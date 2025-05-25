@@ -66,9 +66,24 @@ def load_cfg_from_cfg_file(file):
     with open(file, 'r') as f:
         cfg_from_file = yaml.safe_load(f)
 
-    for key in cfg_from_file:
-        for k, v in cfg_from_file[key].items():
-            cfg[k] = v
+    if isinstance(cfg_from_file, dict):
+        is_nested_config = all(isinstance(value, dict) for value in cfg_from_file.values()) if cfg_from_file else False
+
+        if is_nested_config:
+            # Original logic for nested configs (e.g., DATA: {...}, TRAIN: {...})
+            for key in cfg_from_file:
+                if isinstance(cfg_from_file[key], dict):
+                    for k, v in cfg_from_file[key].items():
+                        cfg[k] = v
+                else:
+                    # Handle cases where a top-level key might not have a dict value (should ideally not happen for strictly nested)
+                    cfg[key] = cfg_from_file[key]
+        else:
+            # Logic for flat configs (e.g., key: value at root)
+            for k, v in cfg_from_file.items():
+                cfg[k] = v
+    else:
+        raise ValueError(f"YAML file {file} did not load as a dictionary.")
 
     cfg = CfgNode(cfg)
     return cfg
@@ -141,10 +156,11 @@ def _check_and_coerce_cfg_value_type(replacement, original, key, full_key):
     # list <-> tuple
     casts = [(tuple, list), (list, tuple)]
     # For py2: allow converting from str (bytes) to a unicode string
-    try:
-        casts.append((str, unicode))  # noqa: F821
-    except Exception:
-        pass
+    # Python 3 handles unicode strings by default, so the py2 specific cast is removed.
+    # try:
+    #     casts.append((str, unicode))  # noqa: F821
+    # except Exception:
+    #     pass
 
     for (from_type, to_type) in casts:
         converted, converted_value = conditional_cast(from_type, to_type)

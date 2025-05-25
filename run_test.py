@@ -58,7 +58,7 @@ def main():
 
     # Get the first sample
     sample = test_data[0]
-    logger.info(f"Sample keys: {sample.keys()}")
+    logger.info(f"Sample keys: {sample}")
 
     # Prepare batch (add batch dimension)
     batch = {}
