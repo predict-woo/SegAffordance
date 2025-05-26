@@ -27,7 +27,7 @@ class CRIS(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         ## Vision & Text Encoder
-        clip_model = torch.jit.load(cfg.clip_pretrain, map_location="cpu").eval()
+        clip_model = torch.jit.load(cfg.clip_pretrain, map_location="cpu").eval() # type: ignore
         
         # encode_image (B, 3, H, W) -> v2: (B, fpn_in[0], H/8, W/8), v3: (B, fpn_in[1], H/16, W/16), v4: (B, fpn_in[2], H/32, W/32)
         # encode_text (B, L: word_len) -> word_features: (B, L, D_text: transformer_width), state: (B, fpn_in[2])

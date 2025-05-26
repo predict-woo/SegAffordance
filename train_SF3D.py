@@ -17,13 +17,14 @@ from datasets.scenefun3d import SF3DDataset, get_default_transforms
 from model.segmenter import CRIS
 from utils.dataset import tokenize # For tokenizing text descriptions
 from config.type_sf3d_cfg import SF3DConfig
+import pickle
 
 warnings.filterwarnings("ignore")
 os.environ["TOKENIZERS_PARALLELISM"] = "false" # To suppress tokenizer warnings if any
 
 # --- Helper Functions --- #
 
-def make_gaussian_map(points_norm, map_h, map_w, sigma:float =2.0, device='cpu'):
+def make_gaussian_map(points_norm, map_h, map_w, sigma, device):
     """
     Generates a batch of 2D Gaussian heatmaps.
     Args:
@@ -79,11 +80,6 @@ class DiceBCELoss(nn.Module):
         dice_val = 1. - dice_score
         
         return (self.bce_weight * bce_val) + (self.dice_weight * dice_val.mean())
-
-
-
-
-
 
 # --- PyTorch Lightning Module --- #
 
@@ -172,6 +168,88 @@ class SF3DTrainingModule(pl.LightningModule):
 
     def val_dataloader(self):
         return self._get_dataloader(split='val')
+
+    def on_validation_epoch_end(self):
+        # Ensure logger is WandbLogger and wandb is enabled
+        if not self.cfg.enable_wandb or not isinstance(self.logger, WandbLogger) or not hasattr(self.logger.experiment, 'log'):
+            if self.cfg.enable_wandb and not isinstance(self.logger, WandbLogger):
+                print("W&B logging is enabled, but the logger is not a WandbLogger instance. Skipping visualization.")
+            return
+
+        # Get a sample batch from the validation dataloader
+        val_loader = self.val_dataloader()
+        try:
+            batch = next(iter(val_loader))
+        except StopIteration:
+            print("Validation dataloader is empty, cannot visualize sample.")
+            return
+
+        img, word_str_list, mask_gt, point_gt_norm = batch
+        
+        # Move data to the correct device
+        img = img.to(self.device)
+        mask_gt = mask_gt.to(self.device)
+        point_gt_norm = point_gt_norm.to(self.device)
+
+        tokenized_words = tokenize(word_str_list, self.cfg.word_len, truncate=True).to(self.device)
+
+        # Perform inference
+        with torch.no_grad():
+            mask_pred_logits, point_pred_logits, coords_hat = self(img, tokenized_words, mask_gt, point_gt_norm)
+
+        # Select the first sample from the batch for visualization
+        img_sample = img[0]                     # (C, H, W)
+        mask_gt_sample = mask_gt[0].float()     # (1, H_orig, W_orig)
+        point_gt_norm_sample = point_gt_norm[0:1] # (1, 2) keep batch dim for make_gaussian_map
+        
+        mask_pred_sigmoid_sample = torch.sigmoid(mask_pred_logits[0]) # (1, H_map, W_map)
+        point_pred_sigmoid_sample = torch.sigmoid(point_pred_logits[0]) # (1, H_map, W_map)
+        
+        H_map, W_map = mask_pred_logits.shape[-2:]
+
+        # Resize GT mask to match prediction dimensions for comparison if needed for logging
+        # or keep original for better GT visualization. For direct logging, original is fine if caption explains.
+        # Here we create GT heatmap for points at map dimensions
+        point_gt_heatmap_sample = make_gaussian_map(
+            point_gt_norm_sample, H_map, W_map,
+            sigma=self.cfg.loss_point_sigma,
+            device=self.device
+        )[0] # (1, H_map, W_map)
+
+        # For masks, wandb can often handle different sizes if they are logged as separate images.
+        # If we want to overlay them, they need to be the same size.
+        # Let's log them as they are.
+        # Ensure masks are in [0, 1] range and (C, H, W) or (H, W)
+        
+        # Prepare images for wandb logging
+        # wandb.Image expects channel first (C, H, W) or (H, W)
+        # Our tensors are already in (C, H, W) mostly, need to ensure no extra batch dim for single image.
+        
+        images_to_log = {
+            "val_sample/input_image": img_sample,
+            "val_sample/gt_mask": mask_gt_sample.squeeze(0), # Remove channel dim if 1 for grayscale
+            "val_sample/pred_mask": mask_pred_sigmoid_sample.squeeze(0),
+            "val_sample/gt_point_heatmap": point_gt_heatmap_sample.squeeze(0),
+            "val_sample/pred_point_heatmap": point_pred_sigmoid_sample.squeeze(0)
+        }
+        
+        # Log to wandb
+        # Need to import wandb for wandb.Image
+        try:
+            import wandb # Conditional import
+            log_data = {k: wandb.Image(v) for k, v in images_to_log.items()}
+            # Ensure logger is WandbLogger before calling experiment.log
+            if isinstance(self.logger, WandbLogger):
+                self.logger.experiment.log(log_data, step=self.global_step)
+            else:
+                # This case should ideally be caught by the check at the beginning of the method
+                # save as pickle to local folder
+                with open(f"out/val_sample_{self.global_step}.pkl", "wb") as f:
+                    pickle.dump(images_to_log, f)
+        except ImportError:
+            print("wandb is not installed. Skipping image logging for validation samples.")
+        except Exception as e:
+            print(f"Error logging images to wandb: {e}")
 
 # --- Main Training Script --- #
 

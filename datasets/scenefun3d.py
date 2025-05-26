@@ -79,6 +79,13 @@ class SF3DDataset(Dataset):
                             # print(f"Skipping item {item_dir} due to missing files.")
                             continue
 
+                        # Check if description is empty
+                        with open(description_path, "r") as f_desc:
+                            description_content = f_desc.read().strip()
+                        if not description_content:
+                            # print(f"Skipping item {item_dir} due to empty description.")
+                            continue
+
                         # Optionally, further validate motion_info.json content here
                         if self.skip_items_without_motion:
                             try:
@@ -215,7 +222,7 @@ def get_default_transforms(
 if __name__ == "__main__":
     # --- Configuration --- #
     # !!! IMPORTANT: Set this to the root directory of your processed data !!!
-    PROCESSED_DATA_DIR = "/local/home/andrye/dev/SF3D_Proc"
+    PROCESSED_DATA_DIR = "/local/home/andrye/dev/SF3D_Proc/train"
     # Example: PROCESSED_DATA_DIR = "output_from_process_frames_script"
 
     BATCH_SIZE = 4
@@ -256,6 +263,12 @@ if __name__ == "__main__":
     # num_batches_to_show = min(3, len(item_dataloader))
     # print(f"\nShowing data from first {num_batches_to_show} batches:")
     for i, batch in enumerate(tqdm.tqdm(item_dataloader)):
+        # check for empty description string
+        description_batch = batch[1]
+        for description in description_batch:
+            if description == "":
+                print(f"Empty description string in batch {i}")
+
         # print(batch[2])
         # break
         
