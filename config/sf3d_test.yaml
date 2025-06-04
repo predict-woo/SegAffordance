@@ -18,8 +18,8 @@ intermediate: False              # Whether the Transformer decoder returns inter
 
 # Data and Dataloaders
 # train_data_dir and val_data_dir MUST be provided in the user's specific config file
-train_data_dir: "/local/home/andrye/dev/SF3D_Proc/train"
-val_data_dir: "/local/home/andrye/dev/SF3D_Proc/val"
+train_data_dir: "/local/home/andrye/dev/SF3D_Proc/dev"
+val_data_dir: "/local/home/andrye/dev/SF3D_Proc/dev"
 input_size: [416, 416]           # Image input size (height, width)
 batch_size_train: 4
 batch_size_val: 4

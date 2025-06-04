@@ -9,7 +9,7 @@ import torch.nn as nn
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, Callback # Import Callback for type hinting
 from pytorch_lightning.loggers import WandbLogger # Optional
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from torch.optim.lr_scheduler import MultiStepLR
 
 import utils.config as config_loader # Renamed to avoid conflict with cfg variable
@@ -18,6 +18,9 @@ from model.segmenter import CRIS
 from utils.dataset import tokenize # For tokenizing text descriptions
 from config.type_sf3d_cfg import SF3DConfig
 import pickle
+import matplotlib.pyplot as plt
+import numpy as np
+from PIL import Image
 
 # Attempt to import CfgNode for config handling, fallback to Namespace
 try:
@@ -126,6 +129,9 @@ class SF3DTrainingModule(pl.LightningModule):
         self.point_map_loss_fn = nn.BCEWithLogitsLoss()
         self.coord_loss_fn = nn.L1Loss()
         
+        # For collecting test samples
+        self.test_samples = []
+        
     def forward(self, img, tokenized_word, mask_condition, point_condition):
         return self.model(img, tokenized_word, mask_condition, point_condition)
 
@@ -157,6 +163,38 @@ class SF3DTrainingModule(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         return self._common_step(batch, batch_idx, 'val')
+        
+    def test_step(self, batch, batch_idx):
+        """Collect test samples for visualization"""
+        img, word_str_list, mask_gt, point_gt_norm = batch
+        
+        # Move data to the correct device
+        img = img.to(self.device)
+        mask_gt = mask_gt.to(self.device)
+        point_gt_norm = point_gt_norm.to(self.device)
+
+        tokenized_words = tokenize(word_str_list, self.cfg.word_len, truncate=True).to(self.device)
+
+        # Perform inference
+        with torch.no_grad():
+            mask_pred_logits, point_pred_logits, coords_hat = self(img, tokenized_words, mask_gt, point_gt_norm)
+
+        # Store samples for visualization
+        for i in range(img.size(0)):
+            sample_data = {
+                'img': img[i].cpu(),
+                'word_str': word_str_list[i],
+                'mask_gt': mask_gt[i].cpu(),
+                'point_gt_norm': point_gt_norm[i].cpu(),
+                'mask_pred_logits': mask_pred_logits[i].cpu(),
+                'point_pred_logits': point_pred_logits[i].cpu(),
+                'coords_hat': coords_hat[i].cpu(),
+                'split': 'train' if batch_idx < 10 else 'val'  # First 10 are train, next 10 are val
+            }
+            self.test_samples.append(sample_data)
+        
+        # Compute loss for logging
+        return self._common_step(batch, batch_idx, 'test')
 
     def configure_optimizers(self):
         trainable_params = filter(lambda p: p.requires_grad, self.model.parameters())
@@ -197,6 +235,46 @@ class SF3DTrainingModule(pl.LightningModule):
 
     def val_dataloader(self):
         return self._get_dataloader(split='val')
+        
+    def test_dataloader(self):
+        """Create test dataloader with 10 random samples from train and 10 from val"""
+        # Get train dataset
+        rgb_transform, mask_transform = get_default_transforms(image_size=(self.cfg.input_size[0], self.cfg.input_size[1]))
+        print(self.cfg.train_data_dir, self.cfg.val_data_dir)
+        train_dataset = SF3DDataset(
+            processed_data_root="/local/home/andrye/dev/SF3D_Proc/train",
+            rgb_transform=rgb_transform,
+            mask_transform=mask_transform,
+            skip_items_without_motion=True
+        )
+        
+        val_dataset = SF3DDataset(
+            processed_data_root="/local/home/andrye/dev/SF3D_Proc/val",
+            rgb_transform=rgb_transform,
+            mask_transform=mask_transform,
+            skip_items_without_motion=True
+        )
+        
+        # Randomly select 10 samples from each dataset
+        import random
+        print(len(train_dataset), len(val_dataset))
+        train_indices = random.sample(range(len(train_dataset)), min(10, len(train_dataset)))
+        val_indices = random.sample(range(len(val_dataset)), min(10, len(val_dataset)))
+        
+        train_subset = Subset(train_dataset, train_indices)
+        val_subset = Subset(val_dataset, val_indices)
+        
+        # Combine datasets
+        from torch.utils.data import ConcatDataset
+        combined_dataset = ConcatDataset([train_subset, val_subset])
+        
+        return DataLoader(
+            combined_dataset, 
+            batch_size=1,  # Process one sample at a time for easier handling
+            shuffle=False,
+            num_workers=0,  # Use single worker for simpler debugging
+            pin_memory=True
+        )
 
     def on_validation_epoch_end(self):
         # Ensure logger is WandbLogger and wandb is enabled
@@ -279,12 +357,112 @@ class SF3DTrainingModule(pl.LightningModule):
             print("wandb is not installed. Skipping image logging for validation samples.")
         except Exception as e:
             print(f"Error logging images to wandb: {e}")
+            
+    def on_test_epoch_end(self):
+        """Save visualizations of test samples to folder"""
+        print(f"Processing {len(self.test_samples)} test samples for visualization...")
+        
+        # Create output directory
+        output_dir = "test_visualizations"
+        os.makedirs(output_dir, exist_ok=True)
+        
+        for idx, sample_data in enumerate(self.test_samples):
+            # Extract data
+            img = sample_data['img']                    # (C, H, W)
+            word_str = sample_data['word_str']
+            mask_gt = sample_data['mask_gt'].float()    # (1, H_orig, W_orig)
+            point_gt_norm = sample_data['point_gt_norm'].unsqueeze(0)  # (1, 2)
+            mask_pred_logits = sample_data['mask_pred_logits']  # (1, H_map, W_map)
+            point_pred_logits = sample_data['point_pred_logits']  # (1, H_map, W_map)
+            coords_hat = sample_data['coords_hat']
+            split = sample_data['split']
+            
+            # Apply sigmoid to predictions
+            mask_pred_sigmoid = torch.sigmoid(mask_pred_logits)  # (1, H_map, W_map)
+            point_pred_sigmoid = torch.sigmoid(point_pred_logits)  # (1, H_map, W_map)
+            
+            H_map, W_map = mask_pred_logits.shape[-2:]
+            
+            # Create GT point heatmap
+            point_gt_heatmap = make_gaussian_map(
+                point_gt_norm, H_map, W_map,
+                sigma=self.cfg.loss_point_sigma, 
+                device='cpu'
+            )[0]  # (1, H_map, W_map)
+            
+            # Convert tensors to numpy for visualization
+            img_np = img.permute(1, 2, 0).numpy()  # (H, W, C)
+            img_np = (img_np * 0.5 + 0.5).clip(0, 1)  # Denormalize from [-1,1] to [0,1]
+            
+            mask_gt_np = mask_gt.squeeze(0).numpy()  # (H_orig, W_orig)
+            mask_pred_np = mask_pred_sigmoid.squeeze(0).numpy()  # (H_map, W_map)
+            
+            point_gt_heatmap_np = point_gt_heatmap.squeeze(0).numpy()  # (H_map, W_map)
+            point_pred_heatmap_np = point_pred_sigmoid.squeeze(0).numpy()  # (H_map, W_map)
+            
+            # Create visualization
+            fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+            
+            # Input image
+            axes[0, 0].imshow(img_np)
+            axes[0, 0].set_title(f'Input Image\n"{word_str}"')
+            axes[0, 0].axis('off')
+            
+            # GT mask
+            axes[0, 1].imshow(mask_gt_np, cmap='gray')
+            axes[0, 1].set_title('Ground Truth Mask')
+            axes[0, 1].axis('off')
+            
+            # Predicted mask
+            axes[0, 2].imshow(mask_pred_np, cmap='gray')
+            axes[0, 2].set_title('Predicted Mask')
+            axes[0, 2].axis('off')
+            
+            # GT point heatmap
+            axes[1, 0].imshow(point_gt_heatmap_np, cmap='hot')
+            axes[1, 0].set_title('GT Point Heatmap')
+            axes[1, 0].axis('off')
+            
+            # Predicted point heatmap
+            axes[1, 1].imshow(point_pred_heatmap_np, cmap='hot')
+            axes[1, 1].set_title('Predicted Point Heatmap')
+            axes[1, 1].axis('off')
+            
+            # Overlay predicted coordinates on input image
+            axes[1, 2].imshow(img_np)
+            # Convert normalized coordinates to pixel coordinates
+            pred_x = coords_hat[0].item() * img_np.shape[1]
+            pred_y = coords_hat[1].item() * img_np.shape[0]
+            gt_x = point_gt_norm[0, 0].item() * img_np.shape[1]
+            gt_y = point_gt_norm[0, 1].item() * img_np.shape[0]
+            
+            axes[1, 2].plot(pred_x, pred_y, 'r*', markersize=15, label='Predicted')
+            axes[1, 2].plot(gt_x, gt_y, 'g*', markersize=15, label='Ground Truth')
+            axes[1, 2].set_title('Predicted vs GT Coordinates')
+            axes[1, 2].axis('off')
+            axes[1, 2].legend()
+            
+            plt.tight_layout()
+            
+            # Save the figure
+            sample_filename = f"{split}_sample_{idx:03d}_{word_str.replace(' ', '_').replace('/', '_')}.png"
+            save_path = os.path.join(output_dir, sample_filename)
+            plt.savefig(save_path, dpi=150, bbox_inches='tight')
+            plt.close()
+            
+            print(f"Saved visualization for {split} sample {idx}: {save_path}")
+        
+        print(f"All visualizations saved to {output_dir}/")
+        
+        # Clear the samples list
+        self.test_samples.clear()
 
 # --- Main Training Script --- #
 
 def get_training_parser():
-    parser = argparse.ArgumentParser(description='Train CRIS model on SceneFun3D data with PyTorch Lightning')
+    parser = argparse.ArgumentParser(description='Test CRIS model on SceneFun3D data with PyTorch Lightning')
     parser.add_argument('--config', type=str, help='Path to the YAML configuration file (overrides defaults)')
+    parser.add_argument('--checkpoint', type=str, required=True, help='Path to the model checkpoint to test')
     parser.add_argument('--opts', default=None, nargs=argparse.REMAINDER, help='Override settings in the config')
     return parser
 
@@ -311,7 +489,11 @@ def main():
     if not hasattr(cfg, 'val_data_dir') or not cfg.val_data_dir:
         raise ValueError("Configuration error: 'val_data_dir' must be specified in your config file.")
     if not hasattr(cfg, 'clip_pretrain') or not cfg.clip_pretrain or cfg.clip_pretrain == 'path/to/clip_model.pth':
-        print(f"Warning: 'clip_pretrain' is not properly set in config (current: {cfg.clip_pretrain}). Training might fail if model requires it.")
+        print(f"Warning: 'clip_pretrain' is not properly set in config (current: {cfg.clip_pretrain}). Testing might fail if model requires it.")
+    
+    # Check if checkpoint exists
+    if not os.path.exists(args.checkpoint):
+        raise FileNotFoundError(f"Checkpoint file not found at {args.checkpoint}")
     
     base_output_folder = os.path.dirname(cfg.output_dir) 
     cfg.output_dir = os.path.join(base_output_folder, cfg.exp_name)
@@ -319,38 +501,21 @@ def main():
     pl.seed_everything(cfg.manual_seed, workers=True)
     os.makedirs(cfg.output_dir, exist_ok=True)
 
-    model = SF3DTrainingModule(typing.cast(typing.Union[SF3DConfig, dict], cfg))
-
-    callbacks_list: typing.List[Callback] = [] 
-    checkpoint_callback = ModelCheckpoint(
-        dirpath=cfg.output_dir,
-        filename='{epoch}-{val/loss_total:.4f}',
-        monitor='val/loss_total',
-        mode='min',
-        save_top_k=20
-    )
-    callbacks_list.append(checkpoint_callback)
-
-    logger: typing.Union[WandbLogger, bool] = False
-    if cfg.enable_wandb:
-        wandb_logger = WandbLogger(
-            project=cfg.wandb_project,
-            name=cfg.exp_name,
-            config=vars(cfg)
-        )
-        logger = wandb_logger
-
+    # Set up trainer for testing
     accelerator_type = 'cpu'
     devices_val: typing.Union[typing.List[int], str, int] = 1 
 
     if cfg.gpus > 0:
         if not torch.cuda.is_available():
-            raise SystemError("CUDA is not available, but cfg.gpus > 0. Set cfg.gpus to 0 to run on CPU.")
-        accelerator_type = 'gpu'
-        if cfg.gpus == 1:
-            devices_val = [0]  
+            print("Warning: CUDA is not available, but cfg.gpus > 0. Running on CPU instead.")
+            accelerator_type = 'cpu'
+            devices_val = 1
         else:
-            devices_val = cfg.gpus 
+            accelerator_type = 'gpu'
+            if cfg.gpus == 1:
+                devices_val = [0]  
+            else:
+                devices_val = cfg.gpus 
     else: 
         accelerator_type = 'cpu'
         devices_val = 1 
@@ -358,16 +523,19 @@ def main():
     trainer = pl.Trainer(
         accelerator=accelerator_type,
         devices=devices_val,
-        max_epochs=cfg.max_epochs,
         precision=cfg.precision,
-        callbacks=callbacks_list,
-        logger=logger,
+        logger=False,  # Disable logging for testing
         default_root_dir=cfg.output_dir,
-        deterministic=False,
-        enable_progress_bar=False
+        deterministic=False
     )
 
-    trainer.fit(model)
+    print(f"Loading model from checkpoint: {args.checkpoint}")
+    print(f"Testing with 10 samples from training set and 10 samples from validation set")
+    print(f"Visualizations will be saved to: test_visualizations/")
+    
+    # Load model from checkpoint and run test
+    model = SF3DTrainingModule.load_from_checkpoint(args.checkpoint)
+    trainer.test(model)
 
 if __name__ == '__main__':
     main() 
