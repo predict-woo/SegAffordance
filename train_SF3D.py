@@ -9,7 +9,7 @@ import torch.nn as nn
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, Callback # Import Callback for type hinting
 from pytorch_lightning.loggers import WandbLogger # Optional
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset, random_split
 from torch.optim.lr_scheduler import MultiStepLR
 
 import utils.config as config_loader # Renamed to avoid conflict with cfg variable
@@ -19,7 +19,8 @@ from utils.dataset import tokenize # For tokenizing text descriptions
 from config.type_sf3d_cfg import SF3DConfig
 import pickle
 
-# Attempt to import CfgNode for config handling, fallback to Namespace
+import wandb
+
 try:
     from yacs.config import CfgNode
 except ImportError:
@@ -93,14 +94,9 @@ class DiceBCELoss(nn.Module):
 class SF3DTrainingModule(pl.LightningModule):
     def __init__(self, cfg: typing.Union[SF3DConfig, dict]):
         super().__init__()
-        # The `cfg` argument can be an SF3DConfig object (during training) 
-        # or a dict (when loading from checkpoint via `load_from_checkpoint(cfg=hparams_dict)`)
-        # PTL's `save_hyperparameters(cfg_object)` flattens cfg_object into self.hparams.
-        # So, self.hparams will be a flat dictionary of the config parameters.
         self.save_hyperparameters(cfg)
 
-        # For consistent internal attribute access (e.g., self.cfg.attribute_name),
-        # ensure self.cfg is an attribute-accessible version of the input `cfg`.
+
         _attribute_accessible_cfg: typing.Any
         if isinstance(cfg, dict):
             # If cfg is a dict (likely from checkpoint hparams), make it attribute-accessible.
@@ -125,6 +121,10 @@ class SF3DTrainingModule(pl.LightningModule):
         )
         self.point_map_loss_fn = nn.BCEWithLogitsLoss()
         self.coord_loss_fn = nn.L1Loss()
+
+        # Datasets will be initialized in setup()
+        self.train_dataset_split: typing.Optional[Dataset] = None
+        self.val_dataset_split: typing.Optional[Dataset] = None
         
     def forward(self, img, tokenized_word, mask_condition, point_condition):
         return self.model(img, tokenized_word, mask_condition, point_condition)
@@ -172,31 +172,58 @@ class SF3DTrainingModule(pl.LightningModule):
         )
         return [optimizer], [scheduler]
 
-    def _get_dataloader(self, split='train'):
-        is_train = split == 'train'
-        data_dir = self.cfg.train_data_dir if is_train else self.cfg.val_data_dir # Uses self.cfg
-        batch_size = self.cfg.batch_size_train if is_train else self.cfg.batch_size_val # Uses self.cfg
-        num_workers = self.cfg.num_workers_train if is_train else self.cfg.num_workers_val # Uses self.cfg
-        shuffle = True if is_train else False
+    def setup(self, stage: typing.Optional[str] = None):
+        if stage == 'fit' or stage is None:
+            print(f"ℹ️ Setting up datasets with train_data_dir: {self.cfg.train_data_dir} and val_split_ratio: {self.cfg.val_split_ratio}")
+            rgb_transform, mask_transform = get_default_transforms(image_size=(self.cfg.input_size[0], self.cfg.input_size[1]))
+            
+            full_dataset = SF3DDataset(
+                lmdb_data_root=self.cfg.train_data_dir, # train_data_dir now points to the full dataset
+                rgb_transform=rgb_transform,
+                mask_transform=mask_transform,
+                image_size_for_mask_reconstruction=(self.cfg.input_size[0], self.cfg.input_size[1])
+            )
+            
+            print(f"✅ Load complete. Full dataset length: {len(full_dataset)}")
+            
+            total_len = len(full_dataset)
+            val_len = int(total_len * self.cfg.val_split_ratio)
+            train_len = total_len - val_len
 
-        rgb_transform, mask_transform = get_default_transforms(image_size=(self.cfg.input_size[0], self.cfg.input_size[1]))
-        
-        dataset = SF3DDataset(
-            processed_data_root=data_dir,
-            rgb_transform=rgb_transform,
-            mask_transform=mask_transform,
-            skip_items_without_motion=True
-        )
-        return DataLoader(
-            dataset, batch_size=batch_size, shuffle=shuffle,
-            num_workers=num_workers, pin_memory=True, drop_last=is_train
-        )
+            print(f"ℹ️ Splitting dataset into train and validation sets...")
+            self.train_dataset_split, self.val_dataset_split = random_split(
+                full_dataset, 
+                [train_len, val_len],
+                generator=torch.Generator().manual_seed(self.cfg.manual_seed) # for reproducibility
+            )
+            
+            print(f"✅ Dataset split: Train samples: {train_len}, Validation samples: {val_len}")
 
     def train_dataloader(self):
-        return self._get_dataloader(split='train')
+        if self.train_dataset_split is None:
+            raise RuntimeError("Training dataset not initialized. Please ensure setup() was called.")
+
+        return DataLoader(
+            typing.cast(Dataset, self.train_dataset_split), # Cast for type checker
+            batch_size=self.cfg.batch_size_train,
+            shuffle=True,
+            num_workers=self.cfg.num_workers_train,
+            pin_memory=True,
+            drop_last=True
+        )
 
     def val_dataloader(self):
-        return self._get_dataloader(split='val')
+        if self.val_dataset_split is None:
+            raise RuntimeError("Validation dataset not initialized. Please ensure setup() was called.")
+        
+        return DataLoader(
+            typing.cast(Dataset, self.val_dataset_split), # Cast for type checker
+            batch_size=self.cfg.batch_size_val,
+            shuffle=False,
+            num_workers=self.cfg.num_workers_val,
+            pin_memory=True,
+            drop_last=False # Typically False for validation
+        )
 
     def on_validation_epoch_end(self):
         # Ensure logger is WandbLogger and wandb is enabled
@@ -236,24 +263,12 @@ class SF3DTrainingModule(pl.LightningModule):
         
         H_map, W_map = mask_pred_logits.shape[-2:]
 
-        # Resize GT mask to match prediction dimensions for comparison if needed for logging
-        # or keep original for better GT visualization. For direct logging, original is fine if caption explains.
-        # Here we create GT heatmap for points at map dimensions
         point_gt_heatmap_sample = make_gaussian_map(
             point_gt_norm_sample, H_map, W_map,
             sigma=self.cfg.loss_point_sigma, # Uses self.cfg
             device=self.device
         )[0] # (1, H_map, W_map)
 
-        # For masks, wandb can often handle different sizes if they are logged as separate images.
-        # If we want to overlay them, they need to be the same size.
-        # Let's log them as they are.
-        # Ensure masks are in [0, 1] range and (C, H, W) or (H, W)
-        
-        # Prepare images for wandb logging
-        # wandb.Image expects channel first (C, H, W) or (H, W)
-        # Our tensors are already in (C, H, W) mostly, need to ensure no extra batch dim for single image.
-        
         images_to_log = {
             "val_sample/input_image": img_sample,
             "val_sample/gt_mask": mask_gt_sample.squeeze(0), # Remove channel dim if 1 for grayscale
@@ -364,7 +379,7 @@ def main():
         logger=logger,
         default_root_dir=cfg.output_dir,
         deterministic=False,
-        enable_progress_bar=False
+        enable_progress_bar=cfg.wandb_show_loading_bar
     )
 
     trainer.fit(model)

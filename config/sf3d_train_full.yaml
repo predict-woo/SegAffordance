@@ -18,7 +18,7 @@ intermediate: False              # Whether the Transformer decoder returns inter
 
 # Data and Dataloaders
 # train_data_dir and val_data_dir MUST be provided in the user's specific config file
-train_data_dir: "/local/home/andrye/dev/SF3D_Proc/train"
+train_data_dir: "/local/home/andrye/dev/SF3D_lmdb"
 val_data_dir: "/local/home/andrye/dev/SF3D_Proc/val"
 input_size: [416, 416]           # Image input size (height, width)
 batch_size_train: 4
@@ -48,5 +48,6 @@ manual_seed: 42
 enable_wandb: True              # Set to true to enable Weights & Biases logging
 wandb_project: "SceneFun3D-V2" # WandB project name
 # wandb_entity: "your_wandb_entity" # Optional: WandB entity (username or team) 
+
 wandb_show_loading_bar: True
 val_split_ratio: 0.1
