@@ -1,6 +1,7 @@
 from typing import TypedDict, List, Union, Optional
 from dataclasses import dataclass
 
+
 @dataclass
 class SF3DConfig:
     # Model Architecture

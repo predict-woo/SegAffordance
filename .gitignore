@@ -2,3 +2,4 @@ __pycache__/
 wandb/
 experiments/
 test_visualizations/
+*.pyc

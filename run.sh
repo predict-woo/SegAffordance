@@ -1,0 +1,1 @@
+python train_SF3D.py --config config/sf3d_train_full.yaml

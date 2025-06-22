@@ -6,13 +6,15 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, Subset
 from torchvision import transforms
 from typing import Any, Optional, Callable, Dict, List, Tuple
 import tqdm
 import lmdb  # Added for LMDB
 import pickle  # Added for deserializing LMDB data
 import cv2
+import shutil
+import random
 
 LMDB_DATASET_VERSION_COMPATIBLE = "1.0"  # For checking compatibility
 
@@ -59,32 +61,12 @@ class SF3DDataset(Dataset):
         )
 
         self.lmdb_path = self.lmdb_data_root / "data.lmdb"
+        self.lmdb_path = Path("/dev/shm/data.lmdb")
+
         if not self.lmdb_path.exists():
             raise FileNotFoundError(f"LMDB database not found at {self.lmdb_path}")
 
-        self.env = None  # Initialize lazily or in __init__
-        self._open_lmdb()
-
-        self.metadata = self._read_metadata()
-        if self.metadata.get("version") != LMDB_DATASET_VERSION_COMPATIBLE:
-            print(
-                f"Warning: LMDB dataset version ({self.metadata.get('version')}) "
-                f"might not be compatible with expected version ({LMDB_DATASET_VERSION_COMPATIBLE})."
-            )
-
-        self.item_keys = self._get_item_keys()
-        if not self.item_keys:
-            print(
-                f"Warning: No item keys found in LMDB at {self.lmdb_path}. Dataset will be empty."
-            )
-        else:
-            print(f"Found {len(self.item_keys)} item keys in LMDB.")
-
-    def _open_lmdb(self):
-        """Opens the LMDB environment. Can be called lazily if needed, e.g. in getitem for num_workers > 0"""
-        # For PyTorch DataLoader with num_workers > 0, it's better to open LMDB in __getitem__
-        # or ensure it's opened once per worker. For simplicity here, opening in init.
-        # If using num_workers, set readonly=True, lock=False, readahead=False for better performance.
+        print(f"Opening LMDB database at {self.lmdb_path}")
         self.env = lmdb.open(
             str(self.lmdb_path),
             readonly=True,
@@ -92,25 +74,13 @@ class SF3DDataset(Dataset):
             readahead=False,  # Usually not beneficial for many small random reads
             meminit=False,  # Only if you trust the DB file completely or manage memory manually
         )
+        print(f"LMDB database opened")
 
-    def _read_metadata(self) -> Dict:
-        if self.env is None:
-            self._open_lmdb()
-        assert (
-            self.env is not None
-        ), "LMDB environment not initialized after _open_lmdb()"
-        with self.env.begin(write=False) as txn:
-            metadata_bytes = txn.get(b"__metadata__")
-            if metadata_bytes:
-                return pickle.loads(metadata_bytes)
-        return {}
+        print(f"Getting item keys")
+        self.item_keys = self._get_item_keys()
+        print(f"Item keys: length {len(self.item_keys)}")
 
     def _get_item_keys(self) -> List[bytes]:
-        if self.env is None:
-            self._open_lmdb()
-        assert (
-            self.env is not None
-        ), "LMDB environment not initialized after _open_lmdb()"
         keys = []
         with self.env.begin(write=False) as txn:
             cursor = txn.cursor()
@@ -123,12 +93,6 @@ class SF3DDataset(Dataset):
         return len(self.item_keys)
 
     def __getitem__(self, idx: int):
-        if self.env is None:  # Potentially re-open if closed or for worker processes
-            self._open_lmdb()
-        assert (
-            self.env is not None
-        ), "LMDB environment not initialized after _open_lmdb()"
-
         item_key_bytes = self.item_keys[idx]
         with self.env.begin(write=False) as txn:
             item_data_bytes = txn.get(item_key_bytes)
@@ -151,14 +115,6 @@ class SF3DDataset(Dataset):
             rgb_image_tensor = transforms.ToTensor()(
                 rgb_image_pil
             )  # Default if no transform
-
-        # --- Reconstruct Mask from Coordinates ---
-        # mask_coordinates_yx is List[[y,x]]
-        # We need original image dimensions to reconstruct mask before resize,
-        # or we reconstruct directly to target size if coordinates are from original.
-        # For now, let's assume we reconstruct to the original image size, then transform.
-        # If mask_coordinates were scaled during LMDB creation, this needs adjustment.
-        # The current convert_to_lmdb.py saves original mask coordinates.
 
         mask_np = np.zeros((original_height, original_width), dtype=np.uint8)
         mask_coords_yx = item_data.get("mask_coordinates_yx", [])
@@ -246,10 +202,69 @@ def get_default_transforms(
     return rgb_transform, mask_transform
 
 
+def split_dataset_by_scene(
+    dataset: "SF3DDataset",
+    val_split_ratio: float,
+    manual_seed: int = 42,
+) -> Tuple[Subset, Subset]:
+    """
+    Splits the SF3DDataset into training and validation subsets based on scene IDs.
+    This ensures that all frames from a particular scene belong to only one split,
+    preventing data leakage between the train and validation sets.
+    Args:
+        dataset (SF3DDataset): The full dataset instance to be split.
+        val_split_ratio (float): The proportion of scenes to allocate to the validation set.
+        manual_seed (int): A random seed to ensure reproducible splits.
+    Returns:
+        Tuple[Subset, Subset]: A tuple containing the training subset and validation subset.
+    """
+    print(
+        f"Splitting dataset by scene with val_split_ratio={val_split_ratio} and seed={manual_seed}"
+    )
+
+    # 1. Group item indices by their scene ID.
+    scene_to_indices: Dict[str, List[int]] = {}
+    for i, key_bytes in enumerate(dataset.item_keys):
+        # Key format is assumed to be 'scene_id/...'
+        key_str = key_bytes.decode("utf-8")
+        scene_id = key_str.split("/")[0]
+        if scene_id not in scene_to_indices:
+            scene_to_indices[scene_id] = []
+        scene_to_indices[scene_id].append(i)
+
+    # 2. Shuffle and split the list of unique scene IDs.
+    unique_scene_ids = sorted(list(scene_to_indices.keys()))
+    rng = random.Random(manual_seed)
+    rng.shuffle(unique_scene_ids)
+
+    num_val_scenes = int(round(len(unique_scene_ids) * val_split_ratio))
+    val_scenes = set(unique_scene_ids[:num_val_scenes])
+    train_scenes = set(unique_scene_ids[num_val_scenes:])
+
+    print(f"Total scenes: {len(unique_scene_ids)}")
+    print(f"Train scenes: {len(train_scenes)}, Validation scenes: {len(val_scenes)}")
+
+    # 3. Create lists of indices for the training and validation sets.
+    train_indices: List[int] = []
+    val_indices: List[int] = []
+    for scene_id, indices in scene_to_indices.items():
+        if scene_id in val_scenes:
+            val_indices.extend(indices)
+        else:
+            # If not in val_scenes, it must be in train_scenes
+            train_indices.extend(indices)
+
+    # 4. Create Subset wrappers for the splits.
+    train_subset = Subset(dataset, train_indices)
+    val_subset = Subset(dataset, val_indices)
+
+    return train_subset, val_subset
+
+
 if __name__ == "__main__":
     # --- Configuration --- #
     # !!! IMPORTANT: Set this to the root directory of your LMDB-converted data !!!
-    LMDB_DATASET_ROOT = "/local/home/andrye/dev/SF3D_lmdb"  # EXAMPLE PATH
+    LMDB_DATASET_ROOT = "/cluster/scratch/andrye/SF3D_lmdb"  # EXAMPLE PATH
     # Example: LMDB_DATASET_ROOT = "output_from_convert_to_lmdb_script/train"
 
     BATCH_SIZE = 4
@@ -264,33 +279,14 @@ if __name__ == "__main__":
     )
 
     # Create Dataset
-    try:
-        item_dataset = SF3DDataset(
-            lmdb_data_root=LMDB_DATASET_ROOT,
-            rgb_transform=default_rgb_transform,
-            mask_transform=default_mask_transform,  # Pass the transform for reconstructed PIL mask
-            image_size_for_mask_reconstruction=TARGET_IMAGE_SIZE,  # Pass this for default internal mask processing
-        )
-    except FileNotFoundError as e:
-        print(f"Error initializing dataset: {e}")
-        print(
-            "Please ensure LMDB_DATASET_ROOT is set correctly and the LMDB database exists (e.g., data.lmdb)."
-        )
-        exit()
-    except Exception as e:
-        print(f"An unexpected error occurred during dataset initialization: {e}")
-        exit()
-
-    if len(item_dataset) == 0:
-        print(
-            "No items found by the dataset. Check LMDB_DATASET_ROOT and ensure the LMDB is populated."
-        )
-        exit()
+    item_dataset = SF3DDataset(
+        lmdb_data_root=LMDB_DATASET_ROOT,
+        rgb_transform=default_rgb_transform,
+        mask_transform=default_mask_transform,  # Pass the transform for reconstructed PIL mask
+        image_size_for_mask_reconstruction=TARGET_IMAGE_SIZE,  # Pass this for default internal mask processing
+    )
 
     # Create DataLoader
-    # Note: For num_workers > 0 with LMDB, self.env should ideally be opened in a worker_init_fn
-    # or __getitem__ should handle opening its own env instance.
-    # For simplicity, keeping num_workers=0 or relying on the initial self.env for now.
     item_dataloader = DataLoader(
         item_dataset,
         batch_size=BATCH_SIZE,

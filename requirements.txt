@@ -1,0 +1,11 @@
+wandb
+lmdb
+pyarrow
+regex
+ftfy
+loguru
+pycocotools
+matplotlib
+tqdm
+lightning
+opencv-python

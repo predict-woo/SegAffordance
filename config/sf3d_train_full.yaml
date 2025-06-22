@@ -18,17 +18,16 @@ intermediate: False              # Whether the Transformer decoder returns inter
 
 # Data and Dataloaders
 # train_data_dir and val_data_dir MUST be provided in the user's specific config file
-train_data_dir: "/local/home/andrye/dev/SF3D_lmdb"
-val_data_dir: "/local/home/andrye/dev/SF3D_Proc/val"
+train_data_dir: "/cluster/scratch/andrye/SF3D_lmdb"
 input_size: [416, 416]           # Image input size (height, width)
-batch_size_train: 4
-batch_size_val: 4
-num_workers_train: 4
-num_workers_val: 4
+batch_size_train: 16
+batch_size_val: 16
+num_workers_train: 24
+num_workers_val: 24
 
 # Optimizer & Scheduler
-optimizer_lr: 0.0001
-optimizer_weight_decay: 0.0001
+optimizer_lr: 0.000005
+optimizer_weight_decay: 0.000005
 scheduler_milestones: [20, 25]   # Epochs at which to decay learning rate
 scheduler_gamma: 0.1             # LR decay factor
 
@@ -40,13 +39,13 @@ loss_coord_weight: 0.5          # Weight for the L1 coordinate regression loss
 
 # Trainer settings
 max_epochs: 30
-gpus: 1                          # Number of GPUs to use. If 1, uses GPU 0. If >1, uses specified number of GPUs. If 0, uses CPU.
+gpus: 2                          # Number of GPUs to use. If 1, uses GPU 0. If >1, uses specified number of GPUs. If 0, uses CPU.
 precision: 32                    # 32 for float32, 16 for mixed-precision
-exp_name: "SF3D_V2"
-output_dir: "experiments/SF3D_V2" # Base directory for outputs, will be exp_name within this.
+exp_name: "SF3D_V4"
+output_dir: "/cluster/scratch/andrye/experiments/SF3D_V4" # Base directory for outputs, will be exp_name within this.
 manual_seed: 42
 enable_wandb: True              # Set to true to enable Weights & Biases logging
-wandb_project: "SceneFun3D-V2" # WandB project name
+wandb_project: "SceneFun3D-V4" # WandB project name
 # wandb_entity: "your_wandb_entity" # Optional: WandB entity (username or team) 
 
 wandb_show_loading_bar: True

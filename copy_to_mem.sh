@@ -1,0 +1,1 @@
+cp -r /cluster/scratch/andrye/SF3D_lmdb/data.lmdb /dev/shm/data.lmdb
