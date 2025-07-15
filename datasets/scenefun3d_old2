@@ -41,7 +41,7 @@ class SF3DDataset(Dataset):
         """
         Args:
             lmdb_data_root (str): Path to the root directory of the LMDB dataset
-                                     (output of convert_to_lmdb.py).
+                                     (output of process_frames_with_items.py).
             rgb_transform (callable, optional): Optional transform to be applied on the RGB image.
             mask_transform (callable, optional): Optional transform for the reconstructed mask.
                                                 Note: Mask is binary {0,1} after reconstruction.
@@ -60,8 +60,12 @@ class SF3DDataset(Dataset):
             image_size_for_mask_reconstruction  # (height, width)
         )
 
-        self.lmdb_path = self.lmdb_data_root / "data.lmdb"
+        # self.lmdb_path = self.lmdb_data_root / "data.lmdb"
         self.lmdb_path = Path("/dev/shm/data.lmdb")
+        # The following line is useful for loading from shared memory for faster access,
+        # but it's commented out to make the code more portable by default.
+        # You can uncomment it and adjust the path if you copy your data.lmdb to /dev/shm.
+        # self.lmdb_path = Path("/dev/shm/data.lmdb")
 
         if not self.lmdb_path.exists():
             raise FileNotFoundError(f"LMDB database not found at {self.lmdb_path}")
@@ -102,10 +106,9 @@ class SF3DDataset(Dataset):
         item_data = pickle.loads(item_data_bytes)
 
         # --- Load RGB Image ---
-        # Path is relative to lmdb_data_root
-        rgb_image_actual_path = (
-            self.lmdb_data_root / item_data["rgb_image_path_relative"]
-        )
+        # Path is relative to lmdb_data_root/images
+        rgb_image_filename = item_data["rgb_image_path"]
+        rgb_image_actual_path = self.lmdb_data_root / "images" / rgb_image_filename
         rgb_image_pil = Image.open(rgb_image_actual_path).convert("RGB")
         original_width, original_height = rgb_image_pil.size
 
@@ -184,14 +187,14 @@ class SF3DDataset(Dataset):
         origin_2d_image_coord_norm = torch.clamp(origin_2d_image_coord_norm, 0.0, 1.0)
 
         # Match return signature of previous version
-        # img, word, mask, interaction_point
+        # The model expects 5 items. We discard the 3D motion origin as the VAE
+        # is designed to only predict the 3D direction.
         return (
             rgb_image_tensor,
             description,
             mask_tensor,
             origin_2d_image_coord_norm,
             motion_dir_3d_camera_coords,
-            motion_origin_3d_camera_coords,
         )
 
     def __del__(self):
@@ -283,106 +286,217 @@ def split_dataset_by_scene(
 
 
 if __name__ == "__main__":
-    # --- Configuration --- #
-    # !!! IMPORTANT: Set this to the root directory of your LMDB-converted data !!!
-    LMDB_DATASET_ROOT = "/cluster/scratch/andrye/SF3D_lmdb"  # EXAMPLE PATH
-    # Example: LMDB_DATASET_ROOT = "output_from_convert_to_lmdb_script/train"
+    import tyro
+    from pathlib import Path
+    import cv2
+    import random
+    import textwrap
 
-    BATCH_SIZE = 4
-    NUM_WORKERS = 0  # Start with 0 for LMDB, can increase but requires careful LMDB handling in __getitem__ or worker_init_fn
-    TARGET_IMAGE_SIZE = (224, 224)  # (height, width)
+    def debug_main(
+        lmdb_data_root: Path,
+        num_samples: int = 10,
+        output_dir: Path = Path("debug_dataloader"),
+    ):
+        """
+        Loads the SF3DDataset, samples a few items, and generates debug visualizations.
+        Args:
+            lmdb_data_root (Path): Path to the root of the processed LMDB dataset.
+            num_samples (int): Number of random samples to visualize.
+            output_dir (Path): Directory to save the debug images.
+        """
+        # --- 1. Setup ---
+        output_dir.mkdir(exist_ok=True)
+        print(f"Saving debug images to {output_dir}")
 
-    print(f"Attempting to load LMDB data from: {LMDB_DATASET_ROOT}")
-
-    # Get default transforms (or define your own)
-    default_rgb_transform, default_mask_transform = get_default_transforms(
-        image_size=TARGET_IMAGE_SIZE
-    )
-
-    # Create Dataset
-    item_dataset = SF3DDataset(
-        lmdb_data_root=LMDB_DATASET_ROOT,
-        rgb_transform=default_rgb_transform,
-        mask_transform=default_mask_transform,  # Pass the transform for reconstructed PIL mask
-        image_size_for_mask_reconstruction=TARGET_IMAGE_SIZE,  # Pass this for default internal mask processing
-    )
-
-    # Create DataLoader
-    item_dataloader = DataLoader(
-        item_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=True,
-        num_workers=NUM_WORKERS,
-        pin_memory=(
-            True if torch.cuda.is_available() and NUM_WORKERS == 0 else False
-        ),  # pin_memory often needs num_workers=0 or custom handling
-    )
-
-    print(f"Successfully created DataLoader with {len(item_dataloader)} batches.")
-
-    # --- Iterate through a few batches to test --- #
-    print(
-        f"Iterating through DataLoader batches (TARGET_IMAGE_SIZE: {TARGET_IMAGE_SIZE}):"
-    )
-    for i, batch_data in enumerate(tqdm.tqdm(item_dataloader, desc="Batches")):
-        (
-            rgb_images,
-            descriptions,
-            masks,
-            interaction_points,
-            motion_vectors,
-            motion_origins,
-        ) = batch_data
-
-        # Basic checks
-        if i == 0:  # Check first batch details
-            print(f"  Batch {i+1}:")
+        # --- 2. Load Dataset ---
+        # We instantiate the dataset without transforms to get raw data for visualization.
+        try:
+            dataset = SF3DDataset(lmdb_data_root=str(lmdb_data_root))
+        except FileNotFoundError as e:
+            print(f"Error: {e}")
             print(
-                f"    RGB Image batch shape: {rgb_images.shape}, type: {rgb_images.dtype}"
+                "Please ensure the `lmdb_data_root` points to the directory containing 'data.lmdb' and 'images/'."
             )
-            # save rgb_images[0] as an image using cv2
-            cv2.imwrite(
-                "debug_rgb_sample.png", rgb_images[0].permute(1, 2, 0).numpy() * 255
-            )
-            print(f"    Mask batch shape: {masks.shape}, type: {masks.dtype}")
-            cv2.imwrite(
-                "debug_mask_sample.png", masks[0].permute(1, 2, 0).numpy() * 255
-            )
-            print(f"    Descriptions (first in batch): '{descriptions[0][:70]}...'")
-            print(f"    Interaction Points (first in batch): {interaction_points[0]}")
-            print(f"    Interaction Points batch shape: {interaction_points.shape}")
-            print(f"    Motion Vectors (first in batch): {motion_vectors[0]}")
-            print(f"    Motion Vectors batch shape: {motion_vectors.shape}")
-            print(f"    Motion Origins (first in batch): {motion_origins[0]}")
-            print(f"    Motion Origins batch shape: {motion_origins.shape}")
+            return
 
-        # Check for empty description string (already done in LMDB generation but good for sanity)
-        for desc_idx, description in enumerate(descriptions):
-            if description == "":
+        # --- 3. Sample and Visualize ---
+        if len(dataset) == 0:
+            print("Dataset is empty. No items to visualize.")
+            return
+
+        indices = list(range(len(dataset)))
+        random.shuffle(indices)
+
+        print(f"Sampling {min(num_samples, len(indices))} items for visualization...")
+        for i in indices[:num_samples]:
+            # We manually retrieve and process the data to create visualizations.
+            item_key_bytes = dataset.item_keys[i]
+            with dataset.env.begin(write=False) as txn:
+                item_data_bytes = txn.get(item_key_bytes)
+            if not item_data_bytes:
+                continue
+            item_data = pickle.loads(item_data_bytes)
+
+            # --- Load Image ---
+            rgb_image_filename = item_data["rgb_image_path"]
+            rgb_image_actual_path = (
+                dataset.lmdb_data_root / "images" / rgb_image_filename
+            )
+            if not rgb_image_actual_path.exists():
                 print(
-                    f"Warning: Empty description string in batch {i}, item index in batch {desc_idx}"
+                    f"Warning: Image not found at {rgb_image_actual_path}. Skipping sample."
                 )
+                continue
 
-        # Check mask values (should be 0. or 1.)
-        if not ((masks == 0.0) | (masks == 1.0)).all():
-            print(f"Warning: Batch {i} masks are not strictly binary (0.0 or 1.0).")
-            unique_mask_vals = torch.unique(masks)
-            print(f"    Unique values in mask batch: {unique_mask_vals}")
+            rgb_image_pil = Image.open(rgb_image_actual_path).convert("RGB")
+            original_height, original_width = rgb_image_pil.height, rgb_image_pil.width
+            debug_image = cv2.cvtColor(np.array(rgb_image_pil), cv2.COLOR_RGB2BGR)
 
-        # For more detailed debugging, you might save a sample image and mask:
-        # if i == 0:
-        #     from torchvision.utils import save_image
-        #     save_image(rgb_images[0], "debug_rgb_sample.png")
-        #     save_image(masks[0], "debug_mask_sample.png") # This will be a binary mask
-        #     print("    Saved sample RGB and mask for the first item in the first batch.")
+            # --- Draw Mask ---
+            mask_coords_yx = item_data.get("mask_coordinates_yx", [])
+            if mask_coords_yx:
+                mask_np = np.zeros((original_height, original_width), dtype=np.uint8)
+                rows, cols = zip(*mask_coords_yx)
+                mask_np[np.array(rows), np.array(cols)] = 255
+                contours, _ = cv2.findContours(
+                    mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                )
+                cv2.drawContours(debug_image, contours, -1, (0, 255, 0), 2)  # Green
 
-        if i >= 2 and os.environ.get("CI"):  # Stop early in CI for speed
-            break
+            # --- Draw Motion Origin and Description ---
+            motion_info = item_data.get("motion_info", {})
+            frame_specific_motion = motion_info.get("frame_specific_motion_data")
 
-    print("\nDone with example dataloader iteration.")
+            if frame_specific_motion:
+                origin_2d = frame_specific_motion.get("motion_origin_2d_image_coords")
+                if origin_2d:
+                    origin_x, origin_y = int(origin_2d[0]), int(origin_2d[1])
+                    cv2.circle(
+                        debug_image, (origin_x, origin_y), 8, (255, 0, 0), -1
+                    )  # Blue dot
 
-    # Explicitly delete dataset to trigger __del__ for LMDB env.close() if needed,
-    # though Python's GC should handle it upon script exit.
-    del item_dataset
-    del item_dataloader
-    print("Dataset and DataLoader objects deleted.")
+                    motion_type = motion_info.get("original_motion_data", {}).get(
+                        "motion_type"
+                    )
+                    if motion_type == "rot":
+                        cv2.circle(
+                            debug_image, (origin_x, origin_y), 12, (0, 0, 255), 2
+                        )  # Red circle for rotation
+
+                        # --- Draw Rotation Axis ---
+                        motion_dir_3d = frame_specific_motion.get(
+                            "motion_dir_3d_camera_coords"
+                        )
+                        if motion_dir_3d:
+                            # Approximate projection of the 3D rotation axis onto the 2D image plane.
+                            v_axis_2d = np.array([motion_dir_3d[0], motion_dir_3d[1]])
+                            norm = np.linalg.norm(v_axis_2d)
+                            if norm > 1e-6:
+                                v_axis_2d_norm = v_axis_2d / norm
+                                axis_length_pixels = 40
+                                target_x = origin_x + int(
+                                    v_axis_2d_norm[0] * axis_length_pixels
+                                )
+                                target_y = origin_y + int(
+                                    v_axis_2d_norm[1] * axis_length_pixels
+                                )
+                                cv2.line(
+                                    debug_image,
+                                    (origin_x, origin_y),
+                                    (target_x, target_y),
+                                    (0, 0, 255),  # Red
+                                    2,
+                                )
+
+                    # --- Draw Motion Arrow for Translational motion ---
+                    if motion_type == "trans":
+                        motion_dir_3d = frame_specific_motion.get(
+                            "motion_dir_3d_camera_coords"
+                        )
+                        if motion_dir_3d:
+                            # This is an approximation of the 3D motion vector in the 2D image plane.
+                            # A true projection would require the camera intrinsics, which are not stored in the dataset.
+                            v_dir_2d = np.array([motion_dir_3d[0], motion_dir_3d[1]])
+                            norm = np.linalg.norm(v_dir_2d)
+                            if norm > 1e-6:
+                                v_dir_2d_norm = v_dir_2d / norm
+                                arrow_length_pixels = 50
+                                target_x = origin_x + int(
+                                    v_dir_2d_norm[0] * arrow_length_pixels
+                                )
+                                target_y = origin_y + int(
+                                    v_dir_2d_norm[1] * arrow_length_pixels
+                                )
+                                cv2.arrowedLine(
+                                    debug_image,
+                                    (origin_x, origin_y),
+                                    (target_x, target_y),
+                                    (0, 255, 0),  # Green
+                                    2,
+                                    tipLength=0.3,
+                                )
+
+                    # --- Add Text Labels ---
+                    font = cv2.FONT_HERSHEY_SIMPLEX
+                    font_scale = 0.4
+                    font_color = (0, 255, 255)  # Yellow
+                    line_type = 1
+
+                    label = item_data.get("label_info", {}).get("label", "N/A")
+                    description = item_data.get("description", "No description.")
+
+                    text_lines = [f"Label: {label}"]
+                    # Add a separator if there's a description
+                    if description:
+                        text_lines.append("---")
+
+                    wrapped_desc = textwrap.wrap(description, width=50)
+                    text_lines.extend(wrapped_desc)
+
+                    # Position text block relative to origin, avoiding image edges
+                    text_x = origin_x + 15
+                    text_y = origin_y
+                    if text_x + 200 > original_width:  # If text goes off-screen right
+                        text_x = origin_x - 250  # Move to the left
+                    if (
+                        text_y + len(text_lines) * 15 > original_height
+                    ):  # If text goes off-screen bottom
+                        text_y = origin_y - len(text_lines) * 15  # Move up
+
+                    for j, line in enumerate(text_lines):
+                        y_pos = text_y + (j * 15)
+                        # Add a semi-transparent background for readability
+                        (text_width, text_height), _ = cv2.getTextSize(
+                            line, font, font_scale, line_type
+                        )
+                        bg_rect_pt1 = (text_x, y_pos - text_height - 2)
+                        bg_rect_pt2 = (text_x + text_width, y_pos + 2)
+
+                        # Create a black rectangle and blend it
+                        overlay = debug_image.copy()
+                        cv2.rectangle(overlay, bg_rect_pt1, bg_rect_pt2, (0, 0, 0), -1)
+                        alpha = 0.5
+                        debug_image = cv2.addWeighted(
+                            overlay, alpha, debug_image, 1 - alpha, 0
+                        )
+
+                        # Put text on top
+                        cv2.putText(
+                            debug_image,
+                            line,
+                            (text_x, y_pos),
+                            font,
+                            font_scale,
+                            font_color,
+                            line_type,
+                        )
+
+            # --- Save Image ---
+            item_key_str = item_key_bytes.decode("utf-8").replace("/", "_")
+            debug_filename = f"debug_{item_key_str}.png"
+            debug_image_path = output_dir / debug_filename
+            cv2.imwrite(str(debug_image_path), debug_image)
+
+        print(f"Finished. Debug images are saved in {output_dir.resolve()}")
+
+    tyro.cli(debug_main)

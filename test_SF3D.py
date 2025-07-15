@@ -38,12 +38,44 @@ class SplitAwareDataset(Dataset):
         self.split_name = split_name
 
     def __getitem__(self, idx):
-        # The base dataset returns a tuple of (img, word, mask, point)
+        # The base dataset returns a tuple of (img, word, mask, point, motion_vec, motion_origin)
         # We append the split name to this tuple.
-        return (*self.dataset[idx], self.split_name)
+        base_data = self.dataset[idx]
+        return (*base_data, self.split_name)
 
     def __len__(self):
         return len(self.dataset)
+
+
+# --- Camera Projection Utility --- #
+
+
+def project_3d_to_2d(
+    points_3d,
+    focal_length=517.0,
+    img_center_x=320.0,
+    img_center_y=240.0,
+    device="cpu",
+):
+    """
+    Projects 3D points in camera coordinates to 2D pixel coordinates.
+    Assumes a simple pinhole camera model with fx=fy and no distortion.
+    Default values are based on typical Kinect/RealSense cameras.
+    """
+    if points_3d.dim() == 1:
+        points_3d = points_3d.unsqueeze(0)
+
+    x_3d = points_3d[:, 0]
+    y_3d = points_3d[:, 1]
+    z_3d = points_3d[:, 2]
+
+    # Prevent division by zero for points at or behind the camera
+    z_3d = torch.clamp(z_3d, min=1e-6)
+
+    u = (focal_length * x_3d / z_3d) + img_center_x
+    v = (focal_length * y_3d / z_3d) + img_center_y
+
+    return torch.stack([u, v], dim=1)
 
 
 # --- PyTorch Lightning Test Module --- #
@@ -65,12 +97,21 @@ class SF3DTestModule(BaseSF3DTrainingModule):
     def test_step(self, batch, batch_idx, dataloader_idx: int = 0):
         """Collect test samples for visualization"""
         # Unpack the batch, which now includes the split name
-        img, word_str_list, mask_gt, point_gt_norm, split_list = batch
+        (
+            img,
+            word_str_list,
+            mask_gt,
+            point_gt_norm,
+            motion_gt,
+            motion_origin_gt,
+            split_list,
+        ) = batch
 
         # Move data to the correct device
         img = img.to(self.device)
         mask_gt = mask_gt.to(self.device)
         point_gt_norm = point_gt_norm.to(self.device)
+        motion_gt = motion_gt.to(self.device)
 
         tokenized_words = tokenize(word_str_list, self.cfg.word_len, truncate=True).to(
             self.device
@@ -79,9 +120,14 @@ class SF3DTestModule(BaseSF3DTrainingModule):
         # Perform inference
         with torch.no_grad():
             # The forward pass is inherited from the base module
-            mask_pred_logits, point_pred_logits, coords_hat = self(
-                img, tokenized_words, mask_gt, point_gt_norm
-            )
+            (
+                mask_pred_logits,
+                point_pred_logits,
+                coords_hat,
+                motion_pred,
+                _,
+                _,
+            ) = self(img, tokenized_words, mask_gt, point_gt_norm, motion_gt)
 
         # Store samples for visualization.
         # This assumes a batch size of 1, as configured in test_dataloader.
@@ -96,17 +142,20 @@ class SF3DTestModule(BaseSF3DTrainingModule):
             "word_str": word_str_list[0],
             "mask_gt": mask_gt[0].cpu(),
             "point_gt_norm": point_gt_norm[0].cpu(),
+            "motion_gt": motion_gt[0].cpu(),
+            "motion_origin_gt": motion_origin_gt[0].cpu(),
             "mask_pred_logits": mask_pred_logits[0].cpu(),
             "point_pred_logits": point_pred_logits[0].cpu(),
             "coords_hat": coords_hat[0].cpu(),
+            "motion_pred": motion_pred[0].cpu(),
             "split": split,
         }
         self.test_samples.append(sample_data)
 
-        # We can still compute and return the loss for logging purposes if desired
-        # Note: We need to pass the original batch content to the common step
-        original_batch = (img, word_str_list, mask_gt, point_gt_norm)
-        return self._common_step(original_batch, batch_idx, "test")
+        print(len(self.test_samples))
+
+        # During testing, we focus on visualization, not loss calculation. Return None.
+        return None
 
     def test_dataloader(self):
         """
@@ -144,11 +193,12 @@ class SF3DTestModule(BaseSF3DTrainingModule):
         )
 
         # 3. Randomly select 10 samples from each dataset split
+        num_samples = 10
         train_indices = random.sample(
-            range(len(train_dataset_split)), min(10, len(train_dataset_split))
+            range(len(train_dataset_split)), min(num_samples, len(train_dataset_split))
         )
         val_indices = random.sample(
-            range(len(val_dataset_split)), min(10, len(val_dataset_split))
+            range(len(val_dataset_split)), min(num_samples, len(val_dataset_split))
         )
         print(
             f"✅ Selected {len(train_indices)} train samples and {len(val_indices)} val samples for testing."
@@ -161,23 +211,22 @@ class SF3DTestModule(BaseSF3DTrainingModule):
         train_dataset_wrapped = SplitAwareDataset(train_subset, "train")
         val_dataset_wrapped = SplitAwareDataset(val_subset, "val")
 
-        # 5. Create separate dataloaders
-        train_dataloader = DataLoader(
-            train_dataset_wrapped,
-            batch_size=1,
-            shuffle=False,
-            num_workers=0,
-            pin_memory=True,
-        )
-        val_dataloader = DataLoader(
-            val_dataset_wrapped,
+        # 5. Combine both datasets into one
+        combined_dataset = ConcatDataset([train_dataset_wrapped, val_dataset_wrapped])
+
+        print("###################")
+        print(len(combined_dataset))
+
+        # 6. Create a single dataloader with all samples
+        combined_dataloader = DataLoader(
+            combined_dataset,
             batch_size=1,
             shuffle=False,
             num_workers=0,
             pin_memory=True,
         )
 
-        return [train_dataloader, val_dataloader]
+        return combined_dataloader
 
     def on_test_epoch_end(self):
         """Save visualizations of test samples to a folder."""
@@ -197,9 +246,12 @@ class SF3DTestModule(BaseSF3DTrainingModule):
             word_str = sample_data["word_str"]
             mask_gt = sample_data["mask_gt"].float()  # (1, H_orig, W_orig)
             point_gt_norm = sample_data["point_gt_norm"].unsqueeze(0)  # (1, 2)
+            motion_gt = sample_data["motion_gt"]
+            motion_origin_gt = sample_data["motion_origin_gt"]
             mask_pred_logits = sample_data["mask_pred_logits"]  # (1, H_map, W_map)
             point_pred_logits = sample_data["point_pred_logits"]  # (1, H_map, W_map)
             coords_hat = sample_data["coords_hat"]
+            motion_pred = sample_data["motion_pred"]
             split = sample_data["split"]
 
             # Apply sigmoid to predictions
@@ -244,7 +296,7 @@ class SF3DTestModule(BaseSF3DTrainingModule):
             ).numpy()  # (H_map, W_map)
 
             # Create visualization
-            fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+            fig, axes = plt.subplots(2, 4, figsize=(24, 10))
             fig.suptitle(
                 f'Sample {idx} - Split: {split} - Phrase: "{word_str}"', fontsize=16
             )
@@ -274,19 +326,79 @@ class SF3DTestModule(BaseSF3DTrainingModule):
             axes[1, 1].set_title("Predicted Point Heatmap")
             axes[1, 1].axis("off")
 
-            # Overlay predicted coordinates on input image
-            axes[1, 2].imshow(img_np)
-            # Convert normalized coordinates to pixel coordinates
-            pred_x = coords_hat[0].item() * img_np.shape[1]
-            pred_y = coords_hat[1].item() * img_np.shape[0]
-            gt_x = point_gt_norm[0, 0].item() * img_np.shape[1]
-            gt_y = point_gt_norm[0, 1].item() * img_np.shape[0]
+            h, w, _ = img_np.shape
+            arrow_scale = 0.5  # Make arrows 2x shorter
+            arrow_width = 4.0  # Make arrows thicker
 
-            axes[1, 2].plot(pred_x, pred_y, "r*", markersize=15, label="Predicted")
-            axes[1, 2].plot(gt_x, gt_y, "g+", markersize=15, label="Ground Truth")
-            axes[1, 2].set_title("Predicted vs GT Coordinates")
-            axes[1, 2].axis("off")
+            # --- Ground Truth Point & Motion Visualization ---
+            axes[1, 2].imshow(img_np)
+            # Get GT point in pixel coords
+            gt_x_pt = point_gt_norm[0, 0].item() * w
+            gt_y_pt = point_gt_norm[0, 1].item() * h
+
+            # Project GT 3D vector to get 2D displacement
+            gt_start_3d = motion_origin_gt
+            gt_end_3d = gt_start_3d + motion_gt * arrow_scale
+            gt_proj_points = project_3d_to_2d(
+                torch.stack([gt_start_3d, gt_end_3d]), device="cpu"
+            )
+            gt_dx = gt_proj_points[1, 0] - gt_proj_points[0, 0]
+            gt_dy = gt_proj_points[1, 1] - gt_proj_points[0, 1]
+
+            axes[1, 2].plot(gt_x_pt, gt_y_pt, "g+", markersize=15, label="GT Point")
+            axes[1, 2].arrow(
+                gt_x_pt,
+                gt_y_pt,
+                gt_dx,
+                gt_dy,
+                width=arrow_width,
+                head_width=20,
+                head_length=15,
+                fc="magenta",
+                ec="red",
+                label="GT Motion",
+            )
+            axes[1, 2].set_title("Ground Truth Point & Motion")
+            axes[1, 2].set_xlim(0, w)
+            axes[1, 2].set_ylim(h, 0)
             axes[1, 2].legend()
+            axes[1, 2].axis("off")
+
+            # --- Predicted Point & Motion Visualization ---
+            axes[1, 3].imshow(img_np)
+            # Get Pred point in pixel coords
+            pred_x_pt = coords_hat[0].item() * w
+            pred_y_pt = coords_hat[1].item() * h
+            axes[1, 3].plot(
+                pred_x_pt, pred_y_pt, "r*", markersize=15, label="Pred Point"
+            )
+
+            # Project Pred 3D vector to get 2D displacement
+            pred_start_3d = motion_origin_gt  # Assume prediction is for the same origin
+            pred_end_3d = pred_start_3d + motion_pred * arrow_scale
+            pred_proj_points = project_3d_to_2d(
+                torch.stack([pred_start_3d, pred_end_3d]), device="cpu"
+            )
+            pred_dx = pred_proj_points[1, 0] - pred_proj_points[0, 0]
+            pred_dy = pred_proj_points[1, 1] - pred_proj_points[0, 1]
+
+            axes[1, 3].arrow(
+                pred_x_pt,
+                pred_y_pt,
+                pred_dx,
+                pred_dy,
+                width=arrow_width,
+                head_width=20,
+                head_length=15,
+                fc="cyan",
+                ec="blue",
+                label="Pred Motion",
+            )
+            axes[1, 3].set_title("Predicted Point & Motion")
+            axes[1, 3].set_xlim(0, w)
+            axes[1, 3].set_ylim(h, 0)  # Invert y-axis for image coordinates
+            axes[1, 3].legend()
+            axes[1, 3].axis("off")
 
             plt.tight_layout(rect=(0, 0.03, 1, 0.95))
 
@@ -337,6 +449,7 @@ def get_training_parser():
 
 
 def main():
+    print("Starting test script...")
     parser = get_training_parser()
     args = parser.parse_args()
 
@@ -410,15 +523,19 @@ def main():
     trainer = pl.Trainer(
         accelerator=accelerator_type,
         devices=devices_val,
+        strategy=(
+            "auto" if devices_val == 1 else "ddp"
+        ),  # Use 'auto' for single device to avoid distributed mode
         precision=cfg.precision,
         logger=False,  # Disable logging for testing
         default_root_dir=cfg.output_dir,
         deterministic=False,
+        use_distributed_sampler=False,  # Explicitly disable distributed sampler for testing
     )
 
     print(f"Loading model from checkpoint: {args.checkpoint}")
     print(
-        f"Testing with 10 samples from training set and 10 samples from validation set"
+        f"Testing with up to 10 samples from training set and up to 10 samples from validation set"
     )
     print(f"Visualizations will be saved to: test_visualizations/")
 
@@ -429,4 +546,5 @@ def main():
 
 
 if __name__ == "__main__":
+    print("Starting test script...")
     main()

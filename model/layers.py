@@ -19,6 +19,32 @@ def linear_layer(in_dim, out_dim, bias=False):
     )
 
 
+class DepthEncoder(nn.Module):
+    def __init__(self, in_channels=1, out_channels=[128, 256]):
+        super().__init__()
+        # os4 -> os8
+        self.conv1 = nn.Sequential(
+            conv_layer(in_channels, 64, 3, padding=1),
+            conv_layer(64, out_channels[0], 3, padding=1),
+        )
+        # os8 -> os16
+        self.conv2 = nn.Sequential(
+            nn.MaxPool2d(2, 2),
+            conv_layer(out_channels[0], out_channels[0], 3, padding=1),
+            conv_layer(out_channels[0], out_channels[1], 3, padding=1),
+        )
+
+    def forward(self, x):
+        # /4
+        x = F.max_pool2d(x, 2, 2)
+        x = F.max_pool2d(x, 2, 2)
+        # /8
+        feat_8 = self.conv1(x)
+        # /16
+        feat_16 = self.conv2(feat_8)
+        return feat_8, feat_16
+
+
 class CoordConv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, padding=1, stride=1):
         super().__init__()
@@ -96,8 +122,8 @@ class Projector_Mult(nn.Module):
     out_channels lets the same weight generator produce several maps
     (e.g. mask + point).
     """
-    def __init__(self, word_dim, in_dim,
-                 kernel_size, out_channels):
+
+    def __init__(self, word_dim, in_dim, kernel_size, out_channels):
         super().__init__()
         self.in_dim = in_dim
         self.kernel_size = kernel_size
@@ -114,9 +140,9 @@ class Projector_Mult(nn.Module):
 
         # ONE linear generates weights for all heads
         # (out_channels × in_dim × k × k) + (out_channels × bias)
-        self.txt = nn.Linear(word_dim,
-                             out_channels * in_dim * kernel_size * kernel_size
-                             + out_channels)
+        self.txt = nn.Linear(
+            word_dim, out_channels * in_dim * kernel_size * kernel_size + out_channels
+        )
 
     def forward(self, x, word):
         """
@@ -124,21 +150,86 @@ class Projector_Mult(nn.Module):
         word : B × word_dim
         """
         x = self.vis(x)
-        B, C, H, W = x.shape                      # x ← B×C×H×W
+        B, C, H, W = x.shape  # x ← B×C×H×W
 
         # dynamic weights from text
-        w_and_b = self.txt(word)                  # B × …
-        weight, bias = w_and_b[:,:-self.out_channels], w_and_b[:,-self.out_channels:]
-        weight = weight.contiguous().view(B*self.out_channels, C,
-                             self.kernel_size, self.kernel_size)  # (B·out)×C×k×k
-        bias   = bias.flatten()                   # (B·out)
+        w_and_b = self.txt(word)  # B × …
+        weight, bias = (
+            w_and_b[:, : -self.out_channels],
+            w_and_b[:, -self.out_channels :],
+        )
+        weight = weight.contiguous().view(
+            B * self.out_channels, C, self.kernel_size, self.kernel_size
+        )  # (B·out)×C×k×k
+        bias = bias.flatten()  # (B·out)
 
-        x = x.reshape(1, B*C, H, W)               # 1 × (B·C) × H × W
-        y = F.conv2d(x, weight, bias=bias,
-                     padding=self.kernel_size//2,
-                     groups=B)                    # 1 × (B·out) × H × W
-        y = y.view(B, self.out_channels, H, W)    # B × out × H × W
+        x = x.reshape(1, B * C, H, W)  # 1 × (B·C) × H × W
+        y = F.conv2d(
+            x, weight, bias=bias, padding=self.kernel_size // 2, groups=B
+        )  # 1 × (B·out) × H × W
+        y = y.view(B, self.out_channels, H, W)  # B × out × H × W
         return y
+
+
+class MotionVAE(nn.Module):
+    def __init__(self, feature_dim, condition_dim, latent_dim=32, hidden_dim=256):
+        super().__init__()
+        self.latent_dim = latent_dim
+
+        # motion_dim is 3 for the 3D motion vector
+        motion_dim = 3
+
+        # Encoder
+        self.enc_mlp = nn.Sequential(
+            nn.Linear(feature_dim + motion_dim, hidden_dim),
+            nn.ReLU(True),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(True),
+        )
+        self.linear_means = nn.Linear(hidden_dim, latent_dim)
+        self.linear_log_var = nn.Linear(hidden_dim, latent_dim)
+
+        # Decoder
+        self.dec_mlp = nn.Sequential(
+            nn.Linear(latent_dim + condition_dim, hidden_dim),
+            nn.ReLU(True),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(True),
+            nn.Linear(hidden_dim, motion_dim),
+        )
+
+    def reparameterize(self, mu, log_var):
+        std = torch.exp(0.5 * log_var)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def forward(self, motion_gt, features, condition):
+        """
+        motion_gt: (B, 3) - ground truth motion vector
+        features: (B, feature_dim) - features for the encoder, e.g., from grid_sample
+        condition: (B, condition_dim) - condition for the decoder, e.g., features + coords
+        """
+        # Encode
+        enc_input = torch.cat([features, motion_gt], dim=1)
+        h = self.enc_mlp(enc_input)
+        mean = self.linear_means(h)
+        log_var = self.linear_log_var(h)
+
+        # Reparameterize
+        z = self.reparameterize(mean, log_var)
+
+        # Decode
+        dec_input = torch.cat([z, condition], dim=1)
+        motion_pred = self.dec_mlp(dec_input)
+
+        return motion_pred, mean, log_var
+
+    def inference(self, condition):
+        B = condition.shape[0]
+        z = torch.randn(B, self.latent_dim, device=condition.device)
+        dec_input = torch.cat([z, condition], dim=1)
+        motion_pred = self.dec_mlp(dec_input)
+        return motion_pred
 
 
 class TransformerDecoder(nn.Module):

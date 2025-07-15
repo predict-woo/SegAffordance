@@ -41,7 +41,7 @@ class SF3DDataset(Dataset):
         """
         Args:
             lmdb_data_root (str): Path to the root directory of the LMDB dataset
-                                     (output of convert_to_lmdb.py).
+                                     (output of process_frames_with_items.py).
             rgb_transform (callable, optional): Optional transform to be applied on the RGB image.
             mask_transform (callable, optional): Optional transform for the reconstructed mask.
                                                 Note: Mask is binary {0,1} after reconstruction.
@@ -60,8 +60,12 @@ class SF3DDataset(Dataset):
             image_size_for_mask_reconstruction  # (height, width)
         )
 
-        self.lmdb_path = self.lmdb_data_root / "data.lmdb"
+        # self.lmdb_path = self.lmdb_data_root / "data.lmdb"
         self.lmdb_path = Path("/dev/shm/data.lmdb")
+        # The following line is useful for loading from shared memory for faster access,
+        # but it's commented out to make the code more portable by default.
+        # You can uncomment it and adjust the path if you copy your data.lmdb to /dev/shm.
+        # self.lmdb_path = Path("/dev/shm/data.lmdb")
 
         if not self.lmdb_path.exists():
             raise FileNotFoundError(f"LMDB database not found at {self.lmdb_path}")
@@ -102,10 +106,9 @@ class SF3DDataset(Dataset):
         item_data = pickle.loads(item_data_bytes)
 
         # --- Load RGB Image ---
-        # Path is relative to lmdb_data_root
-        rgb_image_actual_path = (
-            self.lmdb_data_root / item_data["rgb_image_path_relative"]
-        )
+        # Path is relative to lmdb_data_root/images
+        rgb_image_filename = item_data["rgb_image_path"]
+        rgb_image_actual_path = self.lmdb_data_root / "images" / rgb_image_filename
         rgb_image_pil = Image.open(rgb_image_actual_path).convert("RGB")
         original_width, original_height = rgb_image_pil.size
 
@@ -150,6 +153,8 @@ class SF3DDataset(Dataset):
         # --- Load Motion Info & Interaction Point ---
         motion_info = item_data["motion_info"]
         origin_2d_image_coord_norm = torch.zeros(2, dtype=torch.float32)  # Default
+        motion_dir_3d_camera_coords = torch.zeros(3, dtype=torch.float32)
+        motion_origin_3d_camera_coords = torch.zeros(3, dtype=torch.float32)
 
         frame_specific_motion = motion_info.get("frame_specific_motion_data")
         if frame_specific_motion:
@@ -166,12 +171,31 @@ class SF3DDataset(Dataset):
                     [norm_x, norm_y], dtype=torch.float32
                 )
 
+            motion_vec = frame_specific_motion.get("motion_dir_3d_camera_coords")
+            if motion_vec is not None and len(motion_vec) == 3:
+                motion_dir_3d_camera_coords = torch.tensor(
+                    motion_vec, dtype=torch.float32
+                )
+
+            origin_3d = frame_specific_motion.get("motion_origin_3d_camera_coords")
+            if origin_3d is not None and len(origin_3d) == 3:
+                motion_origin_3d_camera_coords = torch.tensor(
+                    origin_3d, dtype=torch.float32
+                )
+
         # Clamp the normalized coordinates to be within [0, 1]
         origin_2d_image_coord_norm = torch.clamp(origin_2d_image_coord_norm, 0.0, 1.0)
 
         # Match return signature of previous version
-        # img, word, mask, interaction_point
-        return rgb_image_tensor, description, mask_tensor, origin_2d_image_coord_norm
+        # The model expects 5 items. We discard the 3D motion origin as the VAE
+        # is designed to only predict the 3D direction.
+        return (
+            rgb_image_tensor,
+            description,
+            mask_tensor,
+            origin_2d_image_coord_norm,
+            motion_dir_3d_camera_coords,
+        )
 
     def __del__(self):
         if self.env:
@@ -259,98 +283,3 @@ def split_dataset_by_scene(
     val_subset = Subset(dataset, val_indices)
 
     return train_subset, val_subset
-
-
-if __name__ == "__main__":
-    # --- Configuration --- #
-    # !!! IMPORTANT: Set this to the root directory of your LMDB-converted data !!!
-    LMDB_DATASET_ROOT = "/cluster/scratch/andrye/SF3D_lmdb"  # EXAMPLE PATH
-    # Example: LMDB_DATASET_ROOT = "output_from_convert_to_lmdb_script/train"
-
-    BATCH_SIZE = 4
-    NUM_WORKERS = 0  # Start with 0 for LMDB, can increase but requires careful LMDB handling in __getitem__ or worker_init_fn
-    TARGET_IMAGE_SIZE = (224, 224)  # (height, width)
-
-    print(f"Attempting to load LMDB data from: {LMDB_DATASET_ROOT}")
-
-    # Get default transforms (or define your own)
-    default_rgb_transform, default_mask_transform = get_default_transforms(
-        image_size=TARGET_IMAGE_SIZE
-    )
-
-    # Create Dataset
-    item_dataset = SF3DDataset(
-        lmdb_data_root=LMDB_DATASET_ROOT,
-        rgb_transform=default_rgb_transform,
-        mask_transform=default_mask_transform,  # Pass the transform for reconstructed PIL mask
-        image_size_for_mask_reconstruction=TARGET_IMAGE_SIZE,  # Pass this for default internal mask processing
-    )
-
-    # Create DataLoader
-    item_dataloader = DataLoader(
-        item_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=True,
-        num_workers=NUM_WORKERS,
-        pin_memory=(
-            True if torch.cuda.is_available() and NUM_WORKERS == 0 else False
-        ),  # pin_memory often needs num_workers=0 or custom handling
-    )
-
-    print(f"Successfully created DataLoader with {len(item_dataloader)} batches.")
-
-    # --- Iterate through a few batches to test --- #
-    print(
-        f"Iterating through DataLoader batches (TARGET_IMAGE_SIZE: {TARGET_IMAGE_SIZE}):"
-    )
-    for i, batch_data in enumerate(tqdm.tqdm(item_dataloader, desc="Batches")):
-        rgb_images, descriptions, masks, interaction_points = batch_data
-
-        # Basic checks
-        if i == 0:  # Check first batch details
-            print(f"  Batch {i+1}:")
-            print(
-                f"    RGB Image batch shape: {rgb_images.shape}, type: {rgb_images.dtype}"
-            )
-            # save rgb_images[0] as an image using cv2
-            cv2.imwrite(
-                "debug_rgb_sample.png", rgb_images[0].permute(1, 2, 0).numpy() * 255
-            )
-            print(f"    Mask batch shape: {masks.shape}, type: {masks.dtype}")
-            cv2.imwrite(
-                "debug_mask_sample.png", masks[0].permute(1, 2, 0).numpy() * 255
-            )
-            print(f"    Descriptions (first in batch): '{descriptions[0][:70]}...'")
-            print(f"    Interaction Points (first in batch): {interaction_points[0]}")
-            print(f"    Interaction Points batch shape: {interaction_points.shape}")
-
-        # Check for empty description string (already done in LMDB generation but good for sanity)
-        for desc_idx, description in enumerate(descriptions):
-            if description == "":
-                print(
-                    f"Warning: Empty description string in batch {i}, item index in batch {desc_idx}"
-                )
-
-        # Check mask values (should be 0. or 1.)
-        if not ((masks == 0.0) | (masks == 1.0)).all():
-            print(f"Warning: Batch {i} masks are not strictly binary (0.0 or 1.0).")
-            unique_mask_vals = torch.unique(masks)
-            print(f"    Unique values in mask batch: {unique_mask_vals}")
-
-        # For more detailed debugging, you might save a sample image and mask:
-        # if i == 0:
-        #     from torchvision.utils import save_image
-        #     save_image(rgb_images[0], "debug_rgb_sample.png")
-        #     save_image(masks[0], "debug_mask_sample.png") # This will be a binary mask
-        #     print("    Saved sample RGB and mask for the first item in the first batch.")
-
-        if i >= 2 and os.environ.get("CI"):  # Stop early in CI for speed
-            break
-
-    print("\nDone with example dataloader iteration.")
-
-    # Explicitly delete dataset to trigger __del__ for LMDB env.close() if needed,
-    # though Python's GC should handle it upon script exit.
-    del item_dataset
-    del item_dataloader
-    print("Dataset and DataLoader objects deleted.")
