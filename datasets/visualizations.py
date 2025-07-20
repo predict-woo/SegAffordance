@@ -154,6 +154,11 @@ def visualize_dataset(
                 motion_dir_3d,
             ) = sample
 
+            # print the pythagorian length of the motion_dir_3d
+            print(
+                f"Pythagorian length of motion_dir_3d: {np.linalg.norm(motion_dir_3d)}"
+            )
+
             # --- Process Depth Image ---
             depth_np = depth_image_tensor.squeeze().numpy()
             depth_vis = cv2.normalize(

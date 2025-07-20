@@ -1,0 +1,192 @@
+Running test with prediction threshold: 0.2
+ℹ️ Using device: cuda
+📝 Loading descriptions from './test-full.csv'
+✅ Loaded 48117 descriptions for 4960 images.
+📦 Loading model from checkpoint: /cluster/project/cvg/students/andrye/experiments/OPDReal_w_motion_type_v1/epoch=2-val/loss_total=1.0314.ckpt
+✅ Model loaded successfully.
+📚 Setting up dataset for key: MotionNet_test
+✅ Dataset loaded. Found 11797 samples.
+
+--- Evaluation Results ---
+Total Samples: 11797
+IoU Threshold for Match: 0.50
+Motion Threshold for P_ADir: 10.00 degrees
+--------------------------
+Mean IoU: 0.5330
+Mean Point Error (L2 Norm): 0.2216
+Matched Predictions (IoU > 0.50): 6715
+ERR_ADir (Mean Axis Error): 19.23 degrees
+P_ADir (Precision for Axis): 50.25%
+mAP_Type (IoU > 0.50 & Correct Type): 52.03%
+Precision_Type (Correct Type for Matched): 91.41%
+--------------------------
+
+-----------------------------------------------------
+Running test with prediction threshold: 0.3
+ℹ️ Using device: cuda
+📝 Loading descriptions from './test-full.csv'
+✅ Loaded 48117 descriptions for 4960 images.
+📦 Loading model from checkpoint: /cluster/project/cvg/students/andrye/experiments/OPDReal_w_motion_type_v1/epoch=2-val/loss_total=1.0314.ckpt
+✅ Model loaded successfully.
+📚 Setting up dataset for key: MotionNet_test
+✅ Dataset loaded. Found 11797 samples.
+
+--- Evaluation Results ---
+Total Samples: 11797
+IoU Threshold for Match: 0.50
+Motion Threshold for P_ADir: 10.00 degrees
+--------------------------
+Mean IoU: 0.5451
+Mean Point Error (L2 Norm): 0.2194
+Matched Predictions (IoU > 0.50): 6987
+ERR_ADir (Mean Axis Error): 18.67 degrees
+P_ADir (Precision for Axis): 51.52%
+mAP_Type (IoU > 0.50 & Correct Type): 54.39%
+Precision_Type (Correct Type for Matched): 91.83%
+--------------------------
+
+-----------------------------------------------------
+Running test with prediction threshold: 0.4
+ℹ️ Using device: cuda
+📝 Loading descriptions from './test-full.csv'
+✅ Loaded 48117 descriptions for 4960 images.
+📦 Loading model from checkpoint: /cluster/project/cvg/students/andrye/experiments/OPDReal_w_motion_type_v1/epoch=2-val/loss_total=1.0314.ckpt
+✅ Model loaded successfully.
+📚 Setting up dataset for key: MotionNet_test
+✅ Dataset loaded. Found 11797 samples.
+
+--- Evaluation Results ---
+Total Samples: 11797
+IoU Threshold for Match: 0.50
+Motion Threshold for P_ADir: 10.00 degrees
+--------------------------
+Mean IoU: 0.5489
+Mean Point Error (L2 Norm): 0.2187
+Matched Predictions (IoU > 0.50): 7151
+ERR_ADir (Mean Axis Error): 18.07 degrees
+P_ADir (Precision for Axis): 51.98%
+mAP_Type (IoU > 0.50 & Correct Type): 55.93%
+Precision_Type (Correct Type for Matched): 92.27%
+--------------------------
+
+-----------------------------------------------------
+Running test with prediction threshold: 0.5
+ℹ️ Using device: cuda
+📝 Loading descriptions from './test-full.csv'
+✅ Loaded 48117 descriptions for 4960 images.
+📦 Loading model from checkpoint: /cluster/project/cvg/students/andrye/experiments/OPDReal_w_motion_type_v1/epoch=2-val/loss_total=1.0314.ckpt
+✅ Model loaded successfully.
+📚 Setting up dataset for key: MotionNet_test
+✅ Dataset loaded. Found 11797 samples.
+
+--- Evaluation Results ---
+Total Samples: 11797
+IoU Threshold for Match: 0.50
+Motion Threshold for P_ADir: 10.00 degrees
+--------------------------
+Mean IoU: 0.5457
+Mean Point Error (L2 Norm): 0.2184
+Matched Predictions (IoU > 0.50): 7218
+ERR_ADir (Mean Axis Error): 17.57 degrees
+P_ADir (Precision for Axis): 52.69%
+mAP_Type (IoU > 0.50 & Correct Type): 56.78%
+Precision_Type (Correct Type for Matched): 92.80%
+--------------------------
+
+-----------------------------------------------------
+Running test with prediction threshold: 0.6
+ℹ️ Using device: cuda
+📝 Loading descriptions from './test-full.csv'
+✅ Loaded 48117 descriptions for 4960 images.
+📦 Loading model from checkpoint: /cluster/project/cvg/students/andrye/experiments/OPDReal_w_motion_type_v1/epoch=2-val/loss_total=1.0314.ckpt
+✅ Model loaded successfully.
+📚 Setting up dataset for key: MotionNet_test
+✅ Dataset loaded. Found 11797 samples.
+
+--- Evaluation Results ---
+Total Samples: 11797
+IoU Threshold for Match: 0.50
+Motion Threshold for P_ADir: 10.00 degrees
+--------------------------
+Mean IoU: 0.5358
+Mean Point Error (L2 Norm): 0.2187
+Matched Predictions (IoU > 0.50): 7137
+ERR_ADir (Mean Axis Error): 17.06 degrees
+P_ADir (Precision for Axis): 53.72%
+mAP_Type (IoU > 0.50 & Correct Type): 56.29%
+Precision_Type (Correct Type for Matched): 93.05%
+--------------------------
+
+-----------------------------------------------------
+Running test with prediction threshold: 0.7
+ℹ️ Using device: cuda
+📝 Loading descriptions from './test-full.csv'
+✅ Loaded 48117 descriptions for 4960 images.
+📦 Loading model from checkpoint: /cluster/project/cvg/students/andrye/experiments/OPDReal_w_motion_type_v1/epoch=2-val/loss_total=1.0314.ckpt
+✅ Model loaded successfully.
+📚 Setting up dataset for key: MotionNet_test
+✅ Dataset loaded. Found 11797 samples.
+
+--- Evaluation Results ---
+Total Samples: 11797
+IoU Threshold for Match: 0.50
+Motion Threshold for P_ADir: 10.00 degrees
+--------------------------
+Mean IoU: 0.5159
+Mean Point Error (L2 Norm): 0.2200
+Matched Predictions (IoU > 0.50): 6939
+ERR_ADir (Mean Axis Error): 16.47 degrees
+P_ADir (Precision for Axis): 54.58%
+mAP_Type (IoU > 0.50 & Correct Type): 55.15%
+Precision_Type (Correct Type for Matched): 93.76%
+--------------------------
+
+-----------------------------------------------------
+Running test with prediction threshold: 0.8
+ℹ️ Using device: cuda
+📝 Loading descriptions from './test-full.csv'
+✅ Loaded 48117 descriptions for 4960 images.
+📦 Loading model from checkpoint: /cluster/project/cvg/students/andrye/experiments/OPDReal_w_motion_type_v1/epoch=2-val/loss_total=1.0314.ckpt
+✅ Model loaded successfully.
+📚 Setting up dataset for key: MotionNet_test
+✅ Dataset loaded. Found 11797 samples.
+
+--- Evaluation Results ---
+Total Samples: 11797
+IoU Threshold for Match: 0.50
+Motion Threshold for P_ADir: 10.00 degrees
+--------------------------
+Mean IoU: 0.4770
+Mean Point Error (L2 Norm): 0.2243
+Matched Predictions (IoU > 0.50): 6357
+ERR_ADir (Mean Axis Error): 15.69 degrees
+P_ADir (Precision for Axis): 55.70%
+mAP_Type (IoU > 0.50 & Correct Type): 50.95%
+Precision_Type (Correct Type for Matched): 94.54%
+--------------------------
+
+-----------------------------------------------------
+Running test with prediction threshold: 0.9
+ℹ️ Using device: cuda
+📝 Loading descriptions from './test-full.csv'
+✅ Loaded 48117 descriptions for 4960 images.
+📦 Loading model from checkpoint: /cluster/project/cvg/students/andrye/experiments/OPDReal_w_motion_type_v1/epoch=2-val/loss_total=1.0314.ckpt
+✅ Model loaded successfully.
+📚 Setting up dataset for key: MotionNet_test
+✅ Dataset loaded. Found 11797 samples.
+
+--- Evaluation Results ---
+Total Samples: 11797
+IoU Threshold for Match: 0.50
+Motion Threshold for P_ADir: 10.00 degrees
+--------------------------
+Mean IoU: 0.3876
+Mean Point Error (L2 Norm): 0.2341
+Matched Predictions (IoU > 0.50): 4710
+ERR_ADir (Mean Axis Error): 14.59 degrees
+P_ADir (Precision for Axis): 57.56%
+mAP_Type (IoU > 0.50 & Correct Type): 38.11%
+Precision_Type (Correct Type for Matched): 95.46%
+--------------------------
+
+-----------------------------------------------------

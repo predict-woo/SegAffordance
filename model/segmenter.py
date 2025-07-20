@@ -72,11 +72,17 @@ class CRIS(nn.Module):
             cfg.fpn_in[2], cfg.fpn_out[1] // 2, 3, out_channels=2
         )
 
+        # motion_features + global_vis_features + global_text_features
+        vae_feature_dim = cfg.fpn_out[1] + cfg.fpn_in[2] + cfg.fpn_in[2]
+        # the above + coordinates
+        vae_condition_dim = vae_feature_dim + 2
+
         self.motion_vae = MotionVAE(
-            feature_dim=cfg.fpn_out[1],
-            condition_dim=cfg.fpn_out[1] + 2,  # feature_dim + 2 for coords
+            feature_dim=vae_feature_dim,
+            condition_dim=vae_condition_dim,
             latent_dim=cfg.vae_latent_dim,
             hidden_dim=cfg.vae_hidden_dim,
+            num_motion_types=cfg.num_motion_types,
         )
 
     def forward(self, img, depth, word, mask, interaction_point, motion_gt=None):
@@ -129,24 +135,53 @@ class CRIS(nn.Module):
         )
 
         # --- Motion VAE part ---
-        # coords_hat is (B, 2) in [0, 1]. grid_sample needs [-1, 1] and shape (B, 1, 1, 2)
-        coords_for_grid = (coords_hat * 2 - 1).view(b, 1, 1, 2)
-        # fq is (B, C, H, W)
-        sampled_features = F.grid_sample(
-            fq, coords_for_grid, mode="bilinear", align_corners=False
+        mask_prob = torch.sigmoid(mask_pred)
+        fq_h, fq_w = fq.shape[-2:]
+        mask_downsampled = F.interpolate(
+            mask_prob, size=(fq_h, fq_w), mode="bilinear", align_corners=False
         )
-        sampled_features = sampled_features.view(b, -1)  # (B, C) -> (B, fpn_out[1])
+        mask_sum = mask_downsampled.sum(dim=(-1, -2), keepdim=True) + 1e-8
+        pooled_features = (fq * mask_downsampled).sum(
+            dim=(-1, -2), keepdim=True
+        ) / mask_sum
+        motion_features = pooled_features.squeeze(-1).squeeze(
+            -1
+        )  # (B, C) -> (B, fpn_out[1])
 
-        vae_condition = torch.cat([sampled_features, coords_hat], dim=1)
+        # Create rich context for VAE
+        # Global visual features
+        global_vis_feat = torch.mean(vis[2], dim=(-1, -2))  # (B, fpn_in[2])
+        # Encoder input
+        vae_encoder_features = torch.cat(
+            [motion_features, global_vis_feat, state], dim=1
+        )
+        # The VAE is conditioned on object features, global features, and the interaction point.
+        vae_condition = torch.cat([vae_encoder_features, coords_hat], dim=1)
 
         # motion_gt can be None during pure inference, but for train/val it's provided.
         if motion_gt is not None:
-            motion_pred, mu, log_var = self.motion_vae(
-                motion_gt, sampled_features, vae_condition
+            motion_pred, motion_type_logits, mu, log_var = self.motion_vae(
+                motion_gt, vae_encoder_features, vae_condition
             )
-            return mask_pred, point_pred, coords_hat, motion_pred, mu, log_var
+            return (
+                mask_pred,
+                point_pred,
+                coords_hat,
+                motion_pred,
+                motion_type_logits,
+                mu,
+                log_var,
+            )
         else:
             # During pure inference (e.g. in a test script), sample z from prior
-            motion_pred = self.motion_vae.inference(vae_condition)
+            motion_pred, motion_type_logits = self.motion_vae.inference(vae_condition)
             # Return None for mu and log_var as they don't exist in this case
-            return mask_pred, point_pred, coords_hat, motion_pred, None, None
+            return (
+                mask_pred,
+                point_pred,
+                coords_hat,
+                motion_pred,
+                motion_type_logits,
+                None,
+                None,
+            )

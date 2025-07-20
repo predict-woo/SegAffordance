@@ -35,13 +35,22 @@ class DepthEncoder(nn.Module):
         )
 
     def forward(self, x):
-        # /4
+        # Input x is (B, 1, H, W)
+        # Downsample to /4
         x = F.max_pool2d(x, 2, 2)
         x = F.max_pool2d(x, 2, 2)
-        # /8
-        feat_8 = self.conv1(x)
-        # /16
+
+        # The original implementation produced a /4 feature map here.
+        # We need to downsample it further to /8 to match the visual features.
+        x_os4 = x
+        x_os8 = F.max_pool2d(x_os4, 2, 2)
+
+        # feat_8 is now at 1/8 resolution
+        feat_8 = self.conv1(x_os8)
+
+        # feat_16 is now at 1/16 resolution, as conv2 contains a maxpool layer.
         feat_16 = self.conv2(feat_8)
+
         return feat_8, feat_16
 
 
@@ -172,9 +181,17 @@ class Projector_Mult(nn.Module):
 
 
 class MotionVAE(nn.Module):
-    def __init__(self, feature_dim, condition_dim, latent_dim=32, hidden_dim=256):
+    def __init__(
+        self,
+        feature_dim,
+        condition_dim,
+        latent_dim=32,
+        hidden_dim=256,
+        num_motion_types=2,
+    ):
         super().__init__()
         self.latent_dim = latent_dim
+        self.num_motion_types = num_motion_types
 
         # motion_dim is 3 for the 3D motion vector
         motion_dim = 3
@@ -195,8 +212,9 @@ class MotionVAE(nn.Module):
             nn.ReLU(True),
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(True),
-            nn.Linear(hidden_dim, motion_dim),
         )
+        self.motion_head = nn.Linear(hidden_dim, motion_dim)
+        self.type_head = nn.Linear(hidden_dim, num_motion_types)
 
     def reparameterize(self, mu, log_var):
         std = torch.exp(0.5 * log_var)
@@ -220,16 +238,20 @@ class MotionVAE(nn.Module):
 
         # Decode
         dec_input = torch.cat([z, condition], dim=1)
-        motion_pred = self.dec_mlp(dec_input)
+        h_dec = self.dec_mlp(dec_input)
+        motion_pred = self.motion_head(h_dec)
+        motion_type_logits = self.type_head(h_dec)
 
-        return motion_pred, mean, log_var
+        return motion_pred, motion_type_logits, mean, log_var
 
     def inference(self, condition):
         B = condition.shape[0]
         z = torch.randn(B, self.latent_dim, device=condition.device)
         dec_input = torch.cat([z, condition], dim=1)
-        motion_pred = self.dec_mlp(dec_input)
-        return motion_pred
+        h_dec = self.dec_mlp(dec_input)
+        motion_pred = self.motion_head(h_dec)
+        motion_type_logits = self.type_head(h_dec)
+        return motion_pred, motion_type_logits
 
 
 class TransformerDecoder(nn.Module):

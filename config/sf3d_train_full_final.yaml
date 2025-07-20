@@ -37,9 +37,12 @@ scheduler_gamma: 0.1             # LR decay factor
 # Loss functions
 loss_bce_weight: 0.5             # Weight for BCE loss in DiceBCELoss
 loss_dice_weight: 0.5            # Weight for Dice loss in DiceBCELoss
-loss_point_sigma: 8.0            # Sigma for Gaussian heatmap generation (in pixels on the feature map)
 loss_coord_weight: 0.3          # Weight for the L1 coordinate regression loss
-loss_vae_weight: 0.2
+loss_vae_weight: 0.3
+loss_motion_type_weight: 0.3
+
+# Loss parameters
+loss_point_sigma: 8.0            # Sigma for Gaussian heatmap generation (in pixels on the feature map)
 loss_vae_beta: 0.01
 
 # Trainer settings
