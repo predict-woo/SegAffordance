@@ -39,15 +39,6 @@ VAL_VIS_SAMPLES = 12
 
 
 class MotionVAELoss(nn.Module):
-    """
-    VAE loss for motion prediction.
-    For motion vectors with non-zero magnitude, it uses a cosine similarity loss
-    to penalize deviations in direction. The loss is 1 - (cos_sim)^2, which is
-    0 for parallel vectors and 1 for orthogonal vectors.
-    For zero-magnitude motion vectors (i.e., static points), it uses MSE loss
-    to encourage the prediction of a zero vector.
-    """
-
     def __init__(self, beta=0.01, cosine_eps=1e-4):
         super().__init__()
         self.beta = beta
@@ -64,7 +55,7 @@ class MotionVAELoss(nn.Module):
         # Cosine similarity loss: 1 - (cos_sim)^2
         # This is low when vectors are parallel/anti-parallel, high when orthogonal.
         cos_sim = self.cos_sim(recon_x, x)
-        recon_loss = (1.0 - torch.pow(cos_sim, 2)).mean()
+        recon_loss = (1.0 - torch.abs(cos_sim)).mean()
 
         # KLD loss, averaged over batch
         kld_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), dim=1)
@@ -273,8 +264,15 @@ class OPDRealTrainingModule(pl.LightningModule):
     def setup(self, stage: typing.Optional[str] = None):
         if stage == "fit" or stage is None:
             print("ℹ️ Setting up datasets for OPDReal...")
-            rgb_transform, mask_transform, depth_transform = get_default_transforms(
-                image_size=(self.cfg.input_size[0], self.cfg.input_size[1])
+            train_rgb_transform, mask_transform, depth_transform = (
+                get_default_transforms(
+                    image_size=(self.cfg.input_size[0], self.cfg.input_size[1]),
+                    is_train=True,
+                )
+            )
+            val_rgb_transform, _, _ = get_default_transforms(
+                image_size=(self.cfg.input_size[0], self.cfg.input_size[1]),
+                is_train=False,
             )
 
             print(
@@ -283,7 +281,7 @@ class OPDRealTrainingModule(pl.LightningModule):
             self.train_dataset = OPDRealDataset(
                 data_path=self.cfg.data_path,
                 dataset_key=self.cfg.train_dataset_key,
-                rgb_transform=rgb_transform,
+                rgb_transform=train_rgb_transform,
                 mask_transform=mask_transform,
                 depth_transform=depth_transform,
             )
@@ -295,7 +293,7 @@ class OPDRealTrainingModule(pl.LightningModule):
             self.val_dataset = OPDRealDataset(
                 data_path=self.cfg.data_path,
                 dataset_key=self.cfg.val_dataset_key,
-                rgb_transform=rgb_transform,
+                rgb_transform=val_rgb_transform,
                 mask_transform=mask_transform,
                 depth_transform=depth_transform,
             )

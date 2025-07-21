@@ -16,16 +16,25 @@ from .OPDReal.motion_data import load_motion_json
 
 
 def get_default_transforms(
-    image_size: Tuple[int, int] = (256, 256)  # (height, width)
+    image_size: Tuple[int, int] = (256, 256), is_train: bool = False
 ) -> Tuple[Callable, Callable, Callable]:
     """Returns a default set of transforms for RGB images, masks, and depth maps."""
-    rgb_transform = transforms.Compose(
+    rgb_transforms_list = [
+        transforms.Resize(image_size),  # (h,w) for Resize
+    ]
+    if is_train:
+        rgb_transforms_list.append(
+            transforms.ColorJitter(
+                brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1
+            )
+        )
+    rgb_transforms_list.extend(
         [
-            transforms.Resize(image_size),  # (h,w) for Resize
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
     )
+    rgb_transform = transforms.Compose(rgb_transforms_list)
     mask_transform = transforms.Compose(
         [
             transforms.Resize(

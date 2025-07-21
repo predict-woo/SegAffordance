@@ -81,3 +81,12 @@ conda activate /cluster/project/cvg/students/andrye/miniconda3/envs/segaffordanc
     --motion_threshold 10.0 \
     --iou_threshold 0.5 \
     --pred_threshold 0.5
+
+
+conda activate /cluster/project/cvg/students/andrye/miniconda3/envs/segaffordance && python test_OPDReal.py \
+    --config config/opd_train_large_beta.yaml \
+    --checkpoint "/cluster/project/cvg/students/andrye/experiments/OPDReal_w_motion_type_v4/epoch=10-val/loss_total=0.8462.ckpt" \
+    --dataset_key MotionNet_test \
+    --motion_threshold 10.0 \
+    --iou_threshold 0.5 \
+    --pred_threshold 0.5

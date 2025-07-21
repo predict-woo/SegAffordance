@@ -11,7 +11,7 @@ sync_bn: True                   # Whether to use SyncBatchNorm
 num_layers: 3                    # Number of layers in Transformer decoder
 num_head: 8                      # Number of attention heads
 dim_ffn: 1024                    # Dimension of feed-forward network in Transformer
-dropout: 0.1                     # Dropout rate in Transformer
+dropout: 0.2                     # Dropout rate in Transformer
 intermediate: False              # Whether the Transformer decoder returns intermediate layer outputs
 
 # VAE for Motion Prediction
@@ -33,7 +33,7 @@ num_workers_val: 16
 
 # Optimizer & Scheduler
 optimizer_lr: 0.00001
-optimizer_weight_decay: 0.00001
+optimizer_weight_decay: 0.0001
 scheduler_milestones: [20, 25]   # Epochs at which to decay learning rate
 scheduler_gamma: 0.1             # LR decay factor
 
@@ -58,8 +58,8 @@ loss_vae_beta: 0.01
 max_epochs: 30
 gpus: 1                          # Number of GPUs to use. If 1, uses GPU 0. If >1, uses specified number of GPUs. If 0, uses CPU.
 precision: 32                    # 32 for float32, 16 for mixed-precision
-exp_name: "OPDReal_w_motion_type_v3"
-output_dir: "/cluster/project/cvg/students/andrye/experiments/OPDReal_w_motion_type_v3" # Base directory for outputs, will be exp_name within this.
+exp_name: "OPDReal_w_motion_type_v6"
+output_dir: "/cluster/project/cvg/students/andrye/experiments/OPDReal_w_motion_type_v6" # Base directory for outputs, will be exp_name within this.
 manual_seed: 42
 enable_wandb: True              # Set to true to enable Weights & Biases logging
 wandb_project: "OPD"     # WandB project name
