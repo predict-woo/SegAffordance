@@ -12,7 +12,7 @@ import cv2
 
 import utils.config as config_loader
 from datasets.opdreal import OPDRealDataset, get_default_transforms
-from train_OPDReal import OPDRealTrainingModule
+from train_OPDMulti import OPDMultiTrainingModule
 from utils.dataset import tokenize
 
 warnings.filterwarnings("ignore")
@@ -26,6 +26,7 @@ def create_debug_visualization(
     output_path: str,
     pred_threshold: float,
     gt_bbox: torch.Tensor,
+    description: str,
 ):
     """
     Creates a debug visualization comparing a GT mask and a predicted mask,
@@ -108,6 +109,16 @@ def create_debug_visualization(
 
     # --- Combine and Save ---
     combined_vis = np.hstack((vis_prob, vis_binary_bbox))
+    cv2.putText(
+        combined_vis,
+        f"Desc: {description}",
+        (10, h - 20),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (255, 255, 255),
+        1,
+        cv2.LINE_AA,
+    )
     cv2.imwrite(output_path, combined_vis)
 
 
@@ -123,6 +134,23 @@ def mask_to_bbox(mask: torch.Tensor) -> torch.Tensor:
     y_min, y_max = torch.where(rows)[0][[0, -1]]
     x_min, x_max = torch.where(cols)[0][[0, -1]]
     return torch.tensor([x_min, y_min, x_max, y_max], device=mask.device)
+
+
+def calculate_mask_iou(
+    mask_pred: torch.Tensor, mask_gt: torch.Tensor
+) -> torch.Tensor:
+    """
+    Calculates IoU for two binary masks of the same size.
+    """
+    # Ensure masks are boolean for logical operations
+    mask_pred_bool = mask_pred.bool()
+    mask_gt_bool = mask_gt.bool()
+
+    intersection = torch.logical_and(mask_pred_bool, mask_gt_bool).sum()
+    union = torch.logical_or(mask_pred_bool, mask_gt_bool).sum()
+
+    iou = (intersection.float() + 1e-7) / (union.float() + 1e-7)
+    return iou
 
 
 def calculate_bbox_iou(
@@ -172,7 +200,7 @@ def calculate_axis_error(
 
 def get_test_parser() -> argparse.ArgumentParser:
     """Creates the argument parser for the test script."""
-    parser = argparse.ArgumentParser(description="Test CRIS model on OPDReal data")
+    parser = argparse.ArgumentParser(description="Test CRIS model on OPDMulti data")
     parser.add_argument(
         "--config",
         type=str,
@@ -238,7 +266,7 @@ def main():
 
     # --- Model Loading ---
     print(f"📦 Loading model from checkpoint: {args.checkpoint}")
-    model = OPDRealTrainingModule.load_from_checkpoint(args.checkpoint, cfg=cfg)
+    model = OPDMultiTrainingModule.load_from_checkpoint(args.checkpoint, cfg=cfg)
     model.to(device)
     model.eval()
     print("✅ Model loaded successfully.")
@@ -336,10 +364,9 @@ def main():
             for i in range(img.size(0)):
                 # 1. Calculate and store IoU
                 pred_mask_binary = (
-                    mask_pred_upsampled[i].squeeze() > args.pred_threshold
+                    mask_pred_upsampled[i] > args.pred_threshold
                 ).float()
-                pred_bbox = mask_to_bbox(pred_mask_binary)
-                iou = calculate_bbox_iou(pred_bbox.cpu(), bbox_gt[i].cpu())
+                iou = calculate_mask_iou(pred_mask_binary, mask_gt[i])
                 ious.append(iou.item())
 
                 # Optional: Save debug visualization
@@ -354,6 +381,7 @@ def main():
                         output_path,
                         args.pred_threshold,
                         bbox_gt[i],
+                        word_str_list[i],
                     )
 
                 # 2. Calculate and store point error

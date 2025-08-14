@@ -12,6 +12,7 @@ num_layers: 3                    # Number of layers in Transformer decoder
 num_head: 8                      # Number of attention heads
 dim_ffn: 1024                    # Dimension of feed-forward network in Transformer
 dropout: 0.2                     # Dropout rate in Transformer
+proj_dropout: 0.25
 intermediate: False              # Whether the Transformer decoder returns intermediate layer outputs
 
 # VAE for Motion Prediction
@@ -25,6 +26,7 @@ depth_feat_channels: [128, 256]
 data_path: "/cluster/project/cvg/students/andrye/dataset/MotionDataset_h5_real"
 train_dataset_key: "MotionNet_train" # Key for the training dataset split
 val_dataset_key: "MotionNet_valid"   # Key for the validation dataset split
+test_dataset_key: "MotionNet_test"   # Key for the test dataset split
 input_size: [256, 256]           # Image input size (height, width)
 batch_size_train: 64
 batch_size_val: 64
@@ -34,7 +36,7 @@ num_workers_val: 16
 # Optimizer & Scheduler
 optimizer_lr: 0.00001
 optimizer_weight_decay: 0.0001
-scheduler_milestones: [20, 25]   # Epochs at which to decay learning rate
+scheduler_milestones: [70, 90]   # Epochs at which to decay learning rate
 scheduler_gamma: 0.1             # LR decay factor
 
 # motion type
@@ -45,6 +47,8 @@ loss_bce_weight: 0.5             # Weight for BCE loss in DiceBCELoss
 loss_dice_weight: 0.5            # Weight for Dice loss in DiceBCELoss
 
 # loss weights
+loss_mask_weight: 0.5           # Add this (previously implicit 1.0)
+loss_point_map_weight: 1.0 
 loss_coord_weight: 0.5          # Weight for the L1 coordinate regression loss
 loss_vae_weight: 0.5
 loss_motion_type_weight: 0.5
@@ -55,11 +59,11 @@ loss_vae_beta: 0.01
 
 
 # Trainer settings
-max_epochs: 30
+max_epochs: 100
 gpus: 1                          # Number of GPUs to use. If 1, uses GPU 0. If >1, uses specified number of GPUs. If 0, uses CPU.
-precision: 32                    # 32 for float32, 16 for mixed-precision
-exp_name: "OPDReal_w_motion_type_v6"
-output_dir: "/cluster/project/cvg/students/andrye/experiments/OPDReal_w_motion_type_v6" # Base directory for outputs, will be exp_name within this.
+precision: 16                    # 32 for float32, 16 for mixed-precision
+exp_name: "OPDReal_w_motion_type_v8"
+output_dir: "/cluster/project/cvg/students/andrye/experiments/OPDReal_w_motion_type_v8" # Base directory for outputs, will be exp_name within this.
 manual_seed: 42
 enable_wandb: True              # Set to true to enable Weights & Biases logging
 wandb_project: "OPD"     # WandB project name

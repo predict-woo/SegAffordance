@@ -132,11 +132,12 @@ class Projector_Mult(nn.Module):
     (e.g. mask + point).
     """
 
-    def __init__(self, word_dim, in_dim, kernel_size, out_channels):
+    def __init__(self, word_dim, in_dim, kernel_size, out_channels, proj_dropout=0.0):
         super().__init__()
         self.in_dim = in_dim
         self.kernel_size = kernel_size
         self.out_channels = out_channels
+        self.proj_dropout = proj_dropout
 
         # visual tower (unchanged)
         self.vis = nn.Sequential(
@@ -147,10 +148,13 @@ class Projector_Mult(nn.Module):
             nn.Conv2d(in_dim, in_dim, 1),
         )
 
-        # ONE linear generates weights for all heads
-        # (out_channels × in_dim × k × k) + (out_channels × bias)
-        self.txt = nn.Linear(
-            word_dim, out_channels * in_dim * kernel_size * kernel_size + out_channels
+        # Text processing with dropout
+        self.txt_fc = nn.Sequential(
+            nn.Linear(
+                word_dim,
+                out_channels * in_dim * kernel_size * kernel_size + out_channels,
+            ),
+            nn.Dropout(self.proj_dropout),
         )
 
     def forward(self, x, word):
@@ -162,7 +166,7 @@ class Projector_Mult(nn.Module):
         B, C, H, W = x.shape  # x ← B×C×H×W
 
         # dynamic weights from text
-        w_and_b = self.txt(word)  # B × …
+        w_and_b = self.txt_fc(word)  # B × …
         weight, bias = (
             w_and_b[:, : -self.out_channels],
             w_and_b[:, -self.out_channels :],

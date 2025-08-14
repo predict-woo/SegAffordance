@@ -36,6 +36,12 @@ def get_parser():
         help="Dataset key, e.g., 'opd_v_real_test'",
     )
     parser.add_argument(
+        "--is-multi",
+        action="store_true",
+        default=False,
+        help="indication if the dataset is OPDMulti or OPDReal",
+    )
+    parser.add_argument(
         "--axis_threshold",
         type=float,
         default=10.0,
@@ -139,6 +145,7 @@ def main():
         rgb_transform=rgb_transform,
         mask_transform=mask_transform,
         depth_transform=depth_transform,
+        is_multi=args.is_multi,
     )
 
     dataloader = DataLoader(

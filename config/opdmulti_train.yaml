@@ -1,0 +1,43 @@
+data:
+  data_path: "/cluster/project/cvg/students/andrye/OPDMulti/MotionDataset_h5"
+  is_multi: True
+
+# Ensure global deterministic seeding
+seed_everything: 42
+
+trainer:
+  num_nodes: 1
+  accelerator: "gpu"
+  devices: 1
+  # strategy: "ddp_find_unused_parameters_true"
+  strategy: "auto"
+  max_epochs: 30
+  precision: 16
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: "/cluster/project/cvg/students/andrye/experiments/OPDMulti_v10"
+        monitor: val/loss_total
+        mode: min
+        save_top_k: 5
+        filename: "best-{epoch}-{val/loss_total:.4f}"
+  logger:
+    class_path: pytorch_lightning.loggers.WandbLogger
+    init_args:
+      name: "OPDMulti_v11"
+      project: "OPD_final"
+      save_dir: "/cluster/scratch/andrye/wandb_logs/OPDMulti_v11"
+      log_model: false
+
+  log_every_n_steps: 10
+
+model:
+  optimizer_params:
+    lr: 0.00001
+    weight_decay: 0.0001
+    scheduler_milestones: [20, 25]   # Epochs at which to decay learning rate
+    scheduler_gamma: 0.1             # LR decay factor
+  train_only_heads: true
+  finetune_from_path: "/cluster/project/cvg/students/andrye/experiments/OPDReal_v12_bce/best-epoch=9-val/loss_total=0.5307.ckpt"
+  model_params:
+    proj_dropout: 0.5

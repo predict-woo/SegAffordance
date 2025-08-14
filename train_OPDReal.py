@@ -9,16 +9,15 @@ import torch.nn as nn
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, Callback
 from pytorch_lightning.loggers import WandbLogger
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, Dataset
 from torch.optim.lr_scheduler import MultiStepLR
 from pytorch_lightning.strategies import DDPStrategy
 
-import utils.config as config_loader
+import util.config as config_loader
 from datasets.opdreal import OPDRealDataset, get_default_transforms
 from model.segmenter import CRIS
-from utils.dataset import tokenize
+from util.dataset import tokenize
 from config.type_sf3d_cfg import SF3DConfig
-import pickle
 
 import wandb
 import cv2
@@ -26,8 +25,6 @@ import numpy as np
 
 # Import helpers from the SF3D training script
 from train_SF3D import make_gaussian_map, DiceBCELoss
-
-
 from argparse import Namespace
 
 warnings.filterwarnings("ignore")
@@ -36,7 +33,6 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 # --- New VAE Loss for Motion --- #
 
 VAL_VIS_SAMPLES = 12
-
 
 class MotionVAELoss(nn.Module):
     def __init__(self, beta=0.01, cosine_eps=1e-4):
@@ -55,7 +51,7 @@ class MotionVAELoss(nn.Module):
         # Cosine similarity loss: 1 - (cos_sim)^2
         # This is low when vectors are parallel/anti-parallel, high when orthogonal.
         cos_sim = self.cos_sim(recon_x, x)
-        recon_loss = (1.0 - torch.abs(cos_sim)).mean()
+        recon_loss = (1.0 - torch.pow(cos_sim, 2)).mean()
 
         # KLD loss, averaged over batch
         kld_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), dim=1)
@@ -66,10 +62,12 @@ class MotionVAELoss(nn.Module):
 
 
 # --- PyTorch Lightning Module for OPDReal --- #
-
-
 class OPDRealTrainingModule(pl.LightningModule):
-    def __init__(self, cfg: typing.Union[SF3DConfig, dict]):
+    def __init__(
+        self,
+        cfg: typing.Union[SF3DConfig, dict],
+        finetune_from_path: typing.Optional[str] = None,
+    ):
         super().__init__()
         self.save_hyperparameters(cfg)
 
@@ -90,7 +88,10 @@ class OPDRealTrainingModule(pl.LightningModule):
         self.point_map_loss_fn = nn.BCEWithLogitsLoss()
         self.coord_loss_fn = nn.L1Loss()
         self.vae_loss_fn = MotionVAELoss(beta=self.cfg.loss_vae_beta)
-        self.motion_type_loss_fn = nn.CrossEntropyLoss()
+        self.motion_type_loss_fn = nn.CrossEntropyLoss(label_smoothing=0.1)
+
+        if finetune_from_path:
+            self.load_finetune_weights(finetune_from_path)
 
         self.train_dataset: typing.Optional[Dataset] = None
         self.val_dataset: typing.Optional[Dataset] = None
@@ -157,8 +158,8 @@ class OPDRealTrainingModule(pl.LightningModule):
         )
 
         total_loss = (
-            L_mask
-            + L_point_map
+            (self.cfg.loss_mask_weight * L_mask)
+            + (self.cfg.loss_point_map_weight * L_point_map)
             + (self.cfg.loss_coord_weight * L_coord)
             + (self.cfg.loss_vae_weight * L_vae)
             + (self.cfg.loss_motion_type_weight * L_motion_type)
@@ -416,6 +417,41 @@ class OPDRealTrainingModule(pl.LightningModule):
     def on_validation_epoch_end(self):
         pass
 
+    def load_finetune_weights(self, checkpoint_path: str):
+        print(f"🔩 Loading weights for finetuning from: {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        state_dict = checkpoint.get("state_dict", checkpoint)
+
+        # Strip "model." prefix from keys to match the model's state_dict
+        if any(key.startswith("model.") for key in state_dict.keys()):
+            state_dict = {k.replace("model.", "", 1): v for k, v in state_dict.items()}
+
+        model_state_dict = self.model.state_dict()
+
+        # Filter out unnecessary keys and load only matching ones
+        pretrained_dict = {
+            k: v
+            for k, v in state_dict.items()
+            if k in model_state_dict and v.size() == model_state_dict[k].size()
+        }
+
+        if not pretrained_dict:
+            print("⚠️ Warning: No matching keys found in the pretrained model.")
+            return
+
+        model_state_dict.update(pretrained_dict)
+        self.model.load_state_dict(model_state_dict)
+
+        loaded_keys = pretrained_dict.keys()
+        model_keys = model_state_dict.keys()
+
+        unloaded_keys = [k for k in model_keys if k not in loaded_keys]
+
+        if unloaded_keys:
+            print(f"⚠️ Warning: The following keys were not loaded: {unloaded_keys}")
+        else:
+            print("✅ All model weights loaded successfully.")
+
 
 # --- Main Training Script --- #
 
@@ -471,8 +507,20 @@ def create_composite_visualization(
     origin_x = int(point_gt_norm[0] * w)
     origin_y = int(point_gt_norm[1] * h)
 
-    gt_target_x = origin_x + int(motion_gt.cpu().numpy()[0] * vector_scale)
-    gt_target_y = origin_y + int(motion_gt.cpu().numpy()[1] * vector_scale)
+    # Normalize vectors for visualization to ensure they have the same length
+    motion_gt_2d = motion_gt.cpu().numpy()[:2]
+    motion_pred_2d = motion_pred.cpu().numpy()[:2]
+
+    norm_gt = np.linalg.norm(motion_gt_2d)
+    if norm_gt > 1e-6:
+        motion_gt_2d /= norm_gt
+
+    norm_pred = np.linalg.norm(motion_pred_2d)
+    if norm_pred > 1e-6:
+        motion_pred_2d /= norm_pred
+
+    gt_target_x = origin_x + int(motion_gt_2d[0] * vector_scale)
+    gt_target_y = origin_y + int(motion_gt_2d[1] * vector_scale)
     cv2.arrowedLine(
         composite_img,
         (origin_x, origin_y),
@@ -482,8 +530,8 @@ def create_composite_visualization(
         tipLength=0.3,
     )
 
-    pred_target_x = origin_x + int(motion_pred.cpu().numpy()[0] * vector_scale)
-    pred_target_y = origin_y + int(motion_pred.cpu().numpy()[1] * vector_scale)
+    pred_target_x = origin_x + int(motion_pred_2d[0] * vector_scale)
+    pred_target_y = origin_y + int(motion_pred_2d[1] * vector_scale)
     cv2.arrowedLine(
         composite_img,
         (origin_x, origin_y),
@@ -544,6 +592,9 @@ def create_composite_visualization(
 def main():
     parser = get_training_parser()
     args = parser.parse_args()
+
+    # Set matmul precision for Tensor Cores
+    torch.set_float32_matmul_precision("high")
 
     cfg = config_loader.load_cfg_from_cfg_file(args.config)
 

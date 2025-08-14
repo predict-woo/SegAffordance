@@ -12,7 +12,7 @@ import cv2
 
 import utils.config as config_loader
 from datasets.opdreal import OPDRealDataset, get_default_transforms
-from train_OPDReal import OPDRealTrainingModule
+from train_OPDMulti import OPDMultiTrainingModule
 from utils.dataset import tokenize
 
 warnings.filterwarnings("ignore")
@@ -172,7 +172,7 @@ def calculate_axis_error(
 
 def get_test_parser() -> argparse.ArgumentParser:
     """Creates the argument parser for the test script."""
-    parser = argparse.ArgumentParser(description="Test CRIS model on OPDReal data")
+    parser = argparse.ArgumentParser(description="Test CRIS model on OPDMulti data")
     parser.add_argument(
         "--config",
         type=str,
@@ -238,7 +238,7 @@ def main():
 
     # --- Model Loading ---
     print(f"📦 Loading model from checkpoint: {args.checkpoint}")
-    model = OPDRealTrainingModule.load_from_checkpoint(args.checkpoint, cfg=cfg)
+    model = OPDMultiTrainingModule.load_from_checkpoint(args.checkpoint, cfg=cfg)
     model.to(device)
     model.eval()
     print("✅ Model loaded successfully.")
@@ -255,7 +255,7 @@ def main():
             rgb_transform=rgb_transform,
             mask_transform=mask_transform,
             depth_transform=depth_transform,
-            is_multi=True,
+            is_multi=False,
         )
     except FileNotFoundError:
         print(f"❌ Error: Annotation file for '{args.dataset_key}' not found.")

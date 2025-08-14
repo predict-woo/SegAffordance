@@ -1,0 +1,47 @@
+data:
+  data_path: "/cluster/project/cvg/students/andrye/dataset/MotionDataset_h5_6.11"
+  train_dataset_key: "MotionNet_train" # Key for the training dataset split
+  val_dataset_key: "MotionNet_valid"   # Key for the validation dataset split
+  test_dataset_key: "MotionNet_test"   # Key for the test dataset split
+  input_size: [256, 256]
+  batch_size_train: 128
+  batch_size_val: 128
+  num_workers_train: 16
+  num_workers_val: 16
+  annotation_version: "annotations"
+
+# Ensure global deterministic seeding
+seed_everything: 42
+
+trainer:
+  num_nodes: 1
+  accelerator: "gpu"
+  devices: 1
+  # strategy: "ddp_find_unused_parameters_true"
+  strategy: "auto"
+  max_epochs: 30
+  precision: 16
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: "/cluster/project/cvg/students/andrye/experiments/OPDSynth_v1"
+        monitor: val/loss_total
+        mode: min
+        save_top_k: 5
+        filename: "best-{epoch}-{val/loss_total:.4f}"
+  logger:
+    class_path: pytorch_lightning.loggers.WandbLogger
+    init_args:
+      name: "OPDSynth_v1"
+      project: "OPD_final"
+      save_dir: "/cluster/scratch/andrye/wandb_logs/OPDSynth_v1"
+      log_model: false
+
+  log_every_n_steps: 10
+
+model:
+  optimizer_params:
+    lr: 0.00002
+    weight_decay: 0.0001
+    scheduler_milestones: [20, 25]   # Epochs at which to decay learning rate
+    scheduler_gamma: 0.1             # LR decay factor

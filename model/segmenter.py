@@ -32,57 +32,61 @@ def soft_argmax2d(logits: torch.Tensor) -> torch.Tensor:
 
 
 class CRIS(nn.Module):
-    def __init__(self, cfg):
+    def __init__(self, model_params):
         super().__init__()
         ## Vision & Text Encoder
-        clip_model = torch.jit.load(cfg.clip_pretrain, map_location="cpu").eval()  # type: ignore
+        clip_model = torch.jit.load(model_params.clip_pretrain, map_location="cpu").eval()  # type: ignore
 
         # encode_image (B, 3, H, W) -> v2: (B, fpn_in[0], H/8, W/8), v3: (B, fpn_in[1], H/16, W/16), v4: (B, fpn_in[2], H/32, W/32)
         # encode_text (B, L: word_len) -> word_features: (B, L, D_text: transformer_width), state: (B, fpn_in[2])
-        self.backbone = build_model(clip_model.state_dict(), cfg.word_len).float()
+        self.backbone = build_model(clip_model.state_dict(), model_params.word_len).float()
 
         self.depth_encoder = DepthEncoder(
-            in_channels=1, out_channels=cfg.depth_feat_channels
+            in_channels=1, out_channels=model_params.depth_feat_channels
         )
 
         ## Multi-Modal FPN
         # The first two channel counts are increased by the depth feature channels
         fpn_in_channels = [
-            cfg.fpn_in[0] + cfg.depth_feat_channels[0],
-            cfg.fpn_in[1] + cfg.depth_feat_channels[1],
-            cfg.fpn_in[2],
+            model_params.fpn_in[0] + model_params.depth_feat_channels[0],
+            model_params.fpn_in[1] + model_params.depth_feat_channels[1],
+            model_params.fpn_in[2],
         ]
         # forward: v2, v3, v4 -> fq: (B, fpn_out[1], H/16, W/16)
-        self.neck = FPN(in_channels=fpn_in_channels, out_channels=cfg.fpn_out)
+        self.neck = FPN(in_channels=fpn_in_channels, out_channels=model_params.fpn_out)
 
         ## Decoder
         # fq: (B, fpn_out[1], H/16, W/16), word: (B, L, D_text: transformer_width), pad_mask: (B, L) -> fq: (B, fpn_out[1], H/16, W/16)
         self.decoder = TransformerDecoder(
-            num_layers=cfg.num_layers,
-            d_model=cfg.fpn_out[1],
-            nhead=cfg.num_head,
-            dim_ffn=cfg.dim_ffn,
-            dropout=cfg.dropout,
-            return_intermediate=cfg.intermediate,
+            num_layers=model_params.num_layers,
+            d_model=model_params.fpn_out[1],
+            nhead=model_params.num_head,
+            dim_ffn=model_params.dim_ffn,
+            dropout=model_params.dropout,
+            return_intermediate=model_params.intermediate,
         )
 
         ## Projector
         # fq: (B, fpn_out[1], H/16, W/16), state: (B, fpn_in[2]) -> maps: (B, 2, H/4, W/4)
         self.proj = Projector_Mult(
-            cfg.fpn_in[2], cfg.fpn_out[1] // 2, 3, out_channels=2
+            model_params.fpn_in[2],
+            model_params.fpn_out[1] // 2,
+            3,
+            out_channels=2,
+            proj_dropout=model_params.proj_dropout,
         )
 
         # motion_features + global_vis_features + global_text_features
-        vae_feature_dim = cfg.fpn_out[1] + cfg.fpn_in[2] + cfg.fpn_in[2]
+        vae_feature_dim = model_params.fpn_out[1] + model_params.fpn_in[2] + model_params.fpn_in[2]
         # the above + coordinates
         vae_condition_dim = vae_feature_dim + 2
 
         self.motion_vae = MotionVAE(
             feature_dim=vae_feature_dim,
             condition_dim=vae_condition_dim,
-            latent_dim=cfg.vae_latent_dim,
-            hidden_dim=cfg.vae_hidden_dim,
-            num_motion_types=cfg.num_motion_types,
+            latent_dim=model_params.vae_latent_dim,
+            hidden_dim=model_params.vae_hidden_dim,
+            num_motion_types=model_params.num_motion_types,
         )
 
     def forward(self, img, depth, word, mask, interaction_point, motion_gt=None):
@@ -135,18 +139,25 @@ class CRIS(nn.Module):
         )
 
         # --- Motion VAE part ---
-        mask_prob = torch.sigmoid(mask_pred)
         fq_h, fq_w = fq.shape[-2:]
-        mask_downsampled = F.interpolate(
-            mask_prob, size=(fq_h, fq_w), mode="bilinear", align_corners=False
-        )
-        mask_sum = mask_downsampled.sum(dim=(-1, -2), keepdim=True) + 1e-8
-        pooled_features = (fq * mask_downsampled).sum(
+
+        if self.training:
+            # Teacher forcing: use ground-truth mask for pooling during training
+            mask_for_pooling = F.interpolate(
+                mask.float(), size=(fq_h, fq_w), mode="bilinear", align_corners=False
+            )
+        else:
+            # Use predicted mask for pooling during validation/inference
+            mask_prob = torch.sigmoid(mask_pred)
+            mask_for_pooling = F.interpolate(
+                mask_prob, size=(fq_h, fq_w), mode="bilinear", align_corners=False
+            )
+
+        mask_sum = mask_for_pooling.sum(dim=(-1, -2), keepdim=True) + 1e-8
+        pooled_features = (fq * mask_for_pooling).sum(
             dim=(-1, -2), keepdim=True
         ) / mask_sum
-        motion_features = pooled_features.squeeze(-1).squeeze(
-            -1
-        )  # (B, C) -> (B, fpn_out[1])
+        motion_features = pooled_features.squeeze(-1).squeeze(-1)
 
         # Create rich context for VAE
         # Global visual features

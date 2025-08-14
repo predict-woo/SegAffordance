@@ -1,0 +1,60 @@
+# Model Architecture (defaults, user should verify/override for their specific variant)
+
+model:
+  model_params:
+    clip_pretrain: "pretrain/RN50.pt" # Assumes a valid CLIP model is at this path
+    word_len: 77                     # Standard CLIP context length
+    depth_feat_channels: [128, 256]
+    fpn_in: [512, 1024, 1024]      # Input channels for FPN from backbone.
+    fpn_out: [256, 512, 1024]        # Output channels for FPN layers.
+    # Decoder (Transformer)
+    num_layers: 3                    # Number of layers in Transformer decoder
+    num_head: 8                      # Number of attention heads
+    dim_ffn: 1024                    # Dimension of feed-forward network in Transformer
+    dropout: 0.2                     # Dropout rate in Transformer
+    intermediate: False              # Whether the Transformer decoder returns intermediate layer outputs
+    # Projector
+    proj_dropout: 0.25
+    # VAE for Motion Prediction
+    vae_latent_dim: 32
+    vae_hidden_dim: 256
+    # motion type
+    num_motion_types: 2
+
+  loss_params:
+    # Loss functions
+    bce_weight: 0.5             # Weight for BCE loss in DiceBCELoss
+    dice_weight: 0.5            # Weight for Dice loss in DiceBCELoss
+    # loss weights
+    mask_weight: 0.5           # Add this (previously implicit 1.0)
+    point_map_weight: 1.0 
+    coord_weight: 0.5          # Weight for the L1 coordinate regression loss
+    vae_weight: 0.5
+    motion_type_weight: 0.5
+    # loss parameters
+    point_sigma: 8.0            # Sigma for Gaussian heatmap generation (in pixels on the feature map)
+    vae_beta: 0.01
+
+  optimizer_params:
+    lr: 0.00001
+    weight_decay: 0.0001
+    scheduler_milestones: [35, 45]   # Epochs at which to decay learning rate
+    scheduler_gamma: 0.1             # LR decay factor
+
+  config:
+    log_image_interval_steps: 100
+    input_size: [256, 256]           # Image input size (height, width)
+    enable_wandb: True
+    val_vis_samples: 12
+    manual_seed: 42
+
+
+data:
+  train_dataset_key: "MotionNet_train" # Key for the training dataset split
+  val_dataset_key: "MotionNet_valid"   # Key for the validation dataset split
+  test_dataset_key: "MotionNet_test"   # Key for the test dataset split
+  input_size: [256, 256]
+  batch_size_train: 128
+  batch_size_val: 128
+  num_workers_train: 16
+  num_workers_val: 16

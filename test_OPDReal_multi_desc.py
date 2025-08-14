@@ -2,6 +2,8 @@ import os
 import argparse
 import warnings
 import typing
+import pandas as pd
+import textwrap
 
 import torch
 import torch.nn.functional as F
@@ -24,8 +26,10 @@ def create_debug_visualization(
     gt_mask_tensor: torch.Tensor,
     pred_mask_prob_tensor: torch.Tensor,
     output_path: str,
-    pred_threshold: float,
+    description: str,
     gt_bbox: torch.Tensor,
+    original_size: tuple,
+    pred_threshold: float,
 ):
     """
     Creates a debug visualization comparing a GT mask and a predicted mask,
@@ -108,6 +112,29 @@ def create_debug_visualization(
 
     # --- Combine and Save ---
     combined_vis = np.hstack((vis_prob, vis_binary_bbox))
+    # Add description text at the bottom
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.5
+    font_color = (255, 255, 255)
+    line_type = 1
+    text_margin = 10
+
+    # Wrap text to fit the image width
+    wrapped_text = textwrap.wrap(f"Desc: {description}", width=100)
+    y0 = combined_vis.shape[0] - (len(wrapped_text) * 20) - text_margin
+
+    for i, line in enumerate(wrapped_text):
+        y = y0 + i * 20
+        cv2.putText(
+            combined_vis,
+            line,
+            (text_margin, y),
+            font,
+            font_scale,
+            font_color,
+            line_type,
+        )
+
     cv2.imwrite(output_path, combined_vis)
 
 
@@ -151,6 +178,19 @@ def calculate_bbox_iou(
     return iou
 
 
+def calculate_iou(
+    pred_mask: torch.Tensor, gt_mask: torch.Tensor, pred_threshold: float = 0.5
+) -> torch.Tensor:
+    """Calculates IoU for a single prediction and ground truth mask."""
+
+    pred_mask = (pred_mask > pred_threshold).float()
+    gt_mask = (gt_mask > 0.5).float()
+
+    intersection = (pred_mask * gt_mask).sum()
+    union = pred_mask.sum() + gt_mask.sum() - intersection
+    return intersection / (union + 1e-7)
+
+
 def calculate_axis_error(
     pred_axis: torch.Tensor, gt_axis: torch.Tensor
 ) -> torch.Tensor:
@@ -190,6 +230,12 @@ def get_test_parser() -> argparse.ArgumentParser:
         type=str,
         required=True,
         help="Dataset key for testing (e.g., 'opd_c_real_test').",
+    )
+    parser.add_argument(
+        "--is-multi",
+        action="store_true",
+        default=False,
+        help="indication if the dataset is OPDMulti or OPDReal",
     )
     parser.add_argument(
         "--motion_threshold",
@@ -236,6 +282,27 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"ℹ️ Using device: {device}")
 
+    # --- Load Descriptions for Testing ---
+    print("📝 Loading descriptions from './test-full.csv'")
+    try:
+        descriptions_df = pd.read_csv("./test-full.csv")
+        # Ensure all descriptions are strings and drop any empty/NaN ones
+        descriptions_df.dropna(subset=["description"], inplace=True)
+        descriptions_df["description"] = descriptions_df["description"].astype(str)
+        descriptions_map = (
+            descriptions_df.groupby("image_filename")["description"]
+            .apply(list)
+            .to_dict()
+        )
+        print(
+            f"✅ Loaded {len(descriptions_df)} descriptions for {len(descriptions_map)} images."
+        )
+    except FileNotFoundError:
+        print(
+            "❌ Error: './test-full.csv' not found. Please provide the descriptions file."
+        )
+        return
+
     # --- Model Loading ---
     print(f"📦 Loading model from checkpoint: {args.checkpoint}")
     model = OPDRealTrainingModule.load_from_checkpoint(args.checkpoint, cfg=cfg)
@@ -255,7 +322,8 @@ def main():
             rgb_transform=rgb_transform,
             mask_transform=mask_transform,
             depth_transform=depth_transform,
-            is_multi=True,
+            return_filename=True,
+            is_multi=args.is_multi,
         )
     except FileNotFoundError:
         print(f"❌ Error: Annotation file for '{args.dataset_key}' not found.")
@@ -266,7 +334,7 @@ def main():
 
     test_dataloader = DataLoader(
         test_dataset,
-        batch_size=cfg.batch_size_val,
+        batch_size=1,  # Process one image at a time
         shuffle=False,
         num_workers=cfg.num_workers_val,
         pin_memory=True,
@@ -295,28 +363,40 @@ def main():
             (
                 img,
                 depth,
-                word_str_list,
+                _,  # gt_description, which we ignore
                 mask_gt,
                 bbox_gt,
                 point_gt_norm,
                 motion_gt,
                 motion_type_gt,
                 original_size,
+                filename_tuple,
             ) = batch
 
-            img, depth, mask_gt, point_gt_norm, motion_gt, motion_type_gt = (
-                img.to(device),
-                depth.to(device),
-                mask_gt.to(device),
-                point_gt_norm.to(device),
-                motion_gt.to(device),
-                motion_type_gt.to(device),
-            )
+            img_filename = filename_tuple[0]
+            candidate_descriptions = descriptions_map.get(img_filename)
+
+            if not candidate_descriptions:
+                warnings.warn(
+                    f"No descriptions found for image {img_filename} in test-full.csv, skipping."
+                )
+                continue
+
+            img = img.to(device)
+            depth = depth.to(device)
+            mask_gt = mask_gt.to(device)
+            point_gt_norm = point_gt_norm.to(device)
+            motion_gt = motion_gt.to(device)
+            motion_type_gt = motion_type_gt.to(device)
+
+            # --- Run model for all candidate descriptions ---
+            num_candidates = len(candidate_descriptions)
+            img_batch = img.repeat(num_candidates, 1, 1, 1)
+            depth_batch = depth.repeat(num_candidates, 1, 1, 1)
             tokenized_words = tokenize(
-                list(word_str_list), cfg.word_len, truncate=True
+                candidate_descriptions, cfg.word_len, truncate=True
             ).to(device)
 
-            # Perform inference
             (
                 mask_pred_logits,
                 _,
@@ -325,7 +405,7 @@ def main():
                 motion_type_logits,
                 _,
                 _,
-            ) = model(img, depth, tokenized_words, None, None, None)
+            ) = model(img_batch, depth_batch, tokenized_words, None, None, None)
 
             mask_pred_prob = torch.sigmoid(mask_pred_logits)
             mask_pred_upsampled = F.interpolate(
@@ -333,52 +413,70 @@ def main():
             )
             pred_types = torch.argmax(motion_type_logits, dim=1)
 
-            for i in range(img.size(0)):
-                # 1. Calculate and store IoU
-                pred_mask_binary = (
-                    mask_pred_upsampled[i].squeeze() > args.pred_threshold
-                ).float()
-                pred_bbox = mask_to_bbox(pred_mask_binary)
-                iou = calculate_bbox_iou(pred_bbox.cpu(), bbox_gt[i].cpu())
-                ious.append(iou.item())
+            # --- Find best prediction based on IoU ---
+            all_ious = torch.zeros(num_candidates, device=device)
+            for i in range(num_candidates):
+                pred_bbox = mask_to_bbox(
+                    (mask_pred_upsampled[i].squeeze() > args.pred_threshold).float()
+                )
+                all_ious[i] = calculate_bbox_iou(pred_bbox.cpu(), bbox_gt[0].cpu())
 
-                # Optional: Save debug visualization
-                if args.visualize_debug:
-                    output_path = os.path.join(
-                        debug_output_dir, f"sample_{sample_idx:04d}_iou{iou:.2f}.png"
-                    )
-                    create_debug_visualization(
-                        img[i],
-                        mask_gt[i],
-                        mask_pred_upsampled[i],
-                        output_path,
-                        args.pred_threshold,
-                        bbox_gt[i],
-                    )
+            best_idx = torch.argmax(all_ious)
+            max_iou = all_ious[best_idx].item()
 
-                # 2. Calculate and store point error
-                point_err = torch.linalg.norm(coords_hat[i] - point_gt_norm[i])
-                point_errors.append(point_err.item())
+            # print("max_iou", max_iou)
+            # print("all_ious", all_ious)
 
-                # 3. Check for a match and calculate axis-related metrics
-                if iou > args.iou_threshold:
-                    num_matched_predictions += 1
-                    axis_error = calculate_axis_error(motion_pred[i], motion_gt[i])
-                    axis_errors_matched.append(axis_error.item())
+            ious.append(max_iou)
 
-                    is_axis_correct = axis_error <= args.motion_threshold
-                    if is_axis_correct:
-                        correct_axis_predictions += 1
+            best_description = candidate_descriptions[best_idx]
+            best_mask_pred = mask_pred_upsampled[best_idx]
+            best_coords_hat = coords_hat[best_idx]
+            best_motion_pred = motion_pred[best_idx]
+            best_pred_type = pred_types[best_idx]
 
-                    # 4. Check motion type for matched (high IoU) predictions
-                    is_type_correct = pred_types[i] == motion_type_gt[i]
-                    if is_type_correct:
-                        num_correct_type_in_matched += 1
+            # --- Calculate metrics for the best prediction ---
 
-                    if is_axis_correct and is_type_correct:
-                        num_all_correct += 1
+            # Optional: Save debug visualization
+            if args.visualize_debug:
+                output_path = os.path.join(
+                    debug_output_dir,
+                    f"sample_{sample_idx:04d}_iou{max_iou:.2f}.png",
+                )
+                create_debug_visualization(
+                    img[0],
+                    mask_gt[0],
+                    best_mask_pred,
+                    output_path,
+                    best_description,
+                    bbox_gt[0],
+                    (original_size[0, 0].item(), original_size[0, 1].item()),
+                    args.pred_threshold,
+                )
 
-                sample_idx += 1
+            # Calculate and store point error
+            point_err = torch.linalg.norm(best_coords_hat - point_gt_norm[0])
+            point_errors.append(point_err.item())
+
+            # Check for a match and calculate axis-related metrics
+            if max_iou > args.iou_threshold:
+                num_matched_predictions += 1
+                axis_error = calculate_axis_error(best_motion_pred, motion_gt[0])
+                axis_errors_matched.append(axis_error.item())
+
+                is_axis_correct = axis_error <= args.motion_threshold
+                if is_axis_correct:
+                    correct_axis_predictions += 1
+
+                # 4. Check motion type for matched (high IoU) predictions
+                is_type_correct = best_pred_type == motion_type_gt[0]
+                if is_type_correct:
+                    num_correct_type_in_matched += 1
+
+                if is_axis_correct and is_type_correct:
+                    num_all_correct += 1
+
+            sample_idx += 1
 
             if sample_idx > 0:
                 pass_rate = (num_matched_predictions / sample_idx) * 100

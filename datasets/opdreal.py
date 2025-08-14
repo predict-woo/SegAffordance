@@ -19,7 +19,7 @@ def get_default_transforms(
     image_size: Tuple[int, int] = (256, 256), is_train: bool = False
 ) -> Tuple[Callable, Callable, Callable]:
     """Returns a default set of transforms for RGB images, masks, and depth maps."""
-    rgb_transforms_list = [
+    rgb_transforms_list: List[Callable] = [
         transforms.Resize(image_size),  # (h,w) for Resize
     ]
     if is_train:
@@ -70,6 +70,8 @@ class OPDRealDataset(Dataset):
         mask_transform: Callable,
         depth_transform: Callable,
         return_filename: bool = False,
+        is_multi: bool = False,
+        annotation_version: str = "annotations_bwdf"
     ):
         self.data_path = data_path
         self.dataset_key = dataset_key
@@ -77,10 +79,11 @@ class OPDRealDataset(Dataset):
         self.mask_transform = mask_transform
         self.depth_transform = depth_transform
         self.return_filename = return_filename
+        self.is_multi = is_multi
 
         # Load annotations
         json_path = os.path.join(
-            self.data_path, "annotations_wdf", f"{self.dataset_key}.json"
+            self.data_path, annotation_version, f"{self.dataset_key}.json"
         )
         image_root = os.path.join(self.data_path, self.dataset_key.split("_")[-1])
         dataset_dicts = load_motion_json(json_path, image_root, self.dataset_key)
@@ -211,8 +214,7 @@ class OPDRealDataset(Dataset):
         bbox_tensor = torch.tensor(anno["bbox"], dtype=torch.float32)  # XYWH
 
         # 6. origin_2d_image_coord_norm & 7. motion_dir_3d_camera_coords
-        is_multi = "_m_" in self.dataset_key
-        if is_multi:
+        if self.is_multi:
             intrinsic_matrix = np.reshape(
                 image_dict["camera"]["intrinsic"], (3, 3), order="F"
             )
@@ -269,3 +271,5 @@ class OPDRealDataset(Dataset):
             self.h5_file.close()
         if self.depth_h5_file:
             self.depth_h5_file.close()
+
+

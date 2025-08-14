@@ -13,14 +13,14 @@ from torch.utils.data import DataLoader, Dataset, random_split
 from torch.optim.lr_scheduler import MultiStepLR
 from pytorch_lightning.strategies import DDPStrategy
 
-import utils.config as config_loader
+import util.config as config_loader
 from datasets.scenefun3d import (
     SF3DDataset,
     get_default_transforms,
     split_dataset_by_scene,
 )
 from model.segmenter import CRIS
-from utils.dataset import tokenize
+from util.dataset import tokenize
 from config.type_sf3d_cfg import SF3DConfig
 import pickle
 
