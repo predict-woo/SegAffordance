@@ -29,9 +29,8 @@ class SF3DDataset(Dataset):
         self,
         lmdb_data_root: str,  # Changed from processed_data_root
         rgb_transform: Optional[Callable] = None,
-        mask_transform: Optional[
-            Callable
-        ] = None,  # May not be directly applicable to coordinate-based masks in the same way
+        mask_transform: Optional[Callable] = None,
+        depth_transform: Optional[Callable] = None,
         # skip_items_without_motion: bool = True, # This logic is now handled during LMDB creation
         image_size_for_mask_reconstruction: Tuple[int, int] = (
             224,
@@ -44,7 +43,7 @@ class SF3DDataset(Dataset):
                                      (output of process_frames_with_items.py).
             rgb_transform (callable, optional): Optional transform to be applied on the RGB image.
             mask_transform (callable, optional): Optional transform for the reconstructed mask.
-                                                Note: Mask is binary {0,1} after reconstruction.
+            depth_transform (callable, optional): Optional transform for the placeholder depth map.
             image_size_for_mask_reconstruction (Tuple[int, int]): The target size (height, width)
                                                                   for reconstructing the mask if original
                                                                   dimensions aren't available per sample.
@@ -56,6 +55,7 @@ class SF3DDataset(Dataset):
         self.mask_transform = (
             mask_transform  # Retained for potential use after mask reconstruction
         )
+        self.depth_transform = depth_transform
         self.image_size_for_mask_reconstruction = (
             image_size_for_mask_reconstruction  # (height, width)
         )
@@ -118,6 +118,15 @@ class SF3DDataset(Dataset):
             rgb_image_tensor = transforms.ToTensor()(
                 rgb_image_pil
             )  # Default if no transform
+        
+        # --- Create Placeholder Depth Image ---
+        zero_depth = np.zeros((original_height, original_width), dtype=np.float32)
+        depth_pil = Image.fromarray(zero_depth, mode="F")
+        if self.depth_transform:
+            depth_image_tensor = self.depth_transform(depth_pil)
+        else:
+            depth_image_tensor = transforms.ToTensor()(depth_pil)
+
 
         mask_np = np.zeros((original_height, original_width), dtype=np.uint8)
         mask_coords_yx = item_data.get("mask_coordinates_yx", [])
@@ -128,6 +137,16 @@ class SF3DDataset(Dataset):
         mask_pil = Image.fromarray(
             mask_np, mode="L"
         )  # Convert to PIL Image (Grayscale)
+        
+        # --- Bounding Box from Mask ---
+        rows, cols = np.where(mask_np > 0)
+        if rows.size > 0:
+            x_min, x_max = cols.min(), cols.max()
+            y_min, y_max = rows.min(), rows.max()
+            bbox_tensor = torch.tensor([x_min, y_min, x_max - x_min, y_max - y_min], dtype=torch.float32)
+        else:
+            bbox_tensor = torch.zeros(4, dtype=torch.float32)
+
 
         if self.mask_transform:
             mask_tensor = self.mask_transform(mask_pil)
@@ -155,6 +174,7 @@ class SF3DDataset(Dataset):
         origin_2d_image_coord_norm = torch.zeros(2, dtype=torch.float32)  # Default
         motion_dir_3d_camera_coords = torch.zeros(3, dtype=torch.float32)
         motion_origin_3d_camera_coords = torch.zeros(3, dtype=torch.float32)
+        motion_type = "trans" # default
 
         frame_specific_motion = motion_info.get("frame_specific_motion_data")
         if frame_specific_motion:
@@ -182,19 +202,31 @@ class SF3DDataset(Dataset):
                 motion_origin_3d_camera_coords = torch.tensor(
                     origin_3d, dtype=torch.float32
                 )
+        
+        if motion_info.get("original_motion_data"):
+            motion_type = motion_info["original_motion_data"].get("motion_type", "trans")
+
 
         # Clamp the normalized coordinates to be within [0, 1]
         origin_2d_image_coord_norm = torch.clamp(origin_2d_image_coord_norm, 0.0, 1.0)
+        
+        motion_type_map = {"trans": 0, "translation": 0, "rot": 1, "rotation": 1}
+        motion_type_tensor = torch.tensor(motion_type_map.get(motion_type, 0), dtype=torch.long)
 
-        # Match return signature of previous version
-        # The model expects 5 items. We discard the 3D motion origin as the VAE
-        # is designed to only predict the 3D direction.
+        image_size_tensor = torch.tensor([original_width, original_height], dtype=torch.float32)
+
+
+        # Match return signature of OPDRealDataset
         return (
             rgb_image_tensor,
+            depth_image_tensor,
             description,
             mask_tensor,
+            bbox_tensor,
             origin_2d_image_coord_norm,
             motion_dir_3d_camera_coords,
+            motion_type_tensor,
+            image_size_tensor,
         )
 
     def __del__(self):
@@ -204,7 +236,7 @@ class SF3DDataset(Dataset):
 
 def get_default_transforms(
     image_size: Tuple[int, int] = (256, 256)  # (height, width)
-) -> Tuple[Callable, Callable]:
+) -> Tuple[Callable, Callable, Callable]:
     """Returns a default set of transforms for RGB images and masks."""
     rgb_transform = transforms.Compose(
         [
@@ -223,7 +255,16 @@ def get_default_transforms(
             lambda x: (x > 0.5).float(),  # Ensure binary mask {0., 1.}
         ]
     )
-    return rgb_transform, mask_transform
+    depth_transform = transforms.Compose(
+        [
+            transforms.Resize(
+                image_size,
+                interpolation=transforms.InterpolationMode.NEAREST,
+            ),
+            transforms.ToTensor(),
+        ]
+    )
+    return rgb_transform, mask_transform, depth_transform
 
 
 def split_dataset_by_scene(

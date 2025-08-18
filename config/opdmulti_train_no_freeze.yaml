@@ -1,6 +1,6 @@
 data:
-  data_path: "/cluster/project/cvg/students/andrye/dataset/MotionDataset_h5_real"
-  use_depth: true
+  data_path: "/cluster/project/cvg/students/andrye/OPDMulti/MotionDataset_h5"
+  is_multi: True
 
 # Ensure global deterministic seeding
 seed_everything: 42
@@ -16,28 +16,28 @@ trainer:
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        dirpath: "/cluster/project/cvg/students/andrye/experiments/OPDReal_v17"
+        dirpath: "/cluster/project/cvg/students/andrye/experiments/OPDMulti_v13_no_freeze"
         monitor: val/loss_total
         mode: min
-        save_top_k: 10
+        save_top_k: 5
         filename: "best-{epoch}-{val/loss_total:.4f}"
   logger:
     class_path: pytorch_lightning.loggers.WandbLogger
     init_args:
-      name: "OPDReal_v17"
+      name: "OPDMulti_v13_no_freeze"
       project: "OPD_final"
-      save_dir: "/cluster/scratch/andrye/wandb_logs/OPDReal_v17"
+      save_dir: "/cluster/scratch/andrye/wandb_logs/OPDMulti_v13_no_freeze"
       log_model: false
 
   log_every_n_steps: 10
 
 model:
   optimizer_params:
-    lr: 0.00002
+    lr: 0.00001
     weight_decay: 0.0001
-    scheduler_milestones: [25, 27]   # Epochs at which to decay learning rate
+    scheduler_milestones: [20, 25]   # Epochs at which to decay learning rate
     scheduler_gamma: 0.1             # LR decay factor
+  train_only_heads: false
+  finetune_from_path: "/cluster/project/cvg/students/andrye/experiments/OPDReal_v17/best-epoch=27-val/loss_total=0.5939.ckpt"
   model_params:
     proj_dropout: 0.5
-    use_depth: true
-    use_cvae: true

@@ -41,8 +41,10 @@ class OPDMultiTrainingModule(OPDRealTrainingModule):
             )
             for param in self.model.backbone.parameters():
                 param.requires_grad = False
-            for param in self.model.depth_encoder.parameters():
-                param.requires_grad = False
+            # depth encoder may be disabled
+            if hasattr(self.model, "depth_encoder") and self.model.depth_encoder is not None:
+                for param in self.model.depth_encoder.parameters():
+                    param.requires_grad = False
             for param in self.model.neck.parameters():
                 param.requires_grad = False
 
@@ -68,4 +70,4 @@ class OPDMultiTrainingModule(OPDRealTrainingModule):
 
 
 if __name__ == "__main__":
-    LightningCLI(OPDMultiTrainingModule, OPDRealDataModule)
+    LightningCLI(OPDMultiTrainingModule, OPDRealDataModule, save_config_callback=None)

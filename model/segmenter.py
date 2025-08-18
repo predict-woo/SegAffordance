@@ -11,6 +11,7 @@ from .layers import (
     TransformerDecoder,
     Projector_Mult,
     MotionVAE,
+    MotionMLP,
     DepthEncoder,
 )
 
@@ -41,17 +42,29 @@ class CRIS(nn.Module):
         # encode_text (B, L: word_len) -> word_features: (B, L, D_text: transformer_width), state: (B, fpn_in[2])
         self.backbone = build_model(clip_model.state_dict(), model_params.word_len).float()
 
-        self.depth_encoder = DepthEncoder(
-            in_channels=1, out_channels=model_params.depth_feat_channels
-        )
+        # Optional depth usage
+        self.use_depth = getattr(model_params, "use_depth", True)
+        if self.use_depth:
+            self.depth_encoder = DepthEncoder(
+                in_channels=1, out_channels=model_params.depth_feat_channels
+            )
+        else:
+            self.depth_encoder = None
 
         ## Multi-Modal FPN
-        # The first two channel counts are increased by the depth feature channels
-        fpn_in_channels = [
-            model_params.fpn_in[0] + model_params.depth_feat_channels[0],
-            model_params.fpn_in[1] + model_params.depth_feat_channels[1],
-            model_params.fpn_in[2],
-        ]
+        # The first two channel counts are increased by the depth feature channels only if depth is enabled
+        if self.use_depth:
+            fpn_in_channels = [
+                model_params.fpn_in[0] + model_params.depth_feat_channels[0],
+                model_params.fpn_in[1] + model_params.depth_feat_channels[1],
+                model_params.fpn_in[2],
+            ]
+        else:
+            fpn_in_channels = [
+                model_params.fpn_in[0],
+                model_params.fpn_in[1],
+                model_params.fpn_in[2],
+            ]
         # forward: v2, v3, v4 -> fq: (B, fpn_out[1], H/16, W/16)
         self.neck = FPN(in_channels=fpn_in_channels, out_channels=model_params.fpn_out)
 
@@ -81,13 +94,24 @@ class CRIS(nn.Module):
         # the above + coordinates
         vae_condition_dim = vae_feature_dim + 2
 
-        self.motion_vae = MotionVAE(
-            feature_dim=vae_feature_dim,
-            condition_dim=vae_condition_dim,
-            latent_dim=model_params.vae_latent_dim,
-            hidden_dim=model_params.vae_hidden_dim,
-            num_motion_types=model_params.num_motion_types,
-        )
+        self.use_cvae = getattr(model_params, "use_cvae", True)
+        if self.use_cvae:
+            self.motion_vae = MotionVAE(
+                feature_dim=vae_feature_dim,
+                condition_dim=vae_condition_dim,
+                latent_dim=model_params.vae_latent_dim,
+                hidden_dim=model_params.vae_hidden_dim,
+                num_motion_types=model_params.num_motion_types,
+            )
+            self.motion_mlp = None
+        else:
+            self.motion_vae = None
+            # MLP will take the same condition used by the VAE decoder
+            self.motion_mlp = MotionMLP(
+                input_dim=vae_condition_dim,
+                hidden_dim=model_params.vae_hidden_dim,
+                num_motion_types=model_params.num_motion_types,
+            )
 
     def forward(self, img, depth, word, mask, interaction_point, motion_gt=None):
         """
@@ -110,12 +134,15 @@ class CRIS(nn.Module):
             word
         )  # (B, L, D_text: transformer_width) (B, fpn_in[2])
 
-        # --- Depth Fusion ---
-        depth_feat_8, depth_feat_16 = self.depth_encoder(depth)
-        # v2 is H/8, v3 is H/16
-        v2_fused = torch.cat([vis[0], depth_feat_8], dim=1)
-        v3_fused = torch.cat([vis[1], depth_feat_16], dim=1)
-        vis_fused = (v2_fused, v3_fused, vis[2])
+        # --- Depth Fusion (optional) ---
+        if self.use_depth:
+            depth_feat_8, depth_feat_16 = self.depth_encoder(depth)  # type: ignore[operator]
+            # v2 is H/8, v3 is H/16
+            v2_fused = torch.cat([vis[0], depth_feat_8], dim=1)
+            v3_fused = torch.cat([vis[1], depth_feat_16], dim=1)
+            vis_fused = (v2_fused, v3_fused, vis[2])
+        else:
+            vis_fused = vis
 
         # b, 512, 26, 26 (C4)
         fq = self.neck(vis_fused, state)  # fq: (B, fpn_out[1], H/16, W/16)
@@ -170,23 +197,37 @@ class CRIS(nn.Module):
         vae_condition = torch.cat([vae_encoder_features, coords_hat], dim=1)
 
         # motion_gt can be None during pure inference, but for train/val it's provided.
-        if motion_gt is not None:
-            motion_pred, motion_type_logits, mu, log_var = self.motion_vae(
-                motion_gt, vae_encoder_features, vae_condition
-            )
-            return (
-                mask_pred,
-                point_pred,
-                coords_hat,
-                motion_pred,
-                motion_type_logits,
-                mu,
-                log_var,
-            )
+        if self.use_cvae:
+            if motion_gt is not None:
+                motion_pred, motion_type_logits, mu, log_var = self.motion_vae(  # type: ignore[operator]
+                    motion_gt, vae_encoder_features, vae_condition
+                )
+                return (
+                    mask_pred,
+                    point_pred,
+                    coords_hat,
+                    motion_pred,
+                    motion_type_logits,
+                    mu,
+                    log_var,
+                )
+            else:
+                # During pure inference (e.g. in a test script), sample z from prior
+                motion_pred, motion_type_logits = self.motion_vae.inference(vae_condition)  # type: ignore[operator]
+                # Return None for mu and log_var as they don't exist in this case
+                return (
+                    mask_pred,
+                    point_pred,
+                    coords_hat,
+                    motion_pred,
+                    motion_type_logits,
+                    None,
+                    None,
+                )
         else:
-            # During pure inference (e.g. in a test script), sample z from prior
-            motion_pred, motion_type_logits = self.motion_vae.inference(vae_condition)
-            # Return None for mu and log_var as they don't exist in this case
+            motion_pred, motion_type_logits = self.motion_mlp(vae_condition)  # type: ignore[operator]
+            # Convert sigmoid output [0,1] to axis vector in [-1,1]
+            motion_pred = (motion_pred - 0.5) * 2.0
             return (
                 mask_pred,
                 point_pred,

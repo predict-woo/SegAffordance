@@ -17,6 +17,10 @@ class ModelParams:
     vae_latent_dim: int
     vae_hidden_dim: int
     num_motion_types: int
+    # Optional depth usage (enabled by default)
+    use_depth: bool = True
+    # Optional CVAE usage for motion prediction (enabled by default)
+    use_cvae: bool = True
 
 
 @dataclass
@@ -46,3 +50,15 @@ class Config:
     enable_wandb: bool
     val_vis_samples: int
     manual_seed: int
+    # Test/eval settings (optional with safe defaults)
+    test_motion_threshold_deg: float = 10.0
+    test_iou_threshold: float = 0.5
+    test_pred_threshold: float = 0.5
+    # Which IoU metric to use for matching: "mask" or "bbox"
+    test_match_metric: str = "mask"
+    # Control logging of test metrics to external loggers like W&B
+    log_test_to_wandb: bool = False
+    # Optional local visualization during test
+    test_visualize_debug: bool = False
+    test_vis_output_dir: str = "debug_visualizations"
+    test_vis_max_images: int = 100

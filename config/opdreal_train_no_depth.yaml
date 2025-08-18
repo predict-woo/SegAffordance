@@ -1,6 +1,6 @@
 data:
   data_path: "/cluster/project/cvg/students/andrye/dataset/MotionDataset_h5_real"
-  use_depth: true
+  use_depth: false
 
 # Ensure global deterministic seeding
 seed_everything: 42
@@ -16,7 +16,7 @@ trainer:
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        dirpath: "/cluster/project/cvg/students/andrye/experiments/OPDReal_v17"
+        dirpath: "/cluster/project/cvg/students/andrye/experiments/OPDReal_v18_no_depth"
         monitor: val/loss_total
         mode: min
         save_top_k: 10
@@ -24,9 +24,9 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.WandbLogger
     init_args:
-      name: "OPDReal_v17"
+      name: "OPDReal_v18_no_depth"
       project: "OPD_final"
-      save_dir: "/cluster/scratch/andrye/wandb_logs/OPDReal_v17"
+      save_dir: "/cluster/scratch/andrye/wandb_logs/OPDReal_v18_no_depth"
       log_model: false
 
   log_every_n_steps: 10
@@ -39,5 +39,4 @@ model:
     scheduler_gamma: 0.1             # LR decay factor
   model_params:
     proj_dropout: 0.5
-    use_depth: true
-    use_cvae: true
+    use_depth: false

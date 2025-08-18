@@ -40,4 +40,4 @@ model:
   model_params:
     proj_dropout: 0.5
     use_depth: true
-    use_cvae: true
+    use_cvae: false

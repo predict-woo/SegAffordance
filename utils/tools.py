@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import cv2
+import typing
 
 
 class MotionVAELoss(nn.Module):
@@ -105,8 +106,8 @@ def create_composite_visualization(
     point_pred_heatmap: torch.Tensor,
     motion_gt: torch.Tensor,
     motion_pred: torch.Tensor,
-    motion_type_gt: torch.Tensor,
-    motion_type_pred_logits: torch.Tensor,
+    motion_type_gt: typing.Optional[torch.Tensor],
+    motion_type_pred_logits: typing.Optional[torch.Tensor],
     vector_scale: int = 50,
 ):
     """

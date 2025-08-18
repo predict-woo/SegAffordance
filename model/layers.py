@@ -258,6 +258,28 @@ class MotionVAE(nn.Module):
         return motion_pred, motion_type_logits
 
 
+class MotionMLP(nn.Module):
+    def __init__(self, input_dim: int, hidden_dim: int = 256, num_motion_types: int = 2):
+        super().__init__()
+        self.backbone = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(True),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(True),
+        )
+        self.motion_head = nn.Sequential(
+            nn.Linear(hidden_dim, 3),
+            nn.Sigmoid(),
+        )
+        self.type_head = nn.Linear(hidden_dim, num_motion_types)
+
+    def forward(self, condition: torch.Tensor):
+        h = self.backbone(condition)
+        motion_pred = self.motion_head(h)
+        motion_type_logits = self.type_head(h)
+        return motion_pred, motion_type_logits
+
+
 class TransformerDecoder(nn.Module):
     def __init__(
         self, num_layers, d_model, nhead, dim_ffn, dropout, return_intermediate=False

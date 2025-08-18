@@ -1,10 +1,10 @@
-# Model Architecture (defaults, user should verify/override for their specific variant)
+seed_everything: 42
 
 model:
   model_params:
     clip_pretrain: "pretrain/RN50.pt" # Assumes a valid CLIP model is at this path
     word_len: 77                     # Standard CLIP context length
-    use_depth: true                  # Toggle depth usage (default true)
+    use_depth: false                 # SF3D does not use depth
     use_cvae: true                   # Toggle CVAE motion head (default true)
     depth_feat_channels: [128, 256]
     fpn_in: [512, 1024, 1024]      # Input channels for FPN from backbone.
@@ -40,8 +40,8 @@ model:
   optimizer_params:
     lr: 0.00001
     weight_decay: 0.0001
-    scheduler_milestones: [35, 45]   # Epochs at which to decay learning rate
-    scheduler_gamma: 0.1             # LR decay factor
+    scheduler_milestones: [25, 27]
+    scheduler_gamma: 0.1
 
   config:
     log_image_interval_steps: 100
@@ -50,14 +50,35 @@ model:
     val_vis_samples: 12
     manual_seed: 42
 
+trainer:
+  max_epochs: 30
+  accelerator: "gpu"
+  devices: 1
+  precision: 16
+  logger:
+    class_path: pytorch_lightning.loggers.WandbLogger
+    init_args:
+      name: "SF3D_V13"
+      project: "SceneFun3D"
+      save_dir: "/cluster/scratch/andrye/wandb_logs/SF3D_V13"
+      log_model: false
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: "/cluster/project/cvg/students/andrye/experiments/SF3D_V13"
+        monitor: "val/loss_total"
+        mode: "min"
+        save_top_k: 10
+        filename: "best-{epoch}-{val/loss_total:.4f}"
+  log_every_n_steps: 10
+
 
 data:
-  train_dataset_key: "MotionNet_train" # Key for the training dataset split
-  val_dataset_key: "MotionNet_valid"   # Key for the validation dataset split
-  test_dataset_key: "MotionNet_test"   # Key for the test dataset split
+  train_data_dir: "/cluster/project/cvg/students/andrye/sf3d"
+  val_split_ratio: 0.1
   input_size: [256, 256]
-  use_depth: true                    # Toggle depth loading in dataset (default true)
   batch_size_train: 128
   batch_size_val: 128
   num_workers_train: 16
   num_workers_val: 16
+  manual_seed: 42

@@ -1,6 +1,7 @@
 data:
   data_path: "/cluster/project/cvg/students/andrye/OPDMulti/MotionDataset_h5"
   is_multi: True
+  use_depth: true
 
 # Ensure global deterministic seeding
 seed_everything: 42
@@ -16,7 +17,7 @@ trainer:
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        dirpath: "/cluster/project/cvg/students/andrye/experiments/OPDMulti_v10"
+        dirpath: "/cluster/project/cvg/students/andrye/experiments/OPDMulti_v12"
         monitor: val/loss_total
         mode: min
         save_top_k: 5
@@ -24,9 +25,9 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.WandbLogger
     init_args:
-      name: "OPDMulti_v11"
+      name: "OPDMulti_v12"
       project: "OPD_final"
-      save_dir: "/cluster/scratch/andrye/wandb_logs/OPDMulti_v11"
+      save_dir: "/cluster/scratch/andrye/wandb_logs/OPDMulti_v12"
       log_model: false
 
   log_every_n_steps: 10
@@ -38,6 +39,8 @@ model:
     scheduler_milestones: [20, 25]   # Epochs at which to decay learning rate
     scheduler_gamma: 0.1             # LR decay factor
   train_only_heads: true
-  finetune_from_path: "/cluster/project/cvg/students/andrye/experiments/OPDReal_v12_bce/best-epoch=9-val/loss_total=0.5307.ckpt"
+  finetune_from_path: "/cluster/project/cvg/students/andrye/experiments/OPDReal_v17/best-epoch=27-val/loss_total=0.5939.ckpt"
   model_params:
     proj_dropout: 0.5
+    use_depth: true
+    use_cvae: true

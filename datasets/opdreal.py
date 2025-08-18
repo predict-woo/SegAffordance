@@ -71,7 +71,8 @@ class OPDRealDataset(Dataset):
         depth_transform: Callable,
         return_filename: bool = False,
         is_multi: bool = False,
-        annotation_version: str = "annotations_bwdf"
+        annotation_version: str = "annotations_bwdf",
+        use_depth: bool = True,
     ):
         self.data_path = data_path
         self.dataset_key = dataset_key
@@ -80,6 +81,7 @@ class OPDRealDataset(Dataset):
         self.depth_transform = depth_transform
         self.return_filename = return_filename
         self.is_multi = is_multi
+        self.use_depth = use_depth
 
         # Load annotations
         json_path = os.path.join(
@@ -120,6 +122,11 @@ class OPDRealDataset(Dataset):
         }
 
     def _init_depth_h5(self):
+        if not self.use_depth:
+            self.depth_h5_file = None
+            self.depth_images_dset = None
+            self.depth_filenames_map = None
+            return
         depth_h5_path = os.path.join(self.data_path, "depth.h5")
         self.depth_h5_file = h5py.File(depth_h5_path, "r")
         depth_images_dset = self.depth_h5_file["depth_images"]
@@ -163,8 +170,10 @@ class OPDRealDataset(Dataset):
 
         assert self.filenames_map is not None
         assert self.images_dset is not None
-        assert self.depth_filenames_map is not None
-        assert self.depth_images_dset is not None
+        # depth resources are optional
+        if self.use_depth:
+            assert self.depth_filenames_map is not None
+            assert self.depth_images_dset is not None
 
         # 1. rgb_image_tensor
         img_filename = os.path.basename(image_dict["file_name"])
@@ -175,20 +184,26 @@ class OPDRealDataset(Dataset):
         original_width, original_height = rgb_image_pil.size
 
         # 2. depth_image_tensor
-        depth_filename = image_dict["depth_file_name"]
-        depth_img_index = self.depth_filenames_map[depth_filename]
-        depth_array = self.depth_images_dset[depth_img_index]
-        if isinstance(depth_array, np.ndarray):
-            if depth_array.ndim == 3 and depth_array.shape[2] == 1:
-                depth_array = depth_array.squeeze(axis=2)
-        else:
-            # Handle cases where it might not be a numpy array as expected
-            depth_array = np.array(depth_array)
-            if depth_array.ndim == 3 and depth_array.shape[2] == 1:
-                depth_array = depth_array.squeeze(axis=2)
+        if self.use_depth:
+            depth_filename = image_dict["depth_file_name"]
+            depth_img_index = self.depth_filenames_map[depth_filename]  # type: ignore[index]
+            depth_array = self.depth_images_dset[depth_img_index]  # type: ignore[index]
+            if isinstance(depth_array, np.ndarray):
+                if depth_array.ndim == 3 and depth_array.shape[2] == 1:
+                    depth_array = depth_array.squeeze(axis=2)
+            else:
+                # Handle cases where it might not be a numpy array as expected
+                depth_array = np.array(depth_array)
+                if depth_array.ndim == 3 and depth_array.shape[2] == 1:
+                    depth_array = depth_array.squeeze(axis=2)
 
-        depth_pil = Image.fromarray(depth_array, mode="F")
-        depth_image_tensor = self.depth_transform(depth_pil)
+            depth_pil = Image.fromarray(depth_array, mode="F")
+            depth_image_tensor = self.depth_transform(depth_pil)
+        else:
+            # Create an all-zero depth map and pass through the transform for consistent sizing
+            zero_depth = np.zeros((original_height, original_width), dtype=np.float32)
+            depth_pil = Image.fromarray(zero_depth, mode="F")
+            depth_image_tensor = self.depth_transform(depth_pil)
 
         # 3. description
         description = anno["description"]

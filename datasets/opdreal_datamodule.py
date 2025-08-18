@@ -21,11 +21,13 @@ class OPDRealDataModule(pl.LightningDataModule):
         num_workers_val: int,
         return_filename: bool = False,
         is_multi: bool = False,
+        use_depth: bool = True,
     ) -> None:
         super().__init__()
         self.data_path = data_path
         self.train_dataset_key = train_dataset_key
         self.val_dataset_key = val_dataset_key
+        self.test_dataset_key = test_dataset_key
         self.input_size = input_size
         self.batch_size_train = batch_size_train
         self.batch_size_val = batch_size_val
@@ -33,9 +35,11 @@ class OPDRealDataModule(pl.LightningDataModule):
         self.num_workers_val = num_workers_val
         self.return_filename = return_filename
         self.is_multi = is_multi
+        self.use_depth = use_depth
 
         self.train_dataset: Optional[Dataset] = None
         self.val_dataset: Optional[Dataset] = None
+        self.test_dataset: Optional[Dataset] = None
 
     def setup(self, stage: Optional[str] = None) -> None:
         if stage in ("fit", None):
@@ -54,6 +58,7 @@ class OPDRealDataModule(pl.LightningDataModule):
                 depth_transform=train_depth_transform,
                 return_filename=self.return_filename,
                 is_multi=self.is_multi,
+                use_depth=self.use_depth,
             )
 
             self.val_dataset = OPDRealDataset(
@@ -64,6 +69,23 @@ class OPDRealDataModule(pl.LightningDataModule):
                 depth_transform=val_depth_transform,
                 return_filename=self.return_filename,
                 is_multi=self.is_multi,
+                use_depth=self.use_depth,
+            )
+
+        if stage in ("test", None):
+            test_rgb_transform, test_mask_transform, test_depth_transform = (
+                get_default_transforms(image_size=self.input_size, is_train=False)
+            )
+
+            self.test_dataset = OPDRealDataset(
+                data_path=self.data_path,
+                dataset_key=self.test_dataset_key,
+                rgb_transform=test_rgb_transform,
+                mask_transform=test_mask_transform,
+                depth_transform=test_depth_transform,
+                return_filename=self.return_filename,
+                is_multi=self.is_multi,
+                use_depth=self.use_depth,
             )
 
     def train_dataloader(self) -> DataLoader:
@@ -84,6 +106,18 @@ class OPDRealDataModule(pl.LightningDataModule):
             raise RuntimeError("Validation dataset not initialized. Call setup('fit') first.")
         return DataLoader(
             self.val_dataset,
+            batch_size=self.batch_size_val,
+            shuffle=False,
+            num_workers=self.num_workers_val,
+            pin_memory=True,
+            drop_last=False,
+        )
+
+    def test_dataloader(self) -> DataLoader:
+        if self.test_dataset is None:
+            raise RuntimeError("Test dataset not initialized. Call setup('test') first.")
+        return DataLoader(
+            self.test_dataset,
             batch_size=self.batch_size_val,
             shuffle=False,
             num_workers=self.num_workers_val,

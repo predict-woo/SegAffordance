@@ -273,4 +273,39 @@ python train_OPDReal_better.py fit --config config/opd_train.yaml --config confi
 python train_OPDReal_better.py fit --config config/opd_train.yaml --config config/opdsynth_train.yaml
 
 
-python train_OPDMulti_better.py fit --config config/opdmulti-train.yaml --config config/opdmulti_train.yaml
+python train_OPDMulti_better.py fit --config config/opd_train.yaml --config config/opdmulti_train.yaml
+
+
+python train_OPDMulti_better.py test \
+  --config config/opd_train.yaml \
+  --config config/opdmulti_train.yaml \
+  --ckpt_path /cluster/project/cvg/students/andrye/experiments/OPDReal_v12_bce/best-epoch=9-val/loss_total=0.5307.ckpt
+
+
+python train_OPDMulti_better.py test \
+  --config config/opd_train.yaml \
+  --config config/opdmulti_train.yaml \
+  --config config/opdmulti_test.yaml \
+  --ckpt_path /cluster/project/cvg/students/andrye/experiments/OPDMulti_v12/best-epoch=10-val/loss_total=0.7878.ckpt
+
+
+python train_OPDReal_better.py test \
+  --config config/opd_train.yaml \
+  --config config/opdreal_train.yaml \
+  --config config/opdreal_test.yaml \
+  --ckpt_path /cluster/project/cvg/students/andrye/experiments/OPDReal_v17/best-epoch=27-val/loss_total=0.5939.ckpt
+
+config/opdmulti_train_no_pretrain.yaml
+config/opdmulti_train_no_freeze.yaml
+
+
+python train_OPDMulti_better.py fit --config config/opd_train.yaml --config config/opdmulti_train_no_pretrain.yaml && python train_OPDMulti_better.py fit --config config/opd_train.yaml --config config/opdmulti_train_no_freeze.yaml
+
+
+
+python train_OPDReal_better.py fit --config config/opd_train.yaml --config config/opdreal_train_no_depth.yaml
+
+python train_OPDReal_better.py fit --config config/opd_train.yaml --config config/opdreal_train_no_cvae.yaml
+
+
+python test_OPDReal_better.py test --config config/opd_train.yaml --config config/opdreal_train.yaml --data.is_multi false --ckpt_path /path/to.ckpt
