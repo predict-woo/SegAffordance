@@ -84,8 +84,7 @@ SegAffordance/
 │   ├── opdreal.py                  # OPDReal dataset (real-world)
 │   ├── opdreal_datamodule.py       # PyTorch Lightning DataModule for OPDReal
 │   ├── scenefun3d.py               # SceneFun3D dataset (indoor scenes)
-│   ├── scenefun3d_datamodule.py    # PyTorch Lightning DataModule for SF3D
-│   └── OPDReal/                    # OPDReal utilities and data loaders
+│   └── scenefun3d_datamodule.py    # PyTorch Lightning DataModule for SF3D
 │
 ├── config/                         # Configuration files
 │   ├── opd_train.py                # Dataclass definitions for configs
@@ -129,10 +128,6 @@ SegAffordance/
 ### Setup
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd SegAffordance
-
 # Create conda environment (recommended)
 conda create -n segaffordance python=3.10
 conda activate segaffordance
@@ -405,11 +400,3 @@ Debug visualizations during testing save images to disk showing:
 - [CRIS: CLIP-Driven Referring Image Segmentation](https://arxiv.org/abs/2111.15174)
 - [OPD Dataset](https://3dlg-hcvc.github.io/OPD/)
 - [SceneFun3D](https://scenefun3d.github.io/)
-
-## 📄 License
-
-[Specify your license here]
-
-## 👥 Authors
-
-[Your name/team here]
