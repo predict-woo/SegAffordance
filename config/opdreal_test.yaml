@@ -7,16 +7,24 @@ trainer:
   log_every_n_steps: 0
   callbacks: []
 
+data:
+  return_camera_params: true
+  origin_norm_json_path: "/cluster/project/cvg/students/andrye/dataset/MotionDataset_h5_real/real-attr.json"
+  return_filename: true
+  
 model:
   config:
     # Ensure nothing is pushed to W&B from the test hooks
     log_test_to_wandb: false
     # Matching/threshold defaults for OPDMulti testing
-    test_match_metric: "bbox"        # "mask" or "bbox"
+    test_match_metric: "mask"        # "mask" or "bbox"
     test_iou_threshold: 0.5
     test_motion_threshold_deg: 10.0
     test_pred_threshold: 0.5
 
+    # test_visualize_debug: true
+    # test_vis_output_dir: "/cluster/home/andrye/SegAffordance/debug_final"
+    # test_vis_max_images: 100
     test_visualize_debug: true
-    test_vis_output_dir: "/cluster/home/andrye/SegAffordance/debug_final"
-    test_vis_max_images: 100
+    test_vis_output_dir: "opdreal_test_visualizations"
+    test_vis_indices: [500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500, 6000]

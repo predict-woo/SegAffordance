@@ -16,4 +16,4 @@ torch.set_float32_matmul_precision("high")
 if __name__ == "__main__":
     # Usage:
     #   python test_OPDReal_better.py test --config config/opd_train.yaml --config config/opdreal_train.yaml --data.is_multi false --ckpt_path /path/to.ckpt
-    LightningCLI(OPDRealTrainingModule, OPDRealDataModule)
+    LightningCLI(OPDRealTrainingModule, OPDRealDataModule, save_config_callback=None)

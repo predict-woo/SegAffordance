@@ -308,4 +308,134 @@ python train_OPDReal_better.py fit --config config/opd_train.yaml --config confi
 python train_OPDReal_better.py fit --config config/opd_train.yaml --config config/opdreal_train_no_cvae.yaml
 
 
-python test_OPDReal_better.py test --config config/opd_train.yaml --config config/opdreal_train.yaml --data.is_multi false --ckpt_path /path/to.ckpt
+python test_OPDReal_better.py test --config config/opd_train.yaml --config config/opdreal_train.yaml --config config/opdreal_test.yaml --ckpt_path /cluster/project/cvg/students/andrye/experiments/OPDReal_v17/best-epoch=27-val/loss_total=0.5939.ckpt
+
+python test_OPDReal_better.py test \
+    --config config/opd_train.yaml \
+    --config config/opdmulti_train_no_pretrain.yaml \
+    --config config/opdreal_test.yaml \
+    --ckpt_path /cluster/project/cvg/students/andrye/experiments/OPDMulti_v14_no_pretrain/best-epoch=27-val/loss_total=0.9321.ckpt
+
+
+python test_OPDReal_better.py test \
+    --config config/opd_train.yaml \
+    --config config/opdreal_train_no_depth.yaml \
+    --config config/opdreal_test.yaml \
+    --ckpt_path /cluster/project/cvg/students/andrye/experiments/OPDReal_v18_no_depth/best-epoch=25-val/loss_total=0.6191.ckpt
+
+
+python test_OPDReal_better.py test \
+    --config config/opd_train.yaml \
+    --config config/opdreal_train_no_cvae.yaml \
+    --config config/opdreal_test.yaml \
+    --ckpt_path /cluster/project/cvg/students/andrye/experiments/OPDReal_v17/best-epoch=25-val/loss_total=0.5861.ckpt
+
+python test_OPDReal_better.py test \
+    --config config/opd_train.yaml \
+    --config config/opdmulti_train.yaml \
+    --config config/opdmulti_test.yaml \
+    --ckpt_path /cluster/project/cvg/students/andrye/experiments/OPDMulti_v12/best-epoch=11-val/loss_total=0.7877.ckpt
+
+python test_OPDMulti_better.py test \
+    --config config/opd_train.yaml \
+    --config config/opdmulti_train_no_freeze.yaml \
+    --config config/opdmulti_test.yaml \
+    --ckpt_path /cluster/project/cvg/students/andrye/experiments/OPDMulti_v13_no_freeze/best-epoch=4-val/loss_total=0.7669.ckpt
+
+
+python test_OPDMulti_better.py test \
+    --config config/opd_train.yaml \
+    --config config/opdmulti_train_no_pretrain.yaml \
+    --config config/opdmulti_test.yaml \
+    --ckpt_path /cluster/project/cvg/students/andrye/experiments/OPDMulti_v14_no_pretrain/best-epoch=22-val/loss_total=0.9316.ckpt
+
+
+python test_SF3D_better.py test \
+    --config config/sf3d_train.yaml \
+    --config config/sf3d_test.yaml \
+    --ckpt_path /cluster/project/cvg/students/andrye/experiments/SF3D_V13/best-epoch=17-val/loss_total=0.7952.ckpt
+
+python train_SF3D_better.py 
+
+cp -r /cluster/scratch/andrye/SF3D_lmdb_clean/data.lmdb /dev/shm/data.lmdb
+
+
+python train_SF3D_better.py fit --config config/sf3d_train.yaml
+
+python test_SF3D_better.py test \
+    --config config/sf3d_train.yaml \
+    --config config/sf3d_test.yaml \
+    --ckpt_path /cluster/scratch/andrye/experiments/SF3D_V15/best-epoch=17-val/loss_total=0.7886.ckpt
+
+
+python run_single_inference.py \
+    --ckpt_path /cluster/scratch/andrye/experiments/SF3D_V15/best-epoch=17-val/loss_total=0.7886.ckpt\
+    --data_dir /cluster/scratch/andrye/SF3D_lmdb_clean \
+    --text_description "open the cabinet door" \
+    --output_dir "my_inference_results" \
+    --image_path "/cluster/scratch/andrye/SF3D_lmdb_clean/images/423966_42898337_506769.896.jpg"
+
+python run_single_inference.py \
+    --ckpt_path /cluster/scratch/andrye/experiments/SF3D_V15/best-epoch=17-val/loss_total=0.7886.ckpt\
+    --data_dir /cluster/scratch/andrye/SF3D_lmdb_clean \
+    --text_description "open the window" \
+    --output_dir "inf_window" \
+    --image_path "/cluster/scratch/andrye/SF3D_lmdb_clean/images/423966_42898337_506769.896.jpg"
+
+
+python run_single_inference.py \
+    --ckpt_path /cluster/scratch/andrye/experiments/SF3D_V15/best-epoch=17-val/loss_total=0.7886.ckpt\
+    --data_dir /cluster/scratch/andrye/SF3D_lmdb_clean \
+    --text_description "close the curtain" \
+    --output_dir "inf_curtain" \
+    --image_path "/cluster/scratch/andrye/SF3D_lmdb_clean/images/423966_42898337_506769.896.jpg"
+
+
+python run_single_inference.py \
+    --ckpt_path /cluster/scratch/andrye/experiments/SF3D_V15/best-epoch=17-val/loss_total=0.7886.ckpt\
+    --data_dir /cluster/scratch/andrye/SF3D_lmdb_clean \
+    --text_description "open the right cabinet door" \
+    --output_dir "inf_right_cabinet" \
+    --image_path "/cluster/scratch/andrye/SF3D_lmdb_clean/images/423966_42898337_506769.896.jpg"
+
+
+python run_single_inference.py \
+    --ckpt_path /cluster/scratch/andrye/experiments/SF3D_V15/best-epoch=17-val/loss_total=0.7886.ckpt\
+    --data_dir /cluster/scratch/andrye/SF3D_lmdb_clean \
+    --text_description "open the left cabinet door" \
+    --output_dir "inf_left_cabinet" \
+    --image_path "/cluster/scratch/andrye/SF3D_lmdb_clean/images/423966_42898337_506769.896.jpg"
+
+
+python run_custom_inference.py \
+    --ckpt_path /cluster/scratch/andrye/experiments/SF3D_V15/best-epoch=17-val/loss_total=0.7886.ckpt \
+    --image_path /cluster/home/andrye/ml-depth-pro/data/IMG_9414.jpeg \
+    --depth_path /cluster/home/andrye/ml-depth-pro/output/IMG_9414.npz \
+    --text_description "open the door" \
+    --output_dir "my_custom_results"
+
+python test_OPDReal_better.py test \
+    --config config/opd_train.yaml \
+    --config config/opdreal_train.yaml \
+    --config config/opdreal_test.yaml \
+    --ckpt_path /cluster/project/cvg/students/andrye/experiments/OPDReal_v17/best-epoch=25-val/loss_total=0.5977.ckpt
+
+
+
+
+/cluster/scratch/andrye/SF3D_lmdb_clean/data.lmdb
+
+
+python test_OPDMulti_better.py test \
+    --config config/opd_train.yaml \
+    --config config/opdmulti_train_no_pretrain.yaml \
+    --config config/opdmulti_test.yaml \
+    --ckpt_path /cluster/project/cvg/students/andrye/experiments/OPDMulti_v14_no_pretrain/best-epoch=22-val/loss_total=0.9316.ckpt
+
+
+
+python test_OPDMulti_better.py test \
+    --config config/opd_train.yaml \
+    --config config/opdmulti_train.yaml \
+    --config config/opdmulti_test.yaml \
+    --ckpt_path /cluster/project/cvg/students/andrye/experiments/OPDMulti_v12/best-epoch=11-val/loss_total=0.7877.ckpt

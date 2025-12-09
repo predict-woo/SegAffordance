@@ -34,6 +34,10 @@ class LossParams:
     motion_type_weight: float
     point_sigma: float
     vae_beta: float
+    # Optional trajectory-related weights
+    trajectory_weight: float = 1.0
+    geometric_weight: float = 1.0
+    trajectory_to_motion_weight: float = 1.0
     
 @dataclass
 class OptimizerParams:
@@ -62,3 +66,4 @@ class Config:
     test_visualize_debug: bool = False
     test_vis_output_dir: str = "debug_visualizations"
     test_vis_max_images: int = 100
+    test_vis_indices: List[int] = None

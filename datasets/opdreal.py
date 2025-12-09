@@ -11,6 +11,7 @@ from pycocotools import mask as coco_mask
 import cv2
 import random
 import textwrap
+import re
 
 from .OPDReal.motion_data import load_motion_json
 
@@ -73,6 +74,7 @@ class OPDRealDataset(Dataset):
         is_multi: bool = False,
         annotation_version: str = "annotations_bwdf",
         use_depth: bool = True,
+        return_camera_params: bool = False,
     ):
         self.data_path = data_path
         self.dataset_key = dataset_key
@@ -82,6 +84,7 @@ class OPDRealDataset(Dataset):
         self.return_filename = return_filename
         self.is_multi = is_multi
         self.use_depth = use_depth
+        self.return_camera_params = return_camera_params
 
         # Load annotations
         json_path = os.path.join(
@@ -143,28 +146,35 @@ class OPDRealDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Union[
         Tuple[
-            torch.Tensor,
-            torch.Tensor,
-            str,
-            torch.Tensor,
-            torch.Tensor,
-            torch.Tensor,
-            torch.Tensor,
-            torch.Tensor,
-            torch.Tensor,
+            torch.Tensor, # rgb_image_tensor
+            torch.Tensor, # depth_image_tensor
+            str,          # description
+            torch.Tensor, # mask_tensor
+            torch.Tensor, # bbox_tensor
+            torch.Tensor, # origin_2d_image_coord_norm
+            torch.Tensor, # motion_dir_3d_camera_coords
+            torch.Tensor, # motion_type_tensor
+            torch.Tensor, # image_size
+            torch.Tensor, # category_id
+            str, # composite_key
         ],
         Tuple[
-            torch.Tensor,
-            torch.Tensor,
-            str,
-            torch.Tensor,
-            torch.Tensor,
-            torch.Tensor,
-            torch.Tensor,
-            torch.Tensor,
-            torch.Tensor,
-            str,
+            torch.Tensor, torch.Tensor, str, torch.Tensor, torch.Tensor,
+            torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor,
+            torch.Tensor, # intrinsic_matrix
+            torch.Tensor, # motion_origin_3d
         ],
+        Tuple[
+            torch.Tensor, torch.Tensor, str, torch.Tensor, torch.Tensor,
+            torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor,
+            str, # filename
+        ],
+        Tuple[
+            torch.Tensor, torch.Tensor, str, torch.Tensor, torch.Tensor,
+            torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor,
+            torch.Tensor, torch.Tensor,
+            str, # filename
+        ]
     ]:
         image_dict, anno = self.items[idx]
 
@@ -264,6 +274,10 @@ class OPDRealDataset(Dataset):
         origin_2d_image_coord_norm = torch.tensor([norm_x, norm_y], dtype=torch.float32)
         origin_2d_image_coord_norm = torch.clamp(origin_2d_image_coord_norm, 0.0, 1.0)
 
+        # Use the pre-computed 'object_key' from the annotation if available.
+        # This key matches the format required for the 'multi' diagonal lookup.
+        composite_key = anno.get('object_key', '')
+
         data_tuple = (
             rgb_image_tensor,
             depth_image_tensor,
@@ -274,14 +288,28 @@ class OPDRealDataset(Dataset):
             motion_dir_3d_camera_coords,
             motion_type_tensor,
             torch.tensor([original_width, original_height], dtype=torch.float32),
+            torch.tensor(anno["category_id"], dtype=torch.long),
+            composite_key,
         )
 
+        if self.return_camera_params:
+            intrinsic_matrix_tensor = torch.tensor(intrinsic_matrix, dtype=torch.float32)
+            motion_origin_3d_tensor = torch.tensor(motion_origin_3d, dtype=torch.float32)
+            data_tuple += (intrinsic_matrix_tensor, motion_origin_3d_tensor)
+
         if self.return_filename:
-            return data_tuple + (img_filename,)
+            return data_tuple + (img_filename,) # type: ignore
         else:
-            return data_tuple
+            return data_tuple # type: ignore
 
     def __del__(self):
+        if self.h5_file:
+            self.h5_file.close()
+        if self.depth_h5_file:
+            self.depth_h5_file.close()
+
+
+
         if self.h5_file:
             self.h5_file.close()
         if self.depth_h5_file:

@@ -4,7 +4,7 @@ model:
   model_params:
     clip_pretrain: "pretrain/RN50.pt" # Assumes a valid CLIP model is at this path
     word_len: 77                     # Standard CLIP context length
-    use_depth: false                 # SF3D does not use depth
+    use_depth: true                  # SF3D uses depth
     use_cvae: true                   # Toggle CVAE motion head (default true)
     depth_feat_channels: [128, 256]
     fpn_in: [512, 1024, 1024]      # Input channels for FPN from backbone.
@@ -29,10 +29,13 @@ model:
     dice_weight: 0.5            # Weight for Dice loss in DiceBCELoss
     # loss weights
     mask_weight: 0.5           # Add this (previously implicit 1.0)
-    point_map_weight: 1.0 
+    point_map_weight: 0.5
     coord_weight: 0.5          # Weight for the L1 coordinate regression loss
     vae_weight: 0.5
     motion_type_weight: 0.5
+    trajectory_weight: 0.5     # Weight for trajectory prediction loss
+    geometric_weight: 0.5      # Weight for geometric consistency loss (pred vector <-> gt traj)
+    trajectory_to_motion_weight: 0.5  # Weight for geometric consistency loss (pred traj <-> gt vector)
     # loss parameters
     point_sigma: 8.0            # Sigma for Gaussian heatmap generation (in pixels on the feature map)
     vae_beta: 0.01
@@ -40,7 +43,7 @@ model:
   optimizer_params:
     lr: 0.00001
     weight_decay: 0.0001
-    scheduler_milestones: [25, 27]
+    scheduler_milestones: [50, 55]
     scheduler_gamma: 0.1
 
   config:
@@ -51,21 +54,21 @@ model:
     manual_seed: 42
 
 trainer:
-  max_epochs: 30
+  max_epochs: 60
   accelerator: "gpu"
   devices: 1
   precision: 16
   logger:
     class_path: pytorch_lightning.loggers.WandbLogger
     init_args:
-      name: "SF3D_V13"
-      project: "SceneFun3D"
-      save_dir: "/cluster/scratch/andrye/wandb_logs/SF3D_V13"
+      name: "SF3D_TRAJ_V6"
+      project: "SceneFun3D_Trajectory"
+      save_dir: "/cluster/work/cvg/students/andrye/SegAffordanceExperiments/wandb_logs/SF3D_TRAJ_V6"
       log_model: false
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        dirpath: "/cluster/project/cvg/students/andrye/experiments/SF3D_V13"
+        dirpath: "/cluster/work/cvg/students/andrye/SegAffordanceExperiments/experiments/SF3D_TRAJ_V6"
         monitor: "val/loss_total"
         mode: "min"
         save_top_k: 10
@@ -73,12 +76,27 @@ trainer:
   log_every_n_steps: 10
 
 
+# data:
+#   train_data_dir: "/cluster/scratch/andrye/SF3D_lmdb_clean"
+#   val_split_ratio: 0.1
+#   input_size: [256, 256]
+#   batch_size_train: 128
+#   batch_size_val: 128
+#   num_workers_train: 16
+#   num_workers_val: 16
+#   manual_seed: 42
+
+
 data:
-  train_data_dir: "/cluster/project/cvg/students/andrye/sf3d"
+  train_data_dir: "/cluster/work/cvg/students/andrye/sf3d_processed"
   val_split_ratio: 0.1
   input_size: [256, 256]
-  batch_size_train: 128
-  batch_size_val: 128
-  num_workers_train: 16
-  num_workers_val: 16
+  # batch_size_train: 256
+  # batch_size_val: 256
+  # num_workers_train: 16
+  # num_workers_val: 16
+  batch_size_train: 256
+  batch_size_val: 256
+  num_workers_train: 32
+  num_workers_val: 32
   manual_seed: 42

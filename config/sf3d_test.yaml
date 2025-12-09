@@ -1,51 +1,22 @@
-# Default configuration for training CRIS on SceneFun3D
+seed_everything: 42
 
-# Model Architecture (CRIS defaults, user should verify/override for their specific CRIS variant)
-clip_pretrain: "pretrain/RN50.pt" # USER MUST OVERRIDE THIS with actual path to a valid CLIP model
-word_len: 77                     # Standard CLIP context length                # Dimension for the visual features input to the Transformer decoder, should match FPN output channel
-fpn_in: [512, 1024, 1024]      # Input channels for FPN from backbone. For RN50, this is typically [512, 1024, 2048] if using C3,C4,C5.
-                                 # Adjusted to [512, 1024, 1024] based on common CRIS configs, assuming C5 might be adapted or a different feature level is used.
-                                 # The key is that fpn_in[1] must match the 1024 channels of v4.
-fpn_out: [256, 512, 1024]        # Output channels for FPN layers. FPN's final output channel (e.g. fpn_out[1] if vis_dim is taken from mid FPN) should match vis_dim.
-sync_bn: True                   # Whether to use SyncBatchNorm
+trainer:
+  # Disable external logging and checkpointing for local test-only runs
+  logger: false
+  enable_checkpointing: false
+  log_every_n_steps: 0
+  callbacks: []
 
-# Decoder (Transformer)
-num_layers: 3                    # Number of layers in Transformer decoder
-num_head: 8                      # Number of attention heads
-dim_ffn: 1024                    # Dimension of feed-forward network in Transformer (often 4 * vis_dim)
-dropout: 0.1                     # Dropout rate in Transformer
-intermediate: False              # Whether the Transformer decoder returns intermediate layer outputs
-
-# Data and Dataloaders
-# train_data_dir and val_data_dir MUST be provided in the user's specific config file
-train_data_dir: "/local/home/andrye/dev/SF3D_Proc/dev"
-val_data_dir: "/local/home/andrye/dev/SF3D_Proc/dev"
-input_size: [416, 416]           # Image input size (height, width)
-batch_size_train: 4
-batch_size_val: 4
-num_workers_train: 4
-num_workers_val: 4
-
-# Optimizer & Scheduler
-optimizer_lr: 0.0001
-optimizer_weight_decay: 0.0001
-scheduler_milestones: [20, 25]   # Epochs at which to decay learning rate
-scheduler_gamma: 0.1             # LR decay factor
-
-# Loss functions
-loss_bce_weight: 0.5             # Weight for BCE loss in DiceBCELoss
-loss_dice_weight: 0.5            # Weight for Dice loss in DiceBCELoss
-loss_point_sigma: 8.0            # Sigma for Gaussian heatmap generation (in pixels on the feature map)
-loss_coord_weight: 0.5          # Weight for the L1 coordinate regression loss
-
-# Trainer settings
-max_epochs: 30
-gpus: 1                          # Number of GPUs to use. If 1, uses GPU 0. If >1, uses specified number of GPUs. If 0, uses CPU.
-precision: 32                    # 32 for float32, 16 for mixed-precision
-exp_name: "SF3D_V2"
-output_dir: "experiments/SF3D_V2" # Base directory for outputs, will be exp_name within this.
-manual_seed: 42
-enable_wandb: True              # Set to true to enable Weights & Biases logging
-wandb_project: "SceneFun3D-V2" # WandB project name
-# wandb_entity: "your_wandb_entity" # Optional: WandB entity (username or team) 
-wandb_show_loading_bar: False
+model:
+  config:
+    # Ensure nothing is pushed to W&B from the test hooks
+    log_test_to_wandb: false
+    # Matching/threshold defaults for OPDMulti testing
+    test_match_metric: "mask"        # "mask" or "bbox"
+    test_iou_threshold: 0.5
+    test_motion_threshold_deg: 10.0
+    test_pred_threshold: 0.5
+    test_visualize_debug: true
+    test_vis_output_dir: "sf3d_test_visualizations_failure"
+    # test_vis_indices: [23000, 8000, 12000, 13000, 15000, 9000, 16000, 18000]
+    test_vis_indices: [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 11000, 12000, 13000, 14000, 15000, 16000, 17000, 18000, 19000, 20000, 21000, 22000, 23000, 24000, 25000, 26000, 27000, 28000, 29000, 30000, 31000, 32000, 33000, 34000, 35000, 36000, 37000, 38000, 39000, 40000, 41000, 42000, 43000, 44000, 45000, 46000, 47000, 48000, 49000, 50000, 51000, 52000, 53000, 54000, 55000, 56000, 57000, 58000, 59000, 60000, 61000, 62000, 63000, 64000, 65000, 66000, 67000, 68000, 69000, 70000, 71000, 72000, 73000, 74000, 75000, 76000, 77000, 78000, 79000, 80000, 81000, 82000, 83000, 84000, 85000, 86000, 87000, 88000, 89000, 90000, 91000, 92000, 93000, 94000, 95000, 96000, 97000, 98000, 99000, 100000, 101000, 102000, 103000, 104000, 105000, 106000, 107000, 108000, 109000, 110000, 111000, 112000, 113000, 114000, 115000, 116000, 117000, 118000, 119000, 120000, 121000, 122000, 123000, 124000, 125000, 126000, 127000, 128000, 129000, 130000, 131000, 132000, 133000, 134000, 135000, 136000, 137000, 138000, 139000, 140000, 141000, 142000, 143000, 144000, 145000, 146000, 147000, 148000, 149000, 150000, 151000, 152000, 153000, 154000, 155000, 156000, 157000, 158000, 159000, 160000, 161000, 162000, 163000, 164000, 165000, 166000, 167000, 168000, 169000, 170000, 171000, 172000, 173000, 174000, 175000, 176000, 177000, 178000, 179000, 180000, 181000, 182000, 183000, 184000, 185000, 186000, 187000, 188000, 189000, 190000, 191000, 192000, 193000, 194000, 195000, 196000, 197000, 198000, 199000, 200000, 201000, 202000, 203000, 204000, 205000, 206000, 207000, 208000, 209000, 210000, 211000, 212000, 213000, 214000, 215000, 216000, 217000, 218000, 219000, 220000, 221000, 222000, 223000, 224000, 225000, 226000, 227000, 228000, 229000, 23000]

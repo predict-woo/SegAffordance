@@ -13,6 +13,7 @@ from .layers import (
     MotionVAE,
     MotionMLP,
     DepthEncoder,
+    TrajectoryMLP,
 )
 
 
@@ -113,6 +114,12 @@ class CRIS(nn.Module):
                 num_motion_types=model_params.num_motion_types,
             )
 
+        self.trajectory_predictor = TrajectoryMLP(
+            input_dim=vae_condition_dim,
+            hidden_dim=model_params.vae_hidden_dim,  # reuse this param
+            num_points=20,
+        )
+
     def forward(self, img, depth, word, mask, interaction_point, motion_gt=None):
         """
         img: (B, 3, H, W)
@@ -196,6 +203,8 @@ class CRIS(nn.Module):
         # The VAE is conditioned on object features, global features, and the interaction point.
         vae_condition = torch.cat([vae_encoder_features, coords_hat], dim=1)
 
+        trajectory_pred = self.trajectory_predictor(vae_condition)
+
         # motion_gt can be None during pure inference, but for train/val it's provided.
         if self.use_cvae:
             if motion_gt is not None:
@@ -210,6 +219,7 @@ class CRIS(nn.Module):
                     motion_type_logits,
                     mu,
                     log_var,
+                    trajectory_pred,
                 )
             else:
                 # During pure inference (e.g. in a test script), sample z from prior
@@ -223,6 +233,7 @@ class CRIS(nn.Module):
                     motion_type_logits,
                     None,
                     None,
+                    trajectory_pred,
                 )
         else:
             motion_pred, motion_type_logits = self.motion_mlp(vae_condition)  # type: ignore[operator]
@@ -236,4 +247,5 @@ class CRIS(nn.Module):
                 motion_type_logits,
                 None,
                 None,
+                trajectory_pred,
             )

@@ -280,6 +280,29 @@ class MotionMLP(nn.Module):
         return motion_pred, motion_type_logits
 
 
+class TrajectoryMLP(nn.Module):
+    def __init__(self, input_dim: int, hidden_dim: int = 256, num_points: int = 20):
+        super().__init__()
+        self.num_points = num_points
+        self.backbone = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(True),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(True),
+        )
+        # Each point has 3 coordinates (x, y, z)
+        self.trajectory_head = nn.Linear(hidden_dim, num_points * 3)
+
+    def forward(self, condition: torch.Tensor):
+        h = self.backbone(condition)
+        trajectory_pred = self.trajectory_head(h)
+        # Reshape to (B, num_points, 3)
+        trajectory_pred = trajectory_pred.view(
+            trajectory_pred.size(0), self.num_points, 3
+        )
+        return trajectory_pred
+
+
 class TransformerDecoder(nn.Module):
     def __init__(
         self, num_layers, d_model, nhead, dim_ffn, dropout, return_intermediate=False

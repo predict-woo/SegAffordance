@@ -87,6 +87,7 @@ def load_motion_json(
         "category_id",
         "motion",
         "object_key",
+        "image_id",
     ] + (extra_annotation_keys or [])
 
     for img_dict, anno_dict_list in imgs_anns:

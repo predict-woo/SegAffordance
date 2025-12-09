@@ -50,14 +50,13 @@ model:
     val_vis_samples: 12
     manual_seed: 42
 
-
 data:
   train_dataset_key: "MotionNet_train" # Key for the training dataset split
   val_dataset_key: "MotionNet_valid"   # Key for the validation dataset split
   test_dataset_key: "MotionNet_test"   # Key for the test dataset split
   input_size: [256, 256]
   use_depth: true                    # Toggle depth loading in dataset (default true)
-  batch_size_train: 128
-  batch_size_val: 128
-  num_workers_train: 16
-  num_workers_val: 16
+  batch_size_train: 64
+  batch_size_val: 64
+  num_workers_train: 8
+  num_workers_val: 8

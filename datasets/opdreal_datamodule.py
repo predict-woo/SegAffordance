@@ -1,5 +1,6 @@
 import typing
 from typing import Optional, Tuple
+import json
 
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader, Dataset
@@ -22,6 +23,9 @@ class OPDRealDataModule(pl.LightningDataModule):
         return_filename: bool = False,
         is_multi: bool = False,
         use_depth: bool = True,
+        return_camera_params: bool = False,
+        origin_norm_json_path: typing.Optional[str] = None,
+        origin_norm_json_format: str = 'real',
     ) -> None:
         super().__init__()
         self.data_path = data_path
@@ -36,12 +40,31 @@ class OPDRealDataModule(pl.LightningDataModule):
         self.return_filename = return_filename
         self.is_multi = is_multi
         self.use_depth = use_depth
+        self.return_camera_params = return_camera_params
+        self.origin_norm_json_path = origin_norm_json_path
+        self.origin_norm_json_format = origin_norm_json_format
+        self.origin_norm_diagonals = None
 
         self.train_dataset: Optional[Dataset] = None
         self.val_dataset: Optional[Dataset] = None
         self.test_dataset: Optional[Dataset] = None
 
     def setup(self, stage: Optional[str] = None) -> None:
+        if self.origin_norm_json_path and self.origin_norm_diagonals is None:
+            print(f"📏 Loading 3D diagonal data for origin normalization from: {self.origin_norm_json_path}")
+            try:
+                with open(self.origin_norm_json_path, 'r') as f:
+                    data = json.load(f)
+                    if self.origin_norm_json_format == 'real':
+                        self.origin_norm_diagonals = {int(k): v['diameter'] for k, v in data.items()}
+                    elif self.origin_norm_json_format == 'multi':
+                        self.origin_norm_diagonals = {k: v['diagonal'] for k, v in data.items()}
+                    else:
+                        raise ValueError(f"Unknown origin_norm_json_format: {self.origin_norm_json_format}")
+            except Exception as e:
+                print(f"⚠️ Error loading origin normalization data: {e}. Origin error will not be calculated.")
+                self.origin_norm_diagonals = None
+
         if stage in ("fit", None):
             train_rgb_transform, train_mask_transform, train_depth_transform = (
                 get_default_transforms(image_size=self.input_size, is_train=True)
@@ -59,6 +82,7 @@ class OPDRealDataModule(pl.LightningDataModule):
                 return_filename=self.return_filename,
                 is_multi=self.is_multi,
                 use_depth=self.use_depth,
+                return_camera_params=self.return_camera_params,
             )
 
             self.val_dataset = OPDRealDataset(
@@ -70,6 +94,7 @@ class OPDRealDataModule(pl.LightningDataModule):
                 return_filename=self.return_filename,
                 is_multi=self.is_multi,
                 use_depth=self.use_depth,
+                return_camera_params=self.return_camera_params,
             )
 
         if stage in ("test", None):
@@ -86,6 +111,7 @@ class OPDRealDataModule(pl.LightningDataModule):
                 return_filename=self.return_filename,
                 is_multi=self.is_multi,
                 use_depth=self.use_depth,
+                return_camera_params=self.return_camera_params,
             )
 
     def train_dataloader(self) -> DataLoader:

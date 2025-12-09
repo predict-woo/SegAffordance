@@ -1,6 +1,9 @@
 import os
+from torch._tensor import Tensor
 import typing
+from typing import Any
 import warnings
+import json
 
 import pytorch_lightning as pl
 import torch
@@ -41,7 +44,6 @@ class OPDRealTrainingModule(pl.LightningModule):
         self.optimizer_params = optimizer_params
         self.config = config
 
-
         self.model = CRIS(model_params)
 
         self.mask_loss_fn = DiceBCELoss(
@@ -53,6 +55,7 @@ class OPDRealTrainingModule(pl.LightningModule):
         self.coord_loss_fn = nn.L1Loss()
         self.vae_loss_fn = MotionVAELoss(beta=self.loss_params.vae_beta)
         self.motion_type_loss_fn = nn.CrossEntropyLoss(label_smoothing=0.1)
+        self.trajectory_loss_fn = nn.MSELoss()
 
         if finetune_from_path:
             self.load_finetune_weights(finetune_from_path)
@@ -75,10 +78,13 @@ class OPDRealTrainingModule(pl.LightningModule):
         self._test_num_matched: int = 0
         self._test_correct_axis_predictions: int = 0
         self._test_correct_type_in_matched: int = 0
-        self._test_correct_all: int = 0
+        self._test_correct_pdet_ma: int = 0
+        self._test_correct_pdet_mao: int = 0
         self._test_origin_errors_matched: typing.List[float] = []
         self._test_correct_origin_predictions: int = 0
         self._test_num_rotational_matched: int = 0
+        self._test_debug_print_count: int = 0
+        self.indices_to_visualize: typing.Optional[set] = None
 
     def forward(
         self, img, depth, tokenized_word, mask_condition, point_condition, motion_gt
@@ -88,17 +94,49 @@ class OPDRealTrainingModule(pl.LightningModule):
         )
 
     def _common_step(self, batch, batch_idx, step_type="train"):
-        (
-            img,
-            depth,
-            word_str_list,
-            mask_gt,
-            _bbox,
-            point_gt_norm,
-            motion_gt,
-            motion_type_gt,
-            _img_size,
-        ) = batch
+        trajectory_gt = None
+        motion_origin_3d = None
+        if len(batch) == 13:  # SF3D with trajectory
+            (
+                img,
+                depth,
+                word_str_list,
+                mask_gt,
+                _bbox,
+                point_gt_norm,
+                motion_gt,
+                motion_type_gt,
+                _img_size,
+                _rgb_filename,
+                motion_origin_3d,
+                _camera_intrinsic,
+                trajectory_gt,
+            ) = batch
+        elif len(batch) > 10:  # Other SF3D case, no trajectory
+            (
+                img,
+                depth,
+                word_str_list,
+                mask_gt,
+                _bbox,
+                point_gt_norm,
+                motion_gt,
+                motion_type_gt,
+                _img_size,
+                *_,
+            ) = batch
+        else:  # OPDReal
+            (
+                img,
+                depth,
+                word_str_list,
+                mask_gt,
+                _bbox,
+                point_gt_norm,
+                motion_gt,
+                motion_type_gt,
+                _img_size,
+            ) = batch
 
         tokenized_words = tokenize(
             list(word_str_list), self.model_params.word_len, truncate=True
@@ -112,6 +150,7 @@ class OPDRealTrainingModule(pl.LightningModule):
             motion_type_logits,
             mu,
             log_var,
+            trajectory_pred,
         ) = self(img, depth, tokenized_words, mask_gt, point_gt_norm, motion_gt)
 
         H_map, W_map = mask_pred_logits.shape[-2:]
@@ -153,6 +192,71 @@ class OPDRealTrainingModule(pl.LightningModule):
             + (self.loss_params.vae_weight * L_vae)
             + (self.loss_params.motion_type_weight * L_motion_type)
         )
+
+        if trajectory_gt is not None:
+            # Convert GT trajectory to relative coordinates (first point at origin)
+            trajectory_gt_device = trajectory_gt.to(trajectory_pred.device)
+            trajectory_gt_first = trajectory_gt_device[:, 0:1, :]  # (B, 1, 3)
+            trajectory_gt_relative = trajectory_gt_device - trajectory_gt_first  # (B, N, 3)
+            
+            # Model predicts relative trajectory, so compare directly
+            L_trajectory = self.trajectory_loss_fn(trajectory_pred, trajectory_gt_relative)
+            trajectory_weight = getattr(self.loss_params, "trajectory_weight", 1.0)
+            total_loss += trajectory_weight * L_trajectory
+            self.log(
+                f"{step_type}/L_trajectory",
+                L_trajectory,
+                on_step=(step_type == "train"),
+                on_epoch=True,
+                logger=True,
+                sync_dist=True,
+            )
+            
+            # Add geometric consistency losses between trajectory and motion
+            # Note: For relative trajectory, motion_origin is also relative to trajectory start
+            if motion_origin_3d is not None:
+                motion_origin_3d_device = motion_origin_3d.to(trajectory_pred.device)
+                # Convert motion origin to relative coordinates (relative to trajectory first point)
+                motion_origin_3d_relative = motion_origin_3d_device - trajectory_gt_first.squeeze(1)  # (B, 3)
+                trajectory_gt_first_relative = torch.zeros_like(motion_origin_3d_relative)  # (B, 3) - at origin
+                
+                # Loss 1: pred vector <-> gt traj (motion_pred vs trajectory_gt)
+                L_geometric_pred_vector_gt_traj = self._geometric_consistency_loss(
+                    trajectory_pred=trajectory_gt_relative,
+                    motion_pred=motion_pred,
+                    motion_type_gt=motion_type_gt.to(trajectory_pred.device),
+                    motion_origin_3d=motion_origin_3d_relative,
+                    trajectory_gt_first=trajectory_gt_first_relative,
+                )
+                geometric_weight = getattr(self.loss_params, "geometric_weight", 1.0)
+                total_loss += geometric_weight * L_geometric_pred_vector_gt_traj
+                self.log(
+                    f"{step_type}/L_geometric_pred_vector_gt_traj",
+                    L_geometric_pred_vector_gt_traj,
+                    on_step=(step_type == "train"),
+                    on_epoch=True,
+                    logger=True,
+                    sync_dist=True,
+                )
+                
+                # Loss 2: pred traj <-> gt vector (trajectory_pred vs motion_gt)
+                L_geometric_pred_traj_gt_vector = self._geometric_consistency_loss(
+                    trajectory_pred=trajectory_pred,
+                    motion_pred=motion_gt.to(trajectory_pred.device),
+                    motion_type_gt=motion_type_gt.to(trajectory_pred.device),
+                    motion_origin_3d=motion_origin_3d_relative,
+                    trajectory_gt_first=trajectory_gt_first_relative,
+                )
+                trajectory_to_motion_weight = getattr(self.loss_params, "trajectory_to_motion_weight", 1.0)
+                total_loss += trajectory_to_motion_weight * L_geometric_pred_traj_gt_vector
+                self.log(
+                    f"{step_type}/L_geometric_pred_traj_gt_vector",
+                    L_geometric_pred_traj_gt_vector,
+                    on_step=(step_type == "train"),
+                    on_epoch=True,
+                    logger=True,
+                    sync_dist=True,
+                )
 
         self.log(
             f"{step_type}/loss_total",
@@ -248,7 +352,7 @@ class OPDRealTrainingModule(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        trainable_params = filter(lambda p: p.requires_grad, self.model.parameters())
+        trainable_params = list(filter(lambda p: p.requires_grad, self.model.parameters()))
         optimizer = torch.optim.Adam(
             trainable_params,
             lr=self.optimizer_params.lr,
@@ -278,7 +382,9 @@ class OPDRealTrainingModule(pl.LightningModule):
             point_gt_norm_list,
             motion_gt_list,
             motion_type_gt_list,
-            _img_size_list,
+            original_image_size_list,
+            trajectory_gt_list,
+            camera_intrinsic_list,
         ) = zip(*self.val_vis_samples)
 
         img = torch.stack(img_list).to(self.device)
@@ -300,6 +406,7 @@ class OPDRealTrainingModule(pl.LightningModule):
                 motion_type_logits,
                 _,
                 _,
+                trajectory_pred,
             ) = self(img, depth, tokenized_words, mask_gt, point_gt_norm, motion_gt)
 
         try:
@@ -322,6 +429,11 @@ class OPDRealTrainingModule(pl.LightningModule):
                     motion_pred=motion_pred[i],
                     motion_type_gt=motion_type_gt_list[i],
                     motion_type_pred_logits=motion_type_logits[i],
+                    trajectory_gt=trajectory_gt_list[i],
+                    trajectory_pred=trajectory_pred[i],
+                    camera_intrinsic=camera_intrinsic_list[i],
+                    original_image_size=original_image_size_list[i],
+                    depth_tensor=depth[i],
                 )
 
                 log_data[f"val_sample/{i}_sample"] = wandb.Image(composite_image)
@@ -344,6 +456,13 @@ class OPDRealTrainingModule(pl.LightningModule):
         # Release buffer
         self._vis_buffer = []
 
+    def on_test_start(self):
+        vis_indices = getattr(self.config, "test_vis_indices", None)
+        if vis_indices and self.trainer.is_global_zero:
+            self.indices_to_visualize = set(vis_indices)
+        else:
+            self.indices_to_visualize = None
+
     # --- Testing support ---
     def test_step(self, batch, batch_idx):
         (
@@ -356,7 +475,18 @@ class OPDRealTrainingModule(pl.LightningModule):
             motion_gt,
             motion_type_gt,
             _img_size,
-        ) = batch
+            category_id,
+            composite_key,
+        ) = batch[:11]
+        
+        
+        
+        # Unpack optional camera parameters if they exist
+        camera_params_in_batch = len(batch) > 11
+        if camera_params_in_batch:
+            intrinsic_matrix, motion_origin_3d_gt = batch[11], batch[12]
+        else:
+            intrinsic_matrix, motion_origin_3d_gt = None, None
 
         tokenized_words = tokenize(
             list(word_str_list), self.model_params.word_len, truncate=True
@@ -365,7 +495,7 @@ class OPDRealTrainingModule(pl.LightningModule):
         with torch.no_grad():
             (
                 mask_pred_logits,
-                _point_pred_logits,
+                point_pred_logits,
                 coords_hat,
                 motion_pred,
                 motion_type_logits,
@@ -384,6 +514,8 @@ class OPDRealTrainingModule(pl.LightningModule):
         do_vis = getattr(self.config, "test_visualize_debug", False)
         vis_dir = getattr(self.config, "test_vis_output_dir", "debug_visualizations")
         vis_max = int(getattr(self.config, "test_vis_max_images", 100))
+        dm = self.trainer.datamodule
+        origin_norm_diagonals = getattr(dm, "origin_norm_diagonals", None)
 
         for i in range(batch_size):
             # IoU metric
@@ -399,7 +531,7 @@ class OPDRealTrainingModule(pl.LightningModule):
             # Point error
             point_err = torch.linalg.norm(coords_hat[i] - point_gt_norm[i]).item()
             self._test_point_errors.append(point_err)
-
+            
             # Match gating
             if iou_val > self.config.test_iou_threshold:
                 self._test_num_matched += 1
@@ -416,50 +548,97 @@ class OPDRealTrainingModule(pl.LightningModule):
                 if is_type_correct:
                     self._test_correct_type_in_matched += 1
 
-                if is_axis_correct and is_type_correct:
-                    self._test_correct_all += 1
-                
-                # Origin Pass Rate (for rotational motions)
-                # Assuming motion type 0 is rotation
+                is_origin_correct = False
+                # For translational motion, origin check is passed by default
                 if motion_type_gt[i] == 0:
+                    is_origin_correct = True
+                # For rotational motion, we must calculate the 3D error
+                elif motion_type_gt[i] == 1 and camera_params_in_batch and origin_norm_diagonals is not None:
                     self._test_num_rotational_matched += 1
-                    pred_origin = coords_hat[i]
-                    gt_origin = point_gt_norm[i].to(pred_origin.device)
-                    gt_axis = motion_gt[i].to(pred_origin.device)
+                    # 1. Get predicted 2D origin and depth map
+                    pred_origin_norm = coords_hat[i].detach() # (x, y) in [0, 1]
+                    depth_map = depth[i].squeeze() # (H, W)
+                    H, W = depth_map.shape
+
+                    # 2. Convert normalized coords to pixel coords
+                    u, v = int(pred_origin_norm[0] * W), int(pred_origin_norm[1] * H)
                     
-                    p = pred_origin - gt_origin
-                    # Ensure gt_axis has non-zero norm before division
-                    gt_axis_norm_val = torch.linalg.norm(gt_axis)
-                    if gt_axis_norm_val > 1e-6:
-                        dist = torch.linalg.norm(torch.cross(p, gt_axis)) / gt_axis_norm_val
+                    # 3. Sample depth value (with a small patch for robustness)
+                    patch_size = 5
+                    u_start, v_start = max(0, u - patch_size//2), max(0, v - patch_size//2)
+                    u_end, v_end = min(W, u + patch_size//2 + 1), min(H, v + patch_size//2 + 1)
+                    depth_patch = depth_map[v_start:v_end, u_start:u_end]
+                    
+                    # Filter out zero depth values which are often invalid
+                    valid_depths = depth_patch[depth_patch > 0]
+                    z_mm = valid_depths.mean().item() if valid_depths.numel() > 0 else depth_map[v, u].item()
+
+                    # 4. Unproject 2D point + depth to 3D
+                    if z_mm > 1e-6 and intrinsic_matrix is not None:
+                        K = intrinsic_matrix[i].to(self.device)
+                        fx, fy, cx, cy = K[0, 0], K[1, 1], K[0, 2], K[1, 2]
                         
-                        bbox = bbox_gt[i]
-                        diagonal = torch.sqrt(bbox[2]**2 + bbox[3]**2)
+                        x_cam_mm = (u - cx) * z_mm / fx
+                        y_cam_mm = (v - cy) * z_mm / fy
+                        pred_origin_3d_mm = torch.tensor([x_cam_mm, y_cam_mm, z_mm], device=self.device)
                         
-                        if diagonal > 1e-6:
-                            norm_dist = dist / diagonal
+                        # Convert prediction to meters
+                        pred_origin_3d = pred_origin_3d_mm / 1000.0
+                        
+                        # 5. Calculate error against 3D GT origin
+                        gt_origin_3d = motion_origin_3d_gt[i].to(self.device)
+                        origin_error = torch.linalg.norm(pred_origin_3d - gt_origin_3d)
+
+                        # Use 3D diagonal from JSON for normalization, adapting to format
+                        json_format = getattr(dm, "origin_norm_json_format", "real")
+                        if json_format == 'real':
+                            lookup_key = category_id[i].item()
+                        else: # 'multi'
+                            lookup_key = composite_key[i]
+                        
+                        
+                        diagonal_3d = origin_norm_diagonals.get(lookup_key)
+
+                        if diagonal_3d is not None and diagonal_3d > 1e-6:
+                            norm_dist = origin_error / diagonal_3d
                             self._test_origin_errors_matched.append(norm_dist.item())
-                            
                             origin_threshold = getattr(self.config, "test_origin_threshold", 0.1)
                             if norm_dist <= origin_threshold:
+                                is_origin_correct = True
                                 self._test_correct_origin_predictions += 1
 
-            # Local visualization (no W&B). Save side-by-side image of prob vs. thresholded w/ bbox.
-            if do_vis and (len(self._test_ious) <= vis_max) and self.trainer.is_global_zero:
-                try:
-                    self._save_test_debug_visualization(
-                        image_tensor=img[i].detach().cpu(),
-                        gt_mask_tensor=mask_gt[i].detach().cpu(),
-                        pred_mask_prob_tensor=mask_pred_upsampled[i].detach().cpu(),
-                        gt_bbox=bbox_gt[i].detach().cpu(),
-                        description=word_str_list[i],
-                        pred_threshold=float(self.config.test_pred_threshold),
-                        output_dir=vis_dir,
-                        sample_index=(batch_idx * batch_size + i),
-                        iou_value=iou_val,
+                if is_type_correct and is_axis_correct:
+                    self._test_correct_pdet_ma += 1
+                
+                if is_type_correct and is_axis_correct and is_origin_correct:
+                    self._test_correct_pdet_mao += 1
+
+
+            # Debug visualization
+            if do_vis and self.trainer.is_global_zero:
+                current_sample_index: Any = batch_idx * batch_size + i
+                if self.indices_to_visualize is None or current_sample_index in self.indices_to_visualize:
+                    vis_dir = getattr(
+                        self.config, "test_vis_output_dir", "opdreal_debug_visualizations"
                     )
-                except Exception as _:
-                    pass
+                    point_pred_prob = torch.sigmoid(point_pred_logits)
+                    
+                    print(batch[-1][i])
+
+
+                    self._save_opdreal_test_debug_visualizations(
+                        image_tensor=img[i].detach().cpu(),
+                        point_pred_prob_tensor=point_pred_prob[i].detach().cpu(),
+                        mask_pred_prob_tensor=mask_pred_prob[i].detach().cpu(),
+                        motion_pred=motion_pred[i].detach().cpu(),
+                        pred_motion_type=int(pred_types[i].item()),
+                        gt_point_norm=point_gt_norm[i].detach().cpu(),
+                        gt_mask_tensor=mask_gt[i].detach().cpu(),
+                        gt_motion=motion_gt[i].detach().cpu(),
+                        description=word_str_list[i],
+                        output_dir=vis_dir,
+                        sample_index=current_sample_index,
+                    )
 
         return {}
 
@@ -486,24 +665,28 @@ class OPDRealTrainingModule(pl.LightningModule):
 
         if total_predictions > 0:
             p_det = 100.0 * self._test_num_matched / total_predictions
-            map_type = 100.0 * self._test_correct_type_in_matched / total_predictions
-            map_all = 100.0 * self._test_correct_all / total_predictions
+            pdet_m = 100.0 * self._test_correct_type_in_matched / total_predictions
+            pdet_ma = 100.0 * self._test_correct_pdet_ma / total_predictions
+            pdet_mao = 100.0 * self._test_correct_pdet_mao / total_predictions
         else:
             p_det = 0.0
-            map_type = 0.0
-            map_all = 0.0
+            pdet_m = 0.0
+            pdet_ma = 0.0
+            pdet_mao = 0.0
 
         # Always log to progress bar/console; optionally to external logger
         self.log("test/mean_iou", mean_iou, prog_bar=True, logger=self.config.log_test_to_wandb, sync_dist=True)
         self.log("test/p_det", p_det, prog_bar=True, logger=self.config.log_test_to_wandb, sync_dist=True)
+        self.log("test/pdet_m", pdet_m, prog_bar=True, logger=self.config.log_test_to_wandb, sync_dist=True)
+        self.log("test/pdet_ma", pdet_ma, prog_bar=True, logger=self.config.log_test_to_wandb, sync_dist=True)
+        self.log("test/pdet_mao", pdet_mao, prog_bar=True, logger=self.config.log_test_to_wandb, sync_dist=True)
         self.log("test/mean_point_error", mean_point_error, prog_bar=False, logger=self.config.log_test_to_wandb, sync_dist=True)
         self.log("test/err_adir_deg", err_adir, prog_bar=False, logger=self.config.log_test_to_wandb, sync_dist=True)
-        self.log("test/pass_rate_axis", pass_rate_axis, prog_bar=True, logger=self.config.log_test_to_wandb, sync_dist=True)
+        self.log("test/pass_rate_axis", pass_rate_axis, prog_bar=False, logger=self.config.log_test_to_wandb, sync_dist=True)
         self.log("test/pass_rate_type", pass_rate_type, prog_bar=False, logger=self.config.log_test_to_wandb, sync_dist=True)
         self.log("test/mean_origin_error", mean_origin_error, prog_bar=False, logger=self.config.log_test_to_wandb, sync_dist=True)
         self.log("test/pass_rate_origin", pass_rate_origin, prog_bar=False, logger=self.config.log_test_to_wandb, sync_dist=True)
-        self.log("test/map_type", map_type, prog_bar=False, logger=self.config.log_test_to_wandb, sync_dist=True)
-        self.log("test/map_all", map_all, prog_bar=True, logger=self.config.log_test_to_wandb, sync_dist=True)
+        
 
         # Print concise summary
         if self.trainer.is_global_zero:
@@ -511,15 +694,18 @@ class OPDRealTrainingModule(pl.LightningModule):
             print(f"Total Samples: {total_predictions}")
             print(f"Mean IoU: {mean_iou:.4f}")
             print(f"PDet (IoU Pass Rate @ >{self.config.test_iou_threshold:.2f} IoU): {p_det:.2f}%")
+            print(f"PDet+M (IoU + Motion Type): {pdet_m:.2f}%")
+            print(f"PDet+MA (IoU + Motion Type + Axis): {pdet_ma:.2f}%")
+            print(f"PDet+MAO (IoU + Motion Type + Axis + Origin): {pdet_mao:.2f}%")
+            print(f"\n--- Detailed Stats ---")
             print(f"Mean Point Error (L2): {mean_point_error:.4f}")
-            print(f"ERR_ADir (Mean Axis Error): {err_adir:.2f} degrees")
-            print(f"Pass Rate Axis (correct axis for matched preds): {pass_rate_axis:.2f}%")
-            print(f"Pass Rate Type (correct type for matched preds): {pass_rate_type:.2f}%")
+            print(f"ERR_ADir (Mean Axis Error for matched): {err_adir:.2f} degrees")
+            print(f"Pass Rate Axis (correct axis for matched): {pass_rate_axis:.2f}%")
+            print(f"Pass Rate Type (correct type for matched): {pass_rate_type:.2f}%")
             origin_thresh_val = getattr(self.config, "test_origin_threshold", 0.1)
-            print(f"Mean Origin Error (normalized, for matched rotational preds): {mean_origin_error:.4f}")
-            print(f"Pass Rate Origin (correct origin for matched rotational preds @ <{origin_thresh_val:.2f} error): {pass_rate_origin:.2f}%")
-            print(f"mAP_Type (IoU > {self.config.test_iou_threshold:.2f} & Correct Type): {map_type:.2f}%")
-            print(f"mAP_All (IoU > {self.config.test_iou_threshold:.2f} & Correct Type & Axis): {map_all:.2f}%")
+            print(f"Mean Origin Error (normalized, for matched rotational): {mean_origin_error:.4f}")
+            print(f"Pass Rate Origin (correct origin for matched rotational @ <{origin_thresh_val:.2f} error): {pass_rate_origin:.2f}%")
+
 
         # Reset accumulators for potential further test runs
         self._test_ious.clear()
@@ -528,10 +714,12 @@ class OPDRealTrainingModule(pl.LightningModule):
         self._test_num_matched = 0
         self._test_correct_axis_predictions = 0
         self._test_correct_type_in_matched = 0
-        self._test_correct_all = 0
+        self._test_correct_pdet_ma = 0
+        self._test_correct_pdet_mao = 0
         self._test_origin_errors_matched.clear()
         self._test_correct_origin_predictions = 0
         self._test_num_rotational_matched = 0
+        self._test_debug_print_count = 0
 
     # --- Utilities for testing ---
     @staticmethod
@@ -567,6 +755,78 @@ class OPDRealTrainingModule(pl.LightningModule):
         return (intersection.float() + 1e-7) / (union.float() + 1e-7)
 
     @staticmethod
+    def _geometric_consistency_loss(
+        trajectory_pred: torch.Tensor,  # (B, N, 3)
+        motion_pred: torch.Tensor,  # (B, 3)
+        motion_type_gt: torch.Tensor,  # (B,)
+        motion_origin_3d: torch.Tensor,  # (B, 3)
+        trajectory_gt_first: torch.Tensor,  # (B, 3) - first point of GT trajectory
+    ) -> torch.Tensor:
+        """
+        Compute geometric consistency loss between predicted trajectory and motion vector.
+        
+        For translation (type=0): Loss measures how well trajectory points align with a line
+        For rotation (type=1): Loss measures how well trajectory points lie on a circle
+        
+        Returns: scalar loss value averaged over batch
+        """
+        B, N, _ = trajectory_pred.shape
+        device = trajectory_pred.device
+        
+        # Normalize motion vector to unit length
+        motion_pred_norm = F.normalize(motion_pred, p=2, dim=1, eps=1e-8)  # (B, 3)
+        
+        total_loss = torch.zeros(B, device=device)
+        
+        for b in range(B):
+            if motion_type_gt[b] == 0:  # Translation - line loss
+                # L_line = (1/N) Σ ||(Q_i - P_0) × v||²
+                P_0 = motion_origin_3d[b]  # (3,)
+                v = motion_pred_norm[b]  # (3,)
+                Q = trajectory_pred[b]  # (N, 3)
+                
+                # Compute cross product: (Q_i - P_0) × v
+                Q_minus_P0 = Q - P_0  # (N, 3)
+                cross_product = torch.cross(Q_minus_P0, v.unsqueeze(0).expand(N, -1))  # (N, 3)
+                squared_distances = torch.sum(cross_product ** 2, dim=1)  # (N,)
+                line_loss = squared_distances.mean()
+                
+                total_loss[b] = line_loss
+                
+            elif motion_type_gt[b] == 1:  # Rotation - circle loss
+                # L_circle = (1/N) Σ [((Q_i - C) · n)² + (||proj_perp(Q_i - C)|| - r)²]
+                C = motion_origin_3d[b]  # (3,) - circle center
+                n = motion_pred_norm[b]  # (3,) - plane normal (rotation axis)
+                Q = trajectory_pred[b]  # (N, 3)
+                
+                # Compute radius from first GT trajectory point
+                Q_first_gt = trajectory_gt_first[b]  # (3,)
+                Q_first_minus_C = Q_first_gt - C  # (3,)
+                # Project onto plane perpendicular to n: Q - C - ((Q - C) · n)n
+                proj_length = torch.dot(Q_first_minus_C, n)
+                proj_perp = Q_first_minus_C - proj_length * n  # (3,)
+                r = torch.norm(proj_perp)  # scalar - radius
+                
+                # Compute loss for each predicted point
+                Q_minus_C = Q - C  # (N, 3)
+                
+                # First term: ((Q_i - C) · n)² - ensures points lie in plane perpendicular to n
+                dot_n = torch.sum(Q_minus_C * n.unsqueeze(0).expand(N, -1), dim=1)  # (N,)
+                plane_dist_sq = dot_n ** 2  # (N,)
+                
+                # Second term: (||proj_perp(Q_i - C)|| - r)² - ensures points lie on circle
+                proj_lengths = torch.sum(Q_minus_C * n.unsqueeze(0).expand(N, -1), dim=1)  # (N,)
+                proj_perp_vecs = Q_minus_C - proj_lengths.unsqueeze(1) * n.unsqueeze(0).expand(N, -1)  # (N, 3)
+                circle_dists = torch.norm(proj_perp_vecs, dim=1)  # (N,)
+                circle_error_sq = (circle_dists - r) ** 2  # (N,)
+                
+                circle_loss = (plane_dist_sq + circle_error_sq).mean()
+                
+                total_loss[b] = circle_loss
+        
+        return total_loss.mean()
+
+    @staticmethod
     def _axis_error_deg(pred_axis: torch.Tensor, gt_axis: torch.Tensor) -> torch.Tensor:
         pred_axis = pred_axis.squeeze()
         gt_axis = gt_axis.squeeze()
@@ -580,88 +840,197 @@ class OPDRealTrainingModule(pl.LightningModule):
 
     # --- Visualization helper ---
     @staticmethod
-    def _save_test_debug_visualization(
+    def _save_opdreal_test_debug_visualizations(
         image_tensor: torch.Tensor,
+        point_pred_prob_tensor: torch.Tensor,
+        mask_pred_prob_tensor: torch.Tensor,
+        motion_pred: torch.Tensor,  # 3d vector
+        pred_motion_type: int,
+        gt_point_norm: torch.Tensor,
         gt_mask_tensor: torch.Tensor,
-        pred_mask_prob_tensor: torch.Tensor,
-        gt_bbox: torch.Tensor,
+        gt_motion: torch.Tensor,
         description: str,
-        pred_threshold: float,
         output_dir: str,
         sample_index: int,
-        iou_value: float,
-    ) -> None:
-        import numpy as _np
-        import cv2 as _cv2
+    ):
+        import numpy as np
+        import cv2
+        from PIL import Image
+
         os.makedirs(output_dir, exist_ok=True)
 
-        img_np = image_tensor.numpy().transpose(1, 2, 0)
-        mean = _np.array([0.485, 0.456, 0.406])
-        std = _np.array([0.229, 0.224, 0.225])
-        img_np = std * img_np + mean
-        img_np = _np.clip(img_np, 0, 1)
-        img_bgr = _cv2.cvtColor((img_np * 255).astype(_np.uint8), _cv2.COLOR_RGB2BGR)
+        # 1. De-normalize image tensor
+        img_np_norm = image_tensor.numpy().transpose(1, 2, 0)
+        mean = np.array([0.485, 0.456, 0.406])
+        std = np.array([0.229, 0.224, 0.225])
+        img_np = std * img_np_norm + mean
+        img_np = np.clip(img_np, 0, 1)
+        img_bgr = cv2.cvtColor((img_np * 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
+
         h, w, _ = img_bgr.shape
 
-        gt_mask_np = gt_mask_tensor.numpy().squeeze()
-        pred_mask_prob_np = pred_mask_prob_tensor.numpy().squeeze()
+        # --- Common drawing components ---
+        def apply_geo_annotations(vis_image, pred_px, pred_py, motion_pred_np):
+            # Draw interaction point
+            cv2.circle(
+                vis_image,
+                (pred_px, pred_py),
+                radius=5,
+                color=(255, 255, 255),
+                thickness=-1,
+            )
 
-        gt_mask_resized = _cv2.resize(gt_mask_np, (w, h), interpolation=_cv2.INTER_NEAREST)
-        pred_mask_prob_resized = _cv2.resize(pred_mask_prob_np, (w, h), interpolation=_cv2.INTER_LINEAR)
+            # Draw motion arrow
+            motion_xy = motion_pred_np[:2]
+            motion_xy_norm = motion_xy / (np.linalg.norm(motion_xy) + 1e-8)
+            arrow_length = 50
+            arrow_end_x = pred_px + int(motion_xy_norm[0] * arrow_length)
+            arrow_end_y = pred_py + int(motion_xy_norm[1] * arrow_length)
+            cv2.arrowedLine(
+                vis_image,
+                (pred_px, pred_py),
+                (arrow_end_x, arrow_end_y),
+                (255, 255, 255),
+                2,  # Increased thickness
+            )
+            return vis_image
 
-        gt_mask_binary = (gt_mask_resized > 0.5).astype(_np.uint8)
+        def apply_text_annotations(vis_image, desc, img_h, img_w):
+            # Add caption with wrapping
+            font_scale = 0.5
+            font_thickness = 1
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            margin = 10
+            text = f"Desc: {desc}"
+            words = text.split(" ")
+            lines = []
+            current_line = words[0]
+            for word in words[1:]:
+                test_line = f"{current_line} {word}"
+                (text_width, text_height), _ = cv2.getTextSize(
+                    test_line, font, font_scale, font_thickness
+                )
+                if text_width > img_w - 2 * margin:
+                    lines.append(current_line)
+                    current_line = word
+                else:
+                    current_line = test_line
+            lines.append(current_line)
+            y = img_h - margin - (len(lines) - 1) * (text_height + margin)
+            for i, line in enumerate(lines):
+                line_y = y + i * (text_height + margin)
+                (line_width, text_height), _ = cv2.getTextSize(
+                    line, font, font_scale, font_thickness
+                )
+                cv2.rectangle(
+                    vis_image,
+                    (margin - 5, line_y - text_height - 5),
+                    (margin + line_width + 5, line_y + 5),
+                    (0, 0, 0),
+                    -1,
+                )
+                cv2.putText(
+                    vis_image,
+                    line,
+                    (margin, line_y),
+                    font,
+                    font_scale,
+                    (255, 255, 255),
+                    font_thickness,
+                    cv2.LINE_AA,
+                )
+            return vis_image
 
-        # Left: probability overlay
-        overlay_prob = _np.zeros_like(img_bgr, dtype=_np.uint8)
-        overlay_prob[gt_mask_binary == 1, 1] = 255  # Green
-        red_channel_prob = (pred_mask_prob_resized * 255).astype(_np.uint8)
-        overlay_prob[:, :, 2] = red_channel_prob
-        vis_prob = _cv2.addWeighted(img_bgr, 0.6, overlay_prob, 0.4, 0)
-        _cv2.putText(vis_prob, "Left: Sigmoid (Red)", (10, 20), _cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, _cv2.LINE_AA)
+        # --- Visualization 1: Point Heatmap ---
+        point_pred_prob_np = point_pred_prob_tensor.float().numpy().squeeze()
+        point_heatmap_resized = cv2.resize(
+            point_pred_prob_np, (w, h), interpolation=cv2.INTER_LINEAR
+        )
+        point_heatmap_inverted = 1 - point_heatmap_resized
+        point_heatmap_colored = cv2.applyColorMap(
+            (point_heatmap_inverted * 255).astype(np.uint8), cv2.COLORMAP_JET
+        )
+        vis_image_point = cv2.addWeighted(img_bgr.copy(), 0.6, point_heatmap_colored, 0.4, 0)
 
-        # Right: thresholded + bboxes
-        pred_mask_binary = (pred_mask_prob_resized > pred_threshold).astype(_np.uint8)
-        overlay_binary = _np.zeros_like(img_bgr, dtype=_np.uint8)
-        overlay_binary[gt_mask_binary == 1, 1] = 255
-        overlay_binary[pred_mask_binary == 1, 2] = 255
-        vis_binary = _cv2.addWeighted(img_bgr, 0.6, overlay_binary, 0.4, 0)
-        _cv2.putText(vis_binary, "Right: Thresholded (Yellow=Overlap)", (10, 20), _cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, _cv2.LINE_AA)
+        # Get interaction point from argmax of point heatmap
+        (pred_py, pred_px) = np.unravel_index(
+            np.argmax(point_heatmap_resized), point_heatmap_resized.shape
+        )
 
-        # GT bbox
-        x, y, w_box, h_box = map(int, gt_bbox.numpy())
-        _cv2.rectangle(vis_binary, (x, y), (x + w_box, y + h_box), (0, 255, 0), 2)
+        vis_image_point = apply_geo_annotations(
+            vis_image_point, pred_px, pred_py, motion_pred.numpy()
+        )
+        out_path_point = os.path.join(
+            output_dir, f"sample_{sample_index:06d}_point.png"
+        )
+        cv2.imwrite(out_path_point, vis_image_point)
 
-        # Pred bbox from thresholded mask
-        pred_bbox_xyxy = OPDRealTrainingModule._mask_to_bbox(torch.from_numpy(pred_mask_binary))
-        x1, y1, x2, y2 = map(int, pred_bbox_xyxy.numpy())
-        _cv2.rectangle(vis_binary, (x1, y1), (x2, y2), (0, 0, 255), 2)
+        # --- Visualization 2: Mask Heatmap ---
+        mask_prob_np = mask_pred_prob_tensor.float().numpy().squeeze()
+        # Apply sigmoid sharpening
+        k = 20  # Steepness factor
+        sigmoid_mask = 1.0 / (1.0 + np.exp(-k * (mask_prob_np - 0.5)))
+        mask_heatmap_resized = cv2.resize(
+            sigmoid_mask, (w, h), interpolation=cv2.INTER_LINEAR
+        )
+        mask_heatmap_inverted = 1 - mask_heatmap_resized
+        mask_heatmap_colored = cv2.applyColorMap(
+            (mask_heatmap_inverted * 255).astype(np.uint8), cv2.COLORMAP_JET
+        )
+        vis_image_mask = cv2.addWeighted(img_bgr.copy(), 0.6, mask_heatmap_colored, 0.4, 0)
+        vis_image_mask = apply_geo_annotations(
+            vis_image_mask, pred_px, pred_py, motion_pred.numpy()
+        )
+        out_path_mask = os.path.join(
+            output_dir, f"sample_{sample_index:06d}_mask.png"
+        )
+        cv2.imwrite(out_path_mask, vis_image_mask)
 
-        combined_vis = _np.hstack((vis_prob, vis_binary))
-        _cv2.putText(combined_vis, f"IoU: {iou_value:.2f}", (10, h - 20), _cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, _cv2.LINE_AA)
-        if isinstance(description, str):
-            _cv2.putText(combined_vis, f"Desc: {description[:60]}", (10, h - 40), _cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, _cv2.LINE_AA)
+        # --- Visualization 3: Ground Truth ---
+        vis_image_gt = img_bgr.copy()
 
-        out_path = os.path.join(output_dir, f"sample_{sample_index:06d}_iou{iou_value:.2f}.png")
-        _cv2.imwrite(out_path, combined_vis)
+        # Draw GT mask as an overlay
+        gt_mask_np = gt_mask_tensor.float().numpy().squeeze()
+        gt_mask_resized = cv2.resize(gt_mask_np, (w, h), interpolation=cv2.INTER_NEAREST)
+        # Create a green overlay for the mask
+        gt_mask_overlay = np.zeros_like(vis_image_gt, dtype=np.uint8)
+        gt_mask_overlay[gt_mask_resized > 0.5] = (0, 200, 0)  # BGR green
+        vis_image_gt = cv2.addWeighted(vis_image_gt, 1.0, gt_mask_overlay, 0.4, 0)
+
+        # Get GT interaction point in pixel coordinates
+        gt_px = int(gt_point_norm[0] * w)
+        gt_py = int(gt_point_norm[1] * h)
+
+        # Use the same annotation function for the GT visualization
+        vis_image_gt = apply_geo_annotations(
+            vis_image_gt, gt_px, gt_py, gt_motion.numpy()
+        )
+        vis_image_gt = apply_text_annotations(vis_image_gt, description, h, w)
+        
+        out_path_gt = os.path.join(
+            output_dir, f"sample_{sample_index:06d}_gt.png"
+        )
+        cv2.imwrite(out_path_gt, vis_image_gt)
 
     def _collect_vis_samples_from_batch(self, batch):
-        try:
-            (
-                img,
-                depth,
-                word_str_list,
-                mask_gt,
-                bbox,
-                point_gt_norm,
-                motion_gt,
-                motion_type_gt,
-                img_size,
-            ) = batch
-        except Exception:
-            return
+        # Match the unpacking logic in _common_step
+        trajectory_gt = None
+        camera_intrinsic = None
+        img, depth, word_str_list, mask_gt, bbox, point_gt_norm, motion_gt, motion_type_gt, img_size = [None] * 9
+
+        if len(batch) >= 9:
+             base_items = batch[:9]
+             img, depth, word_str_list, mask_gt, bbox, point_gt_norm, motion_gt, motion_type_gt, img_size = base_items
+
+        if len(batch) == 13:  # SF3D with trajectory
+             camera_intrinsic = batch[11]
+             trajectory_gt = batch[12]
 
         batch_size = img.size(0) if hasattr(img, "size") else 0
         for i in range(batch_size):
+            sample_trajectory = trajectory_gt[i].detach().cpu() if trajectory_gt is not None else None
+            sample_intrinsic = camera_intrinsic[i].detach().cpu() if camera_intrinsic is not None else None
+
             sample = (
                 img[i].detach().cpu(),
                 depth[i].detach().cpu(),
@@ -672,17 +1041,26 @@ class OPDRealTrainingModule(pl.LightningModule):
                 motion_gt[i].detach().cpu(),
                 motion_type_gt[i].detach().cpu(),
                 img_size[i].detach().cpu(),
+                sample_trajectory,
+                sample_intrinsic,
             )
 
+            # True reservoir sampling for uniform random selection
+            if self._vis_rng is None:
+                self._vis_rng = torch.Generator(device="cpu").manual_seed(
+                    int(self.base_seed + int(self.current_epoch))
+                )
+            
             if len(self._vis_buffer) < self.vis_num_samples:
+                # Fill buffer first
                 self._vis_buffer.append(sample)
             else:
-                # Reservoir sampling replacement
-                if self._vis_rng is None:
-                    self._vis_rng = torch.Generator(device="cpu").manual_seed(self.base_seed)
+                # Reservoir sampling: replace with probability k/n
+                # where k = vis_num_samples, n = _vis_seen_count + 1
                 j = int(torch.randint(0, self._vis_seen_count + 1, (1,), generator=self._vis_rng).item())
                 if j < self.vis_num_samples:
                     self._vis_buffer[j] = sample
+            
             self._vis_seen_count += 1
 
     def load_finetune_weights(self, checkpoint_path: str):

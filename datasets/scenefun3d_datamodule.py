@@ -35,24 +35,27 @@ class SF3DDataModule(pl.LightningDataModule):
         self.test_dataset: Optional[Dataset] = None
 
     def setup(self, stage: Optional[str] = None) -> None:
-        if stage in ("fit", None):
-            rgb_transform, mask_transform, depth_transform = get_default_transforms(
-                image_size=self.input_size
-            )
+        # The validation set is used for testing, so we set it up in both 'fit' and 'test' stages.
+        if stage in ("fit", "test", None):
+            # We only need to perform the setup once.
+            if self.val_dataset is None:
+                rgb_transform, mask_transform, depth_transform = get_default_transforms(
+                    image_size=self.input_size
+                )
 
-            full_dataset = SF3DDataset(
-                lmdb_data_root=self.train_data_dir,
-                rgb_transform=rgb_transform,
-                mask_transform=mask_transform,
-                depth_transform=depth_transform,
-                image_size_for_mask_reconstruction=self.input_size,
-            )
+                full_dataset = SF3DDataset(
+                    lmdb_data_root=self.train_data_dir,
+                    rgb_transform=rgb_transform,
+                    mask_transform=mask_transform,
+                    depth_transform=depth_transform,
+                    image_size_for_mask_reconstruction=self.input_size,
+                )
 
-            self.train_dataset, self.val_dataset = split_dataset_by_scene(
-                full_dataset,
-                val_split_ratio=self.val_split_ratio,
-                manual_seed=self.manual_seed,
-            )
+                self.train_dataset, self.val_dataset = split_dataset_by_scene(
+                    full_dataset,
+                    val_split_ratio=self.val_split_ratio,
+                    manual_seed=self.manual_seed,
+                )
 
     def train_dataloader(self) -> DataLoader:
         if self.train_dataset is None:
@@ -77,10 +80,11 @@ class SF3DDataModule(pl.LightningDataModule):
         return DataLoader(
             self.val_dataset,
             batch_size=self.batch_size_val,
-            shuffle=False,
+            shuffle=True,  # Enable shuffling for random visualization sampling
             num_workers=self.num_workers_val,
             pin_memory=True,
             drop_last=False,
+            generator=torch.Generator().manual_seed(self.manual_seed),  # Deterministic shuffling
         )
 
     def test_dataloader(self) -> DataLoader:

@@ -1,0 +1,21 @@
+[rank: 0] Seed set to 42
+Using 16bit Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+wandb: Currently logged in as: predict-woo to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.19.11
+wandb: Run data is saved locally in /cluster/scratch/andrye/wandb_logs/SF3D_TRAJ_V1/wandb/run-20251008_101325-g6g2gwaw
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run SF3D_TRAJ_V1
+wandb: ⭐️ View project at https://wandb.ai/predict-woo/SceneFun3D_Trajectory
+wandb: 🚀 View run at https://wandb.ai/predict-woo/SceneFun3D_Trajectory/runs/g6g2gwaw
+
+Detected KeyboardInterrupt, attempting graceful shutdown ...
+Opening LMDB database at /dev/shm/data.lmdb
+Images will be loaded from /cluster/project/cvg/students/andrye/sf3d/images
+LMDB database opened
+Getting item keys
+[1;34mwandb[0m: 
+[1;34mwandb[0m: 🚀 View run [33mSF3D_TRAJ_V1[0m at: [34mhttps://wandb.ai/predict-woo/SceneFun3D_Trajectory/runs/g6g2gwaw[0m
+[1;34mwandb[0m: Find logs at: [1;35m../../../scratch/andrye/wandb_logs/SF3D_TRAJ_V1/wandb/run-20251008_101325-g6g2gwaw/logs[0m
