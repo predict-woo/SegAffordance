@@ -46,8 +46,16 @@ to the pod in ~1s. Then execute with `dev.sh run "<cmd>"`. No need to scp,
 rsync, or edit through SSH. Heavy dirs (`datasets/`, `cache/`, `models/`,
 `checkpoints/`, `runs/wandb/`) are sync-ignored and exist only on the volume —
 never try to read datasets locally. `dev.sh sync` shows session health;
-`dev.sh sync-reset` recreates it. Run git from the Mac side
-(`~/dev/ethz-workspace/SegAffordance`) or the pod, not both simultaneously.
+`dev.sh sync-reset` recreates it.
+
+Git rules: run mutating git (commit/pull/push/checkout) ONLY from the Mac side
+(`~/dev/ethz-workspace/SegAffordance`) — commits reach the pod through the
+sync itself (`.git` objects/refs sync; no `git pull` needed on the pod).
+`.git/index` is machine-specific and sync-ignored, so the pod's `git status`
+may show phantom staged changes after Mac-side commits — run `git reset -q`
+on the pod to clear it; never trust or commit from the pod's index.
+CLIP weights (`pretrain/RN50.pt`) are NOT in git: the real file is
+`/workspace/models/RN50.pt`, symlinked into the repo by `setup.sh`.
 
 ### Cost etiquette
 

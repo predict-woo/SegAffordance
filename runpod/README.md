@@ -92,9 +92,11 @@ OpenAI CLIP URL if the volume copy is ever missing).
 - Sync pauses automatically while the pod is off and reconciles on start.
 
 Conventions: `~/dev/ethz-workspace/SegAffordance` is the canonical working
-copy for pod work — run git from there (or on the pod), not from both sides
-at once. `core.fileMode false` is set in that clone because mutagen does not
-propagate executable bits.
+copy — run mutating git (commit/pull/push) only from there; commits reach the
+pod through the sync itself, so the pod never needs `git pull`. `.git/index`
+is sync-ignored (machine-specific), so the pod's `git status` can show phantom
+staged changes — `git reset -q` on the pod clears them. `core.fileMode false`
+is set in the clone because mutagen does not propagate executable bits.
 
 ## Training pod (A100 80GB, ~$1.39–1.49/hr)
 
