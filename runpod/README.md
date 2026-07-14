@@ -98,6 +98,13 @@ runpodctl pod list                 # find the pod id
 runpodctl ssh info <pod-id>        # SSH command + key
 ```
 
+From the local machine, `ssh segaff-dev` connects to the dev pod. The pod's
+IP/port change on stop/start — refresh the `~/.ssh/config` entry with:
+
+```bash
+bash runpod/update-ssh-config.sh
+```
+
 On a fresh pod:
 
 ```bash
