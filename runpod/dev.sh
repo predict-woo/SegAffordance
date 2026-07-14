@@ -87,6 +87,8 @@ print(f\"{p['name']} ({p['id']}): {p['desiredStatus']}  \${p['costPerHr']}/hr\")
       --ignore="/runs/wandb" \
       --ignore="**/__pycache__" \
       --ignore="*.pyc" \
+      --ignore="*.pt" \
+      --ignore="*.ckpt" \
       --ignore=".DS_Store" \
       "$HOME/dev/ethz-workspace" "$HOST_ALIAS:/workspace"
     ;;

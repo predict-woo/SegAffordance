@@ -9,10 +9,14 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mkdir -p /workspace/datasets /workspace/checkpoints /workspace/runs /workspace/models /workspace/cache
 
 # Basic tooling (base image is minimal)
-if ! command -v tmux >/dev/null 2>&1 || ! command -v rsync >/dev/null 2>&1 || ! command -v htop >/dev/null 2>&1; then
+if ! command -v tmux >/dev/null 2>&1 || ! command -v rsync >/dev/null 2>&1 || ! command -v htop >/dev/null 2>&1 || ! command -v git-lfs >/dev/null 2>&1; then
   apt-get update -qq
-  apt-get install -y -qq rsync tmux htop >/dev/null
+  apt-get install -y -qq rsync tmux htop git-lfs >/dev/null
 fi
+
+# Pull LFS-tracked files (e.g. pretrain/RN50.pt is an LFS pointer otherwise)
+git -C "$REPO_DIR" lfs install --skip-smudge >/dev/null 2>&1 || true
+git -C "$REPO_DIR" lfs pull
 
 # torch/CUDA come from the base image; requirements.txt is the rest.
 # The ubuntu2404 image enforces PEP 668 but ships torch in the system
