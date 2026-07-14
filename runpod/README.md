@@ -74,6 +74,24 @@ bash runpod/dev.sh run <cmd...>    # run a command in /workspace/SegAffordance
 when the host's stock was taken while stopped) — in that case delete and
 recreate the pod with the command above.
 
+## Local mirror of /workspace (mutagen)
+
+`~/dev/ethz-workspace` on the Mac is a continuous two-way mutagen sync of the
+pod's `/workspace` (session name `ethz-workspace`). Edit files there and they
+land on the pod in ~1s — no manual copying. Heavy directories are excluded
+from sync (never downloaded): `datasets/`, `cache/`, `models/`,
+`checkpoints/`, `runs/wandb/`, plus `__pycache__`/`*.pyc`.
+
+- `bash runpod/dev.sh sync` — session status
+- `bash runpod/dev.sh sync-reset` — terminate + recreate the session (use
+  after recreating the pod, or if sync gets stuck)
+- Sync pauses automatically while the pod is off and reconciles on start.
+
+Conventions: `~/dev/ethz-workspace/SegAffordance` is the canonical working
+copy for pod work — run git from there (or on the pod), not from both sides
+at once. `core.fileMode false` is set in that clone because mutagen does not
+propagate executable bits.
+
 ## Training pod (A100 80GB, ~$1.39–1.49/hr)
 
 Launch only when data is on the volume and the code smoke-tests on the dev pod:

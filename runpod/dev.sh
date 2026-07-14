@@ -6,6 +6,8 @@
 #   bash runpod/dev.sh stop            # stop (billing stops, /workspace persists)
 #   bash runpod/dev.sh ssh             # interactive shell on the pod
 #   bash runpod/dev.sh run <cmd...>    # run a command in /workspace/SegAffordance
+#   bash runpod/dev.sh sync            # mutagen sync status (~/dev/ethz-workspace)
+#   bash runpod/dev.sh sync-reset      # recreate the mutagen session (after pod recreation)
 set -euo pipefail
 
 POD_NAME="segaffordance-dev"
@@ -72,8 +74,24 @@ print(f\"{p['name']} ({p['id']}): {p['desiredStatus']}  \${p['costPerHr']}/hr\")
     [ $# -gt 0 ] || { echo "usage: dev.sh run <cmd...>" >&2; exit 2; }
     ssh -o BatchMode=yes "$HOST_ALIAS" "cd /workspace/SegAffordance 2>/dev/null || cd /workspace; $*"
     ;;
+  sync)
+    mutagen sync list ethz-workspace
+    ;;
+  sync-reset)
+    mutagen sync terminate ethz-workspace 2>/dev/null || true
+    mutagen sync create --name=ethz-workspace \
+      --ignore="/datasets" \
+      --ignore="/cache" \
+      --ignore="/models" \
+      --ignore="/checkpoints" \
+      --ignore="/runs/wandb" \
+      --ignore="**/__pycache__" \
+      --ignore="*.pyc" \
+      --ignore=".DS_Store" \
+      "$HOME/dev/ethz-workspace" "$HOST_ALIAS:/workspace"
+    ;;
   *)
-    echo "usage: dev.sh {status|start|stop|ssh|run <cmd...>}" >&2
+    echo "usage: dev.sh {status|start|stop|ssh|run <cmd...>|sync|sync-reset}" >&2
     exit 2
     ;;
 esac

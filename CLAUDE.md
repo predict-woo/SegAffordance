@@ -37,6 +37,18 @@ The pod's IP/port change on every restart; `dev.sh start` refreshes the
 `bash runpod/setup.sh` (idempotent; installs requirements.txt on top of the
 image's torch).
 
+### Editing pod files: use the mutagen mirror
+
+**`~/dev/ethz-workspace` is a live two-way mutagen sync of the pod's
+`/workspace`.** To change code on the pod, edit files under
+`~/dev/ethz-workspace/SegAffordance/` with normal file tools — they propagate
+to the pod in ~1s. Then execute with `dev.sh run "<cmd>"`. No need to scp,
+rsync, or edit through SSH. Heavy dirs (`datasets/`, `cache/`, `models/`,
+`checkpoints/`, `runs/wandb/`) are sync-ignored and exist only on the volume —
+never try to read datasets locally. `dev.sh sync` shows session health;
+`dev.sh sync-reset` recreates it. Run git from the Mac side
+(`~/dev/ethz-workspace/SegAffordance`) or the pod, not both simultaneously.
+
 ### Cost etiquette
 
 The account runs on a small prepaid balance. Stop the dev pod after finishing
