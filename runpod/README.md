@@ -78,9 +78,13 @@ recreate the pod with the command above.
 
 `~/dev/ethz-workspace` on the Mac is a continuous two-way mutagen sync of the
 pod's `/workspace` (session name `ethz-workspace`). Edit files there and they
-land on the pod in ~1s — no manual copying. Heavy directories are excluded
-from sync (never downloaded): `datasets/`, `cache/`, `models/`,
-`checkpoints/`, `runs/wandb/`, plus `__pycache__`/`*.pyc`.
+land on the pod in ~1s — no manual copying. Heavy content is excluded from
+sync (never downloaded): `datasets/`, `cache/`, `models/`, `checkpoints/`,
+`runs/wandb/`, `*.pt`, `*.ckpt`, `.git/lfs`, plus `__pycache__`/`*.pyc`.
+So the Mac mirror holds code only (~43MB). Weights are not in git at all:
+the CLIP weights live at `/workspace/models/RN50.pt` on the volume, and
+setup.sh symlinks `pretrain/RN50.pt` to them (downloading from the official
+OpenAI CLIP URL if the volume copy is ever missing).
 
 - `bash runpod/dev.sh sync` — session status
 - `bash runpod/dev.sh sync-reset` — terminate + recreate the session (use
