@@ -89,7 +89,6 @@ print(f\"{p['name']} ({p['id']}): {p['desiredStatus']}  \${p['costPerHr']}/hr\")
       --ignore="*.pyc" \
       --ignore="*.pt" \
       --ignore="*.ckpt" \
-      --ignore=".git/lfs" \
       --ignore=".DS_Store" \
       "$HOME/dev/ethz-workspace" "$HOST_ALIAS:/workspace"
     ;;

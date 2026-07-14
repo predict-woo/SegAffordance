@@ -8,3 +8,4 @@ test_visualizations/
 __pycache__/
 *.pyc
 .DS_Store
+pretrain/RN50.pt

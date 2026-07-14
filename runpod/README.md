@@ -78,12 +78,9 @@ recreate the pod with the command above.
 
 `~/dev/ethz-workspace` on the Mac is a continuous two-way mutagen sync of the
 pod's `/workspace` (session name `ethz-workspace`). Edit files there and they
-land on the pod in ~1s — no manual copying. Heavy content is excluded from
-sync (never downloaded): `datasets/`, `cache/`, `models/`, `checkpoints/`,
-`runs/wandb/`, `*.pt`, `*.ckpt`, `.git/lfs`, plus `__pycache__`/`*.pyc`.
-So the Mac mirror holds code only (~43MB); weights like `pretrain/RN50.pt`
-stay a 134-byte LFS pointer locally while the pod has the real file
-(setup.sh runs `git lfs pull` there).
+land on the pod in ~1s — no manual copying. Heavy directories are excluded
+from sync (never downloaded): `datasets/`, `cache/`, `models/`,
+`checkpoints/`, `runs/wandb/`, plus `__pycache__`/`*.pyc`.
 
 - `bash runpod/dev.sh sync` — session status
 - `bash runpod/dev.sh sync-reset` — terminate + recreate the session (use
