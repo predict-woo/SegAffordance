@@ -60,12 +60,19 @@ runpodctl pod create \
   --ports "22/tcp,8888/http"
 ```
 
-Stop it when you're done for the day (billing stops, `/workspace` persists):
+Day-to-day control goes through `runpod/dev.sh` (run locally):
 
 ```bash
-runpodctl pod stop <pod-id>
-runpodctl pod start <pod-id>   # next morning
+bash runpod/dev.sh status          # pod state + hourly cost
+bash runpod/dev.sh stop            # stop when done (billing stops, /workspace persists)
+bash runpod/dev.sh start           # start, wait for SSH, refresh ~/.ssh/config
+bash runpod/dev.sh ssh             # interactive shell
+bash runpod/dev.sh run <cmd...>    # run a command in /workspace/SegAffordance
 ```
+
+`start` warns and exits nonzero if the pod comes back without a GPU (possible
+when the host's stock was taken while stopped) — in that case delete and
+recreate the pod with the command above.
 
 ## Training pod (A100 80GB, ~$1.39–1.49/hr)
 
