@@ -14,8 +14,10 @@ if ! command -v tmux >/dev/null 2>&1 || ! command -v rsync >/dev/null 2>&1 || ! 
   apt-get install -y -qq rsync tmux htop >/dev/null
 fi
 
-# torch/CUDA come from the base image; requirements.txt is the rest
-pip install --no-cache-dir -r "$REPO_DIR/requirements.txt"
+# torch/CUDA come from the base image; requirements.txt is the rest.
+# The ubuntu2404 image enforces PEP 668 but ships torch in the system
+# site-packages, so install alongside it.
+pip install --no-cache-dir --break-system-packages -r "$REPO_DIR/requirements.txt"
 
 # Keep model/dataset caches and wandb logs on the persistent volume
 if ! grep -q "SegAffordance env" ~/.bashrc 2>/dev/null; then
