@@ -1,17 +1,37 @@
 # RunPod Runbook
 
-Provisioned 2026-07-15. See `RUNPOD_PLAN.md` at the repo root for the rationale.
+Provisioned 2026-07-15. See `RUNPOD_PLAN.md` at the repo root for the original
+rationale; this file reflects what actually exists.
 
 ## Provisioned resources
 
 | Resource | Value |
 | --- | --- |
-| Network Volume | `segaffordance-data`, id `er8u1eqoro`, 500GB, **US-CA-2** |
-| Base image (both pods) | `runpod/pytorch:1.0.3-cu1281-torch291-ubuntu2404` (CUDA 12.8, torch 2.9.1) |
-| Dev pod | `segaffordance-dev-a5000` (RTX A5000, Secure Cloud, US-CA-2) |
+| Network Volume | `segaffordance-data`, id `bckt1t9uuf`, 500GB, **EU-RO-1** (Romania) |
+| Base image (all pods) | `runpod/pytorch:1.0.3-cu1281-torch291-ubuntu2404` (CUDA 12.8, torch 2.9.1) |
+| Dev pod | `segaffordance-dev` (RTX PRO 4000 Blackwell 24GB, $0.57/hr, Secure Cloud) |
 
-All pods must be created in **US-CA-2** so they can mount the volume. The volume
-mounts at `/workspace`:
+### Why EU-RO-1, not US-CA-2 + H100 (deviation from RUNPOD_PLAN.md)
+
+At provisioning time, no network-volume-capable datacenter had both an H100 SXM
+and a cheap dev GPU actually available — the availability API's empty
+`stockStatus` means *out of stock*, and every "in stock" GPU in US-CA-2,
+EUR-IS-1, and EU-CZ-1 failed to provision. EU-RO-1 was the only DC that
+provisioned dev pods, and it hosts the widest GPU variety:
+
+- Dev tier: RTX PRO 4000 24GB ($0.57/hr), RTX PRO 4500 32GB ($0.74/hr),
+  L4 24GB ($0.39/hr), RTX 4090 ($0.69/hr), RTX A6000 48GB ($0.49/hr)
+- Training tier: **A100 PCIe/SXM 80GB ($1.39–1.49/hr)** — same class as the
+  SLURM `a100_80gb` setup this project already trains on — plus B200 and
+  RTX PRO 6000 96GB ($1.99/hr) when in stock. No H100 in this DC.
+
+Network volumes cannot move between DCs. If H100 SXM becomes a hard
+requirement, create a second volume in an H100 DC (US-CA-2, US-NE-1, EU-FR-1,
+EUR-IS-3, EUR-NO-2, AP-JP-1) and sync data over.
+
+## Volume layout
+
+The volume mounts at `/workspace` on every pod that attaches it:
 
 ```text
 /workspace
@@ -24,18 +44,18 @@ mounts at `/workspace`:
 ```
 
 Rules: `/workspace` is the source of truth for data and outputs. Pods are
-disposable. The A5000 is for dev and smoke tests only; the H100 is for full
-training only, and gets stopped/deleted the moment a run finishes.
+disposable. Dev pod is for dev and smoke tests only; training pods get
+stopped/deleted the moment a run finishes.
 
-## Dev pod (RTX A5000, ~$0.27/hr)
+## Dev pod (RTX PRO 4000, $0.57/hr)
 
 ```bash
 runpodctl pod create \
-  --name segaffordance-dev-a5000 \
+  --name segaffordance-dev \
   --cloud-type SECURE \
-  --gpu-id "NVIDIA RTX A5000" \
+  --gpu-id "NVIDIA RTX PRO 4000 Blackwell" \
   --image runpod/pytorch:1.0.3-cu1281-torch291-ubuntu2404 \
-  --network-volume-id er8u1eqoro \
+  --network-volume-id bckt1t9uuf \
   --container-disk-in-gb 20 \
   --ports "22/tcp,8888/http"
 ```
@@ -47,23 +67,29 @@ runpodctl pod stop <pod-id>
 runpodctl pod start <pod-id>   # next morning
 ```
 
-## Training pod (H100 SXM, ~$3.29/hr)
+## Training pod (A100 80GB, ~$1.39–1.49/hr)
 
-Launch only when data is on the volume and the code smoke-tests on the A5000:
+Launch only when data is on the volume and the code smoke-tests on the dev pod:
 
 ```bash
 runpodctl pod create \
-  --name segaffordance-train-h100 \
+  --name segaffordance-train-a100 \
   --cloud-type SECURE \
-  --gpu-id "NVIDIA H100 80GB HBM3" \
+  --gpu-id "NVIDIA A100 80GB PCIe" \
   --image runpod/pytorch:1.0.3-cu1281-torch291-ubuntu2404 \
-  --network-volume-id er8u1eqoro \
+  --network-volume-id bckt1t9uuf \
   --container-disk-in-gb 20 \
   --ports "22/tcp"
 ```
 
-**Delete it immediately after the run** (`runpodctl pod delete <pod-id>`).
-Checkpoint often enough that losing the pod never costs more than an hour.
+(`"NVIDIA A100-SXM4-80GB"` for the SXM variant; `"NVIDIA B200"` when it's in
+stock and you want a serious speedup.) Availability fluctuates — if creation
+fails with "no instances available", retry later; the error is per-attempt,
+nothing gets created on failure.
+
+**Delete the training pod immediately after the run**
+(`runpodctl pod delete <pod-id>`). Checkpoint often enough that losing the pod
+never costs more than an hour.
 
 ## Connect + bootstrap
 
@@ -96,5 +122,6 @@ runs, and copy the lmdb to `/dev/shm` first as `train.sh` already does.
 ## Budget
 
 Balance was $50 at setup, spend limit $80/mo. Fixed cost: volume $35/mo
-(~$1.17/day). A5000 dev: $0.27/hr. H100: $3.29/hr (a 4h run ≈ $13).
-Top up and consider raising the spend limit before the first real H100 run.
+(~$1.17/day). Dev pod: $0.57/hr while running. A100 training: ~$1.49/hr (a 4h
+run ≈ $6). Top up and consider raising the spend limit before long training
+runs.
