@@ -5,3 +5,6 @@ test_visualizations/
 *.pyc
 *.out
 *.pngsf3d_test_visualizations_failure.tar.gz
+__pycache__/
+*.pyc
+.DS_Store
