@@ -9,6 +9,15 @@ import cv2
 from tqdm import tqdm
 import h5py
 
+# Importable both as a package module and as a standalone script
+# (python datasets/filter_bad_annotations.py ...).
+try:
+    from datasets.opd_intrinsics import intrinsic_matrix_from_camera
+except ImportError:
+    import sys
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    from opd_intrinsics import intrinsic_matrix_from_camera
+
 
 def draw_overlays(image, origin_xy, motion_dir_3d, description, is_valid, segmentation=None):
     """
@@ -130,15 +139,9 @@ def main(args: argparse.Namespace):
         height = image_info["height"]
         width = image_info["width"]
 
-        # Handle different intrinsic matrix structures
-        if args.is_multi:
-            intrinsic_matrix = np.reshape(
-                image_info["camera"]["intrinsic"], (3, 3), order="F"
-            )
-        else:
-            intrinsic_matrix = np.reshape(
-                image_info["camera"]["intrinsic"]["matrix"], (3, 3), order="F"
-            )
+        # Handle different intrinsic structures (real matrix / multi flat
+        # list / synth fov+aspect).
+        intrinsic_matrix = intrinsic_matrix_from_camera(image_info, args.is_multi)
 
         motion = anno["motion"]
         motion_origin_3d = motion.get("current_origin", motion.get("origin"))

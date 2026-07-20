@@ -23,12 +23,32 @@ fi
 mkdir -p "$REPO_DIR/pretrain"
 ln -sf /workspace/models/RN50.pt "$REPO_DIR/pretrain/RN50.pt"
 
-# torch/CUDA come from the base image; requirements.txt is the rest.
-# The ubuntu2404 image enforces PEP 668 but ships torch in the system
-# site-packages, so install alongside it.
-pip install --no-cache-dir --break-system-packages -r "$REPO_DIR/requirements.txt"
+# Python deps live in a venv ON THE VOLUME: RunPod wipes the container disk
+# on every pod stop, so system-site pip installs vanish across restarts.
+# The venv inherits torch/CUDA from the base image via --system-site-packages
+# and only needs to be built once per volume.
+VENV=/workspace/venv
+if [ ! -x "$VENV/bin/python" ]; then
+  python3 -m venv --system-site-packages "$VENV"
+fi
+# shellcheck disable=SC1091
+source "$VENV/bin/activate"
 
-# Keep model/dataset caches and wandb logs on the persistent volume
+pip install --no-cache-dir -r "$REPO_DIR/requirements.txt"
+
+# torchvision is not in the base image; pin to the build matching its torch.
+pip install --no-cache-dir \
+  torch==2.9.1 torchvision==0.24.1 --index-url https://download.pytorch.org/whl/cu128
+
+# detectron2 has no wheel and its setup.py imports torch, so it must be
+# built without pip's build isolation (after torch is present).
+python -c 'import detectron2' 2>/dev/null || \
+  pip install --no-cache-dir --no-build-isolation \
+    'git+https://github.com/facebookresearch/detectron2.git'
+
+# Keep model/dataset caches and wandb logs on the persistent volume, and
+# activate the venv in interactive shells. (Non-interactive ssh commands
+# should call /workspace/venv/bin/python explicitly.)
 if ! grep -q "SegAffordance env" ~/.bashrc 2>/dev/null; then
   cat >> ~/.bashrc <<'EOF'
 
@@ -36,6 +56,9 @@ if ! grep -q "SegAffordance env" ~/.bashrc 2>/dev/null; then
 export HF_HOME=/workspace/cache/huggingface
 export TORCH_HOME=/workspace/cache/torch
 export WANDB_DIR=/workspace/runs/wandb
+export CODEX_HOME=/workspace/.codex
+export PATH="/workspace/bin:$PATH"
+source /workspace/venv/bin/activate
 EOF
 fi
 

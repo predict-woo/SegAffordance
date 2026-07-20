@@ -80,11 +80,26 @@ training pod alive after its run. The volume bills $35/mo regardless.
 
 ## Current state / TODO
 
-- Datasets are **not yet on the volume** — they live on the ETH Euler cluster
-  (`/cluster/work/cvg/students/andrye/`, see `train.sh` / `slurm.sh`). Next
-  step is rsyncing them into `/workspace/datasets/` and pointing
-  `train_data_dir` (and checkpoint/wandb dirs) in `config/*.yaml` at
-  `/workspace` paths — the configs still reference cluster paths.
+- **Euler access was revoked (2026-07-16)**; all datasets were rebuilt from
+  public sources and are now on the main volume under `/workspace/datasets/`:
+  OPD* (incl. regenerated `annotations_bwdf/`) and `sf3d_processed/` (SF3D
+  LMDB rebuilt by `tools/sf3d_process.py`, incl. reconstructed
+  depth+trajectory fields — see its docstring for GT conventions).
+  End-to-end smoke-validated 2026-07-17: SF3D, OPDReal, and OPDMulti train
+  via the `config/*_train_runpod.yaml` variants (wandb off). **OPDSynth is
+  dropped** (2026-07-19, as in the Euler-era project — too much problematic
+  data); its files remain on the volume but it has no config and is excluded
+  from description regeneration. The cluster configs (`sf3d_train.yaml`
+  etc.) still reference dead Euler paths.
+  OPD `description` texts were REGENERATED 2026-07-20 for all six
+  OPDReal/OPDMulti annotation files (62,904 annotations, 100% coverage) by
+  `tools/gen_descriptions.py` — image-conditioned Codex (gpt-5.6-luna)
+  generations, `info.description_source = "codex-gpt-5.6-luna-medium-v1"`;
+  see `runpod/README.md` for style rules and pipeline details.
+  **Open items:** (1) the OPDReal_v17 checkpoint used for OPDMulti
+  fine-tuning was lost — retrain OPDReal first; (2) raw SceneFun3D (302GB)
+  sits on the temporary scratch volume pending deletion after a real
+  training run validates the rebuilt trajectories. See `runpod/README.md`.
 - `RUNPOD_PLAN.md` is the original plan; where it disagrees with
   `runpod/README.md` (e.g. it promises an A5000 dev pod and H100 training in
   US-CA-2), the README reflects reality.

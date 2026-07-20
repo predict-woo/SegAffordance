@@ -14,6 +14,7 @@ import textwrap
 import re
 
 from .OPDReal.motion_data import load_motion_json
+from .opd_intrinsics import intrinsic_matrix_from_camera
 
 
 def get_default_transforms(
@@ -239,14 +240,9 @@ class OPDRealDataset(Dataset):
         bbox_tensor = torch.tensor(anno["bbox"], dtype=torch.float32)  # XYWH
 
         # 6. origin_2d_image_coord_norm & 7. motion_dir_3d_camera_coords
-        if self.is_multi:
-            intrinsic_matrix = np.reshape(
-                image_dict["camera"]["intrinsic"], (3, 3), order="F"
-            )
-        else:
-            intrinsic_matrix = np.reshape(
-                image_dict["camera"]["intrinsic"]["matrix"], (3, 3), order="F"
-            )
+        # Handles real ({"matrix": ...}), multi (flat list), and synth
+        # ({"fov", "aspect"}) camera formats.
+        intrinsic_matrix = intrinsic_matrix_from_camera(image_dict, self.is_multi)
 
         motion = anno["motion"]
         if "current_origin" in motion:

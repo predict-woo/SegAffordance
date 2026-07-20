@@ -9,3 +9,10 @@ matplotlib
 tqdm
 lightning
 opencv-python
+torchvision
+h5py
+pandas
+scipy
+scikit-image
+tyro
+jsonargparse[signatures]>=4.27.7

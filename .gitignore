@@ -9,3 +9,8 @@ __pycache__/
 *.pyc
 .DS_Store
 pretrain/RN50.pt
+
+# throwaway sample/audit renders from tools/show_opd_samples.py & tools/label_render.py
+sample_viz/
+label_viz*/
+label_audit/

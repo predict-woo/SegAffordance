@@ -55,6 +55,11 @@ print(f\"{p['name']} ({p['id']}): {p['desiredStatus']}  \${p['costPerHr']}/hr\")
     wait_for_ssh "$id"
     bash "$SCRIPT_DIR/update-ssh-config.sh" "$id"
     if ssh -o BatchMode=yes "$HOST_ALIAS" nvidia-smi --query-gpu=name --format=csv,noheader; then
+      # Container disk (incl. ~/.bashrc and any system pip installs) is wiped
+      # on every stop — re-run the idempotent bootstrap. Fast once
+      # /workspace/venv exists.
+      ssh "$HOST_ALIAS" "bash /workspace/SegAffordance/runpod/setup.sh" >/dev/null 2>&1 \
+        || echo "WARNING: setup.sh failed — run 'bash runpod/dev.sh run bash runpod/setup.sh' manually" >&2
       echo "ready: ssh $HOST_ALIAS"
     else
       echo "WARNING: pod started but has no GPU (stock was likely taken while" >&2
@@ -89,8 +94,14 @@ print(f\"{p['name']} ({p['id']}): {p['desiredStatus']}  \${p['costPerHr']}/hr\")
       --ignore="*.pyc" \
       --ignore="*.pt" \
       --ignore="*.ckpt" \
-      --ignore=".git/lfs" \
-      --ignore=".git/index" \
+      --ignore="**/.git/lfs" \
+      --ignore="**/.git/index" \
+      --ignore="**/.git/FETCH_HEAD" \
+      --ignore="/*.log" \
+      --ignore="/*.py" \
+      --ignore="/*.csv" \
+      --ignore="/sf3d_processed" \
+      --ignore="/scenefun3d" \
       --ignore=".DS_Store" \
       "$HOME/dev/ethz-workspace" "$HOST_ALIAS:/workspace"
     ;;

@@ -1,0 +1,79 @@
+# RunPod variant of opdreal_train.yaml: volume paths, wandb off, full data
+# section (the datamodule requires dataset keys/batch params explicitly).
+# Uses annotations_bwdf/ (regenerated 2026-07-16 with
+# datasets/filter_bad_annotations.py) — the dataset class default.
+data:
+  data_path: "/workspace/datasets/MotionDataset_h5_real"
+  train_dataset_key: "MotionNet_train"
+  val_dataset_key: "MotionNet_valid"
+  test_dataset_key: "MotionNet_test"
+  input_size: [256, 256]
+  batch_size_train: 64
+  batch_size_val: 64
+  num_workers_train: 8
+  num_workers_val: 4
+  use_depth: true
+
+seed_everything: 42
+
+trainer:
+  num_nodes: 1
+  accelerator: "gpu"
+  devices: 1
+  strategy: "auto"
+  max_epochs: 30
+  precision: 16
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: "/workspace/checkpoints/OPDReal_RUNPOD"
+        monitor: val/loss_total
+        mode: min
+        save_top_k: 10
+        filename: "best-{epoch}-{val/loss_total:.4f}"
+  logger: false
+  log_every_n_steps: 10
+
+model:
+  model_params:
+    clip_pretrain: "pretrain/RN50.pt"
+    word_len: 77
+    depth_feat_channels: [128, 256]
+    fpn_in: [512, 1024, 1024]
+    fpn_out: [256, 512, 1024]
+    num_layers: 3
+    num_head: 8
+    dim_ffn: 1024
+    dropout: 0.1
+    intermediate: False
+    proj_dropout: 0.5
+    vae_latent_dim: 32
+    vae_hidden_dim: 256
+    num_motion_types: 2
+    use_depth: true
+    use_cvae: true
+
+  loss_params:
+    bce_weight: 0.5
+    dice_weight: 0.5
+    mask_weight: 0.5
+    point_map_weight: 0.5
+    coord_weight: 0.3
+    vae_weight: 0.2
+    motion_type_weight: 0.5
+    point_sigma: 8.0
+    vae_beta: 0.01
+
+  config:
+    log_image_interval_steps: 100
+    input_size: [256, 256]
+    enable_wandb: False
+    val_vis_samples: 4
+    manual_seed: 42
+
+  optimizer_params:
+    lr: 0.00002
+    weight_decay: 0.0001
+    scheduler_milestones: [25, 27]
+    scheduler_gamma: 0.1
+
