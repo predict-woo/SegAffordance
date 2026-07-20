@@ -501,6 +501,7 @@ class OPDRealTrainingModule(pl.LightningModule):
                 motion_type_logits,
                 _mu,
                 _log_var,
+                _trajectory_pred,
             ) = self(img, depth, tokenized_words, None, None, None)
 
         mask_pred_prob = torch.sigmoid(mask_pred_logits)

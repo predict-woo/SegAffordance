@@ -191,10 +191,20 @@ of this file for the procedure). Current state:
   Euler-era labels). Historical analysis and the placeholder era: see git
   history of this section; `tools/add_placeholder_descriptions.py` remains
   for reference.
-- OPD training configs: `config/opdreal_train_runpod.yaml` and
-  `config/opdmulti_train_runpod.yaml` — smoke-tested 2026-07-17. OPDMulti
-  trains from scratch until an OPDReal checkpoint replaces the lost
-  OPDReal_v17.
+- **OPD models RETRAINED (2026-07-21, RTX PRO 6000 pod)** with the
+  regenerated descriptions; both CSV-logged under `/workspace/runs/csv/`:
+  - OPDReal: `config/opdreal_train_runpod.yaml`, 30 epochs, best
+    `/workspace/checkpoints/OPDReal_RUNPOD/best-epoch15-valloss0.4069.ckpt`
+    (val-sample check: mIoU 0.56, type acc 24/24, axis err 7°). Replaces the
+    lost OPDReal_v17 for fine-tuning.
+  - OPDMulti (fine-tuned from that checkpoint; three variants compared on
+    300 val samples): heads-only (`opdmulti_train_runpod.yaml`, best ep8,
+    IoU>0.5 65.7%) < full-finetune 1 epoch (`…_nofreeze.yaml`, ep0, 68.0%)
+    ≈ full-finetune lr 3e-6 (`…_nofreeze_lowlr.yaml`, ep2, **70.3%**,
+    axis 16.8° — recommended): `/workspace/checkpoints/
+    OPDMulti_RUNPOD_NOFREEZE_LOWLR/best-epoch02-valloss0.4654.ckpt`.
+    OPDMulti overfits within ~2 epochs of full fine-tuning — keep runs
+    short. Prediction visualizations: `/workspace/vis_out/` (synced).
 - **Raw SceneFun3D train_val (302GB): on the SCRATCH volume** at
   `/workspace/scenefun3d/train_val` (230 scenes / 609 videos, hires assets,
   verified complete). Downloaded with the toolkit
@@ -223,8 +233,8 @@ of this file for the procedure). Current state:
   holds the raw download + original LMDB copy.** Keep until a real training
   run validates the rebuilt trajectories, then delete
   (`runpodctl network-volume delete s3qha8tz50`) — it bills ~$49/mo.
-- The OPDReal_v17 checkpoint used by OPDMulti fine-tuning configs was lost
-  with Euler access — retrain OPDReal or recover the checkpoint (wandb?).
+- ~~The OPDReal_v17 checkpoint was lost with Euler access~~ — resolved
+  2026-07-21: OPDReal retrained on RunPod (see above).
 
 Note `train.sh`/configs still reference cluster paths — point
 `train_data_dir` at `/workspace/datasets/...` for RunPod runs, and copy the

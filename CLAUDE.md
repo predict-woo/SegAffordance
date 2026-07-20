@@ -96,10 +96,13 @@ training pod alive after its run. The volume bills $35/mo regardless.
   `tools/gen_descriptions.py` — image-conditioned Codex (gpt-5.6-luna)
   generations, `info.description_source = "codex-gpt-5.6-luna-medium-v1"`;
   see `runpod/README.md` for style rules and pipeline details.
-  **Open items:** (1) the OPDReal_v17 checkpoint used for OPDMulti
-  fine-tuning was lost — retrain OPDReal first; (2) raw SceneFun3D (302GB)
-  sits on the temporary scratch volume pending deletion after a real
-  training run validates the rebuilt trajectories. See `runpod/README.md`.
+  OPD models RETRAINED 2026-07-21 (replacing the lost OPDReal_v17):
+  best checkpoints in `/workspace/checkpoints/OPDReal_RUNPOD/` and
+  `/workspace/checkpoints/OPDMulti_RUNPOD_NOFREEZE_LOWLR/` — details and
+  the fine-tuning-recipe comparison in `runpod/README.md`.
+  **Open item:** raw SceneFun3D (302GB) sits on the temporary scratch
+  volume pending deletion after a real training run validates the rebuilt
+  trajectories. See `runpod/README.md`.
 - `RUNPOD_PLAN.md` is the original plan; where it disagrees with
   `runpod/README.md` (e.g. it promises an A5000 dev pod and H100 training in
   US-CA-2), the README reflects reality.

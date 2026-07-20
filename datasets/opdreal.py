@@ -305,10 +305,3 @@ class OPDRealDataset(Dataset):
             self.depth_h5_file.close()
 
 
-
-        if self.h5_file:
-            self.h5_file.close()
-        if self.depth_h5_file:
-            self.depth_h5_file.close()
-
-
