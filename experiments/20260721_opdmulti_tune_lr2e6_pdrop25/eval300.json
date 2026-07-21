@@ -1,0 +1,10 @@
+{
+  "checkpoint": "experiments/20260721_opdmulti_tune_lr2e6_pdrop25/checkpoints/best-epoch05-valloss0.4697.ckpt",
+  "split": "valid",
+  "num": 300,
+  "seed": 0,
+  "mIoU": 0.5984,
+  "det_at_0.5": 0.7133,
+  "type_acc": 0.9667,
+  "axis_err_deg": 16.51
+}

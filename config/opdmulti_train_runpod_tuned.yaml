@@ -1,10 +1,12 @@
+# TUNED OPDMulti recipe (2026-07-21 sweep winner, = 20260721_opdmulti_tune_lr2e6):
+# full fine-tune from the OPDReal base checkpoint, lr 2e-6, 10 epochs.
+# det@0.5 71.3% (300 val) / 69.6% (1000 val) — best known. To reuse for a new
+# run, copy into a new experiments/<id>/config.yaml and retarget dirpath/save_dir.
 # RunPod variant of opdmulti_train.yaml: volume paths, wandb off, full data
 # section. Uses annotations_bwdf/ (regenerated 2026-07-16).
 #
 # Fine-tunes from the RunPod-retrained OPDReal checkpoint (2026-07-21,
 # replaces the lost Euler-era OPDReal_v17): backbone/neck frozen, heads only.
-# NOTE: full-finetune variants beat this heads-only recipe; the tuned best
-# is opdmulti_train_runpod_tuned.yaml (lr 2e-6, IoU>0.5 71.3% vs 65.7%).
 data:
   data_path: "/workspace/datasets/OPDMulti/MotionDataset_h5"
   is_multi: True
@@ -25,12 +27,12 @@ trainer:
   accelerator: "gpu"
   devices: 1
   strategy: "auto"
-  max_epochs: 30
+  max_epochs: 10
   precision: 16
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        dirpath: "/workspace/SegAffordance/experiments/20260721_opdmulti_headsonly/checkpoints"
+        dirpath: "/workspace/SegAffordance/experiments/20260721_opdmulti_tune_lr2e6/checkpoints"
         monitor: val/loss_total
         mode: min
         save_top_k: 3
@@ -40,7 +42,7 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: "/workspace/SegAffordance/experiments/20260721_opdmulti_headsonly/logs"
+      save_dir: "/workspace/SegAffordance/experiments/20260721_opdmulti_tune_lr2e6/logs"
       name: "csv"
   log_every_n_steps: 10
 
@@ -82,10 +84,10 @@ model:
     manual_seed: 42
 
   optimizer_params:
-    lr: 0.00001
+    lr: 0.000002
     weight_decay: 0.0001
-    scheduler_milestones: [20, 25]
+    scheduler_milestones: [7, 9]
     scheduler_gamma: 0.1
 
-  train_only_heads: true
+  train_only_heads: false
   finetune_from_path: "/workspace/SegAffordance/experiments/20260721_opdreal_base/checkpoints/best-epoch15-valloss0.4069.ckpt"

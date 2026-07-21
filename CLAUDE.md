@@ -119,7 +119,8 @@ and the experiment's `config.yaml` should stay identical.
   `experiments/INDEX.md`; best checkpoints live under
   `experiments/<id>/checkpoints/` on the volume (OPDReal:
   `20260721_opdreal_base`, OPDMulti recommended:
-  `20260721_opdmulti_ft_lowlr`).
+  `20260721_opdmulti_tune_lr2e6`, recipe in
+  `config/opdmulti_train_runpod_tuned.yaml`).
   **Open item:** raw SceneFun3D (302GB) sits on the temporary scratch
   volume pending deletion after a real training run validates the rebuilt
   trajectories. See `runpod/README.md`.

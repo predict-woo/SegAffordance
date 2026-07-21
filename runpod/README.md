@@ -197,9 +197,11 @@ of this file for the procedure). Current state:
   (`INDEX.md` table + per-experiment notes/configs/metrics; checkpoints under
   `experiments/<id>/checkpoints/` on the volume). Headlines: OPDReal base
   best val 0.4069 (ep15, replaces the lost OPDReal_v17); OPDMulti recipe
-  comparison won by full fine-tune at lr 3e-6 (`20260721_opdmulti_ft_lowlr`,
-  IoU>0.5 70.3% on 300 val samples) — OPDMulti overfits within ~2 epochs of
-  full fine-tuning, keep runs short.
+  comparison + 2026-07-21 hyperparameter sweep won by full fine-tune at
+  lr 2e-6 (`20260721_opdmulti_tune_lr2e6`, IoU>0.5 71.3% on 300 val /
+  69.6% on 1000; recipe: `config/opdmulti_train_runpod_tuned.yaml`) —
+  OPDMulti overfits within a few epochs of full fine-tuning, keep runs
+  short. Weight decay and dropout changes had no measurable effect.
 - **Raw SceneFun3D train_val (302GB): on the SCRATCH volume** at
   `/workspace/scenefun3d/train_val` (230 scenes / 609 videos, hires assets,
   verified complete). Downloaded with the toolkit

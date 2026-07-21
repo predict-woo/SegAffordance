@@ -1,0 +1,30 @@
+checkpoint: experiments/20260721_opdmulti_tune_lr2e6/checkpoints/best-epoch05-valloss0.4698.ckpt
+split: valid  samples: 24
+mean IoU: 0.607   IoU>0.5: 17/24
+type acc: 22/24
+mean axis err: 24.7 deg  (rot-only: 18.7 deg)
+
+00_idx45_iou0.76.png  iou=0.757 type_gt=trans type_pred=trans ax_err=3.8deg  desc=Close the top drawer.
+01_idx182_iou0.70.png  iou=0.699 type_gt=rot type_pred=rot ax_err=1.1deg  desc=Close the open oven door.
+02_idx196_iou0.25.png  iou=0.250 type_gt=trans type_pred=rot ax_err=78.1deg  desc=Open the rightmost decorative door.
+03_idx253_iou0.86.png  iou=0.863 type_gt=rot type_pred=rot ax_err=22.7deg  desc=Close the open cabinet door above the oven.
+04_idx290_iou0.52.png  iou=0.522 type_gt=rot type_pred=rot ax_err=1.5deg  desc=Open the rightmost cabinet door.
+05_idx298_iou0.00.png  iou=0.000 type_gt=rot type_pred=rot ax_err=69.5deg  desc=Open the microwave door.
+06_idx453_iou0.44.png  iou=0.440 type_gt=rot type_pred=rot ax_err=12.1deg  desc=Close the open cabinet door.
+07_idx569_iou0.60.png  iou=0.602 type_gt=rot type_pred=rot ax_err=4.2deg  desc=Open the large cabinet door to the right of the drawers.
+08_idx572_iou0.95.png  iou=0.948 type_gt=rot type_pred=rot ax_err=10.2deg  desc=Close the large cabinet door on the left.
+09_idx648_iou0.88.png  iou=0.884 type_gt=rot type_pred=rot ax_err=9.7deg  desc=Open the left cabinet door beneath the countertop.
+10_idx663_iou0.78.png  iou=0.776 type_gt=rot type_pred=rot ax_err=0.7deg  desc=Close the open cabinet door on the right.
+11_idx728_iou0.89.png  iou=0.886 type_gt=rot type_pred=rot ax_err=4.6deg  desc=Close the open white cabinet door above the drawer.
+12_idx1366_iou0.80.png  iou=0.801 type_gt=rot type_pred=rot ax_err=10.8deg  desc=Close the open center cabinet door.
+13_idx1462_iou0.44.png  iou=0.436 type_gt=rot type_pred=rot ax_err=2.7deg  desc=Open the left cabinet door beneath the countertop.
+14_idx1581_iou0.32.png  iou=0.317 type_gt=trans type_pred=trans ax_err=34.4deg  desc=Push the open left drawer closed.
+15_idx1637_iou0.69.png  iou=0.694 type_gt=rot type_pred=rot ax_err=6.8deg  desc=Open the large white door.
+16_idx1724_iou0.93.png  iou=0.931 type_gt=trans type_pred=trans ax_err=13.0deg  desc=Pull out the bottom drawer.
+17_idx1736_iou0.76.png  iou=0.761 type_gt=rot type_pred=rot ax_err=2.4deg  desc=Open the upper cabinet door above the refrigerator, just left of center.
+18_idx1818_iou0.85.png  iou=0.852 type_gt=trans type_pred=trans ax_err=49.4deg  desc=Open the large glass cabinet door.
+19_idx2667_iou0.63.png  iou=0.630 type_gt=rot type_pred=rot ax_err=15.9deg  desc=Open the right cabinet door.
+20_idx3119_iou0.10.png  iou=0.104 type_gt=rot type_pred=rot ax_err=68.2deg  desc=Close the open oven door.
+21_idx3159_iou0.00.png  iou=0.000 type_gt=rot type_pred=rot ax_err=86.9deg  desc=Close the wooden cabinet door to the left of the refrigerator.
+22_idx3292_iou0.88.png  iou=0.881 type_gt=rot type_pred=rot ax_err=6.9deg  desc=Close the right cabinet door.
+23_idx3409_iou0.54.png  iou=0.542 type_gt=trans type_pred=rot ax_err=78.4deg  desc=Open the large glass-paneled door.
