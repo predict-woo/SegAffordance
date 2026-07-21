@@ -76,9 +76,10 @@ bash runpod/dev.sh run <cmd...>    # run a command in /workspace/SegAffordance
 when the host's stock was taken while stopped) — in that case delete and
 recreate the pod with the command above.
 
-**KNOWN ISSUE (2026-07-16): `dev.sh start` currently fails with "not enough
-free GPUs on the host machine"** — the dev pod's host lost its GPU while
-stopped. Delete + recreate the dev pod next time GPU work is needed.
+This has happened twice (2026-07-16, 2026-07-21): `dev.sh start` fails with
+"not enough free GPUs on the host machine". Delete + recreate the dev pod
+with the command above, then `bash runpod/dev.sh start` and
+`bash runpod/dev.sh sync-reset`.
 
 ## Local mirror of /workspace (mutagen)
 
