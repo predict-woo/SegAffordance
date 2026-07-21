@@ -236,9 +236,9 @@ of this file for the procedure). Current state:
 - ~~The OPDReal_v17 checkpoint was lost with Euler access~~ — resolved
   2026-07-21: OPDReal retrained on RunPod (see above).
 
-Note `train.sh`/configs still reference cluster paths — point
-`train_data_dir` at `/workspace/datasets/...` for RunPod runs, and copy the
-lmdb to `/dev/shm` first as `train.sh` already does.
+Note the non-runpod configs still reference dead cluster paths (kept for
+their hyperparameters); use the `*_runpod.yaml` variants, and for SF3D copy
+the lmdb to `/dev/shm` first (`cp -r /workspace/datasets/sf3d_processed/data.lmdb /dev/shm/`).
 
 ## Budget
 

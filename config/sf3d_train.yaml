@@ -1,3 +1,6 @@
+# EULER-ERA CONFIG (historical): documents the original cluster training
+# hyperparameters but references dead /cluster/... paths. For actual
+# training use config/sf3d_train_runpod.yaml.
 seed_everything: 42
 
 model:

@@ -1,13 +1,16 @@
 __pycache__/
+*.pyc
+.DS_Store
+
+# experiment outputs
 wandb/
 experiments/
 test_visualizations/
-*.pyc
 *.out
-*.pngsf3d_test_visualizations_failure.tar.gz
-__pycache__/
-*.pyc
-.DS_Store
+*.png
+*.tar.gz
+
+# CLIP weights: symlink to /workspace/models/RN50.pt, created by runpod/setup.sh
 pretrain/RN50.pt
 
 # throwaway sample/audit renders from tools/show_opd_samples.py & tools/label_render.py

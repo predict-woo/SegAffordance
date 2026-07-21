@@ -1,3 +1,7 @@
+# Base model/loss/optimizer defaults, composed with an overlay config via
+# LightningCLI, e.g.: --config config/opd_train.yaml --config config/opdreal_test.yaml
+# The self-contained config/*_runpod.yaml variants used for training were
+# derived from this file.
 # Model Architecture (defaults, user should verify/override for their specific variant)
 
 model:

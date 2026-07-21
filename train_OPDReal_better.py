@@ -1,9 +1,7 @@
 import os
-from torch._tensor import Tensor
 import typing
 from typing import Any
 import warnings
-import json
 
 import pytorch_lightning as pl
 import torch
@@ -50,7 +48,6 @@ class OPDRealTrainingModule(pl.LightningModule):
             bce_weight=self.loss_params.bce_weight,
             dice_weight=self.loss_params.dice_weight,
         )
-        # self.mask_loss_fn = nn.BCEWithLogitsLoss()
         self.point_map_loss_fn = nn.BCEWithLogitsLoss()
         self.coord_loss_fn = nn.L1Loss()
         self.vae_loss_fn = MotionVAELoss(beta=self.loss_params.vae_beta)
@@ -623,9 +620,6 @@ class OPDRealTrainingModule(pl.LightningModule):
                         self.config, "test_vis_output_dir", "opdreal_debug_visualizations"
                     )
                     point_pred_prob = torch.sigmoid(point_pred_logits)
-                    
-                    print(batch[-1][i])
-
 
                     self._save_opdreal_test_debug_visualizations(
                         image_tensor=img[i].detach().cpu(),

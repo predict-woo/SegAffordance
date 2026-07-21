@@ -75,7 +75,6 @@ The model is built on CLIP (Contrastive Language-Image Pre-training) and extends
 ```
 SegAffordance/
 ├── model/                          # Neural network components
-│   ├── __init__.py                 # Model builder function
 │   ├── segmenter.py                # Main CRIS model
 │   ├── clip.py                     # CLIP backbone (ViT/ResNet)
 │   └── layers.py                   # Custom layers (FPN, Projector, VAE, etc.)
@@ -88,11 +87,10 @@ SegAffordance/
 │
 ├── config/                         # Configuration files
 │   ├── opd_train.py                # Dataclass definitions for configs
-│   ├── opd_train.yaml              # Base model config
-│   ├── opdreal_train.yaml          # OPDReal training overrides
-│   ├── opdmulti_train.yaml         # OPDMulti training overrides
-│   ├── sf3d_train.yaml             # SceneFun3D training config
-│   ├── *_test.yaml                 # Test configurations
+│   ├── *_runpod*.yaml              # ACTIVE self-contained training configs (RunPod paths)
+│   ├── opd_train.yaml              # Base model config (composed with overlays)
+│   ├── opdreal_train.yaml          # Historical Euler-era training configs
+│   ├── *_test.yaml                 # Test overlays for tests/*_better.py
 │   └── ...
 │
 ├── train_OPDReal_better.py         # Training script for OPDReal
@@ -104,16 +102,20 @@ SegAffordance/
 │   ├── test_OPDMulti_better.py
 │   └── test_SF3D_better.py
 │
+├── tools/                          # Data pipelines & utilities
+│   ├── sf3d_process.py             # SceneFun3D -> LMDB builder (see docstring)
+│   ├── gen_descriptions.py         # OPD description generation (Codex VLM)
+│   ├── vis_predictions.py          # Checkpoint visualizer (GT vs pred panels)
+│   └── show_opd_samples.py         # Dataset sample renderer
+│
 ├── utils/                          # Utility functions
 │   ├── tools.py                    # Loss functions, visualization
-│   ├── dataset.py                  # Tokenization utilities
+│   ├── dataset.py                  # CLIP tokenization
 │   └── simple_tokenizer.py         # CLIP tokenizer
 │
-├── pretrain/                       # Pretrained models
-│   └── RN50.pt                     # CLIP ResNet-50 weights
-│
-├── train.sh                        # Training launch script
-├── slurm.sh                        # SLURM job submission script
+├── runpod/                         # RunPod infra: runbook, dev-pod ctl, setup
+├── annotations_backup/             # Gzipped OPD annotations w/ generated descriptions (do not delete)
+├── pretrain/RN50.pt                # CLIP weights (symlink on pod; see runpod/setup.sh)
 └── requirements.txt                # Python dependencies
 ```
 
@@ -127,26 +129,31 @@ SegAffordance/
 
 ### Setup
 
+On a RunPod pod, `bash runpod/setup.sh` does all of this (installs
+`requirements.txt` into the shared `/workspace/venv` and links the CLIP
+weights). For a local/manual environment:
+
 ```bash
-# Create conda environment (recommended)
-conda create -n segaffordance python=3.10
-conda activate segaffordance
-
-# Install PyTorch (adjust for your CUDA version)
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-
-# Install dependencies
+# Install PyTorch first (adjust for your CUDA version), then:
 pip install -r requirements.txt
-
-# Install additional dependencies
-pip install pytorch-lightning h5py
 ```
 
-### Download Pretrained CLIP Weights
+### Pretrained CLIP Weights
 
-Place the CLIP ResNet-50 weights in `pretrain/RN50.pt`. You can download from [OpenAI CLIP](https://github.com/openai/CLIP).
+The model expects CLIP ResNet-50 weights at `pretrain/RN50.pt` (download from
+[OpenAI CLIP](https://github.com/openai/CLIP)). On RunPod this is a symlink
+to `/workspace/models/RN50.pt` created by `runpod/setup.sh` — locally it will
+appear dangling; that's expected.
 
 ## 📊 Datasets
+
+All datasets live on the RunPod network volume: OPDReal at
+`/workspace/datasets/MotionDataset_h5_real`, OPDMulti at
+`/workspace/datasets/OPDMulti/MotionDataset_h5`, SceneFun3D at
+`/workspace/datasets/sf3d_processed`. The OPD `description` fields were
+regenerated 2026-07-20 (image-conditioned VLM, see `runpod/README.md`);
+gzipped copies with restore instructions are in `annotations_backup/`.
+OPDSynth was dropped from the project (2026-07-19).
 
 ### OPDReal (Real-World Articulated Objects)
 
@@ -195,47 +202,45 @@ sf3d_processed/
 
 ## 🎯 Training
 
-### SceneFun3D Training
-
-The standard training workflow copies the LMDB dataset to shared memory for faster I/O:
-
-```bash
-# Using train.sh
-./train.sh
-
-# Or manually:
-cp -r /path/to/sf3d_processed/data.lmdb /dev/shm/data.lmdb
-python train_SF3D_better.py fit --config config/sf3d_train.yaml
-```
+**All GPU work happens on RunPod** — datasets, checkpoints, and the venv live
+on a network volume mounted at `/workspace`. Read `runpod/README.md` (infra
+runbook) and `CLAUDE.md` (workflow) first. The active configs are the
+self-contained `config/*_runpod.yaml` files; the non-runpod YAMLs are
+historical Euler-cluster configs kept for their hyperparameters.
 
 ### OPDReal Training
 
 ```bash
-python train_OPDReal_better.py fit \
-    --config config/opd_train.yaml \
-    --config config/opdreal_train.yaml
+python train_OPDReal_better.py fit --config config/opdreal_train_runpod.yaml
 ```
 
 ### OPDMulti Training (Fine-tuning from OPDReal)
 
 ```bash
-python train_OPDMulti_better.py fit \
-    --config config/opd_train.yaml \
-    --config config/opdmulti_train.yaml
+python train_OPDMulti_better.py fit --config config/opdmulti_train_runpod.yaml
 ```
 
-The OPDMulti config automatically:
-- Loads pretrained weights from OPDReal checkpoint
-- Freezes backbone, depth encoder, and neck
-- Only trains decoder and prediction heads
+Fine-tuning recipes compared 2026-07-21 (300 val samples): full fine-tune at
+lr 3e-6 for ~2 epochs wins (`opdmulti_train_runpod_nofreeze_lowlr.yaml`,
+IoU>0.5 70.3%) over heads-only (65.7%). OPDMulti overfits within ~2 epochs
+of full fine-tuning — keep runs short.
 
-### SLURM Job Submission
+### SceneFun3D Training
+
+Copy the LMDB to shared memory first for I/O speed (the loader expects
+`/dev/shm/data.lmdb`):
 
 ```bash
-sbatch slurm.sh
+cp -r /workspace/datasets/sf3d_processed/data.lmdb /dev/shm/
+python train_SF3D_better.py fit --config config/sf3d_train_runpod.yaml
 ```
 
 ## 📈 Testing & Evaluation
+
+The `*_test.yaml` overlays still carry Euler-era data paths — override
+`data.data_path` (and `origin_norm_json_path` where set) with the
+`/workspace/datasets/...` locations when running on RunPod. For quick
+qualitative checks use `tools/vis_predictions.py` instead.
 
 ### OPDReal Testing
 
@@ -373,7 +378,9 @@ class CRIS(nn.Module):
 
 ## 🎨 Visualization
 
-Training visualizations are logged to Weights & Biases (wandb) and include:
+The RunPod configs log losses to CSV (`/workspace/runs/csv/`) with wandb off;
+`tools/vis_predictions.py` renders GT-vs-prediction panels for any checkpoint.
+When wandb is enabled, training visualizations include:
 
 - Predicted vs GT segmentation masks
 - Interaction point heatmaps

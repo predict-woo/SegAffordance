@@ -1,3 +1,6 @@
+# Test-time overlay for the tests/*_better.py entry points. NOTE: data
+# paths still point at the dead Euler cluster — override data.data_path
+# (and origin_norm_json_path if set) with /workspace/datasets/... on RunPod.
 seed_everything: 42
 
 trainer:
