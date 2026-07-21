@@ -33,14 +33,16 @@ class OPDRealTrainingModule(pl.LightningModule):
         optimizer_params: OptimizerParams,
         config: Config,
         finetune_from_path: typing.Optional[str] = None,
+        freeze_backbone: bool = False,
     ):
         super().__init__()
         self.save_hyperparameters()
-        
+
         self.model_params = model_params
         self.loss_params = loss_params
         self.optimizer_params = optimizer_params
         self.config = config
+        self.freeze_backbone = freeze_backbone
 
         self.model = CRIS(model_params)
 
@@ -348,7 +350,20 @@ class OPDRealTrainingModule(pl.LightningModule):
         self._collect_vis_samples_from_batch(batch)
         return loss
 
+    def _apply_backbone_freeze(self):
+        if self.freeze_backbone:
+            print("❄️ Freezing CLIP backbone (visual + text encoders).")
+            for param in self.model.backbone.parameters():
+                param.requires_grad = False
+
+    def on_train_epoch_start(self):
+        # Keep frozen CLIP truly frozen: eval mode stops BatchNorm running-stat
+        # updates that requires_grad=False alone would not prevent.
+        if self.freeze_backbone:
+            self.model.backbone.eval()
+
     def configure_optimizers(self):
+        self._apply_backbone_freeze()
         trainable_params = list(filter(lambda p: p.requires_grad, self.model.parameters()))
         optimizer = torch.optim.Adam(
             trainable_params,

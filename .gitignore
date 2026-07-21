@@ -2,13 +2,18 @@ __pycache__/
 *.pyc
 .DS_Store
 
-# experiment outputs
+# run outputs
 wandb/
-experiments/
 test_visualizations/
 *.out
 *.png
 *.tar.gz
+*.log
+
+# experiments/: notes, configs, metrics and vis summaries ARE tracked;
+# heavy artifacts stay on the volume / out of git
+experiments/**/checkpoints/
+experiments/**/logs/
 
 # CLIP weights: symlink to /workspace/models/RN50.pt, created by runpod/setup.sh
 pretrain/RN50.pt

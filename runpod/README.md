@@ -193,19 +193,13 @@ of this file for the procedure). Current state:
   history of this section; `tools/add_placeholder_descriptions.py` remains
   for reference.
 - **OPD models RETRAINED (2026-07-21, RTX PRO 6000 pod)** with the
-  regenerated descriptions; both CSV-logged under `/workspace/runs/csv/`:
-  - OPDReal: `config/opdreal_train_runpod.yaml`, 30 epochs, best
-    `/workspace/checkpoints/OPDReal_RUNPOD/best-epoch15-valloss0.4069.ckpt`
-    (val-sample check: mIoU 0.56, type acc 24/24, axis err 7°). Replaces the
-    lost OPDReal_v17 for fine-tuning.
-  - OPDMulti (fine-tuned from that checkpoint; three variants compared on
-    300 val samples): heads-only (`opdmulti_train_runpod.yaml`, best ep8,
-    IoU>0.5 65.7%) < full-finetune 1 epoch (`…_nofreeze.yaml`, ep0, 68.0%)
-    ≈ full-finetune lr 3e-6 (`…_nofreeze_lowlr.yaml`, ep2, **70.3%**,
-    axis 16.8° — recommended): `/workspace/checkpoints/
-    OPDMulti_RUNPOD_NOFREEZE_LOWLR/best-epoch02-valloss0.4654.ckpt`.
-    OPDMulti overfits within ~2 epochs of full fine-tuning — keep runs
-    short. Prediction visualizations: `/workspace/vis_out/` (synced).
+  regenerated descriptions. Full record: `SegAffordance/experiments/`
+  (`INDEX.md` table + per-experiment notes/configs/metrics; checkpoints under
+  `experiments/<id>/checkpoints/` on the volume). Headlines: OPDReal base
+  best val 0.4069 (ep15, replaces the lost OPDReal_v17); OPDMulti recipe
+  comparison won by full fine-tune at lr 3e-6 (`20260721_opdmulti_ft_lowlr`,
+  IoU>0.5 70.3% on 300 val samples) — OPDMulti overfits within ~2 epochs of
+  full fine-tuning, keep runs short.
 - **Raw SceneFun3D train_val (302GB): on the SCRATCH volume** at
   `/workspace/scenefun3d/train_val` (230 scenes / 609 videos, hires assets,
   verified complete). Downloaded with the toolkit

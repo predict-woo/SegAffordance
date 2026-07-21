@@ -378,7 +378,7 @@ class CRIS(nn.Module):
 
 ## 🎨 Visualization
 
-The RunPod configs log losses to CSV (`/workspace/runs/csv/`) with wandb off;
+The RunPod configs log losses to CSV under `experiments/<id>/logs/` with wandb off;
 `tools/vis_predictions.py` renders GT-vs-prediction panels for any checkpoint.
 When wandb is enabled, training visualizations include:
 

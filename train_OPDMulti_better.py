@@ -24,6 +24,7 @@ class OPDMultiTrainingModule(OPDRealTrainingModule):
         config: Config,
         train_only_heads: bool,
         finetune_from_path: typing.Optional[str] = None,
+        freeze_backbone: bool = False,
     ):
         super().__init__(
             model_params=model_params,
@@ -31,10 +32,12 @@ class OPDMultiTrainingModule(OPDRealTrainingModule):
             optimizer_params=optimizer_params,
             config=config,
             finetune_from_path=finetune_from_path,
+            freeze_backbone=freeze_backbone,
         )
         self.train_only_heads = train_only_heads
 
     def configure_optimizers(self):
+        self._apply_backbone_freeze()
         if self.train_only_heads:
             print(
                 "❄️ Freezing backbone, depth encoder, and neck. Training only decoder and heads."

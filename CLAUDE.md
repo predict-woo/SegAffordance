@@ -78,6 +78,25 @@ training pod alive after its run. The volume bills $35/mo regardless.
   stopped: delete the pod and recreate it from the runbook (state on
   `/workspace` survives).
 
+## Experiment organization
+
+Every training run gets a directory `experiments/YYYYMMDD_<dataset>_<variant>/`
+(inside this repo). `experiments/INDEX.md` is the summary table — one row per
+experiment, updated when a run finishes; `experiments/README.md` documents the
+full workflow. Per experiment:
+
+- **Tracked in git:** `notes.md` (goal/setup/result/decision), `config.yaml`
+  (exact launch config), `metrics.csv` (CSV-logger copy), `vis_summary.txt`
+  (from `tools/vis_predictions.py`).
+- **Volume-only (gitignored):** `checkpoints/` (`*.ckpt` is also
+  mutagen-ignored — checkpoints never leave the volume), `logs/` (raw CSV
+  versions + train.log), `vis/` (prediction-panel PNGs).
+
+New runs: copy a `config/*_runpod*.yaml`, point its ModelCheckpoint `dirpath`
+and CSVLogger `save_dir` at the new experiment dir, launch on a training pod,
+then fill in the tracked files and INDEX row and commit. The `config/` file
+and the experiment's `config.yaml` should stay identical.
+
 ## Current state / TODO
 
 - **Euler access was revoked (2026-07-16)**; all datasets were rebuilt from
@@ -96,10 +115,11 @@ training pod alive after its run. The volume bills $35/mo regardless.
   `tools/gen_descriptions.py` — image-conditioned Codex (gpt-5.6-luna)
   generations, `info.description_source = "codex-gpt-5.6-luna-medium-v1"`;
   see `runpod/README.md` for style rules and pipeline details.
-  OPD models RETRAINED 2026-07-21 (replacing the lost OPDReal_v17):
-  best checkpoints in `/workspace/checkpoints/OPDReal_RUNPOD/` and
-  `/workspace/checkpoints/OPDMulti_RUNPOD_NOFREEZE_LOWLR/` — details and
-  the fine-tuning-recipe comparison in `runpod/README.md`.
+  OPD models RETRAINED 2026-07-21 (replacing the lost OPDReal_v17) — see
+  `experiments/INDEX.md`; best checkpoints live under
+  `experiments/<id>/checkpoints/` on the volume (OPDReal:
+  `20260721_opdreal_base`, OPDMulti recommended:
+  `20260721_opdmulti_ft_lowlr`).
   **Open item:** raw SceneFun3D (302GB) sits on the temporary scratch
   volume pending deletion after a real training run validates the rebuilt
   trajectories. See `runpod/README.md`.

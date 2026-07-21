@@ -3,9 +3,6 @@
 #
 # Fine-tunes from the RunPod-retrained OPDReal checkpoint (2026-07-21,
 # replaces the lost Euler-era OPDReal_v17): backbone/neck frozen, heads only.
-# NOTE: on 300 val samples the full-finetune variants beat this heads-only
-# recipe (IoU>0.5: 70.3% vs 65.7%) — see opdmulti_train_runpod_nofreeze_lowlr
-# .yaml (recommended; overfits after ~2 epochs, hence max_epochs 8).
 data:
   data_path: "/workspace/datasets/OPDMulti/MotionDataset_h5"
   is_multi: True
@@ -31,18 +28,18 @@ trainer:
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        dirpath: "/workspace/SegAffordance/experiments/20260721_opdmulti_headsonly/checkpoints"
+        dirpath: "/workspace/checkpoints/OPDMulti_RUNPOD_NOFREEZE"
         monitor: val/loss_total
         mode: min
         save_top_k: 3
         save_last: true
         auto_insert_metric_name: false
-        filename: "csv"
+        filename: "best-epoch{epoch:02d}-valloss{val/loss_total:.4f}"
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: "/workspace/SegAffordance/experiments/20260721_opdmulti_headsonly/logs"
-      name: "opdmulti_runpod"
+      save_dir: "/workspace/runs/csv"
+      name: "opdmulti_runpod_nofreeze"
   log_every_n_steps: 10
 
 model:
@@ -88,5 +85,5 @@ model:
     scheduler_milestones: [20, 25]
     scheduler_gamma: 0.1
 
-  train_only_heads: true
-  finetune_from_path: "/workspace/SegAffordance/experiments/20260721_opdreal_base/checkpoints/best-epoch15-valloss0.4069.ckpt"
+  train_only_heads: false
+  finetune_from_path: "/workspace/checkpoints/OPDReal_RUNPOD/best-epoch15-valloss0.4069.ckpt"

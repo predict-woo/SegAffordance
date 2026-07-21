@@ -1,14 +1,12 @@
-# RunPod variant of opdmulti_train.yaml: volume paths, wandb off, full data
-# section. Uses annotations_bwdf/ (regenerated 2026-07-16).
-#
-# Fine-tunes from the RunPod-retrained OPDReal checkpoint (2026-07-21,
-# replaces the lost Euler-era OPDReal_v17): backbone/neck frozen, heads only.
-# NOTE: on 300 val samples the full-finetune variants beat this heads-only
-# recipe (IoU>0.5: 70.3% vs 65.7%) — see opdmulti_train_runpod_nofreeze_lowlr
-# .yaml (recommended; overfits after ~2 epochs, hence max_epochs 8).
+# 20260721_opdreal_frozenclip: opdreal_train_runpod.yaml but with the CLIP
+# backbone frozen (visual+text; eval mode, no BN-stat drift). Everything
+# else identical for comparability with 20260721_opdreal_base.
+# RunPod variant of opdreal_train.yaml: volume paths, wandb off, full data
+# section (the datamodule requires dataset keys/batch params explicitly).
+# Uses annotations_bwdf/ (regenerated 2026-07-16 with
+# datasets/filter_bad_annotations.py) — the dataset class default.
 data:
-  data_path: "/workspace/datasets/OPDMulti/MotionDataset_h5"
-  is_multi: True
+  data_path: "/workspace/datasets/MotionDataset_h5_real"
   train_dataset_key: "MotionNet_train"
   val_dataset_key: "MotionNet_valid"
   test_dataset_key: "MotionNet_test"
@@ -31,7 +29,7 @@ trainer:
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        dirpath: "/workspace/SegAffordance/experiments/20260721_opdmulti_headsonly/checkpoints"
+        dirpath: "/workspace/SegAffordance/experiments/20260721_opdreal_frozenclip/checkpoints"
         monitor: val/loss_total
         mode: min
         save_top_k: 3
@@ -41,11 +39,12 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: "/workspace/SegAffordance/experiments/20260721_opdmulti_headsonly/logs"
-      name: "opdmulti_runpod"
+      save_dir: "/workspace/SegAffordance/experiments/20260721_opdreal_frozenclip/logs"
+      name: "opdreal_runpod"
   log_every_n_steps: 10
 
 model:
+  freeze_backbone: true
   model_params:
     clip_pretrain: "pretrain/RN50.pt"
     word_len: 77
@@ -83,10 +82,8 @@ model:
     manual_seed: 42
 
   optimizer_params:
-    lr: 0.00001
+    lr: 0.00002
     weight_decay: 0.0001
-    scheduler_milestones: [20, 25]
+    scheduler_milestones: [25, 27]
     scheduler_gamma: 0.1
 
-  train_only_heads: true
-  finetune_from_path: "/workspace/SegAffordance/experiments/20260721_opdreal_base/checkpoints/best-epoch15-valloss0.4069.ckpt"
