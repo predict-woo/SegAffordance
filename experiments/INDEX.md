@@ -10,6 +10,8 @@ Eval columns are on 300 fixed OPDMulti-val samples (seed 0) unless noted;
 | [20260721_opdmulti_headsonly](20260721_opdmulti_headsonly/) | OPDMulti | freeze backbone+depth+neck, lr 1e-5 | 0.4917 (ep8) | 0.566 | 65.7% | 96.7% | 18.2 | worst of the three recipes |
 | [20260721_opdmulti_ft_full](20260721_opdmulti_ft_full/) | OPDMulti | full fine-tune, lr 1e-5 | 0.4601 (ep0!) | 0.592 | 68.0% | 97.7% | 17.3 | best val loss; overfits after 1 epoch |
 | [20260721_opdmulti_ft_lowlr](20260721_opdmulti_ft_lowlr/) | OPDMulti | full fine-tune, lr 3e-6, 8 ep | 0.4654 (ep2) | 0.587 | 70.3% | 97.3% | 16.8 | **recommended** |
+| [20260721_opdreal_frozenclip](20260721_opdreal_frozenclip/) | OPDReal | frozen CLIP, else = base | 0.4138 (ep11) | 0.525* | 54%* | 100%* | 9.5* | CLIP-ft buys only ~0.007 val; 40% faster |
+| [20260721_opdmulti_frozenclip](20260721_opdmulti_frozenclip/) | OPDMulti | frozen CLIP, neck+dec+heads train, lr 1e-5 | 0.4683 (ep0) | 0.581 | 67.3% | 95.7% | 17.5 | overfit isn't CLIP's fault; not better |
 
 \* OPDReal numbers are on 24 OPDReal-val samples (its own val set), not the
 300-sample OPDMulti eval.

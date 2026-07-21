@@ -37,12 +37,12 @@ trainer:
         save_top_k: 3
         save_last: true
         auto_insert_metric_name: false
-        filename: "csv"
+        filename: "best-epoch{epoch:02d}-valloss{val/loss_total:.4f}"
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
       save_dir: "/workspace/SegAffordance/experiments/20260721_opdmulti_headsonly/logs"
-      name: "opdmulti_runpod"
+      name: "csv"
   log_every_n_steps: 10
 
 model:
