@@ -1,1 +1,0 @@
-from .coco_instance_new_baseline_dataset_mapper import COCOInstanceNewBaselineDatasetMapper

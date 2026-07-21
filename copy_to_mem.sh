@@ -1,1 +1,0 @@
-cp -r $WORK/sf3d_processed/data.lmdb /dev/shm/data.lmdb
