@@ -6,10 +6,12 @@
 Builds the real model (CLIP RN50 + heads) once, then drives `_common_step`
 through every combination of batch shape and geometric-loss variant:
 
-    OPD  (9-tuple)  x cross_gt   -> no geometric term (OPD has no trajectory)
-    SF3D (13-tuple) x cross_gt   -> both historical cross-GT terms
-    SF3D (13-tuple) x pred_pred  -> the single symmetric term
-    OPD  (9-tuple)  x pred_pred  -> still a no-op
+    OPD   (9-tuple)  x cross_gt   -> no geometric term (OPD has no trajectory)
+    SF3D  (13-tuple) x cross_gt   -> both historical cross-GT terms
+    SF3D  (13-tuple) x pred_pred  -> the single symmetric term
+    OPD   (9-tuple)  x pred_pred  -> still a no-op
+    video (dict)     x projected  -> the 2D-pretraining alignment term,
+                                     with the element-sweep head removed
 
 Checks each total loss is finite, that gradients actually flow, and that the
 logged term names are exactly the expected set — the last one is what catches
@@ -34,7 +36,9 @@ from model.losses import build_geometric_loss
 from train_OPDReal_better import OPDRealTrainingModule
 
 
-def build_params(geometric_loss: str):
+def build_params(geometric_loss: str, stage: str = "3d"):
+    """stage="2d" mirrors the pretraining config: no element-sweep head, a 2D
+    hand-track head, and a metric origin-depth head."""
     model_params = ModelParams(
         clip_pretrain="pretrain/RN50.pt",
         word_len=77,
@@ -52,6 +56,9 @@ def build_params(geometric_loss: str):
         num_motion_types=2,
         use_depth=True,
         use_cvae=True,
+        use_trajectory_head=(stage != "2d"),
+        use_2d_trajectory_head=(stage == "2d"),
+        predict_origin_depth=(stage == "2d"),
     )
     loss_params = LossParams(
         bce_weight=0.5,
@@ -68,6 +75,10 @@ def build_params(geometric_loss: str):
         geometric_weight=0.5,
         trajectory_to_motion_weight=0.5,
         pred_pred_weight=0.1,
+        projected_weight=1.0,
+        projected_radius_weight=0.1,
+        projected_radius_ref=1.0,
+        trajectory_2d_weight=1.0,
     )
     config = Config(
         log_image_interval_steps=100,
@@ -108,6 +119,34 @@ def sf3d_batch(batch: int, size: int, device: str):
     )
 
 
+def video_batch(batch: int, size: int, device: str):
+    """A mined 2D source: hand track + intrinsics, NO element sweep and no 3D
+    motion origin. Supplied as a dict so no positional layout is invented."""
+    img, depth, words, mask, _bbox, point, motion, mtype, img_sz = opd_batch(batch, size, device)
+    track = torch.rand(batch, 20, 2, device=device) * 0.5 + 0.25
+    K = torch.tensor([[500.0, 0, 256.0], [0, 500.0, 256.0], [0, 0, 1.0]], device=device)
+    return {
+        "img": img, "depth": depth, "word": words, "mask": mask,
+        "point_norm": point, "motion": motion, "motion_type": mtype,
+        "img_size": torch.tensor([[512.0, 512.0]] * batch, device=device),
+        "trajectory_2d": track,
+        "anchor_depth": torch.full((batch,), 2.0, device=device),
+        "camera_intrinsic": K.expand(batch, 3, 3).contiguous(),
+    }
+
+
+def switch_to_2d_heads(module, device):
+    """Reconfigure an already-built model for 2D pretraining: drop the
+    element-sweep head, add the 2D track and origin-depth heads."""
+    from model.layers import OriginDepthHead, Trajectory2DMLP
+
+    condition_dim = module.model.trajectory_predictor.backbone[0].in_features
+    module.model.trajectory_predictor = None
+    module.model.trajectory_2d_predictor = Trajectory2DMLP(condition_dim).to(device)
+    module.model.origin_depth_head = OriginDepthHead(condition_dim).to(device)
+    print(f"   switched to 2D heads (condition_dim={condition_dim})", flush=True)
+
+
 def run_case(module, name, geometric_loss, batch, expected_terms):
     _, loss_params, _, _ = build_params(geometric_loss)
     module.loss_params = loss_params
@@ -126,7 +165,8 @@ def run_case(module, name, geometric_loss, batch, expected_terms):
     nonzero = sum(1 for p in grads if p.grad.abs().sum() > 0)
     terms = sorted(k.split("/", 1)[1] for k in logged if "geo" in k.lower())
 
-    print(f"\n=== {name} (geometric_loss={geometric_loss!r}, {len(batch)}-tuple) ===")
+    shape = "dict" if isinstance(batch, dict) else f"{len(batch)}-tuple"
+    print(f"\n=== {name} (geometric_loss={geometric_loss!r}, {shape}) ===")
     print(f"   loss      {loss.item():.6f}  finite={bool(torch.isfinite(loss))}")
     print(f"   grads     {len(grads)} tensors, {nonzero} non-zero")
     print(f"   geometric {terms or '(none)'}")
@@ -164,12 +204,21 @@ def main() -> int:
         "L_geometric_pred_traj_gt_vector",
     ]
 
+    video = video_batch(args.batch, args.size, args.device)
+
     results = [
         run_case(module, "OPD  / default", "cross_gt", opd, []),
         run_case(module, "SF3D / cross_gt", "cross_gt", sf3d, cross_gt_terms),
         run_case(module, "SF3D / pred_pred", "pred_pred", sf3d, ["L_geo_pred_pred"]),
         run_case(module, "OPD  / pred_pred", "pred_pred", opd, []),
     ]
+
+    # Stage-1 (2D pretraining) head configuration. Swapped in place rather
+    # than rebuilding CRIS, which would mean reloading CLIP off the volume.
+    switch_to_2d_heads(module, args.device)
+    results.append(
+        run_case(module, "video / projected", "projected", video, ["L_geo_projected"])
+    )
 
     if all(results):
         print("\n✅ all loss-wiring checks passed")

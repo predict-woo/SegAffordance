@@ -67,7 +67,14 @@ class LossParams:
     # Read only by the "pred_pred" variant. Kept well under motion_type_weight
     # so the type head stays anchored by its own cross-entropy.
     pred_pred_weight: float = 0.1
-    # 2D track supervision (2D pretraining).
+    # Read only by the "projected" variant (2D pretraining).
+    projected_weight: float = 1.0
+    # Penalty on articulation radius above projected_radius_ref metres. A line
+    # is a circle of infinite radius, so without this the soft type gate
+    # collapses to revolute: dL/dp = L_arc - L_line <= 0 everywhere.
+    projected_radius_weight: float = 0.1
+    projected_radius_ref: float = 1.0
+    # 2D track supervision, used alongside the projected geometric loss.
     trajectory_2d_weight: float = 1.0
     
 @dataclass

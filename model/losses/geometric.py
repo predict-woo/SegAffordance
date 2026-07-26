@@ -21,6 +21,7 @@ source of truth, while the logged values stay comparable across weight
 changes.
 """
 
+import math
 from typing import Dict, Tuple
 
 import torch
@@ -112,6 +113,190 @@ class PredPredGeometricLoss(GeometricConsistencyLoss):
         # The key is emitted whenever the dataset has trajectories at all, so
         # the CSV logger sees a stable set of columns across steps.
         return self.weight * term, {"L_geo_pred_pred": term}
+
+
+def normalized_intrinsics(K: torch.Tensor, img_size: torch.Tensor) -> torch.Tensor:
+    """K at original resolution -> K projecting camera 3D into [0, 1] coords.
+
+    The dataset stores intrinsics for the ORIGINAL frame while every 2D
+    quantity in the model (``coords_hat``, the 2D tracks) is normalised to
+    [0, 1]. Folding the resolution into K once keeps the loss independent of
+    whatever size the images were resized to. ``img_size`` is (width, height),
+    matching ``datasets/scenefun3d.py:235``.
+    """
+    K_norm = K.clone().float()
+    width = img_size[:, 0].to(K_norm.dtype).clamp(min=1.0).unsqueeze(-1)
+    height = img_size[:, 1].to(K_norm.dtype).clamp(min=1.0).unsqueeze(-1)
+    K_norm[:, 0, :] = K_norm[:, 0, :] / width
+    K_norm[:, 1, :] = K_norm[:, 1, :] / height
+    return K_norm
+
+
+def project_points(K_norm: torch.Tensor, points: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
+    """(B, M, 3) camera-frame points -> (B, M, 2) normalised image coords."""
+    homogeneous = torch.einsum("bij,bmj->bmi", K_norm, points)
+    depth = homogeneous[..., 2:3].clamp(min=eps)  # keeps behind-camera finite
+    return homogeneous[..., :2] / depth
+
+
+def backproject_points(K_norm: torch.Tensor, uv: torch.Tensor, depth: torch.Tensor) -> torch.Tensor:
+    """(B, 2) normalised coords + (B,) depth -> (B, 3) camera-frame points."""
+    ones = torch.ones_like(uv[..., :1])
+    rays = torch.einsum(
+        "bij,bj->bi", torch.linalg.inv(K_norm), torch.cat([uv, ones], dim=-1)
+    )
+    return rays * depth.unsqueeze(-1)
+
+
+def _point_to_polyline_distance(points: torch.Tensor, polyline: torch.Tensor) -> torch.Tensor:
+    """(B, N, 2) points, (B, M, 2) polyline -> (B, N) distance to the polyline.
+
+    Distance to the *segments*, not to the sampled vertices: sampling a conic
+    at M points and measuring to the vertices would put a floor of half the
+    vertex spacing under the residual.
+    """
+    start = polyline[:, :-1].unsqueeze(1)              # (B, 1, M-1, 2)
+    end = polyline[:, 1:].unsqueeze(1)                 # (B, 1, M-1, 2)
+    seg = end - start
+    rel = points.unsqueeze(2) - start                  # (B, N, M-1, 2)
+    t = (rel * seg).sum(-1) / (seg * seg).sum(-1).clamp(min=1e-12)
+    closest = start + t.clamp(0.0, 1.0).unsqueeze(-1) * seg
+    return (points.unsqueeze(2) - closest).norm(dim=-1).min(dim=-1).values
+
+
+def _rotate_about_axis(axis: torch.Tensor, vec: torch.Tensor, thetas: torch.Tensor) -> torch.Tensor:
+    """Rodrigues. axis/vec (B, 3), thetas (M,) -> (B, M, 3)."""
+    cos = torch.cos(thetas).view(1, -1, 1)
+    sin = torch.sin(thetas).view(1, -1, 1)
+    axis_cross_vec = torch.linalg.cross(axis, vec, dim=-1).unsqueeze(1)
+    axis_dot_vec = (axis * vec).sum(-1, keepdim=True).unsqueeze(1)
+    return (
+        vec.unsqueeze(1) * cos
+        + axis_cross_vec * sin
+        + axis.unsqueeze(1) * axis_dot_vec * (1.0 - cos)
+    )
+
+
+class ProjectedGeometricLoss(GeometricConsistencyLoss):
+    """2D-pretraining alignment: does the predicted articulation project onto
+    the observed 2D track?
+
+    The articulation ``{type, axis, origin}`` defines a 1-parameter 3D curve
+    through the track's own first point. Project it and measure how far each
+    observed point falls from that curve. Nothing is fitted to the data, so a
+    short low-curvature arc yields a *weak* gradient rather than a wrong one.
+
+    Anchoring on the track's own start is what makes this immune to the
+    hand-vs-element mismatch: the curve automatically carries the hand's
+    radius, and ``n · d = 0`` holds for every point of a rigid body, so a hand
+    arc constrains the axis exactly as an element sweep would.
+
+    The curve parameter is free per point, so phase and speed are
+    unconstrained — only *lying on* the curve is required.
+
+    Motion type gates the branch softly. A line is a circle of infinite
+    radius, so the revolute branch can always match the prismatic one and a
+    bare residual would collapse the gate to revolute
+    (``dL/dp = L_arc - L_line <= 0`` everywhere). ``radius_weight`` makes the
+    richer hypothesis pay for itself, turning the gate into a differentiable
+    model-selection criterion.
+    """
+
+    def __init__(
+        self,
+        weight: float,
+        radius_weight: float = 0.1,
+        radius_ref: float = 1.0,
+        num_arc_samples: int = 64,
+        degenerate_threshold: float = 1e-6,
+    ):
+        super().__init__()
+        self.weight = weight
+        self.radius_weight = radius_weight
+        self.radius_ref = radius_ref
+        self.num_arc_samples = num_arc_samples
+        # A track with no extent has no curve to lie on.
+        self.degenerate_threshold = degenerate_threshold
+
+    def forward(self, outputs: ModelOutputs, targets: StepTargets) -> LossTerms:
+        track = targets.trajectory_2d
+        if (
+            track is None
+            or targets.camera_intrinsic is None
+            or targets.img_size is None
+            or targets.anchor_depth is None
+            or outputs.origin_depth is None
+        ):
+            return self._zero(outputs.motion_pred), {}
+
+        device = outputs.motion_pred.device
+        track = track.to(device).float()
+        K_norm = normalized_intrinsics(
+            targets.camera_intrinsic.to(device), targets.img_size.to(device)
+        )
+        axis = F.normalize(outputs.motion_pred.float(), p=2, dim=1, eps=1e-8)
+
+        # Anchor: the track's own first point, lifted to metric 3D.
+        start_3d = backproject_points(
+            K_norm, track[:, 0], targets.anchor_depth.to(device).float()
+        )
+
+        line_residual = self._prismatic_residual(K_norm, track, start_3d, axis)
+        arc_residual, radius = self._revolute_residual(
+            K_norm, track, start_3d, axis, outputs.coords_hat.float(),
+            outputs.origin_depth.float(),
+        )
+        complexity = torch.relu(radius - self.radius_ref) / self.radius_ref
+
+        p_revolute = outputs.motion_type_logits.float().softmax(dim=-1)[:, 1]
+        per_sample = (1.0 - p_revolute) * line_residual + p_revolute * (
+            arc_residual + self.radius_weight * complexity
+        )
+
+        extent = (track - track[:, 0:1]).norm(dim=-1).max(dim=1).values
+        valid = extent > self.degenerate_threshold
+        term = (
+            per_sample[valid].mean()
+            if bool(valid.any())
+            else self._zero(outputs.motion_pred)
+        )
+        return self.weight * term, {"L_geo_projected": term}
+
+    def _prismatic_residual(self, K_norm, track, start_3d, axis):
+        """Point-to-line distance: a 3D line projects to a 2D line exactly."""
+        # A second point on the line, stepped proportionally to depth so the
+        # projected direction is well conditioned at any distance.
+        step = start_3d[:, 2:3].abs().clamp(min=1e-3) * 0.1
+        pair = torch.stack([start_3d, start_3d + step * axis], dim=1)
+        projected = project_points(K_norm, pair)
+        origin_2d, second_2d = projected[:, 0], projected[:, 1]
+
+        direction = second_2d - origin_2d
+        length = direction.norm(dim=-1, keepdim=True)
+        unit = direction / length.clamp(min=1e-9)
+
+        rel = track - origin_2d.unsqueeze(1)
+        cross = rel[..., 0] * unit[:, None, 1] - rel[..., 1] * unit[:, None, 0]
+        distance = cross.abs().mean(dim=1)
+
+        # Axis pointing along the view ray projects to a single point, so
+        # there is no line to measure against — score the raw offset instead.
+        degenerate = (length.squeeze(-1) < 1e-8)
+        return torch.where(degenerate, rel.norm(dim=-1).mean(dim=1), distance)
+
+    def _revolute_residual(self, K_norm, track, start_3d, axis, coords_hat, origin_depth):
+        """Point-to-polyline distance against the projected circle."""
+        centre = backproject_points(K_norm, coords_hat, origin_depth)
+        offset = start_3d - centre
+        parallel = (offset * axis).sum(-1, keepdim=True) * axis
+        radius = (offset - parallel).norm(dim=-1)
+
+        thetas = torch.linspace(
+            -math.pi, math.pi, self.num_arc_samples, device=track.device
+        )
+        curve_3d = centre.unsqueeze(1) + _rotate_about_axis(axis, offset, thetas)
+        curve_2d = project_points(K_norm, curve_3d)
+        return _point_to_polyline_distance(track, curve_2d).mean(dim=1), radius
 
 
 class CrossGTGeometricLoss(GeometricConsistencyLoss):
@@ -227,9 +412,16 @@ def build_geometric_loss(loss_params) -> GeometricConsistencyLoss:
         return PredPredGeometricLoss(
             weight=getattr(loss_params, "pred_pred_weight", 0.1)
         )
+    if name == "projected":
+        return ProjectedGeometricLoss(
+            weight=getattr(loss_params, "projected_weight", 1.0),
+            radius_weight=getattr(loss_params, "projected_radius_weight", 0.1),
+            radius_ref=getattr(loss_params, "projected_radius_ref", 1.0),
+        )
     if name == "none":
         return NoGeometricLoss()
 
     raise ValueError(
-        f"unknown geometric_loss {name!r} — expected 'cross_gt', 'pred_pred' or 'none'"
+        f"unknown geometric_loss {name!r} — expected 'cross_gt', 'pred_pred', "
+        f"'projected' or 'none'"
     )
