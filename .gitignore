@@ -14,6 +14,8 @@ test_visualizations/
 # heavy artifacts stay on the volume / out of git
 experiments/**/checkpoints/
 experiments/**/logs/
+# vis/ = prediction-panel PNGs (megabytes). vis_summary.txt IS tracked.
+experiments/**/vis/
 
 # CLIP weights: symlink to /workspace/models/RN50.pt, created by runpod/setup.sh
 pretrain/RN50.pt

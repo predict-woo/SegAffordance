@@ -8,6 +8,7 @@ a backward pass, and peak memory at the real training batch size.
 """
 
 import argparse
+import dataclasses
 import sys
 import time
 from pathlib import Path
@@ -116,11 +117,11 @@ def main() -> int:
     t0 = time.time()
     with torch.autocast("cuda", dtype=torch.float16, enabled=(device == "cuda")):
         out = model(img, dep, tok, mask, pt, mgt)
-    names = ["mask", "point", "coords", "motion", "type", "mu", "logvar", "traj"]
-    for n, o in zip(names, out):
-        print(f"   {n:7s} {tuple(o.shape) if o is not None else None}")
+    tensors = [(f.name, getattr(out, f.name)) for f in dataclasses.fields(out)]
+    for n, o in tensors:
+        print(f"   {n:20s} {tuple(o.shape) if o is not None else None}")
 
-    loss = sum(o.float().pow(2).mean() for o in out if o is not None)
+    loss = sum(o.float().pow(2).mean() for _, o in tensors if o is not None)
     loss.backward()
     fwd_bwd = time.time() - t0
 

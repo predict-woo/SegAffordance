@@ -48,8 +48,17 @@ class LossParams:
     vae_beta: float
     # Optional trajectory-related weights
     trajectory_weight: float = 1.0
+    # Which geometric consistency loss to use between the motion-axis and
+    # trajectory heads: "cross_gt" | "pred_pred" | "none".
+    # Default "cross_gt" reproduces the behaviour of configs written before
+    # this option existed.
+    geometric_loss: str = "cross_gt"
+    # Read only by the "cross_gt" variant.
     geometric_weight: float = 1.0
     trajectory_to_motion_weight: float = 1.0
+    # Read only by the "pred_pred" variant. Kept well under motion_type_weight
+    # so the type head stays anchored by its own cross-entropy.
+    pred_pred_weight: float = 0.1
     
 @dataclass
 class OptimizerParams:

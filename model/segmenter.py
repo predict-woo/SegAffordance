@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 
 from model.backbones import build_backbone
+from model.outputs import ModelOutputs
 
 from .layers import (
     FPN,
@@ -223,46 +224,29 @@ class CRIS(nn.Module):
         trajectory_pred = self.trajectory_predictor(vae_condition)
 
         # motion_gt can be None during pure inference, but for train/val it's provided.
+        mu = None
+        log_var = None
         if self.use_cvae:
             if motion_gt is not None:
                 motion_pred, motion_type_logits, mu, log_var = self.motion_vae(  # type: ignore[operator]
                     motion_gt, vae_encoder_features, vae_condition
                 )
-                return (
-                    mask_pred,
-                    point_pred,
-                    coords_hat,
-                    motion_pred,
-                    motion_type_logits,
-                    mu,
-                    log_var,
-                    trajectory_pred,
-                )
             else:
-                # During pure inference (e.g. in a test script), sample z from prior
+                # During pure inference (e.g. in a test script), sample z from prior.
+                # mu/log_var do not exist in this case and stay None.
                 motion_pred, motion_type_logits = self.motion_vae.inference(vae_condition)  # type: ignore[operator]
-                # Return None for mu and log_var as they don't exist in this case
-                return (
-                    mask_pred,
-                    point_pred,
-                    coords_hat,
-                    motion_pred,
-                    motion_type_logits,
-                    None,
-                    None,
-                    trajectory_pred,
-                )
         else:
             motion_pred, motion_type_logits = self.motion_mlp(vae_condition)  # type: ignore[operator]
             # Convert sigmoid output [0,1] to axis vector in [-1,1]
             motion_pred = (motion_pred - 0.5) * 2.0
-            return (
-                mask_pred,
-                point_pred,
-                coords_hat,
-                motion_pred,
-                motion_type_logits,
-                None,
-                None,
-                trajectory_pred,
-            )
+
+        return ModelOutputs(
+            mask_logits=mask_pred,
+            point_logits=point_pred,
+            coords_hat=coords_hat,
+            motion_pred=motion_pred,
+            motion_type_logits=motion_type_logits,
+            trajectory_pred=trajectory_pred,
+            mu=mu,
+            log_var=log_var,
+        )

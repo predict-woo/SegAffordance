@@ -77,7 +77,12 @@ print(f\"{p['name']} ({p['id']}): {p['desiredStatus']}  \${p['costPerHr']}/hr\")
     ;;
   run)
     [ $# -gt 0 ] || { echo "usage: dev.sh run <cmd...>" >&2; exit 2; }
-    ssh -o BatchMode=yes "$HOST_ALIAS" "cd /workspace/SegAffordance 2>/dev/null || cd /workspace; $*"
+    # Use the project venv on the volume, not the image's system python: the
+    # latter has torch but no numpy/lightning/wandb, so `python foo.py` dies at
+    # `import numpy`. /workspace/venv is the environment training actually runs
+    # in and is shared by every pod that mounts the volume.
+    ssh -o BatchMode=yes "$HOST_ALIAS" \
+      '[ -d /workspace/venv ] && export PATH=/workspace/venv/bin:$PATH; cd /workspace/SegAffordance 2>/dev/null || cd /workspace; '"$*"
     ;;
   sync)
     mutagen sync list ethz-workspace
@@ -90,6 +95,14 @@ print(f\"{p['name']} ({p['id']}): {p['desiredStatus']}  \${p['costPerHr']}/hr\")
       --ignore="/models" \
       --ignore="/checkpoints" \
       --ignore="/runs/wandb" \
+      `# /venv: 27k+ files — 37x the whole project — and scanning it across` \
+      `# the network volume stalls the session for tens of minutes. It is also` \
+      `# a LINUX venv: syncing it to macOS produces a broken copy that shadows` \
+      `# the Mac's own interpreter. Each side keeps its own.` \
+      --ignore="/venv" \
+      `# /.codex: agent state, and infra-lessons.md warns CODEX_HOME must stay` \
+      `# off the network volume (sqlite WAL fsync) — its logs grow ~1GB/1500 calls.` \
+      --ignore="/.codex" \
       --ignore="**/__pycache__" \
       --ignore="*.pyc" \
       --ignore="*.pt" \

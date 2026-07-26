@@ -129,7 +129,11 @@ def main():
                 None,
                 None,
             )
-        mask_logits, point_logits, coords_hat, motion_pred, type_logits = out[:5]
+        mask_logits = out.mask_logits
+        point_logits = out.point_logits
+        coords_hat = out.coords_hat
+        motion_pred = out.motion_pred
+        type_logits = out.motion_type_logits
 
         H, W = img.shape[-2:]
         mask_prob = torch.sigmoid(mask_logits)[0, 0].cpu()

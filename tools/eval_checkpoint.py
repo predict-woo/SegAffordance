@@ -110,15 +110,15 @@ def main():
             agt = torch.stack([c[6] for c in chunk])
             out = model(img, dep, tok, None, None, None)
             mup = F.interpolate(
-                torch.sigmoid(out[0]), size=mgt.shape[-2:], mode="bilinear", align_corners=False
+                torch.sigmoid(out.mask_logits), size=mgt.shape[-2:], mode="bilinear", align_corners=False
             )
             pb = (mup > 0.5).float()
             gb = mgt.float()
             inter = (pb * gb).sum(dim=(1, 2, 3))
             union = ((pb + gb) > 0).float().sum(dim=(1, 2, 3))
             ious += (inter / union.clamp(min=1)).cpu().tolist()
-            type_hits += int((out[4].argmax(1).cpu() == tgt).sum())
-            ap_ = F.normalize(out[3], dim=1).cpu()
+            type_hits += int((out.motion_type_logits.argmax(1).cpu() == tgt).sum())
+            ap_ = F.normalize(out.motion_pred, dim=1).cpu()
             ag = F.normalize(agt, dim=1)
             cos = (ap_ * ag).sum(1).abs().clamp(max=1.0)
             axerrs += torch.rad2deg(torch.acos(cos)).tolist()

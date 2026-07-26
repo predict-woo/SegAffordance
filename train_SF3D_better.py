@@ -266,16 +266,13 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         ).to(self.device)
 
         with torch.no_grad():
-            (
-                mask_pred_logits,
-                point_pred_logits,
-                coords_hat,
-                motion_pred,
-                motion_type_logits,
-                _mu,
-                _log_var,
-                trajectory_pred,
-            ) = self(img, depth, tokenized_words, None, None, None)
+            outputs = self(img, depth, tokenized_words, None, None, None)
+        mask_pred_logits = outputs.mask_logits
+        point_pred_logits = outputs.point_logits
+        coords_hat = outputs.coords_hat
+        motion_pred = outputs.motion_pred
+        motion_type_logits = outputs.motion_type_logits
+        trajectory_pred = outputs.trajectory_pred
 
         mask_pred_prob = torch.sigmoid(mask_pred_logits)
         mask_pred_upsampled = F.interpolate(

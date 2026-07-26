@@ -15,13 +15,16 @@ from torch.utils.data import Dataset
 
 from config.opd_train import Config, LossParams, ModelParams, OptimizerParams
 from datasets.opdreal_datamodule import OPDRealDataModule
+from model.losses import build_geometric_loss
 from model.segmenter import CRIS
+from model.targets import StepTargets, unpack_batch
 from utils.tools import DiceBCELoss, MotionVAELoss, create_composite_visualization, make_gaussian_map
 
 torch.set_float32_matmul_precision("high")
 
 warnings.filterwarnings("ignore")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 
 # --- PyTorch Lightning Module for OPDReal --- #
 class OPDRealTrainingModule(pl.LightningModule):
@@ -54,6 +57,10 @@ class OPDRealTrainingModule(pl.LightningModule):
         self.vae_loss_fn = MotionVAELoss(beta=self.loss_params.vae_beta)
         self.motion_type_loss_fn = nn.CrossEntropyLoss(label_smoothing=0.1)
         self.trajectory_loss_fn = nn.MSELoss()
+        # "cross_gt" (default, historical) | "pred_pred" | "none".
+        # Each variant no-ops on batches lacking the targets it needs, so OPD
+        # runs are unaffected whichever is selected.
+        self.geometric_loss = build_geometric_loss(self.loss_params)
 
         if finetune_from_path:
             self.load_finetune_weights(finetune_from_path)
@@ -92,64 +99,23 @@ class OPDRealTrainingModule(pl.LightningModule):
         )
 
     def _common_step(self, batch, batch_idx, step_type="train"):
-        trajectory_gt = None
-        motion_origin_3d = None
-        if len(batch) == 13:  # SF3D with trajectory
-            (
-                img,
-                depth,
-                word_str_list,
-                mask_gt,
-                _bbox,
-                point_gt_norm,
-                motion_gt,
-                motion_type_gt,
-                _img_size,
-                _rgb_filename,
-                motion_origin_3d,
-                _camera_intrinsic,
-                trajectory_gt,
-            ) = batch
-        elif len(batch) > 10:  # Other SF3D case, no trajectory
-            (
-                img,
-                depth,
-                word_str_list,
-                mask_gt,
-                _bbox,
-                point_gt_norm,
-                motion_gt,
-                motion_type_gt,
-                _img_size,
-                *_,
-            ) = batch
-        else:  # OPDReal
-            (
-                img,
-                depth,
-                word_str_list,
-                mask_gt,
-                _bbox,
-                point_gt_norm,
-                motion_gt,
-                motion_type_gt,
-                _img_size,
-            ) = batch
+        img, depth, word_str_list, targets = unpack_batch(batch)
+        mask_gt = targets.mask
+        point_gt_norm = targets.point_norm
+        motion_gt = targets.motion
+        motion_type_gt = targets.motion_type
 
         tokenized_words = self.model.tokenize(
             list(word_str_list), self.model_params.word_len
         ).to(self.device)
 
-        (
-            mask_pred_logits,
-            point_pred_logits,
-            coords_hat,
-            motion_pred,
-            motion_type_logits,
-            mu,
-            log_var,
-            trajectory_pred,
-        ) = self(img, depth, tokenized_words, mask_gt, point_gt_norm, motion_gt)
+        outputs = self(img, depth, tokenized_words, mask_gt, point_gt_norm, motion_gt)
+        mask_pred_logits = outputs.mask_logits
+        point_pred_logits = outputs.point_logits
+        coords_hat = outputs.coords_hat
+        motion_pred = outputs.motion_pred
+        motion_type_logits = outputs.motion_type_logits
+        mu, log_var = outputs.mu, outputs.log_var
 
         H_map, W_map = mask_pred_logits.shape[-2:]
         mask_gt_float = mask_gt.float().to(mask_pred_logits.device)
@@ -191,16 +157,16 @@ class OPDRealTrainingModule(pl.LightningModule):
             + (self.loss_params.motion_type_weight * L_motion_type)
         )
 
-        if trajectory_gt is not None:
-            # Convert GT trajectory to relative coordinates (first point at origin)
-            trajectory_gt_device = trajectory_gt.to(trajectory_pred.device)
-            trajectory_gt_first = trajectory_gt_device[:, 0:1, :]  # (B, 1, 3)
-            trajectory_gt_relative = trajectory_gt_device - trajectory_gt_first  # (B, N, 3)
-            
-            # Model predicts relative trajectory, so compare directly
-            L_trajectory = self.trajectory_loss_fn(trajectory_pred, trajectory_gt_relative)
-            trajectory_weight = getattr(self.loss_params, "trajectory_weight", 1.0)
-            total_loss += trajectory_weight * L_trajectory
+        if targets.trajectory is not None:
+            # Convert GT trajectory to relative coordinates (first point at origin);
+            # the model predicts relative, so they compare directly.
+            trajectory_gt_device = targets.trajectory.to(outputs.trajectory_pred.device)
+            trajectory_gt_relative = trajectory_gt_device - trajectory_gt_device[:, 0:1, :]
+
+            L_trajectory = self.trajectory_loss_fn(
+                outputs.trajectory_pred, trajectory_gt_relative
+            )
+            total_loss = total_loss + self.loss_params.trajectory_weight * L_trajectory
             self.log(
                 f"{step_type}/L_trajectory",
                 L_trajectory,
@@ -209,52 +175,22 @@ class OPDRealTrainingModule(pl.LightningModule):
                 logger=True,
                 sync_dist=True,
             )
-            
-            # Add geometric consistency losses between trajectory and motion
-            # Note: For relative trajectory, motion_origin is also relative to trajectory start
-            if motion_origin_3d is not None:
-                motion_origin_3d_device = motion_origin_3d.to(trajectory_pred.device)
-                # Convert motion origin to relative coordinates (relative to trajectory first point)
-                motion_origin_3d_relative = motion_origin_3d_device - trajectory_gt_first.squeeze(1)  # (B, 3)
-                trajectory_gt_first_relative = torch.zeros_like(motion_origin_3d_relative)  # (B, 3) - at origin
-                
-                # Loss 1: pred vector <-> gt traj (motion_pred vs trajectory_gt)
-                L_geometric_pred_vector_gt_traj = self._geometric_consistency_loss(
-                    trajectory_pred=trajectory_gt_relative,
-                    motion_pred=motion_pred,
-                    motion_type_gt=motion_type_gt.to(trajectory_pred.device),
-                    motion_origin_3d=motion_origin_3d_relative,
-                    trajectory_gt_first=trajectory_gt_first_relative,
-                )
-                geometric_weight = getattr(self.loss_params, "geometric_weight", 1.0)
-                total_loss += geometric_weight * L_geometric_pred_vector_gt_traj
-                self.log(
-                    f"{step_type}/L_geometric_pred_vector_gt_traj",
-                    L_geometric_pred_vector_gt_traj,
-                    on_step=(step_type == "train"),
-                    on_epoch=True,
-                    logger=True,
-                    sync_dist=True,
-                )
-                
-                # Loss 2: pred traj <-> gt vector (trajectory_pred vs motion_gt)
-                L_geometric_pred_traj_gt_vector = self._geometric_consistency_loss(
-                    trajectory_pred=trajectory_pred,
-                    motion_pred=motion_gt.to(trajectory_pred.device),
-                    motion_type_gt=motion_type_gt.to(trajectory_pred.device),
-                    motion_origin_3d=motion_origin_3d_relative,
-                    trajectory_gt_first=trajectory_gt_first_relative,
-                )
-                trajectory_to_motion_weight = getattr(self.loss_params, "trajectory_to_motion_weight", 1.0)
-                total_loss += trajectory_to_motion_weight * L_geometric_pred_traj_gt_vector
-                self.log(
-                    f"{step_type}/L_geometric_pred_traj_gt_vector",
-                    L_geometric_pred_traj_gt_vector,
-                    on_step=(step_type == "train"),
-                    on_epoch=True,
-                    logger=True,
-                    sync_dist=True,
-                )
+
+        # Geometric consistency between the motion-axis and trajectory heads.
+        # Which scheme runs is set by loss_params.geometric_loss; every variant
+        # no-ops when the batch lacks the targets it needs, so this is safe to
+        # call unconditionally.
+        geometric_total, geometric_terms = self.geometric_loss(outputs, targets)
+        total_loss = total_loss + geometric_total
+        for term_name, term_value in geometric_terms.items():
+            self.log(
+                f"{step_type}/{term_name}",
+                term_value,
+                on_step=(step_type == "train"),
+                on_epoch=True,
+                logger=True,
+                sync_dist=True,
+            )
 
         self.log(
             f"{step_type}/loss_total",
@@ -423,16 +359,13 @@ class OPDRealTrainingModule(pl.LightningModule):
         ).to(self.device)
 
         with torch.no_grad():
-            (
-                mask_pred_logits,
-                point_pred_logits,
-                coords_hat,
-                motion_pred,
-                motion_type_logits,
-                _,
-                _,
-                trajectory_pred,
-            ) = self(img, depth, tokenized_words, mask_gt, point_gt_norm, motion_gt)
+            outputs = self(img, depth, tokenized_words, mask_gt, point_gt_norm, motion_gt)
+        mask_pred_logits = outputs.mask_logits
+        point_pred_logits = outputs.point_logits
+        coords_hat = outputs.coords_hat
+        motion_pred = outputs.motion_pred
+        motion_type_logits = outputs.motion_type_logits
+        trajectory_pred = outputs.trajectory_pred
 
         try:
             log_data = {}
@@ -518,16 +451,12 @@ class OPDRealTrainingModule(pl.LightningModule):
         ).to(self.device)
 
         with torch.no_grad():
-            (
-                mask_pred_logits,
-                point_pred_logits,
-                coords_hat,
-                motion_pred,
-                motion_type_logits,
-                _mu,
-                _log_var,
-                _trajectory_pred,
-            ) = self(img, depth, tokenized_words, None, None, None)
+            outputs = self(img, depth, tokenized_words, None, None, None)
+        mask_pred_logits = outputs.mask_logits
+        point_pred_logits = outputs.point_logits
+        coords_hat = outputs.coords_hat
+        motion_pred = outputs.motion_pred
+        motion_type_logits = outputs.motion_type_logits
 
         mask_pred_prob = torch.sigmoid(mask_pred_logits)
         mask_pred_upsampled = F.interpolate(
@@ -776,78 +705,6 @@ class OPDRealTrainingModule(pl.LightningModule):
         intersection = torch.logical_and(mask_pred_bool, mask_gt_bool).sum()
         union = torch.logical_or(mask_pred_bool, mask_gt_bool).sum()
         return (intersection.float() + 1e-7) / (union.float() + 1e-7)
-
-    @staticmethod
-    def _geometric_consistency_loss(
-        trajectory_pred: torch.Tensor,  # (B, N, 3)
-        motion_pred: torch.Tensor,  # (B, 3)
-        motion_type_gt: torch.Tensor,  # (B,)
-        motion_origin_3d: torch.Tensor,  # (B, 3)
-        trajectory_gt_first: torch.Tensor,  # (B, 3) - first point of GT trajectory
-    ) -> torch.Tensor:
-        """
-        Compute geometric consistency loss between predicted trajectory and motion vector.
-        
-        For translation (type=0): Loss measures how well trajectory points align with a line
-        For rotation (type=1): Loss measures how well trajectory points lie on a circle
-        
-        Returns: scalar loss value averaged over batch
-        """
-        B, N, _ = trajectory_pred.shape
-        device = trajectory_pred.device
-        
-        # Normalize motion vector to unit length
-        motion_pred_norm = F.normalize(motion_pred, p=2, dim=1, eps=1e-8)  # (B, 3)
-        
-        total_loss = torch.zeros(B, device=device)
-        
-        for b in range(B):
-            if motion_type_gt[b] == 0:  # Translation - line loss
-                # L_line = (1/N) Σ ||(Q_i - P_0) × v||²
-                P_0 = motion_origin_3d[b]  # (3,)
-                v = motion_pred_norm[b]  # (3,)
-                Q = trajectory_pred[b]  # (N, 3)
-                
-                # Compute cross product: (Q_i - P_0) × v
-                Q_minus_P0 = Q - P_0  # (N, 3)
-                cross_product = torch.cross(Q_minus_P0, v.unsqueeze(0).expand(N, -1))  # (N, 3)
-                squared_distances = torch.sum(cross_product ** 2, dim=1)  # (N,)
-                line_loss = squared_distances.mean()
-                
-                total_loss[b] = line_loss
-                
-            elif motion_type_gt[b] == 1:  # Rotation - circle loss
-                # L_circle = (1/N) Σ [((Q_i - C) · n)² + (||proj_perp(Q_i - C)|| - r)²]
-                C = motion_origin_3d[b]  # (3,) - circle center
-                n = motion_pred_norm[b]  # (3,) - plane normal (rotation axis)
-                Q = trajectory_pred[b]  # (N, 3)
-                
-                # Compute radius from first GT trajectory point
-                Q_first_gt = trajectory_gt_first[b]  # (3,)
-                Q_first_minus_C = Q_first_gt - C  # (3,)
-                # Project onto plane perpendicular to n: Q - C - ((Q - C) · n)n
-                proj_length = torch.dot(Q_first_minus_C, n)
-                proj_perp = Q_first_minus_C - proj_length * n  # (3,)
-                r = torch.norm(proj_perp)  # scalar - radius
-                
-                # Compute loss for each predicted point
-                Q_minus_C = Q - C  # (N, 3)
-                
-                # First term: ((Q_i - C) · n)² - ensures points lie in plane perpendicular to n
-                dot_n = torch.sum(Q_minus_C * n.unsqueeze(0).expand(N, -1), dim=1)  # (N,)
-                plane_dist_sq = dot_n ** 2  # (N,)
-                
-                # Second term: (||proj_perp(Q_i - C)|| - r)² - ensures points lie on circle
-                proj_lengths = torch.sum(Q_minus_C * n.unsqueeze(0).expand(N, -1), dim=1)  # (N,)
-                proj_perp_vecs = Q_minus_C - proj_lengths.unsqueeze(1) * n.unsqueeze(0).expand(N, -1)  # (N, 3)
-                circle_dists = torch.norm(proj_perp_vecs, dim=1)  # (N,)
-                circle_error_sq = (circle_dists - r) ** 2  # (N,)
-                
-                circle_loss = (plane_dist_sq + circle_error_sq).mean()
-                
-                total_loss[b] = circle_loss
-        
-        return total_loss.mean()
 
     @staticmethod
     def _axis_error_deg(pred_axis: torch.Tensor, gt_axis: torch.Tensor) -> torch.Tensor:
