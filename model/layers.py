@@ -303,6 +303,65 @@ class TrajectoryMLP(nn.Module):
         return trajectory_pred
 
 
+class Trajectory2DMLP(nn.Module):
+    """Image-plane track, normalised to [0, 1], relative to its own first point.
+
+    Mirrors TrajectoryMLP's shape and convention but outputs 2D. It is a
+    SEPARATE head rather than a reinterpretation of the 3D one because the two
+    predict different physical quantities: this is the hand/contact path mined
+    from video, while TrajectoryMLP is the functional element's swept path.
+    Sharing one head would ask it to learn one curve in 2D pretraining and a
+    different curve in 3D finetuning.
+    """
+
+    def __init__(self, input_dim: int, hidden_dim: int = 256, num_points: int = 20):
+        super().__init__()
+        self.num_points = num_points
+        self.backbone = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(True),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(True),
+        )
+        self.trajectory_head = nn.Linear(hidden_dim, num_points * 2)
+
+    def forward(self, condition: torch.Tensor):
+        h = self.backbone(condition)
+        out = self.trajectory_head(h)
+        return out.view(out.size(0), self.num_points, 2)
+
+
+class OriginDepthHead(nn.Module):
+    """Metric depth (metres) of the 3D joint origin.
+
+    Combined with ``coords_hat`` and the intrinsics this yields the 3D origin
+    the model otherwise never predicts — ``motion_origin_3d`` has always been
+    ground-truth-only, which is why the cross-GT geometric loss teacher-forces
+    it.
+
+    Predicts an ABSOLUTE depth rather than an offset against the input depth
+    map, because the depth maps are not on a common scale: SF3D converts to
+    metres (``datasets/scenefun3d.py:133``) while OPD passes the raw array
+    through (``datasets/opdreal.py:211``). Absolute metres is supervised
+    unambiguously by ``motion_origin_3d[2]``.
+
+    Softplus keeps the origin in front of the camera; a negative depth would
+    make the projection meaningless.
+    """
+
+    def __init__(self, input_dim: int, hidden_dim: int = 256, min_depth: float = 0.1):
+        super().__init__()
+        self.min_depth = min_depth
+        self.mlp = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(True),
+            nn.Linear(hidden_dim, 1),
+        )
+
+    def forward(self, condition: torch.Tensor):
+        return F.softplus(self.mlp(condition).squeeze(-1)) + self.min_depth
+
+
 class TransformerDecoder(nn.Module):
     def __init__(
         self, num_layers, d_model, nhead, dim_ffn, dropout, return_intermediate=False

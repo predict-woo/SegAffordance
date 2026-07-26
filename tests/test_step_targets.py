@@ -79,3 +79,42 @@ def test_bbox_is_dropped_rather_than_shifting_later_fields():
 def test_targets_default_to_all_none():
     empty = StepTargets()
     assert all(getattr(empty, f) is None for f in vars(empty))
+
+
+# --- dict batches (2D pretraining) --------------------------------------
+# A positional tuple encodes its dataset in its length, which does not extend
+# to a new 2D source without guessing a layout. Dict batches are named, so a
+# 2D datamodule can supply exactly the fields it has.
+
+DICT_BATCH = {
+    "img": "img", "depth": "depth", "word": "words", "mask": "mask",
+    "point_norm": "point", "motion": "motion", "motion_type": "motion_type",
+    "img_size": "img_size", "trajectory_2d": "track2d",
+    "anchor_depth": "z0", "camera_intrinsic": "K",
+}
+
+
+def test_dict_batch_maps_named_fields():
+    img, depth, words, targets = unpack_batch(DICT_BATCH)
+    assert (img, depth, words) == ("img", "depth", "words")
+    assert targets.trajectory_2d == "track2d"
+    assert targets.anchor_depth == "z0"
+    assert targets.camera_intrinsic == "K"
+
+
+def test_dict_batch_leaves_absent_fields_none():
+    """A 2D source has no element sweep and no 3D motion origin. Those must be
+    None, never zeros — a zero-filled trajectory would train the 3D head to
+    predict zeros instead of leaving it untouched."""
+    _, _, _, targets = unpack_batch(DICT_BATCH)
+    assert targets.trajectory is None
+    assert targets.motion_origin_3d is None
+
+
+def test_dict_batch_tolerates_a_minimal_2d_source():
+    minimal = {"img": "img", "depth": "depth", "word": "words",
+               "trajectory_2d": "track2d", "camera_intrinsic": "K",
+               "anchor_depth": "z0", "img_size": "img_size"}
+    _, _, _, targets = unpack_batch(minimal)
+    assert targets.trajectory_2d == "track2d"
+    assert targets.mask is None and targets.motion is None

@@ -157,7 +157,26 @@ class OPDRealTrainingModule(pl.LightningModule):
             + (self.loss_params.motion_type_weight * L_motion_type)
         )
 
-        if targets.trajectory is not None:
+        # 2D hand/contact track (2D pretraining). Made relative to its own
+        # first point, matching how the head predicts and how the 3D
+        # trajectory is handled below.
+        if targets.trajectory_2d is not None and outputs.trajectory_2d_pred is not None:
+            track_gt = targets.trajectory_2d.to(outputs.trajectory_2d_pred.device)
+            track_gt_relative = track_gt - track_gt[:, 0:1, :]
+            L_trajectory_2d = self.trajectory_loss_fn(
+                outputs.trajectory_2d_pred, track_gt_relative
+            )
+            total_loss = total_loss + self.loss_params.trajectory_2d_weight * L_trajectory_2d
+            self.log(
+                f"{step_type}/L_trajectory_2d",
+                L_trajectory_2d,
+                on_step=(step_type == "train"),
+                on_epoch=True,
+                logger=True,
+                sync_dist=True,
+            )
+
+        if targets.trajectory is not None and outputs.trajectory_pred is not None:
             # Convert GT trajectory to relative coordinates (first point at origin);
             # the model predicts relative, so they compare directly.
             trajectory_gt_device = targets.trajectory.to(outputs.trajectory_pred.device)

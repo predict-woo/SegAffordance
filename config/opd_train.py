@@ -21,6 +21,14 @@ class ModelParams:
     use_depth: bool = True
     # Optional CVAE usage for motion prediction (enabled by default)
     use_cvae: bool = True
+    # 3D element-sweep trajectory head. Disable for 2D pretraining, where no
+    # element-sweep ground truth exists and the head would get no gradient.
+    use_trajectory_head: bool = True
+    # 2D hand/contact-track head. Enable for 2D pretraining.
+    use_2d_trajectory_head: bool = False
+    # Predict metric depth of the 3D joint origin, giving a full
+    # {type, axis, origin} articulation. Required by geometric_loss="projected".
+    predict_origin_depth: bool = False
     # Which vision+text encoder to use: "clip_rn50" | "siglip2" | "dinov3"
     backbone: str = "clip_rn50"
     # HF id / hub entry for the non-CLIP backbones
@@ -59,6 +67,8 @@ class LossParams:
     # Read only by the "pred_pred" variant. Kept well under motion_type_weight
     # so the type head stays anchored by its own cross-entropy.
     pred_pred_weight: float = 0.1
+    # 2D track supervision (2D pretraining).
+    trajectory_2d_weight: float = 1.0
     
 @dataclass
 class OptimizerParams:

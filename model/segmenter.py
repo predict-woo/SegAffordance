@@ -15,6 +15,8 @@ from .layers import (
     MotionMLP,
     DepthEncoder,
     TrajectoryMLP,
+    Trajectory2DMLP,
+    OriginDepthHead,
 )
 
 
@@ -128,11 +130,40 @@ class CRIS(nn.Module):
                 num_motion_types=model_params.num_motion_types,
             )
 
-        self.trajectory_predictor = TrajectoryMLP(
-            input_dim=vae_condition_dim,
-            hidden_dim=model_params.vae_hidden_dim,  # reuse this param
-            num_points=20,
-        )
+        # 3D element-sweep head. Off during 2D pretraining: video data has no
+        # element-sweep GT, so it would receive no gradient at all. It is a
+        # leaf — nothing consumes its output and vae_condition_dim is computed
+        # independently — so removing it changes nothing upstream.
+        self.use_trajectory_head = getattr(model_params, "use_trajectory_head", True)
+        if self.use_trajectory_head:
+            self.trajectory_predictor = TrajectoryMLP(
+                input_dim=vae_condition_dim,
+                hidden_dim=model_params.vae_hidden_dim,  # reuse this param
+                num_points=20,
+            )
+        else:
+            self.trajectory_predictor = None
+
+        # 2D hand/contact-track head, for pretraining on mined video.
+        self.use_2d_trajectory_head = getattr(model_params, "use_2d_trajectory_head", False)
+        if self.use_2d_trajectory_head:
+            self.trajectory_2d_predictor = Trajectory2DMLP(
+                input_dim=vae_condition_dim,
+                hidden_dim=model_params.vae_hidden_dim,
+                num_points=20,
+            )
+        else:
+            self.trajectory_2d_predictor = None
+
+        # Metric depth of the joint origin, completing {type, axis, origin}.
+        self.predict_origin_depth = getattr(model_params, "predict_origin_depth", False)
+        if self.predict_origin_depth:
+            self.origin_depth_head = OriginDepthHead(
+                input_dim=vae_condition_dim,
+                hidden_dim=model_params.vae_hidden_dim,
+            )
+        else:
+            self.origin_depth_head = None
 
     def tokenize(self, texts, context_length):
         """Tokenize with whatever tokenizer the active backbone was trained on."""
@@ -221,7 +252,21 @@ class CRIS(nn.Module):
         # The VAE is conditioned on object features, global features, and the interaction point.
         vae_condition = torch.cat([vae_encoder_features, coords_hat], dim=1)
 
-        trajectory_pred = self.trajectory_predictor(vae_condition)
+        trajectory_pred = (
+            self.trajectory_predictor(vae_condition)
+            if self.trajectory_predictor is not None
+            else None
+        )
+        trajectory_2d_pred = (
+            self.trajectory_2d_predictor(vae_condition)
+            if self.trajectory_2d_predictor is not None
+            else None
+        )
+        origin_depth = (
+            self.origin_depth_head(vae_condition)
+            if self.origin_depth_head is not None
+            else None
+        )
 
         # motion_gt can be None during pure inference, but for train/val it's provided.
         mu = None
@@ -247,6 +292,8 @@ class CRIS(nn.Module):
             motion_pred=motion_pred,
             motion_type_logits=motion_type_logits,
             trajectory_pred=trajectory_pred,
+            trajectory_2d_pred=trajectory_2d_pred,
+            origin_depth=origin_depth,
             mu=mu,
             log_var=log_var,
         )
