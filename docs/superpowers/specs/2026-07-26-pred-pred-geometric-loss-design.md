@@ -326,6 +326,11 @@ dataset or GPU:
 - `tools/smoke_backbone.py` runs clean after the `ModelOutputs` change.
 - One short OPD run confirms no behavioural change on the default path (OPD
   reaches no geometric loss either before or after).
+- `tools/smoke_losses.py` drives `_common_step` on the real model across all
+  four combinations of batch shape and variant, asserting the exact set of
+  logged geometric terms in each — which is what catches a variant silently
+  no-opping or leaking terms into the wrong dataset. Needs a GPU and
+  `pretrain/RN50.pt`, hence `tools/` rather than `tests/`.
 
 ## Non-goals
 
