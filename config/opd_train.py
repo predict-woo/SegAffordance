@@ -21,6 +21,18 @@ class ModelParams:
     use_depth: bool = True
     # Optional CVAE usage for motion prediction (enabled by default)
     use_cvae: bool = True
+    # Which vision+text encoder to use: "clip_rn50" | "siglip2" | "dinov3"
+    backbone: str = "clip_rn50"
+    # HF id / hub entry for the non-CLIP backbones
+    backbone_id: str = ""
+    # Native input resolution the backbone checkpoint expects
+    backbone_image_size: int = 256
+    # DINOv3 only: where the text tower comes from ("dinotxt" | "clip")
+    text_source: str = "dinotxt"
+    # DINOv3 + dino.txt only: gated .pth files and a local dinov3 checkout
+    dinotxt_weights: str = ""
+    dinov3_backbone_weights: str = ""
+    dinov3_repo_dir: str = ""
 
 
 @dataclass

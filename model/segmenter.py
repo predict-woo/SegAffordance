@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-from model.clip import build_model
+from model.backbones import build_backbone
 
 from .layers import (
     FPN,
@@ -37,11 +37,10 @@ class CRIS(nn.Module):
     def __init__(self, model_params):
         super().__init__()
         ## Vision & Text Encoder
-        clip_model = torch.jit.load(model_params.clip_pretrain, map_location="cpu").eval()  # type: ignore
-
         # encode_image (B, 3, H, W) -> v2: (B, fpn_in[0], H/8, W/8), v3: (B, fpn_in[1], H/16, W/16), v4: (B, fpn_in[2], H/32, W/32)
-        # encode_text (B, L: word_len) -> word_features: (B, L, D_text: transformer_width), state: (B, fpn_in[2])
-        self.backbone = build_model(clip_model.state_dict(), model_params.word_len).float()
+        # encode_text (B, L: word_len) -> word_features: (B, L, backbone.word_dim), state: (B, backbone.state_dim)
+        self.backbone = build_backbone(model_params, list(model_params.fpn_in))
+        state_dim = self.backbone.state_dim
 
         # Optional depth usage
         self.use_depth = getattr(model_params, "use_depth", True)
@@ -67,7 +66,21 @@ class CRIS(nn.Module):
                 model_params.fpn_in[2],
             ]
         # forward: v2, v3, v4 -> fq: (B, fpn_out[1], H/16, W/16)
-        self.neck = FPN(in_channels=fpn_in_channels, out_channels=model_params.fpn_out)
+        self.neck = FPN(
+            in_channels=fpn_in_channels,
+            out_channels=model_params.fpn_out,
+            text_dim=state_dim,
+        )
+
+        ## Text token projection
+        # The decoder cross-attends visual queries (d_model = fpn_out[1]) against
+        # word tokens. CLIP RN50's 512-d word features happen to match; wider
+        # text towers (SigLIP 2, dino.txt) need projecting down.
+        d_model = model_params.fpn_out[1]
+        if self.backbone.word_dim != d_model:
+            self.word_proj = nn.Linear(self.backbone.word_dim, d_model)
+        else:
+            self.word_proj = None
 
         ## Decoder
         # fq: (B, fpn_out[1], H/16, W/16), word: (B, L, D_text: transformer_width), pad_mask: (B, L) -> fq: (B, fpn_out[1], H/16, W/16)
@@ -83,7 +96,7 @@ class CRIS(nn.Module):
         ## Projector
         # fq: (B, fpn_out[1], H/16, W/16), state: (B, fpn_in[2]) -> maps: (B, 2, H/4, W/4)
         self.proj = Projector_Mult(
-            model_params.fpn_in[2],
+            state_dim,
             model_params.fpn_out[1] // 2,
             3,
             out_channels=2,
@@ -91,7 +104,7 @@ class CRIS(nn.Module):
         )
 
         # motion_features + global_vis_features + global_text_features
-        vae_feature_dim = model_params.fpn_out[1] + model_params.fpn_in[2] + model_params.fpn_in[2]
+        vae_feature_dim = model_params.fpn_out[1] + model_params.fpn_in[2] + state_dim
         # the above + coordinates
         vae_condition_dim = vae_feature_dim + 2
 
@@ -120,6 +133,10 @@ class CRIS(nn.Module):
             num_points=20,
         )
 
+    def tokenize(self, texts, context_length):
+        """Tokenize with whatever tokenizer the active backbone was trained on."""
+        return self.backbone.tokenize(texts, context_length)
+
     def forward(self, img, depth, word, mask, interaction_point, motion_gt=None):
         """
         img: (B, 3, H, W)
@@ -131,15 +148,15 @@ class CRIS(nn.Module):
         """
         # padding mask used in decoder
 
-        pad_mask = torch.zeros_like(word).masked_fill_(word == 0, 1).bool()
+        pad_mask = self.backbone.pad_mask(word)
 
         # vis: x2, x3, x4
-        # word: b, length, 1024
-        # state: b, 1024
+        # word: b, length, word_dim
+        # state: b, state_dim
         vis = self.backbone.encode_image(img)  # v2, v3, v4
-        word, state = self.backbone.encode_text(
-            word
-        )  # (B, L, D_text: transformer_width) (B, fpn_in[2])
+        word, state = self.backbone.encode_text(word)
+        if self.word_proj is not None:
+            word = self.word_proj(word)
 
         # --- Depth Fusion (optional) ---
         if self.use_depth:

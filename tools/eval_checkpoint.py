@@ -27,7 +27,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.opd_train import ModelParams
 from datasets.opdreal import OPDRealDataset, get_default_transforms
 from model.segmenter import CRIS
-from utils.dataset import tokenize
 
 
 def pick_best_checkpoint(path):
@@ -41,6 +40,18 @@ def pick_best_checkpoint(path):
     def valloss(p):
         m = re.search(r"valloss([0-9.]+?)\.ckpt", p)
         return float(m.group(1)) if m else float("inf")
+
+    # Not every experiment encodes the metric in the filename (e.g.
+    # 20260721_opdreal_frozenclip wrote plain best-epochNN.ckpt). Silently
+    # falling back to glob order there picks an arbitrary checkpoint and
+    # quietly invalidates the comparison — refuse instead.
+    if all(valloss(p) == float("inf") for p in cands):
+        raise SystemExit(
+            f"cannot rank checkpoints in {path}: no filename encodes valloss.\n"
+            f"  candidates: {sorted(os.path.basename(c) for c in cands)}\n"
+            f"  pass --checkpoint <explicit .ckpt> (check the run's notes.md for "
+            f"which epoch was best)"
+        )
 
     return min(cands, key=valloss)
 
@@ -93,7 +104,7 @@ def main():
             chunk = samples[s : s + args.batch]
             img = torch.stack([c[0] for c in chunk]).to(device)
             dep = torch.stack([c[1] for c in chunk]).to(device)
-            tok = tokenize([c[2] for c in chunk], mp.word_len, truncate=True).to(device)
+            tok = model.tokenize([c[2] for c in chunk], mp.word_len).to(device)
             mgt = torch.stack([c[3] for c in chunk]).to(device)
             tgt = torch.stack([c[7] for c in chunk])
             agt = torch.stack([c[6] for c in chunk])

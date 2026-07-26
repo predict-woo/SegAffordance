@@ -1,0 +1,10 @@
+{
+  "checkpoint": "experiments/20260726_opdreal_dinov3l/checkpoints/best-epoch25-valloss0.4030.ckpt",
+  "split": "valid",
+  "num": 1000,
+  "seed": 0,
+  "mIoU": 0.6026,
+  "det_at_0.5": 0.713,
+  "type_acc": 0.982,
+  "axis_err_deg": 10.36
+}

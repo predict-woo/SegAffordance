@@ -18,5 +18,22 @@ Eval columns are on 300 fixed OPDMulti-val samples (seed 0) unless noted;
 | [20260721_opdmulti_tune_lr2e6_wd1e3](20260721_opdmulti_tune_lr2e6_wd1e3/) | OPDMulti | lr 2e-6 + wd 1e-3 | 0.4707 (ep5) | 0.599 | 71.3% | 96.7% | 16.6 | wd: no effect |
 | [20260721_opdmulti_tune_lr2e6_pdrop25](20260721_opdmulti_tune_lr2e6_pdrop25/) | OPDMulti | lr 2e-6 + proj_dropout 0.25 | 0.4697 (ep5) | 0.598 | 71.3% | 96.7% | 16.5 | dropout: no effect |
 
+| [20260726_opdreal_siglip2l](20260726_opdreal_siglip2l/) | OPDReal | **SigLIP 2 Large** backbone, frozen, else = frozenclip | 0.4087 (ep17) | 0.579† | 68.4%† | 98.2%† | 12.5† | beats frozen CLIP +1.8pt det; ties unfrozen CLIP |
+| [20260726_opdreal_dinov3l](20260726_opdreal_dinov3l/) | OPDReal | **DINOv3 ViT-L/16 + dino.txt** backbone, frozen, else = frozenclip | **0.4030** (ep25) | **0.603**† | **71.3%**† | 98.2%† | **10.4**† | **best backbone tested** — beats fine-tuned CLIP on every metric while frozen; likely under-trained at 30 ep |
+
 \* OPDReal numbers are on 24 OPDReal-val samples (its own val set), not the
 300-sample OPDMulti eval.
+
+† Backbone-comparison rows (2026-07-26) are on **1000** fixed OPDReal-*valid*
+samples, seed 0, via `tools/eval_checkpoint.py` — not comparable to the
+24-sample `*` rows above. Re-measured baselines on that same draw:
+CLIP RN50 unfrozen (20260721_opdreal_base, ep15) mIoU 0.578 / det 67.9% /
+type 98.2% / axis 11.9°; CLIP RN50 frozen (20260721_opdreal_frozenclip, ep11)
+mIoU 0.566 / det 66.6% / type 98.1% / axis 11.5°. Raw JSON in
+`experiments/eval_results/`.
+
+‡ All rows select the checkpoint by **best val loss**, never by det@0.5 —
+det is a reporting metric, not a selection one. Note the two disagree: frozen
+CLIP ep26 reaches det 69.3% vs ep11's 66.6% despite worse val loss, and
+SigLIP 2 ep24 reaches 69.2% vs ep17's 68.4%. Treat cross-model det gaps under
+~1.5pt as noise.

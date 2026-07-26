@@ -13,7 +13,6 @@ from config.opd_train import Config, LossParams, ModelParams, OptimizerParams
 from datasets.scenefun3d_datamodule import SF3DDataModule
 from model.segmenter import CRIS
 from train_OPDReal_better import OPDRealTrainingModule
-from utils.dataset import tokenize
 from utils.tools import create_composite_visualization, make_gaussian_map
 import torch.nn as nn
 
@@ -262,8 +261,8 @@ class SF3DTrainingModule(OPDRealTrainingModule):
             ) = batch
             motion_origin_3d_gt, intrinsic_matrix = None, None
 
-        tokenized_words = tokenize(
-            list(word_str_list), self.model_params.word_len, truncate=True
+        tokenized_words = self.model.tokenize(
+            list(word_str_list), self.model_params.word_len
         ).to(self.device)
 
         with torch.no_grad():

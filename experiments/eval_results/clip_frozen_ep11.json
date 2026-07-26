@@ -1,0 +1,10 @@
+{
+  "checkpoint": "experiments/20260721_opdreal_frozenclip/checkpoints/best-epoch11.ckpt",
+  "split": "valid",
+  "num": 1000,
+  "seed": 0,
+  "mIoU": 0.5658,
+  "det_at_0.5": 0.666,
+  "type_acc": 0.981,
+  "axis_err_deg": 11.48
+}

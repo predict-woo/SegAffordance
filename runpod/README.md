@@ -105,29 +105,49 @@ is sync-ignored (machine-specific), so the pod's `git status` can show phantom
 staged changes — `git reset -q` on the pod clears them. `core.fileMode false`
 is set in the clone because mutagen does not propagate executable bits.
 
-## Training pod (A100 80GB, ~$1.39–1.49/hr)
+## Training pods — one per experiment, in parallel (RTX PRO 6000, ~$1.89–1.99/hr)
 
-Launch only when data is on the volume and the code smoke-tests on the dev pod:
+**Never train on the dev pod.** It is for interactive work and smoke tests. A
+training run squats the GPU for hours and blocks exactly the smoke tests you
+need in order to launch the next run (learned the hard way 2026-07-26).
+
+Launch only once the data is on the volume and the code smoke-tests on the dev
+pod. Use `runpod/train_pod.sh`, which encodes the whole cycle:
 
 ```bash
-runpodctl pod create \
-  --name segaffordance-train-a100 \
-  --cloud-type SECURE \
-  --gpu-id "NVIDIA A100 80GB PCIe" \
-  --image runpod/pytorch:1.0.3-cu1281-torch291-ubuntu2404 \
-  --network-volume-id bckt1t9uuf \
-  --container-disk-in-gb 20 \
-  --ports "22/tcp"
+bash runpod/train_pod.sh create train-siglip2                 # create + ssh alias
+bash runpod/train_pod.sh launch train-siglip2 <exp_id> <config.yaml> [pythonpath]
+bash runpod/train_pod.sh status train-siglip2 <exp_id>        # proc + GPU + best ckpts
+bash runpod/train_pod.sh delete train-siglip2                 # DO THIS WHEN DONE
 ```
 
-(`"NVIDIA A100-SXM4-80GB"` for the SXM variant; `"NVIDIA B200"` when it's in
-stock and you want a serious speedup.) Availability fluctuates — if creation
-fails with "no instances available", retry later; the error is per-attempt,
-nothing gets created on failure.
+**Run N experiments on N pods in parallel, not sequentially on one.** The cost
+is identical — you pay the same GPU-hours either way — but wall time drops to
+1/N and each run gets a clean GPU. Delete each pod the moment *its* run
+finishes rather than waiting for the slowest; otherwise the fast one idles at
+full price.
 
-**Delete the training pod immediately after the run**
-(`runpodctl pod delete <pod-id>`). Checkpoint often enough that losing the pod
-never costs more than an hour.
+Practical notes:
+
+- **GPU choice.** No A100/H100 in EU-RO-1 — every attempt has failed on stock.
+  RTX PRO 6000 Blackwell (96GB) is the workhorse. It has **two SKUs**, Server
+  Edition (~$1.99/hr) and Workstation Edition (~$1.89/hr), with independent
+  stock; `train_pod.sh create` tries both. Failed creates make nothing, so
+  retrying is always safe.
+- **No bootstrap needed.** `/workspace/venv`, the code, datasets and cached
+  model weights all come from the shared network volume. A `pip install` done
+  once on any pod (into `/workspace/venv`) is visible to every later pod — so
+  install new deps on the dev pod, then training pods just work.
+- **Training pods have no mutagen.** They see code through the volume. If the
+  dev pod is off (so the mirror is down), `scp` straight to a training pod's
+  `/workspace/SegAffordance/`; identical content reconciles cleanly later.
+- **Observed throughput** (OPDReal, 30.5k train, batch 64, 256², frozen
+  backbone, RTX PRO 6000): CLIP RN50 ≈ 1.5 min/epoch, SigLIP 2 Large
+  ≈ 3 min/epoch, DINOv3 ViT-L + dino.txt ≈ 6 min/epoch. Budget ~30 epochs.
+
+**Delete every training pod immediately after its run**
+(`train_pod.sh delete <name>`, or `runpodctl pod delete <pod-id>`). Checkpoint
+often enough that losing a pod never costs more than an hour.
 
 ## Connect + bootstrap
 

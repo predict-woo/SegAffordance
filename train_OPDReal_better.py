@@ -16,7 +16,6 @@ from torch.utils.data import Dataset
 from config.opd_train import Config, LossParams, ModelParams, OptimizerParams
 from datasets.opdreal_datamodule import OPDRealDataModule
 from model.segmenter import CRIS
-from utils.dataset import tokenize
 from utils.tools import DiceBCELoss, MotionVAELoss, create_composite_visualization, make_gaussian_map
 
 torch.set_float32_matmul_precision("high")
@@ -137,8 +136,8 @@ class OPDRealTrainingModule(pl.LightningModule):
                 _img_size,
             ) = batch
 
-        tokenized_words = tokenize(
-            list(word_str_list), self.model_params.word_len, truncate=True
+        tokenized_words = self.model.tokenize(
+            list(word_str_list), self.model_params.word_len
         ).to(self.device)
 
         (
@@ -350,17 +349,31 @@ class OPDRealTrainingModule(pl.LightningModule):
         self._collect_vis_samples_from_batch(batch)
         return loss
 
+    def _frozen_modules(self):
+        """The pretrained encoders only.
+
+        For a ViT backbone the pyramid adapter lives inside self.model.backbone
+        too, but it is randomly initialised and must always train — freezing it
+        would leave the neck reading noise.
+        """
+        backbone = self.model.backbone
+        if hasattr(backbone, "pretrained_modules"):
+            return backbone.pretrained_modules()
+        return [backbone]
+
     def _apply_backbone_freeze(self):
         if self.freeze_backbone:
-            print("❄️ Freezing CLIP backbone (visual + text encoders).")
-            for param in self.model.backbone.parameters():
-                param.requires_grad = False
+            print("❄️ Freezing pretrained backbone towers (visual + text encoders).")
+            for module in self._frozen_modules():
+                for param in module.parameters():
+                    param.requires_grad = False
 
     def on_train_epoch_start(self):
-        # Keep frozen CLIP truly frozen: eval mode stops BatchNorm running-stat
+        # Keep a frozen backbone truly frozen: eval mode stops BatchNorm/dropout
         # updates that requires_grad=False alone would not prevent.
         if self.freeze_backbone:
-            self.model.backbone.eval()
+            for module in self._frozen_modules():
+                module.eval()
 
     def configure_optimizers(self):
         self._apply_backbone_freeze()
@@ -405,8 +418,8 @@ class OPDRealTrainingModule(pl.LightningModule):
         point_gt_norm = torch.stack(point_gt_norm_list).to(self.device)
         motion_gt = torch.stack(motion_gt_list).to(self.device)
 
-        tokenized_words = tokenize(
-            list(word_str_list), self.model_params.word_len, truncate=True
+        tokenized_words = self.model.tokenize(
+            list(word_str_list), self.model_params.word_len
         ).to(self.device)
 
         with torch.no_grad():
@@ -500,8 +513,8 @@ class OPDRealTrainingModule(pl.LightningModule):
         else:
             intrinsic_matrix, motion_origin_3d_gt = None, None
 
-        tokenized_words = tokenize(
-            list(word_str_list), self.model_params.word_len, truncate=True
+        tokenized_words = self.model.tokenize(
+            list(word_str_list), self.model_params.word_len
         ).to(self.device)
 
         with torch.no_grad():

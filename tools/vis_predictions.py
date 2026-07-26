@@ -28,7 +28,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.opd_train import ModelParams
 from datasets.opdreal import OPDRealDataset, get_default_transforms
 from model.segmenter import CRIS
-from utils.dataset import tokenize
 
 MEAN = np.array([0.485, 0.456, 0.406])
 STD = np.array([0.229, 0.224, 0.225])
@@ -120,7 +119,7 @@ def main():
     for rank, idx in enumerate(sorted(indices.tolist())):
         item = ds[idx]
         (img, depth, desc, mask_gt, _bbox, point_gt, motion_gt, mtype_gt, _size) = item[:9]
-        tok = tokenize([desc], mp.word_len, truncate=True).to(device)
+        tok = model.tokenize([desc], mp.word_len).to(device)
         with torch.no_grad():
             out = model(
                 img.unsqueeze(0).to(device),

@@ -489,10 +489,14 @@ class TransformerDecoderLayer(nn.Module):
 
 
 class FPN(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, text_dim=None):
         super(FPN, self).__init__()
-        # text projection
-        self.txt_proj = linear_layer(in_channels[2], out_channels[2])
+        # text projection. For CLIP RN50 the pooled text state happens to have
+        # the same width as v5 (both 1024, via attnpool), which is why this used
+        # to read in_channels[2]; other backbones need it stated explicitly.
+        if text_dim is None:
+            text_dim = in_channels[2]
+        self.txt_proj = linear_layer(text_dim, out_channels[2])
         # fusion 1: v5 & seq -> f_5: b, 1024, 13, 13
         self.f1_v_proj = conv_layer(in_channels[2], out_channels[2], 1, 0)
         self.norm_layer = nn.Sequential(nn.BatchNorm2d(out_channels[2]), nn.ReLU(True))

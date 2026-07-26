@@ -1,0 +1,108 @@
+# 20260726_opdreal_dinov3l: OPDReal pretraining with a FROZEN DINOv3 ViT-L/16
+# vision tower in place of frozen CLIP RN50.
+#
+# TEXT TOWER = dino.txt (LiT-trained against this exact frozen DINOv3 ViT-L),
+# so image and text share a 2048-d space — the aligned configuration.
+# Weights are the gated .pth files from ai.meta.com, stored under
+# /workspace/cache/ (mutagen-ignored, never reaches git).
+#
+# Pyramid mirrors CLIP RN50's split: /8 and /16 come from raw DINOv3 patch
+# tokens, /32 from the dino.txt vision-head tokens that are aligned with the
+# text state — the level the FPN gate and dynamic kernel actually consume.
+#
+# Matched line-for-line to opdreal_train_runpod_frozenclip.yaml (val 0.4138,
+# = experiment 20260721_opdreal_frozenclip) so the only variable is the
+# backbone. Frozen is the right regime for this comparison: it isolates
+# feature quality, and OPDReal cannot support fine-tuning a 300M ViT.
+#
+# The pretrained towers are frozen; the SimpleFeaturePyramid adapter, neck,
+# decoder and heads train (the adapter is randomly initialised, so freezing it
+# would leave the neck reading noise).
+data:
+  data_path: "/workspace/datasets/MotionDataset_h5_real"
+  train_dataset_key: "MotionNet_train"
+  val_dataset_key: "MotionNet_valid"
+  test_dataset_key: "MotionNet_test"
+  input_size: [256, 256]
+  batch_size_train: 64
+  batch_size_val: 64
+  num_workers_train: 8
+  num_workers_val: 4
+  use_depth: true
+
+seed_everything: 42
+
+trainer:
+  num_nodes: 1
+  accelerator: "gpu"
+  devices: 1
+  strategy: "auto"
+  max_epochs: 30
+  precision: 16
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: "/workspace/SegAffordance/experiments/20260726_opdreal_dinov3l/checkpoints"
+        monitor: val/loss_total
+        mode: min
+        save_top_k: 3
+        save_last: true
+        auto_insert_metric_name: false
+        filename: "best-epoch{epoch:02d}-valloss{val/loss_total:.4f}"
+  logger:
+    class_path: pytorch_lightning.loggers.CSVLogger
+    init_args:
+      save_dir: "/workspace/SegAffordance/experiments/20260726_opdreal_dinov3l/logs"
+      name: "csv"
+  log_every_n_steps: 10
+
+model:
+  freeze_backbone: true
+  model_params:
+    backbone: "dinov3"
+    backbone_id: "facebook/dinov3-vitl16-pretrain-lvd1689m"
+    text_source: "dinotxt"
+    dinotxt_weights: "/workspace/cache/dinov3/dinov3_vitl16_dinotxt_vision_head_and_text_encoder-a442d8f5.pth"
+    dinov3_backbone_weights: "/workspace/cache/dinov3/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth"
+    dinov3_repo_dir: "/workspace/cache/dinov3repo"
+    backbone_image_size: 256
+    clip_pretrain: "pretrain/RN50.pt"   # unused by this backbone
+    word_len: 77                        # dino.txt reuses CLIP BPE (77 ctx)
+    depth_feat_channels: [128, 256]
+    fpn_in: [512, 1024, 1024]
+    fpn_out: [256, 512, 1024]
+    num_layers: 3
+    num_head: 8
+    dim_ffn: 1024
+    dropout: 0.1
+    intermediate: False
+    proj_dropout: 0.5
+    vae_latent_dim: 32
+    vae_hidden_dim: 256
+    num_motion_types: 2
+    use_depth: true
+    use_cvae: true
+
+  loss_params:
+    bce_weight: 0.5
+    dice_weight: 0.5
+    mask_weight: 0.5
+    point_map_weight: 0.5
+    coord_weight: 0.3
+    vae_weight: 0.2
+    motion_type_weight: 0.5
+    point_sigma: 8.0
+    vae_beta: 0.01
+
+  config:
+    log_image_interval_steps: 100
+    input_size: [256, 256]
+    enable_wandb: False
+    val_vis_samples: 4
+    manual_seed: 42
+
+  optimizer_params:
+    lr: 0.00002
+    weight_decay: 0.0001
+    scheduler_milestones: [25, 27]
+    scheduler_gamma: 0.1
