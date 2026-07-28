@@ -71,7 +71,7 @@ model:
   optimizer_params:
     lr: 0.00001
     weight_decay: 0.0001
-    scheduler_milestones: [15, 17]
+    scheduler_milestones: [13, 15]
     scheduler_gamma: 0.1
 
   config:
@@ -82,10 +82,11 @@ model:
     manual_seed: 42
 
 trainer:
-  # 18 epochs (~7.5M samples) fits the 8h single-GPU budget at the GPU-bound
-  # ~280-320 samples/s; 60 epochs would be ~24h. Extend from last.ckpt if
-  # the curves are still moving. Milestones scaled with the schedule.
-  max_epochs: 18
+  # 16 epochs (~6.8M samples) fits the 8h single-GPU budget at the measured
+  # in-flight rate (~250-300 samples/s, GPU-bound with the frame cache and
+  # freshly warmed LMDBs). Extend from last.ckpt if the curves are still
+  # moving; milestones scale with the schedule.
+  max_epochs: 16
   accelerator: "gpu"
   devices: 1
   precision: 16

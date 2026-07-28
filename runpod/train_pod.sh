@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One training pod per experiment, run in parallel, deleted when done.
 #
-#   bash runpod/train_pod.sh create  <name>
+#   bash runpod/train_pod.sh create  <name> [gpu_count]
 #   bash runpod/train_pod.sh launch  <name> <exp_id> <config> [train_script] [pythonpath]
 #   bash runpod/train_pod.sh status  <name> <exp_id>
 #   bash runpod/train_pod.sh delete  <name>
@@ -43,13 +43,14 @@ print(f\"{s.get('ip','')} {s.get('port','')} {p.get('costPerHr','')}\")"
 
 case "${1:-}" in
   create)
-    name="$2"; pod="segaffordance-${name}"
+    name="$2"; pod="segaffordance-${name}"; count="${3:-1}"
     for gpu in "${GPUS[@]}"; do
-      echo "trying: $gpu"
+      echo "trying: $gpu x$count"
       out=$(runpodctl pod create --name "$pod" --cloud-type SECURE \
-        --gpu-id "$gpu" --image "$IMAGE" --network-volume-id "$VOLUME_ID" \
-        --container-disk-in-gb 20 --ports "22/tcp" 2>&1)
-      if ! grep -q '"error"' <<<"$out"; then echo "created with $gpu"; break; fi
+        --gpu-id "$gpu" --gpu-count "$count" --image "$IMAGE" \
+        --network-volume-id "$VOLUME_ID" \
+        --container-disk-in-gb 40 --ports "22/tcp" 2>&1)
+      if ! grep -q '"error"' <<<"$out"; then echo "created with $gpu x$count"; break; fi
       echo "  unavailable, trying next SKU"
     done
     id=$(pod_id "$pod")
