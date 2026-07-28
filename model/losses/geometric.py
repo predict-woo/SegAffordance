@@ -247,6 +247,12 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
             return self._zero(outputs.motion_pred), {}
 
         device = outputs.motion_pred.device
+        # Same fp16 overflow hazard as ScrewConsistencyLoss: projected curve
+        # points near the camera plane reach ~1e6 and overflow under autocast.
+        with torch.autocast(device_type=device.type, enabled=False):
+            return self._forward_fp32(outputs, targets, track, device)
+
+    def _forward_fp32(self, outputs, targets, track, device) -> LossTerms:
         track = track.to(device).float()
         # SF3D marks off-frame / behind-camera points invalid ([0,0]
         # placeholders); scoring those would measure distance to fabricated
@@ -329,7 +335,7 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
             -math.pi, math.pi, self.num_arc_samples, device=track.device
         )
         curve_3d = centre.unsqueeze(1) + _rotate_about_axis(axis, offset, thetas)
-        curve_2d = project_points(K_norm, curve_3d)
+        curve_2d = project_points(K_norm, curve_3d).clamp(min=-4.0, max=5.0)
         return _point_to_polyline_distance(track, curve_2d), radius
 
 
@@ -523,6 +529,16 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
             return self._zero(outputs.motion_pred), {}
 
         device = outputs.twist_pred.device
+        # fp32 is load-bearing, not hygiene: orbit points near the camera
+        # plane project to ~1e6 coordinates (depth clamped at 1e-6), and under
+        # fp16 autocast the projection einsums overflow to inf, then
+        # inf - inf = NaN in the polyline distance. The .float() casts alone
+        # do NOT protect against this — autocast re-casts einsum inputs to
+        # fp16 regardless. This killed run 20260728_sf3d_2d_twist at step 49.
+        with torch.autocast(device_type=device.type, enabled=False):
+            return self._forward_fp32(outputs, targets, depth, device)
+
+    def _forward_fp32(self, outputs, targets, depth, device) -> LossTerms:
         twist = outputs.twist_pred.float()
         total = self._zero(outputs.motion_pred)
         terms: Dict[str, torch.Tensor] = {}
@@ -596,6 +612,11 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
         omega_norm = twist[..., :3].norm(dim=-1, keepdim=True)
         ts = base.unsqueeze(0) / omega_norm.clamp(min=1.0)
         orbit_2d = project_points(K_norm, screw_orbit(twist, anchor, ts))
+        # Orbit samples behind the camera project to ~1/eps coordinates.
+        # Clamp to a box a few frames wide: those segments stay far from the
+        # [0,1] track (never win the min) but remain finite in value and
+        # gradient. Belt to the autocast-off braces above.
+        orbit_2d = orbit_2d.clamp(min=-4.0, max=5.0)
 
         dists = _point_to_polyline_distance(track, orbit_2d)
         count = point_mask.sum(dim=1)

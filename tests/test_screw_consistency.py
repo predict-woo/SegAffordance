@@ -275,6 +275,24 @@ def test_omega_shrink_only_fires_with_a_track():
     assert "L_screw_omega" not in terms_3d
 
 
+def test_track_term_finite_when_orbit_sweeps_behind_the_camera():
+    # The step-49 NaN of run 20260728_sf3d_2d_twist: a hinge near the camera
+    # plane makes the orbit through the anchor (z=2) sweep through z <= 0;
+    # those samples project to ~1/eps coordinates, which overflowed to inf
+    # under fp16 autocast and produced inf - inf = NaN in the polyline
+    # distance. Loss and gradient must stay finite.
+    near_hinge = torch.tensor([[0.05, 0.0, 0.1]])
+    vertical_axis = torch.tensor([[0.0, 1.0, 0.0]])
+    twist = twist_from_gt(vertical_axis, ROT, near_hinge)
+    twist = twist.clone().requires_grad_(True)
+    outputs, targets, depth = make_track_case(twist)
+    loss = ScrewConsistencyLoss(gt_weight=1.0, self_weight=1.0, track_weight=1.0)
+    total, terms = loss(outputs, targets, depth)
+    assert torch.isfinite(terms["L_screw_track"]).all()
+    total.backward()
+    assert torch.isfinite(twist.grad).all()
+
+
 # --- the 15-tuple SF3D batch path ----------------------------------------
 
 def test_unpack_batch_15_normalises_track_and_derives_anchor_depth():
