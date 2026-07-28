@@ -1,22 +1,27 @@
-# 20260726_sf3d_geo_predpred: SF3D with the symmetric pred<->pred geometric
-# consistency loss replacing the two cross-GT terms.
+# 20260728_sf3d_2d: the 2D-arm machinery validated ON SF3D.
 #
-# Matched line-for-line to sf3d_train_runpod_geo_crossgt.yaml except for the
-# geometric block in loss_params, so the loss is the only variable.
+# The 2D pretraining pipeline (2D track head + projected geometric loss) was
+# built for mined video, where nothing 3D can be checked. SF3D's v2 LMDB
+# stores the SAME element sweep both as 3D camera-frame points and projected
+# into the frame (trajectory_2d columns), so running the 2D arm here tests it
+# with full 3D ground truth available for evaluation — that is this run's
+# entire purpose.
 #
-# The loss couples motion_pred to trajectory_pred directly:
-#     R = n̂ᵀMn̂ / tr(M)   with  M = Σᵢ dᵢdᵢᵀ over the relative trajectory
-#     p = P(revolute) from motion_type_logits, gradient flowing
-#     L = (1-p)(1-R) + p·R
-# Prismatic wants all trajectory energy along the axis (R=1), revolute wants
-# none of it (R=0). Design:
-# docs/superpowers/specs/2026-07-26-pred-pred-geometric-loss-design.md
+# vs sf3d_train_runpod_geo_crossgt.yaml this changes:
+#   * data.return_trajectory_2d: true — the reader emits the 15-tuple;
+#     model/targets.unpack_batch normalises the pixel coords, masks on
+#     trajectory_2d_valid (off-frame points carry [0,0] placeholders), and
+#     derives anchor_depth from the 3D curve's first point.
+#   * use_2d_trajectory_head + trajectory_2d_weight — the 2D track head,
+#     supervised with the masked relative-track MSE.
+#   * predict_origin_depth + geometric_loss "projected" — the 2D-arm
+#     articulation supervision: does the predicted {type, axis, origin}
+#     project onto the observed 2D track? (Legacy parameterisation on
+#     purpose: sf3d_train_runpod_2d_twist.yaml is the twist-native,
+#     prediction-anchored counterpart; running both makes the comparison.)
 #
-# WATCH val motion-type accuracy against the 96-97% baseline in
-# experiments/INDEX.md. Because p carries gradient, the type head can reduce
-# this loss by relabelling a sample instead of fixing the geometry; degradation
-# there is the tell that it is doing so, and the cue to lower
-# pred_pred_weight.
+# The 3D trajectory head, cross_gt loss and all baseline heads stay on, so
+# the run also shows what the extra 2D supervision does to the 3D metrics.
 
 seed_everything: 42
 
@@ -26,6 +31,8 @@ model:
     word_len: 77                     # Standard CLIP context length
     use_depth: true                  # SF3D uses depth
     use_cvae: true                   # Toggle CVAE motion head (default true)
+    use_2d_trajectory_head: true     # <-- the arm's variable
+    predict_origin_depth: true       # <-- required by geometric_loss "projected"
     depth_feat_channels: [128, 256]
     fpn_in: [512, 1024, 1024]      # Input channels for FPN from backbone.
     fpn_out: [256, 512, 1024]        # Output channels for FPN layers.
@@ -54,12 +61,9 @@ model:
     vae_weight: 0.5
     motion_type_weight: 0.5
     trajectory_weight: 0.5     # Weight for trajectory prediction loss
-    # --- geometric consistency: the only block that differs between the arms
-    geometric_loss: "pred_pred"       # symmetric, couples the two predictions
-    pred_pred_weight: 0.1             # kept under motion_type_weight (0.5) so
-                                      # the type head stays anchored by its CE
-    geometric_weight: 0.5             # unused by this variant
-    trajectory_to_motion_weight: 0.5  # unused by this variant
+    trajectory_2d_weight: 0.5  # <-- masked relative-track MSE (the 2D head)
+    geometric_loss: "projected"       # <-- 2D-arm articulation supervision
+    projected_weight: 0.5
     # loss parameters
     point_sigma: 8.0            # Sigma for Gaussian heatmap generation (in pixels on the feature map)
     vae_beta: 0.01
@@ -85,7 +89,7 @@ trainer:
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        dirpath: "/workspace/SegAffordance/experiments/20260726_sf3d_geo_predpred/checkpoints"
+        dirpath: "/workspace/SegAffordance/experiments/20260728_sf3d_2d/checkpoints"
         monitor: "val/loss_total"
         mode: "min"
         save_top_k: 3
@@ -95,13 +99,12 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: "/workspace/SegAffordance/experiments/20260726_sf3d_geo_predpred/logs"
+      save_dir: "/workspace/SegAffordance/experiments/20260728_sf3d_2d/logs"
       name: "csv"
   log_every_n_steps: 10
 
-# sf3d_processed_v2 (2026-07-28) supersedes sf3d_processed: splat masks,
-# corrected revolute arcs, sensor-occlusion filtering (reader cutoff 0.5 ->
-# 417,765 records). Warm the page cache before launch (train_pod.sh does):
+# Requires sf3d_processed_v2 (2D trajectory columns). Warm the page cache
+# before launch (train_pod.sh does):
 #   cat /workspace/datasets/sf3d_processed_v2/data.lmdb/data.mdb > /dev/null
 data:
   train_data_dir: "/workspace/datasets/sf3d_processed_v2"
@@ -115,3 +118,4 @@ data:
   num_workers_train: 16
   num_workers_val: 8
   manual_seed: 42
+  return_trajectory_2d: true    # <-- the arm's variable

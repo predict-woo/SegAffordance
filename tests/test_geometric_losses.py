@@ -306,10 +306,18 @@ def test_registry_rejects_an_unknown_name():
 def _reference_geometric_consistency_loss(
     trajectory_pred, motion_pred, motion_type_gt, motion_origin_3d, trajectory_gt_first
 ):
-    """Verbatim copy of OPDRealTrainingModule._geometric_consistency_loss as it
-    stood before this refactor (train_OPDReal_better.py:781, commit a314e9e).
+    """Oracle for CrossGTGeometricLoss.
 
-    Frozen here as the oracle proving CrossGTGeometricLoss changed no numbers.
+    Originally a verbatim copy of OPDRealTrainingModule._geometric_consistency_loss
+    as it stood before the refactor (train_OPDReal_better.py:781, commit a314e9e),
+    frozen to prove the refactor changed no numbers.
+
+    Updated 2026-07-28: the revolute plane term ``dot_n**2`` was removed from
+    the production loss and therefore from this oracle. It required every
+    trajectory point to sit at the motion origin's height along the axis, which
+    is not what rotation about an axis means -- see CrossGTGeometricLoss for
+    the full rationale. Everything else, including the prismatic branch and the
+    per-sample loop's float associativity, is still pinned verbatim.
     """
     import torch.nn.functional as F
 
@@ -337,15 +345,53 @@ def _reference_geometric_consistency_loss(
             proj_perp = Q_first_minus_C - proj_length * n
             r = torch.norm(proj_perp)
             Q_minus_C = Q - C
-            dot_n = torch.sum(Q_minus_C * n.unsqueeze(0).expand(N, -1), dim=1)
-            plane_dist_sq = dot_n**2
             proj_lengths = torch.sum(Q_minus_C * n.unsqueeze(0).expand(N, -1), dim=1)
             proj_perp_vecs = Q_minus_C - proj_lengths.unsqueeze(1) * n.unsqueeze(0).expand(N, -1)
             circle_dists = torch.norm(proj_perp_vecs, dim=1)
             circle_error_sq = (circle_dists - r) ** 2
-            total_loss[b] = (plane_dist_sq + circle_error_sq).mean()
+            total_loss[b] = circle_error_sq.mean()
 
     return total_loss.mean()
+
+
+def test_revolute_loss_is_zero_for_a_correct_arc_off_the_origin_plane():
+    """A correct rotation must score 0 even when the hinge is not level with it.
+
+    This pins the 2026-07-28 correction. The revolute branch used to add
+    ((Q-C).n)^2, which forced the trajectory to share the motion origin's
+    height along the axis. A door handle sweeps a circle at its own height, so
+    that term charged a perfectly valid arc the squared along-axis offset --
+    here 0.5^2 = 0.25 -- and the optimiser could only reduce it by tilting the
+    predicted axis away from the truth.
+    """
+    n = 20
+    axis = torch.tensor([[0.0, 1.0, 0.0]])           # vertical hinge
+    radius, height_offset = 0.3, 0.5
+    theta = torch.linspace(0.0, 1.5707963, n)
+    # Arc in the plane y = height_offset; the motion origin sits at y = 0.
+    arc = torch.stack(
+        [radius * torch.cos(theta),
+         torch.full((n,), height_offset),
+         radius * torch.sin(theta)],
+        dim=1,
+    ).unsqueeze(0)
+    origin = torch.zeros(1, 3)
+
+    # The loss consumes the relative frame, exactly as CrossGT does.
+    arc_rel = arc - arc[:, 0:1, :]
+    origin_rel = origin - arc[:, 0, :]
+
+    loss = CrossGTGeometricLoss._consistency(
+        trajectory=arc_rel,
+        axis=axis,
+        motion_type_gt=torch.tensor([1]),
+        motion_origin_3d=origin_rel,
+        trajectory_gt_first=torch.zeros(1, 3),
+    )
+    assert loss.item() == pytest.approx(0.0, abs=1e-10), (
+        "a correct revolute arc must cost nothing regardless of how far the "
+        f"hinge sits along the axis; got {loss.item()}"
+    )
 
 
 def test_cross_gt_reproduces_the_pre_refactor_numbers():

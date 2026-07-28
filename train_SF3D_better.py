@@ -11,6 +11,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 from config.opd_train import Config, LossParams, ModelParams, OptimizerParams
 from datasets.scenefun3d_datamodule import SF3DDataModule
+from model.losses import decode_twist, point_to_line_distance
 from model.segmenter import CRIS
 from train_OPDReal_better import OPDRealTrainingModule
 from utils.tools import create_composite_visualization, make_gaussian_map
@@ -35,6 +36,16 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         self._test_type_correct_all = 0
         self._test_ma_correct_all = 0
         self._test_origin_errors_rotational_all = []
+
+        # Twist-head metrics (empty/zero when use_twist_head is off).
+        # Axis-LINE distance replaces the origin-point error: the twist cannot
+        # (by design) say where along the axis the annotated origin sits, so
+        # the right question is how far the GT origin lies from the predicted
+        # axis line.
+        self._test_twist_axis_errors_all = []
+        self._test_twist_type_correct_all = 0
+        self._test_twist_ma_correct_all = 0
+        self._test_twist_line_dist_rotational = []
 
     @staticmethod
     def _save_sf3d_test_debug_visualizations(
@@ -213,8 +224,9 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         # Unpack batch, handling optional camera parameters
         camera_params_in_batch = len(batch) > 10
         if camera_params_in_batch:
-            # This is the new format including trajectory
-            if len(batch) == 13:
+            # This is the new format including trajectory (a 15-tuple appends
+            # the 2D trajectory columns, unused by these metrics)
+            if len(batch) >= 13:
                 (
                     img,
                     depth,
@@ -229,6 +241,7 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                     motion_origin_3d_gt,
                     intrinsic_matrix,
                     trajectory_gt,
+                    *_trajectory_2d_extras,
                 ) = batch
             else: # Old format without trajectory
                 (
@@ -279,6 +292,12 @@ class SF3DTrainingModule(OPDRealTrainingModule):
             mask_pred_prob, size=mask_gt.shape[-2:], mode="bilinear", align_corners=False
         )
         pred_types = torch.argmax(motion_type_logits, dim=1)
+
+        twist_decoded = (
+            decode_twist(outputs.twist_pred.detach().float())
+            if outputs.twist_pred is not None
+            else None
+        )
 
         batch_size = img.size(0)
         for i in range(batch_size):
@@ -348,6 +367,34 @@ class SF3DTrainingModule(OPDRealTrainingModule):
             if is_axis_correct and is_type_correct:
                 self._test_ma_correct_all += 1
 
+            # --- Twist-head evaluation (unified screw parameterisation) ---
+            if twist_decoded is not None:
+                tw_rev, tw_dir, tw_point = twist_decoded
+                tw_axis_err = self._axis_error_deg(tw_dir[i], motion_gt[i]).item()
+                self._test_twist_axis_errors_all.append(tw_axis_err)
+
+                tw_type_correct = bool(tw_rev[i].item()) == bool(
+                    motion_type_gt[i].item() == 1
+                )
+                if tw_type_correct:
+                    self._test_twist_type_correct_all += 1
+                if tw_type_correct and (
+                    tw_axis_err <= self.config.test_motion_threshold_deg
+                ):
+                    self._test_twist_ma_correct_all += 1
+
+                if (
+                    camera_params_in_batch
+                    and motion_type_gt[i] == 1
+                    and motion_origin_3d_gt is not None
+                ):
+                    line_dist = point_to_line_distance(
+                        motion_origin_3d_gt[i].to(tw_point.device).float(),
+                        tw_point[i],
+                        tw_dir[i],
+                    ).item()
+                    self._test_twist_line_dist_rotational.append(line_dist)
+
             # --- Original evaluation for IoU-matched samples ---
             if iou_val > self.config.test_iou_threshold:
                 self._test_num_matched += 1
@@ -415,6 +462,22 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         all_origin_errors_rotational = self.all_gather(
             torch.tensor(self._test_origin_errors_rotational_all, device=self.device)
         )
+        all_twist_axis_errors = self.all_gather(
+            torch.tensor(self._test_twist_axis_errors_all, device=self.device)
+        )
+        all_twist_line_dists = self.all_gather(
+            torch.tensor(self._test_twist_line_dist_rotational, device=self.device)
+        )
+        total_twist_type_correct = self.all_gather(
+            torch.tensor(
+                self._test_twist_type_correct_all, dtype=torch.long, device=self.device
+            )
+        ).sum()
+        total_twist_ma_correct = self.all_gather(
+            torch.tensor(
+                self._test_twist_ma_correct_all, dtype=torch.long, device=self.device
+            )
+        ).sum()
 
         # For counters, we need to gather and then sum them up.
         num_matched_tensor = torch.tensor(
@@ -498,6 +561,29 @@ class SF3DTrainingModule(OPDRealTrainingModule):
             sync_dist=True,
         )
 
+        # --- Twist-head metrics (only when the head ran) ---
+        twist_ran = all_twist_axis_errors.numel() > 0
+        if twist_ran:
+            twist_axis_err = float(all_twist_axis_errors.mean().item())
+            twist_line_dist = (
+                float(all_twist_line_dists.mean().item())
+                if all_twist_line_dists.numel() > 0
+                else 0.0
+            )
+            if total_predictions > 0:
+                twist_type_acc = 100.0 * total_twist_type_correct / total_predictions
+                twist_pass_rate_ma = 100.0 * total_twist_ma_correct / total_predictions
+            else:
+                twist_type_acc, twist_pass_rate_ma = 0.0, 0.0
+            self.log("test/twist_axis_err_deg", twist_axis_err, logger=True, sync_dist=True)
+            self.log("test/twist_type_acc", twist_type_acc, logger=True, sync_dist=True)
+            self.log(
+                "test/twist_pass_rate_ma", twist_pass_rate_ma, logger=True, sync_dist=True
+            )
+            self.log(
+                "test/twist_axis_line_dist_m", twist_line_dist, logger=True, sync_dist=True
+            )
+
         if self.trainer.is_global_zero:
             print("\n--- SF3D Test Results ---")
             print(f"Total Samples: {total_predictions}")
@@ -513,6 +599,16 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                 print(
                     f"Mean Origin Error (m, for rotational): {mean_origin_error_m:.4f}"
                 )
+            if twist_ran:
+                print(f"\n--- Twist Head (unified screw parameterisation) ---")
+                print(f"Type Accuracy (|omega| > 0.5): {twist_type_acc:.2f}%")
+                print(f"MA Pass Rate (type + axis): {twist_pass_rate_ma:.2f}%")
+                print(f"Mean Axis Error: {twist_axis_err:.2f} degrees")
+                if all_twist_line_dists.numel() > 0:
+                    print(
+                        "Mean GT-origin -> predicted-axis-line distance "
+                        f"(m, rotational): {twist_line_dist:.4f}"
+                    )
 
         # Reset accumulators
         self._test_ious.clear()
@@ -528,6 +624,10 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         self._test_type_correct_all = 0
         self._test_ma_correct_all = 0
         self._test_origin_errors_rotational_all.clear()
+        self._test_twist_axis_errors_all.clear()
+        self._test_twist_type_correct_all = 0
+        self._test_twist_ma_correct_all = 0
+        self._test_twist_line_dist_rotational.clear()
 
 
 if __name__ == "__main__":

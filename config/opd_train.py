@@ -29,6 +29,11 @@ class ModelParams:
     # Predict metric depth of the 3D joint origin, giving a full
     # {type, axis, origin} articulation. Required by geometric_loss="projected".
     predict_origin_depth: bool = False
+    # Unified screw-motion head: one se(3) twist (omega, v) for both motion
+    # types — revolute is the axis LINE (no point on it), prismatic is a bare
+    # direction with omega = 0. Additive alongside the axis/type heads; see
+    # model/losses/twist.py. SF3D-only supervision (needs a 3D origin).
+    use_twist_head: bool = False
     # Which vision+text encoder to use: "clip_rn50" | "siglip2" | "dinov3"
     backbone: str = "clip_rn50"
     # HF id / hub entry for the non-CLIP backbones
@@ -76,6 +81,20 @@ class LossParams:
     projected_radius_ref: float = 1.0
     # 2D track supervision, used alongside the projected geometric loss.
     trajectory_2d_weight: float = 1.0
+    # Sign-agnostic L2 on the se(3) twist head (use_twist_head). Units are
+    # comparable to the trajectory MSE: omega is unitless O(1), v is metres.
+    twist_weight: float = 0.5
+    # Read only by the "screw" variant: predicted twist's velocity field vs
+    # the GT trajectory, and vs the model's OWN trajectory anchored at its
+    # OWN interaction point (no teacher forcing in the self term).
+    screw_gt_weight: float = 0.5
+    screw_self_weight: float = 0.5
+    # Observed 2D track vs the projected orbit through the model's own
+    # anchor. Fully prediction-anchored — no anchor_depth from the data.
+    screw_track_weight: float = 0.5
+    # Occam prior |omega| for settings where nothing else pins omega (video
+    # pretraining). Leave 0 where the direct twist L2 supervises it (SF3D).
+    screw_omega_shrink: float = 0.0
     
 @dataclass
 class OptimizerParams:

@@ -94,16 +94,19 @@ trainer:
       name: "csv"
   log_every_n_steps: 10
 
-# RunPod paths: dataset lives on the network volume; datasets/scenefun3d.py
-# additionally requires data.lmdb to be copied to /dev/shm/data.lmdb first
-# (11.6GB — fits the pod's 14GB shm):
-#   cp -r /workspace/datasets/sf3d_processed/data.lmdb /dev/shm/data.lmdb
+# sf3d_processed_v2 (2026-07-28) supersedes sf3d_processed: splat masks,
+# corrected revolute arcs, sensor-occlusion filtering (reader cutoff 0.5 ->
+# 417,765 records). Warm the page cache before launch (train_pod.sh does):
+#   cat /workspace/datasets/sf3d_processed_v2/data.lmdb/data.mdb > /dev/null
 data:
-  train_data_dir: "/workspace/datasets/sf3d_processed"
+  train_data_dir: "/workspace/datasets/sf3d_processed_v2"
+  # Memoised sensor-filtered key list (297s -> 3s startup; created by the
+  # first run, validated against the LMDB entry count and cutoff).
+  key_cache_path: "/workspace/cache/sf3d_v2_keys_cutoff05.pkl"
   val_split_ratio: 0.1
   input_size: [256, 256]
-  batch_size_train: 16
-  batch_size_val: 16
-  num_workers_train: 8
-  num_workers_val: 4
+  batch_size_train: 64
+  batch_size_val: 64
+  num_workers_train: 16
+  num_workers_val: 8
   manual_seed: 42

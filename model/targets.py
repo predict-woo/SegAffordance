@@ -34,10 +34,17 @@ class StepTargets:
     motion_origin_3d: Optional[torch.Tensor] = None
     #: (B, 3, 3) camera intrinsics, at ORIGINAL image resolution — SF3D only
     camera_intrinsic: Optional[torch.Tensor] = None
-    #: (B, N, 2) observed 2D track, normalised to [0, 1] — 2D pretraining only.
-    #: The hand/contact path mined from video, NOT the element sweep that
-    #: `trajectory` holds; see the 2D-pretraining spec on why they differ.
+    #: (B, N, 2) observed 2D track, normalised to [0, 1]. In 2D pretraining
+    #: the hand/contact path mined from video; from SF3D (15-tuple batches)
+    #: the element sweep projected into the frame — same curve `trajectory`
+    #: holds, which is exactly what makes SF3D a testbed for the 2D arm.
     trajectory_2d: Optional[torch.Tensor] = None
+    #: (B, N) bool — which 2D track points are real observations. SF3D marks
+    #: points behind the camera or outside the frame invalid and stores [0, 0]
+    #: placeholders for them; every 2D loss must mask on this rather than
+    #: regress the placeholders. None means "all points valid" (2D pretraining
+    #: sources that only emit observed points).
+    trajectory_2d_valid: Optional[torch.Tensor] = None
     #: (B,) metric depth of the 2D track's first point. Supplied rather than
     #: read from the depth map here, so depth-map scaling conventions (and
     #: pseudo-depth) stay out of the geometry.
@@ -47,9 +54,10 @@ class StepTargets:
 def unpack_batch(batch) -> Tuple[Any, Any, Any, StepTargets]:
     """Split a training batch into model inputs and a named target bundle.
 
-    The datasets emit tuples whose length says which produced them: 13 for
-    SF3D with trajectories, 9 for OPD. Dispatching on that here means nothing
-    downstream — least of all the loss modules — has to.
+    The datasets emit tuples whose length says which produced them: 15 for
+    SF3D with the 2D trajectory columns, 13 for SF3D with trajectories, 9 for
+    OPD. Dispatching on that here means nothing downstream — least of all the
+    loss modules — has to.
 
     Returns ``(img, depth, word_str_list, targets)``.
 
@@ -70,9 +78,40 @@ def unpack_batch(batch) -> Tuple[Any, Any, Any, StepTargets]:
             motion_origin_3d=batch.get("motion_origin_3d"),
             camera_intrinsic=batch.get("camera_intrinsic"),
             trajectory_2d=batch.get("trajectory_2d"),
+            trajectory_2d_valid=batch.get("trajectory_2d_valid"),
             anchor_depth=batch.get("anchor_depth"),
         )
         return batch.get("img"), batch.get("depth"), batch.get("word"), targets
+
+    if len(batch) == 15:  # SF3D with 2D trajectory (return_trajectory_2d=True)
+        (
+            img, depth, word_str_list, mask_gt, _bbox, point_gt_norm, motion_gt,
+            motion_type_gt, img_size, _rgb_filename, motion_origin_3d,
+            camera_intrinsic, trajectory_gt, trajectory_2d_px, trajectory_2d_valid,
+        ) = batch
+        # The dataset emits PIXELS (a trajectory legitimately leaves the
+        # frame, so it is stored unclamped); the model-side convention for 2D
+        # tracks is [0, 1], so normalise here, once. img_size is (w, h).
+        scale = img_size.to(trajectory_2d_px.dtype).clamp(min=1.0).unsqueeze(1)
+        trajectory_2d = trajectory_2d_px / scale
+        # Metric z of the track's first point — the element centroid's depth,
+        # taken from the 3D curve the 2D one is a projection of (data-side
+        # lifting of an observation, not teacher forcing of a prediction).
+        anchor_depth = trajectory_gt[:, 0, 2]
+        targets = StepTargets(
+            mask=mask_gt,
+            point_norm=point_gt_norm,
+            motion=motion_gt,
+            motion_type=motion_type_gt,
+            img_size=img_size,
+            trajectory=trajectory_gt,
+            motion_origin_3d=motion_origin_3d,
+            camera_intrinsic=camera_intrinsic,
+            trajectory_2d=trajectory_2d,
+            trajectory_2d_valid=trajectory_2d_valid,
+            anchor_depth=anchor_depth,
+        )
+        return img, depth, word_str_list, targets
 
     if len(batch) == 13:  # SF3D with trajectory
         (

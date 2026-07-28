@@ -1,6 +1,9 @@
-"""Geometric consistency losses between the motion-axis and trajectory heads.
+"""Geometric consistency losses between the motion/twist and trajectory heads.
 
-Two schemes, selected by ``LossParams.geometric_loss``:
+Selected by ``LossParams.geometric_loss``: ``cross_gt`` | ``pred_pred`` |
+``projected`` | ``screw`` | ``none``. The first two are described below;
+``projected`` (2D-track alignment) and ``screw`` (twist-native, no motion-type
+branching) document themselves on their classes.
 
 ``cross_gt`` (default, the historical behaviour)
     Two terms, each pairing one prediction against the *other* head's ground
@@ -22,6 +25,7 @@ changes.
 """
 
 import math
+import typing
 from typing import Dict, Tuple
 
 import torch
@@ -31,13 +35,26 @@ import torch.nn.functional as F
 from model.outputs import ModelOutputs
 from model.targets import StepTargets
 
+from .twist import screw_orbit
+
 LossTerms = Tuple[torch.Tensor, Dict[str, torch.Tensor]]
 
 
 class GeometricConsistencyLoss(nn.Module):
-    """Base class. Subclasses return (weighted total, unweighted terms)."""
+    """Base class. Subclasses return (weighted total, unweighted terms).
 
-    def forward(self, outputs: ModelOutputs, targets: StepTargets) -> LossTerms:
+    ``depth`` is the model's INPUT depth map (B, 1, H, W) — an observation the
+    model receives at inference anyway, so using it never constitutes teacher
+    forcing. Only the screw variant reads it (to lift the predicted 2D point
+    to a metric 3D anchor); the others ignore it.
+    """
+
+    def forward(
+        self,
+        outputs: ModelOutputs,
+        targets: StepTargets,
+        depth: typing.Optional[torch.Tensor] = None,
+    ) -> LossTerms:
         raise NotImplementedError
 
     @staticmethod
@@ -48,7 +65,7 @@ class GeometricConsistencyLoss(nn.Module):
 class NoGeometricLoss(GeometricConsistencyLoss):
     """Contributes nothing. Used on OPD and as the ablation arm."""
 
-    def forward(self, outputs: ModelOutputs, targets: StepTargets) -> LossTerms:
+    def forward(self, outputs, targets, depth=None) -> LossTerms:
         return self._zero(outputs.motion_pred), {}
 
 
@@ -84,7 +101,7 @@ class PredPredGeometricLoss(GeometricConsistencyLoss):
         # signal. Such samples are dropped from the batch mean instead.
         self.degenerate_threshold = degenerate_threshold
 
-    def forward(self, outputs: ModelOutputs, targets: StepTargets) -> LossTerms:
+    def forward(self, outputs, targets, depth=None) -> LossTerms:
         if targets.trajectory is None:
             return self._zero(outputs.motion_pred), {}
 
@@ -218,7 +235,7 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
         # A track with no extent has no curve to lie on.
         self.degenerate_threshold = degenerate_threshold
 
-    def forward(self, outputs: ModelOutputs, targets: StepTargets) -> LossTerms:
+    def forward(self, outputs, targets, depth=None) -> LossTerms:
         track = targets.trajectory_2d
         if (
             track is None
@@ -231,6 +248,16 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
 
         device = outputs.motion_pred.device
         track = track.to(device).float()
+        # SF3D marks off-frame / behind-camera points invalid ([0,0]
+        # placeholders); scoring those would measure distance to fabricated
+        # corners. None (2D pretraining sources) means all points observed.
+        # The track's first point anchors the curve, so a sample whose first
+        # point is unobserved has no anchor and is dropped entirely.
+        if targets.trajectory_2d_valid is not None:
+            point_mask = targets.trajectory_2d_valid.to(device).float()
+        else:
+            point_mask = torch.ones(track.shape[:2], device=device)
+        mask_count = point_mask.sum(dim=1)
         K_norm = normalized_intrinsics(
             targets.camera_intrinsic.to(device), targets.img_size.to(device)
         )
@@ -241,11 +268,14 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
             K_norm, track[:, 0], targets.anchor_depth.to(device).float()
         )
 
-        line_residual = self._prismatic_residual(K_norm, track, start_3d, axis)
-        arc_residual, radius = self._revolute_residual(
+        line_dists = self._prismatic_residual(K_norm, track, start_3d, axis)
+        arc_dists, radius = self._revolute_residual(
             K_norm, track, start_3d, axis, outputs.coords_hat.float(),
             outputs.origin_depth.float(),
         )
+        denom = mask_count.clamp(min=1.0)
+        line_residual = (line_dists * point_mask).sum(dim=1) / denom
+        arc_residual = (arc_dists * point_mask).sum(dim=1) / denom
         complexity = torch.relu(radius - self.radius_ref) / self.radius_ref
 
         p_revolute = outputs.motion_type_logits.float().softmax(dim=-1)[:, 1]
@@ -253,8 +283,12 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
             arc_residual + self.radius_weight * complexity
         )
 
-        extent = (track - track[:, 0:1]).norm(dim=-1).max(dim=1).values
-        valid = extent > self.degenerate_threshold
+        extent = ((track - track[:, 0:1]).norm(dim=-1) * point_mask).max(dim=1).values
+        valid = (
+            (extent > self.degenerate_threshold)
+            & (point_mask[:, 0] > 0)
+            & (mask_count >= 2)
+        )
         term = (
             per_sample[valid].mean()
             if bool(valid.any())
@@ -263,7 +297,8 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
         return self.weight * term, {"L_geo_projected": term}
 
     def _prismatic_residual(self, K_norm, track, start_3d, axis):
-        """Point-to-line distance: a 3D line projects to a 2D line exactly."""
+        """Per-point distance to the projected line (a 3D line projects to a
+        2D line exactly). Returns (B, N); the caller applies the point mask."""
         # A second point on the line, stepped proportionally to depth so the
         # projected direction is well conditioned at any distance.
         step = start_3d[:, 2:3].abs().clamp(min=1e-3) * 0.1
@@ -277,15 +312,14 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
 
         rel = track - origin_2d.unsqueeze(1)
         cross = rel[..., 0] * unit[:, None, 1] - rel[..., 1] * unit[:, None, 0]
-        distance = cross.abs().mean(dim=1)
 
         # Axis pointing along the view ray projects to a single point, so
         # there is no line to measure against — score the raw offset instead.
-        degenerate = (length.squeeze(-1) < 1e-8)
-        return torch.where(degenerate, rel.norm(dim=-1).mean(dim=1), distance)
+        degenerate = (length.squeeze(-1) < 1e-8).unsqueeze(1)
+        return torch.where(degenerate, rel.norm(dim=-1), cross.abs())
 
     def _revolute_residual(self, K_norm, track, start_3d, axis, coords_hat, origin_depth):
-        """Point-to-polyline distance against the projected circle."""
+        """Per-point distance to the projected circle. Returns ((B, N), radius)."""
         centre = backproject_points(K_norm, coords_hat, origin_depth)
         offset = start_3d - centre
         parallel = (offset * axis).sum(-1, keepdim=True) * axis
@@ -296,16 +330,35 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
         )
         curve_3d = centre.unsqueeze(1) + _rotate_about_axis(axis, offset, thetas)
         curve_2d = project_points(K_norm, curve_3d)
-        return _point_to_polyline_distance(track, curve_2d).mean(dim=1), radius
+        return _point_to_polyline_distance(track, curve_2d), radius
 
 
 class CrossGTGeometricLoss(GeometricConsistencyLoss):
     """The historical scheme: each prediction against the other head's GT.
 
-    Kept numerically identical to the pre-refactor implementation — the
-    per-sample Python loop and its float associativity included, since
-    ``tests/test_geometric_losses.py`` pins the numbers against a frozen copy
-    of the original.
+    The per-sample Python loop and its float associativity are kept from the
+    pre-refactor implementation.
+
+    CORRECTION 2026-07-28 — the revolute branch used to penalise two things:
+
+      (a) circle term: every trajectory point stays the same distance from the
+          rotation axis. That is what "rotation about an axis" means; correct.
+      (b) plane term:  every trajectory point stays at the same height ALONG
+          the axis as the motion origin. Wrong — a door handle sweeps a circle
+          at its OWN height, not at the hinge pin's.
+
+    (b) has been removed. It was not a harmless extra constraint: because the
+    SF3D GT trajectories are reconstructed (tools/sf3d_process.py), they had
+    been built to satisfy (b), which slid the start of every revolute arc along
+    the axis until it was level with the motion origin — off the element it
+    belongs to by 0.02 m and 0.21 m on two measured annotations. With arcs
+    centred correctly at the element's height, (b) evaluates to the squared
+    along-axis offset, which the optimiser can only reduce by tilting the
+    predicted axis away from the truth. Verified: a geometrically correct arc
+    whose hinge lies 0.5 m off the arc plane scored exactly 0.25 with (b) and
+    0.00 without.
+
+    Prismatic behaviour is untouched, and (a) is unchanged.
     """
 
     def __init__(self, geometric_weight: float, trajectory_to_motion_weight: float):
@@ -313,7 +366,7 @@ class CrossGTGeometricLoss(GeometricConsistencyLoss):
         self.geometric_weight = geometric_weight
         self.trajectory_to_motion_weight = trajectory_to_motion_weight
 
-    def forward(self, outputs: ModelOutputs, targets: StepTargets) -> LossTerms:
+    def forward(self, outputs, targets, depth=None) -> LossTerms:
         if targets.trajectory is None or targets.motion_origin_3d is None:
             return self._zero(outputs.motion_pred), {}
 
@@ -385,12 +438,205 @@ class CrossGTGeometricLoss(GeometricConsistencyLoss):
 
                 Q_minus_C = Q - C
                 dot_n = torch.sum(Q_minus_C * n.unsqueeze(0).expand(N, -1), dim=1)
-                plane_dist_sq = dot_n**2
                 proj_perp_vecs = Q_minus_C - dot_n.unsqueeze(1) * n.unsqueeze(0).expand(N, -1)
                 circle_error_sq = (torch.norm(proj_perp_vecs, dim=1) - r) ** 2
-                total_loss[b] = (plane_dist_sq + circle_error_sq).mean()
+                total_loss[b] = circle_error_sq.mean()
 
         return total_loss.mean()
+
+
+class ScrewConsistencyLoss(GeometricConsistencyLoss):
+    """Twist-native consistency: trajectories must follow the screw's flow.
+
+    A constant twist (omega, v) moves every point of space along the velocity
+    field ``f(p) = omega x p + v``, whose orbits are helices — with circles
+    (revolute) and straight lines (prismatic, omega = 0) as interior special
+    cases. So ONE residual covers both motion types: the squared sine between
+    each trajectory segment and the field at the segment's midpoint. No
+    line/circle branch, no soft type gate, no radius penalty — everything the
+    branchy losses needed to arbitrate between two hypotheses disappears when
+    there is only one hypothesis family. The residual is scale-free in the
+    twist (f enters through its direction only) and sign-agnostic (sin^2), and
+    leaves the speed profile along the curve unconstrained.
+
+    Three terms, each active only when its inputs exist, so one loss serves
+    SF3D 3D training, the SF3D 2D arm, and video pretraining (which has no 3D
+    GT at all):
+
+    ``L_screw_twist_gt_traj``  (needs targets.trajectory)
+        Predicted twist's field against the GT trajectory (data). Grounds the
+        twist where it matters — at the element's actual location.
+
+    ``L_screw_self``  (needs trajectory_pred + intrinsics + input depth)
+        Predicted twist's field against the PREDICTED trajectory, anchored at
+        the PREDICTED interaction point lifted to 3D with the input depth map
+        (an observation the model receives at inference — not teacher
+        forcing; no GT enters this term). This is what makes the heads
+        self-consistent at inference, and it gives coords_hat a geometric
+        job: the twist's orbit must pass through the element point it marks.
+
+    ``L_screw_track``  (needs targets.trajectory_2d + intrinsics + depth)
+        The predicted twist's orbit through the predicted anchor, projected
+        into the image, against the OBSERVED 2D track (point-to-polyline,
+        validity-masked). Fully prediction-anchored: unlike the legacy
+        "projected" loss it needs NO anchor_depth from the data pipeline —
+        and because perspective projection is invariant to a global depth
+        rescaling, the depth source's scale convention cannot corrupt this
+        residual (only its direction errors matter). ``omega_shrink`` adds
+        the Occam prior ``|omega|`` (logged as ``L_screw_omega``) for
+        settings where nothing else pins omega: a short low-curvature track
+        is genuinely ambiguous between a line and a huge-radius arc, and the
+        prior resolves it toward the simpler explanation. Leave it 0 where
+        the direct twist L2 supervises omega (SF3D).
+
+    The moment v is defined about the camera origin, so the field must be
+    evaluated on ABSOLUTE camera-frame points — never on a re-centred
+    trajectory (translating the frame changes v by -omega x t).
+
+    Degenerate-segment masking doubles as the in-place-rotator guard: the
+    9.1% of SF3D revolute records with sub-centimetre radius store a 0.01 m
+    stub whose direction is an artifact (it points along the axis); their
+    ~0.5 mm segments fall under segment_threshold and contribute nothing.
+    """
+
+    def __init__(
+        self,
+        gt_weight: float,
+        self_weight: float,
+        track_weight: float = 0.5,
+        omega_shrink: float = 0.0,
+        segment_threshold: float = 1e-3,
+        field_threshold: float = 1e-4,
+        num_orbit_samples: int = 64,
+    ):
+        super().__init__()
+        self.gt_weight = gt_weight
+        self.self_weight = self_weight
+        self.track_weight = track_weight
+        self.omega_shrink = omega_shrink
+        self.segment_threshold = segment_threshold
+        self.field_threshold = field_threshold
+        self.num_orbit_samples = num_orbit_samples
+
+    def forward(self, outputs, targets, depth=None) -> LossTerms:
+        if outputs.twist_pred is None:
+            return self._zero(outputs.motion_pred), {}
+
+        device = outputs.twist_pred.device
+        twist = outputs.twist_pred.float()
+        total = self._zero(outputs.motion_pred)
+        terms: Dict[str, torch.Tensor] = {}
+
+        if targets.trajectory is not None:
+            gt_term = self._field_residual(
+                twist, targets.trajectory.to(device).float()
+            )
+            total = total + self.gt_weight * gt_term
+            terms["L_screw_twist_gt_traj"] = gt_term
+
+        # The prediction-side anchor both remaining terms share: the model's
+        # own 2D point, lifted with a differentiable lookup of the INPUT depth
+        # map. coords_hat is (x, y) in [0, 1]; grid_sample wants [-1, 1]. A
+        # hole in the depth map gives z ~ 0 and a meaningless anchor, so such
+        # samples are masked out of both terms.
+        anchor = anchor_ok = K_norm = None
+        if (
+            depth is not None
+            and targets.camera_intrinsic is not None
+            and targets.img_size is not None
+        ):
+            K_norm = normalized_intrinsics(
+                targets.camera_intrinsic.to(device), targets.img_size.to(device)
+            )
+            coords = outputs.coords_hat.float()
+            grid = (coords * 2.0 - 1.0).view(-1, 1, 1, 2)
+            z = F.grid_sample(
+                depth.to(device).float(), grid, align_corners=False
+            ).view(-1)
+            anchor = backproject_points(K_norm, coords, z)
+            anchor_ok = z > 1e-3
+
+        if anchor is not None and outputs.trajectory_pred is not None:
+            trajectory_abs = anchor.unsqueeze(1) + outputs.trajectory_pred.float()
+            self_term = self._field_residual(
+                twist, trajectory_abs, sample_mask=anchor_ok
+            )
+            total = total + self.self_weight * self_term
+            terms["L_screw_self"] = self_term
+
+        if anchor is not None and targets.trajectory_2d is not None:
+            track_term = self._track_residual(
+                twist, anchor, anchor_ok, K_norm, targets, device
+            )
+            total = total + self.track_weight * track_term
+            terms["L_screw_track"] = track_term
+            if self.omega_shrink > 0.0:
+                omega_term = twist[..., :3].norm(dim=-1).mean()
+                total = total + self.omega_shrink * omega_term
+                terms["L_screw_omega"] = omega_term
+
+        return total, terms
+
+    def _track_residual(self, twist, anchor, anchor_ok, K_norm, targets, device):
+        """Observed 2D track vs the projected orbit through the own anchor."""
+        track = targets.trajectory_2d.to(device).float()
+        if targets.trajectory_2d_valid is not None:
+            point_mask = targets.trajectory_2d_valid.to(device).float()
+        else:
+            point_mask = torch.ones(track.shape[:2], device=device)
+
+        # Curve-parameter range: |t|*|omega| up to pi covers the full circle
+        # for revolute twists; for near-prismatic ones (|omega| < 1 -> clamp)
+        # t in [-pi, pi] sweeps +-pi*|v| metres of line, and a line is
+        # interpolated EXACTLY by the polyline, so coarse sampling costs
+        # nothing there.
+        base = torch.linspace(
+            -math.pi, math.pi, self.num_orbit_samples, device=device
+        )
+        omega_norm = twist[..., :3].norm(dim=-1, keepdim=True)
+        ts = base.unsqueeze(0) / omega_norm.clamp(min=1.0)
+        orbit_2d = project_points(K_norm, screw_orbit(twist, anchor, ts))
+
+        dists = _point_to_polyline_distance(track, orbit_2d)
+        count = point_mask.sum(dim=1)
+        per_sample = (dists * point_mask).sum(dim=1) / count.clamp(min=1.0)
+        row_valid = (count > 0) & anchor_ok
+        if bool(row_valid.any()):
+            return per_sample[row_valid].mean()
+        return self._zero(twist)
+
+    def _field_residual(
+        self,
+        twist: torch.Tensor,          # (B, 6)
+        trajectory_abs: torch.Tensor,  # (B, N, 3) camera frame, ABSOLUTE
+        sample_mask: typing.Optional[torch.Tensor] = None,  # (B,) bool
+    ) -> torch.Tensor:
+        omega, v = twist[..., :3], twist[..., 3:]
+        delta = trajectory_abs[:, 1:] - trajectory_abs[:, :-1]
+        mid = 0.5 * (trajectory_abs[:, 1:] + trajectory_abs[:, :-1])
+        field = torch.linalg.cross(
+            omega.unsqueeze(1).expand_as(mid), mid, dim=-1
+        ) + v.unsqueeze(1)
+
+        delta_norm = delta.norm(dim=-1)
+        field_norm = field.norm(dim=-1)
+        # Segments with no extent have no direction (degenerate stubs);
+        # midpoints ON the predicted axis have no field direction.
+        seg_valid = (delta_norm > self.segment_threshold) & (
+            field_norm > self.field_threshold
+        )
+
+        cos = (delta * field).sum(-1) / (delta_norm * field_norm).clamp(min=1e-12)
+        residual = 1.0 - cos.pow(2).clamp(max=1.0)  # sin^2: sign-agnostic
+
+        seg_count = seg_valid.float().sum(dim=1)
+        per_sample = (residual * seg_valid.float()).sum(dim=1) / seg_count.clamp(min=1.0)
+        row_valid = seg_count > 0
+        if sample_mask is not None:
+            row_valid = row_valid & sample_mask
+        if bool(row_valid.any()):
+            return per_sample[row_valid].mean()
+        return self._zero(twist)
 
 
 def build_geometric_loss(loss_params) -> GeometricConsistencyLoss:
@@ -418,10 +664,17 @@ def build_geometric_loss(loss_params) -> GeometricConsistencyLoss:
             radius_weight=getattr(loss_params, "projected_radius_weight", 0.1),
             radius_ref=getattr(loss_params, "projected_radius_ref", 1.0),
         )
+    if name == "screw":
+        return ScrewConsistencyLoss(
+            gt_weight=getattr(loss_params, "screw_gt_weight", 0.5),
+            self_weight=getattr(loss_params, "screw_self_weight", 0.5),
+            track_weight=getattr(loss_params, "screw_track_weight", 0.5),
+            omega_shrink=getattr(loss_params, "screw_omega_shrink", 0.0),
+        )
     if name == "none":
         return NoGeometricLoss()
 
     raise ValueError(
         f"unknown geometric_loss {name!r} — expected 'cross_gt', 'pred_pred', "
-        f"'projected' or 'none'"
+        f"'projected', 'screw' or 'none'"
     )

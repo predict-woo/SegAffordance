@@ -331,6 +331,30 @@ class Trajectory2DMLP(nn.Module):
         return out.view(out.size(0), self.num_points, 2)
 
 
+class TwistMLP(nn.Module):
+    """se(3) twist (omega, v) in R^6, camera frame — see model/losses/twist.py.
+
+    Unconstrained linear output: revolute targets have |omega| = 1 and
+    prismatic targets |omega| = 0, and both live in the interior of R^6, so
+    there is no manifold to project onto. Normalising omega here would destroy
+    exactly the |omega| -> 0 limit that makes the parameterisation unify the
+    two motion types.
+    """
+
+    def __init__(self, input_dim: int, hidden_dim: int = 256):
+        super().__init__()
+        self.backbone = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(True),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(True),
+        )
+        self.twist_head = nn.Linear(hidden_dim, 6)
+
+    def forward(self, condition: torch.Tensor):
+        return self.twist_head(self.backbone(condition))
+
+
 class OriginDepthHead(nn.Module):
     """Metric depth (metres) of the 3D joint origin.
 

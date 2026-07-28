@@ -36,6 +36,11 @@ class SF3DDataset(Dataset):
             224,
             224,
         ),  # Needed if original size not stored
+        lmdb_path: Optional[str] = None,
+        sensor_max_occluded_frac: Optional[float] = 0.5,
+        key_cache_path: Optional[str] = None,
+        return_trajectory_2d: bool = False,
+        point_source: str = "motion_origin",
     ):
         """
         Args:
@@ -60,12 +65,46 @@ class SF3DDataset(Dataset):
             image_size_for_mask_reconstruction  # (height, width)
         )
 
-        # self.lmdb_path = self.lmdb_data_root / "data.lmdb"
-        self.lmdb_path = Path("/dev/shm/data.lmdb")
-        # The following line is useful for loading from shared memory for faster access,
-        # but it's commented out to make the code more portable by default.
-        # You can uncomment it and adjust the path if you copy your data.lmdb to /dev/shm.
-        # self.lmdb_path = Path("/dev/shm/data.lmdb")
+        # This used to be hardcoded to Path("/dev/shm/data.lmdb"), which
+        # silently ignored lmdb_data_root: whatever happened to be staged in
+        # shm was loaded instead of the configured dataset, with no warning.
+        # Default to the configured root; pass lmdb_path explicitly to use a
+        # shm copy.
+        #
+        # Staging in shm is still worth it for training. A full pass over the
+        # keys touches every leaf page (LMDB stores values inline), and on the
+        # MooseFS-backed volume that runs at ~1.4 MB/s -- hours for a 13 GB
+        # database -- while a sequential copy runs at ~155 MB/s:
+        #     cp /workspace/datasets/sf3d_processed_v2/data.lmdb/data.mdb \
+        #        /dev/shm/data.lmdb/
+        self.lmdb_path = (
+            Path(lmdb_path) if lmdb_path else self.lmdb_data_root / "data.lmdb"
+        )
+        self.sensor_max_occluded_frac = sensor_max_occluded_frac
+        self.key_cache_path = Path(key_cache_path) if key_cache_path else None
+
+        # OFF by default: the extra columns cost decode time and only the 2D
+        # arm consumes them. The 15-tuple is understood end to end
+        # (model/targets.unpack_batch normalises the pixels and derives
+        # anchor_depth; the test paths tolerate the extra columns), so turning
+        # this on is the whole switch for the 2D arm.
+        self.return_trajectory_2d = return_trajectory_2d
+
+        # What the interaction point (tuple element 5) is supervised with:
+        #   "motion_origin" — the projected motion origin (historical). For
+        #       rotation that is the HINGE, which sits outside the element's
+        #       mask 63% of the time and gets clamped to the image border when
+        #       off-screen — an actively wrong target whenever the hinge is
+        #       not on a visible surface.
+        #   "element" — the projected element centroid (trajectory_2d[0] in
+        #       the v2 LMDB): a graspable on-element point for BOTH motion
+        #       types. Pair with the twist head, which carries the rotation
+        #       axis as a line and so no longer needs a hinge point at all.
+        if point_source not in ("motion_origin", "element"):
+            raise ValueError(
+                f"point_source must be 'motion_origin' or 'element', got {point_source!r}"
+            )
+        self.point_source = point_source
 
         if not self.lmdb_path.exists():
             raise FileNotFoundError(f"LMDB database not found at {self.lmdb_path}")
@@ -85,12 +124,75 @@ class SF3DDataset(Dataset):
         print(f"Item keys: length {len(self.item_keys)}")
 
     def _get_item_keys(self) -> List[bytes]:
-        keys = []
+        """Keys to train on, minus records the ARKit sensor says are occluded.
+
+        ``sensor_check`` is written by tools/sf3d_process.py: it compares the
+        annotated element's laser points against the real ARKit LiDAR frame.
+        hires_depth is RENDERED from the laser scan, so the writer's own
+        visibility test cannot see a surface that is missing from the scan or
+        that moved between the scan and the video (a closed door, a glossy
+        tiled wall). Measured over the full 458,264-record database, 8.97% of
+        records sit behind a real measured surface at a 0.5 cutoff -- and the
+        number barely moves with the threshold (8.26% at 0.7, 7.58% at 0.9),
+        so these are decisive, not borderline.
+
+        Records with ``sensor_check`` None (1.5%: no ARKit frame paired within
+        the writer's time window) are KEPT, since there is no evidence against
+        them. Set sensor_max_occluded_frac=None to disable filtering entirely.
+        """
+        cutoff = self.sensor_max_occluded_frac
+
+        # Cache validity is keyed on the record COUNT, not the path, so a cache
+        # built from a /dev/shm copy stays valid for the same database on the
+        # volume (and vice versa).
+        with self.env.begin(write=False) as txn:
+            entry_count = txn.stat()["entries"]
+
+        if self.key_cache_path and self.key_cache_path.is_file():
+            cached = pickle.loads(self.key_cache_path.read_bytes())
+            if cached.get("cutoff") == cutoff and cached.get("entries") == entry_count:
+                print(
+                    f"Loaded {len(cached['keys'])} keys from cache "
+                    f"{self.key_cache_path} (cutoff={cutoff})"
+                )
+                return cached["keys"]
+
+        keys: List[bytes] = []
+        dropped = 0
+        unverified = 0
         with self.env.begin(write=False) as txn:
             cursor = txn.cursor()
-            for key, _ in cursor:
-                if key != b"__metadata__":
+            if cutoff is None:
+                for key, _ in cursor:
+                    if key != b"__metadata__":
+                        keys.append(key)
+            else:
+                for key, value in cursor:
+                    if key == b"__metadata__":
+                        continue
+                    sensor = pickle.loads(value).get("sensor_check")
+                    if sensor is None:
+                        unverified += 1
+                    elif sensor.get("sensor_occluded_frac", 0.0) > cutoff:
+                        dropped += 1
+                        continue
                     keys.append(key)
+
+        if cutoff is not None:
+            total = len(keys) + dropped
+            print(
+                f"Sensor filter (occluded_frac > {cutoff}): dropped {dropped} of "
+                f"{total} records ({100.0 * dropped / max(1, total):.2f}%); "
+                f"{unverified} kept without a sensor verdict"
+            )
+
+        if self.key_cache_path:
+            self.key_cache_path.parent.mkdir(parents=True, exist_ok=True)
+            self.key_cache_path.write_bytes(
+                pickle.dumps({"cutoff": cutoff, "entries": entry_count, "keys": keys})
+            )
+            print(f"Cached key list -> {self.key_cache_path}")
+
         return keys
 
     def __len__(self) -> int:
@@ -225,6 +327,29 @@ class SF3DDataset(Dataset):
         if motion_info.get("original_motion_data"):
             motion_type = motion_info["original_motion_data"].get("motion_type", "trans")
 
+        # Retarget the interaction point to the element itself (see __init__).
+        # trajectory_2d_image_coords[0] is the projected element centroid —
+        # index 0 of the stored polyline is also index 0 after the linspace
+        # subsample, so no index mapping is needed. Falls back to the motion
+        # origin when the centroid projects outside the frame (partially
+        # visible element), which the valid flag marks.
+        if self.point_source == "element":
+            coords_2d = item_data.get("trajectory_2d_image_coords")
+            valid_2d = item_data.get("trajectory_2d_valid")
+            if coords_2d is None or valid_2d is None:
+                raise ValueError(
+                    f"point_source='element' but item {item_key_bytes.decode()} has no "
+                    "2D trajectory. Records written before 2026-07-28 lack these fields; "
+                    "rebuild with tools/sf3d_process.py or use sf3d_processed_v2."
+                )
+            if len(coords_2d) > 0 and bool(valid_2d[0]):
+                origin_2d_image_coord_norm = torch.tensor(
+                    [
+                        coords_2d[0][0] / original_width if original_width > 0 else 0.0,
+                        coords_2d[0][1] / original_height if original_height > 0 else 0.0,
+                    ],
+                    dtype=torch.float32,
+                )
 
         # Clamp the normalized coordinates to be within [0, 1]
         origin_2d_image_coord_norm = torch.clamp(origin_2d_image_coord_norm, 0.0, 1.0)
@@ -242,12 +367,14 @@ class SF3DDataset(Dataset):
 
         # --- Load Trajectory Data ---
         trajectory_3d_camera_coords = item_data.get("trajectory_3d_camera_coords", [])
+        trajectory_indices = None
         if trajectory_3d_camera_coords:
             trajectory_tensor = torch.tensor(trajectory_3d_camera_coords, dtype=torch.float32)
             # Sample 20 points uniformly from the trajectory to match model output
             num_points = 20
             if len(trajectory_tensor) > 0:
                 indices = torch.linspace(0, len(trajectory_tensor) - 1, num_points).long()
+                trajectory_indices = indices
                 trajectory_tensor = trajectory_tensor[indices]
             else:
                 # If no trajectory, return zeros but with the correct shape
@@ -256,6 +383,60 @@ class SF3DDataset(Dataset):
             # Create empty trajectory if not available
             raise ValueError(f"Trajectory not found in LMDB item {item_key_bytes.decode()}")
             # trajectory_tensor = torch.zeros((20, 3), dtype=torch.float32)
+
+        # --- 2D trajectory (only when explicitly requested; see __init__) ---
+        # Written by tools/sf3d_process.py as the SAME curve projected into
+        # this frame, so it is subsampled with the SAME indices as the 3D
+        # trajectory and 2D point i corresponds to 3D point i.
+        #
+        # Coordinates are PIXELS in the original frame, left unnormalised on
+        # purpose: image_size_tensor (element 8 of this tuple) carries the
+        # frame size, so the head can normalise however it likes. Note the
+        # existing interaction point is normalised AND clamped to [0,1], which
+        # would be the wrong convention here -- a trajectory legitimately
+        # leaves the frame, and clamping would invent border pixels.
+        #
+        # trajectory_2d_valid marks points that are in front of the camera and
+        # inside the image. Invalid points carry [0, 0]; a 2D loss should mask
+        # on this rather than regress the placeholders.
+        if self.return_trajectory_2d:
+            num_points = 20
+            coords_2d = item_data.get("trajectory_2d_image_coords")
+            valid_2d = item_data.get("trajectory_2d_valid")
+            if coords_2d is None or valid_2d is None:
+                raise ValueError(
+                    f"return_trajectory_2d=True but item {item_key_bytes.decode()} has no "
+                    "2D trajectory. Records written before 2026-07-28 lack these fields; "
+                    "rebuild with tools/sf3d_process.py or use sf3d_processed_v2."
+                )
+            trajectory_2d_tensor = torch.tensor(coords_2d, dtype=torch.float32)
+            trajectory_2d_valid_tensor = torch.tensor(valid_2d, dtype=torch.bool)
+            if trajectory_indices is not None and len(trajectory_2d_tensor) == len(
+                trajectory_3d_camera_coords
+            ):
+                trajectory_2d_tensor = trajectory_2d_tensor[trajectory_indices]
+                trajectory_2d_valid_tensor = trajectory_2d_valid_tensor[trajectory_indices]
+            else:
+                trajectory_2d_tensor = torch.zeros((num_points, 2), dtype=torch.float32)
+                trajectory_2d_valid_tensor = torch.zeros(num_points, dtype=torch.bool)
+
+            return (
+                rgb_image_tensor,
+                depth_image_tensor,
+                description,
+                mask_tensor,
+                bbox_tensor,
+                origin_2d_image_coord_norm,
+                motion_dir_3d_camera_coords,
+                motion_type_tensor,
+                image_size_tensor,
+                rgb_image_filename,
+                motion_origin_3d_camera_coords,
+                camera_intrinsic_matrix,
+                trajectory_tensor,
+                trajectory_2d_tensor,        # (20, 2) pixels
+                trajectory_2d_valid_tensor,  # (20,) bool
+            )
 
         # Match return signature of OPDRealDataset + trajectory + additional fields
         return (

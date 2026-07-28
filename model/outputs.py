@@ -43,6 +43,11 @@ class ModelOutputs:
     #: the intrinsics this gives the 3D origin the model otherwise never
     #: predicts. None unless `predict_origin_depth`.
     origin_depth: Optional[torch.Tensor] = None
+    #: (B, 6) se(3) twist (omega, v) in the camera frame — one construct for
+    #: both motion types (revolute: |omega|=1 and v encodes the axis LINE;
+    #: prismatic: omega=0 and v is the direction). See model/losses/twist.py.
+    #: None unless `use_twist_head`.
+    twist_pred: Optional[torch.Tensor] = None
     #: (B, latent_dim) CVAE posterior mean — only when motion_gt was supplied
     mu: Optional[torch.Tensor] = None
     #: (B, latent_dim) CVAE posterior log-variance — likewise

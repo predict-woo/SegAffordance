@@ -17,6 +17,7 @@ from .layers import (
     TrajectoryMLP,
     Trajectory2DMLP,
     OriginDepthHead,
+    TwistMLP,
 )
 
 
@@ -155,6 +156,20 @@ class CRIS(nn.Module):
         else:
             self.trajectory_2d_predictor = None
 
+        # Unified screw-motion head: one 6-vector for both motion types
+        # (model/losses/twist.py). Additive — the axis/type heads keep
+        # training alongside it so runs stay comparable to the baseline and
+        # OPD batches (which cannot supervise a twist: no 3D origin) still
+        # train every head they used to.
+        self.use_twist_head = getattr(model_params, "use_twist_head", False)
+        if self.use_twist_head:
+            self.twist_predictor = TwistMLP(
+                input_dim=vae_condition_dim,
+                hidden_dim=model_params.vae_hidden_dim,
+            )
+        else:
+            self.twist_predictor = None
+
         # Metric depth of the joint origin, completing {type, axis, origin}.
         self.predict_origin_depth = getattr(model_params, "predict_origin_depth", False)
         if self.predict_origin_depth:
@@ -267,6 +282,11 @@ class CRIS(nn.Module):
             if self.origin_depth_head is not None
             else None
         )
+        twist_pred = (
+            self.twist_predictor(vae_condition)
+            if self.twist_predictor is not None
+            else None
+        )
 
         # motion_gt can be None during pure inference, but for train/val it's provided.
         mu = None
@@ -294,6 +314,7 @@ class CRIS(nn.Module):
             trajectory_pred=trajectory_pred,
             trajectory_2d_pred=trajectory_2d_pred,
             origin_depth=origin_depth,
+            twist_pred=twist_pred,
             mu=mu,
             log_var=log_var,
         )

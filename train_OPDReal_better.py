@@ -15,7 +15,7 @@ from torch.utils.data import Dataset
 
 from config.opd_train import Config, LossParams, ModelParams, OptimizerParams
 from datasets.opdreal_datamodule import OPDRealDataModule
-from model.losses import build_geometric_loss
+from model.losses import TwistLoss, build_geometric_loss
 from model.segmenter import CRIS
 from model.targets import StepTargets, unpack_batch
 from utils.tools import DiceBCELoss, MotionVAELoss, create_composite_visualization, make_gaussian_map
@@ -61,6 +61,11 @@ class OPDRealTrainingModule(pl.LightningModule):
         # Each variant no-ops on batches lacking the targets it needs, so OPD
         # runs are unaffected whichever is selected.
         self.geometric_loss = build_geometric_loss(self.loss_params)
+        # No-ops unless the model has a twist head AND the batch carries a 3D
+        # origin (SF3D), same convention as the geometric losses.
+        self.twist_loss = TwistLoss(
+            weight=getattr(self.loss_params, "twist_weight", 0.5)
+        )
 
         if finetune_from_path:
             self.load_finetune_weights(finetune_from_path)
@@ -163,9 +168,19 @@ class OPDRealTrainingModule(pl.LightningModule):
         if targets.trajectory_2d is not None and outputs.trajectory_2d_pred is not None:
             track_gt = targets.trajectory_2d.to(outputs.trajectory_2d_pred.device)
             track_gt_relative = track_gt - track_gt[:, 0:1, :]
-            L_trajectory_2d = self.trajectory_loss_fn(
-                outputs.trajectory_2d_pred, track_gt_relative
-            )
+            if targets.trajectory_2d_valid is not None:
+                # Invalid points carry [0, 0] placeholders (off-frame /
+                # behind-camera); regressing them would train the head toward
+                # fabricated corners. The relative frame also needs a real
+                # first point, so its validity gates the whole sample.
+                valid = targets.trajectory_2d_valid.to(track_gt.device)
+                m = (valid & valid[:, 0:1]).unsqueeze(-1).float()
+                sq_err = (outputs.trajectory_2d_pred - track_gt_relative).pow(2) * m
+                L_trajectory_2d = sq_err.sum() / (2.0 * m.sum()).clamp(min=1.0)
+            else:
+                L_trajectory_2d = self.trajectory_loss_fn(
+                    outputs.trajectory_2d_pred, track_gt_relative
+                )
             total_loss = total_loss + self.loss_params.trajectory_2d_weight * L_trajectory_2d
             self.log(
                 f"{step_type}/L_trajectory_2d",
@@ -195,11 +210,25 @@ class OPDRealTrainingModule(pl.LightningModule):
                 sync_dist=True,
             )
 
-        # Geometric consistency between the motion-axis and trajectory heads.
+        # Unified screw-motion supervision (use_twist_head).
+        twist_total, twist_terms = self.twist_loss(outputs, targets)
+        total_loss = total_loss + twist_total
+        for term_name, term_value in twist_terms.items():
+            self.log(
+                f"{step_type}/{term_name}",
+                term_value,
+                on_step=(step_type == "train"),
+                on_epoch=True,
+                logger=True,
+                sync_dist=True,
+            )
+
+        # Geometric consistency between the motion/twist and trajectory heads.
         # Which scheme runs is set by loss_params.geometric_loss; every variant
         # no-ops when the batch lacks the targets it needs, so this is safe to
-        # call unconditionally.
-        geometric_total, geometric_terms = self.geometric_loss(outputs, targets)
+        # call unconditionally. The input depth map is passed so the screw
+        # variant can lift the predicted 2D point to a metric anchor.
+        geometric_total, geometric_terms = self.geometric_loss(outputs, targets, depth)
         total_loss = total_loss + geometric_total
         for term_name, term_value in geometric_terms.items():
             self.log(
@@ -921,7 +950,7 @@ class OPDRealTrainingModule(pl.LightningModule):
              base_items = batch[:9]
              img, depth, word_str_list, mask_gt, bbox, point_gt_norm, motion_gt, motion_type_gt, img_size = base_items
 
-        if len(batch) == 13:  # SF3D with trajectory
+        if len(batch) >= 13:  # SF3D with trajectory (15 adds the 2D columns)
              camera_intrinsic = batch[11]
              trajectory_gt = batch[12]
 

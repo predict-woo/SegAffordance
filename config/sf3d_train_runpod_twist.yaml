@@ -1,22 +1,27 @@
-# 20260726_sf3d_geo_predpred: SF3D with the symmetric pred<->pred geometric
-# consistency loss replacing the two cross-GT terms.
+# 20260728_sf3d_twist: unified screw-motion (se(3) twist) arm.
 #
-# Matched line-for-line to sf3d_train_runpod_geo_crossgt.yaml except for the
-# geometric block in loss_params, so the loss is the only variable.
+# Differs from sf3d_train_runpod_geo_crossgt.yaml in three blocks
+# (use_twist_head + twist_weight, geometric_loss "screw", point_source):
 #
-# The loss couples motion_pred to trajectory_pred directly:
-#     R = n̂ᵀMn̂ / tr(M)   with  M = Σᵢ dᵢdᵢᵀ over the relative trajectory
-#     p = P(revolute) from motion_type_logits, gradient flowing
-#     L = (1-p)(1-R) + p·R
-# Prismatic wants all trajectory energy along the axis (R=1), revolute wants
-# none of it (R=0). Design:
-# docs/superpowers/specs/2026-07-26-pred-pred-geometric-loss-design.md
+#   * model_params.use_twist_head + loss_params.twist_weight — one 6-vector
+#     (omega, v) for both motion types: revolute carries the axis LINE (the
+#     moment v is invariant to where along the axis the origin sits, so there
+#     is no point on the axis to be noisy over), prismatic is the interior
+#     point omega = 0 (no infinite radius, no far-away axis). Motion type is
+#     emergent from |omega|. See model/losses/twist.py. The axis/type/CVAE
+#     heads still train alongside, so every baseline metric stays comparable.
 #
-# WATCH val motion-type accuracy against the 96-97% baseline in
-# experiments/INDEX.md. Because p carries gradient, the type head can reduce
-# this loss by relabelling a sample instead of fixing the geometry; degradation
-# there is the tell that it is doing so, and the cue to lower
-# pred_pred_weight.
+#   * data.point_source: "element" — the interaction point is supervised with
+#     the projected element centroid (graspable, on the element for BOTH
+#     types) instead of the motion origin, which for rotation is the hinge:
+#     off the element 63% of the time and border-clamped when off-screen. The
+#     twist head carries the hinge line, so nothing needs a hinge POINT.
+#     NOTE this changes what coords_hat means, so test/mean_point_error and
+#     test/mean_origin_error_m are not comparable with motion_origin runs;
+#     the twist metrics (test/twist_*) are the ones to read.
+#
+# Requires sf3d_processed_v2 (per-record 2D trajectories; older records make
+# point_source="element" raise).
 
 seed_everything: 42
 
@@ -26,6 +31,7 @@ model:
     word_len: 77                     # Standard CLIP context length
     use_depth: true                  # SF3D uses depth
     use_cvae: true                   # Toggle CVAE motion head (default true)
+    use_twist_head: true             # <-- the arm's variable (with point_source)
     depth_feat_channels: [128, 256]
     fpn_in: [512, 1024, 1024]      # Input channels for FPN from backbone.
     fpn_out: [256, 512, 1024]        # Output channels for FPN layers.
@@ -54,12 +60,15 @@ model:
     vae_weight: 0.5
     motion_type_weight: 0.5
     trajectory_weight: 0.5     # Weight for trajectory prediction loss
-    # --- geometric consistency: the only block that differs between the arms
-    geometric_loss: "pred_pred"       # symmetric, couples the two predictions
-    pred_pred_weight: 0.1             # kept under motion_type_weight (0.5) so
-                                      # the type head stays anchored by its CE
-    geometric_weight: 0.5             # unused by this variant
-    trajectory_to_motion_weight: 0.5  # unused by this variant
+    twist_weight: 0.5          # <-- sign-agnostic L2 on the twist 6-vector
+    # Twist-native consistency replaces the branchy cross_gt: one velocity-
+    # field residual for both motion types (helix family: circle and line are
+    # interior cases), no type gate. The self term anchors the PREDICTED
+    # trajectory at the PREDICTED interaction point lifted with the input
+    # depth map — no teacher forcing.
+    geometric_loss: "screw"
+    screw_gt_weight: 0.5       # pred twist field <-> gt trajectory
+    screw_self_weight: 0.5     # pred twist field <-> pred trajectory @ pred point
     # loss parameters
     point_sigma: 8.0            # Sigma for Gaussian heatmap generation (in pixels on the feature map)
     vae_beta: 0.01
@@ -85,7 +94,7 @@ trainer:
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        dirpath: "/workspace/SegAffordance/experiments/20260726_sf3d_geo_predpred/checkpoints"
+        dirpath: "/workspace/SegAffordance/experiments/20260728_sf3d_twist/checkpoints"
         monitor: "val/loss_total"
         mode: "min"
         save_top_k: 3
@@ -95,14 +104,16 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: "/workspace/SegAffordance/experiments/20260726_sf3d_geo_predpred/logs"
+      save_dir: "/workspace/SegAffordance/experiments/20260728_sf3d_twist/logs"
       name: "csv"
   log_every_n_steps: 10
 
-# sf3d_processed_v2 (2026-07-28) supersedes sf3d_processed: splat masks,
-# corrected revolute arcs, sensor-occlusion filtering (reader cutoff 0.5 ->
-# 417,765 records). Warm the page cache before launch (train_pod.sh does):
+# sf3d_processed_v2: splat masks, corrected revolute arcs, 2D trajectories,
+# per-record sensor provenance (reader filters at sensor_max_occluded_frac=0.5
+# -> 417,765 records). Warm the page cache before launch (train_pod.sh does):
 #   cat /workspace/datasets/sf3d_processed_v2/data.lmdb/data.mdb > /dev/null
+# Batch size is provisional until the v2 smoke run settles throughput; keep it
+# identical across all SF3D arms when changing it.
 data:
   train_data_dir: "/workspace/datasets/sf3d_processed_v2"
   # Memoised sensor-filtered key list (297s -> 3s startup; created by the
@@ -115,3 +126,4 @@ data:
   num_workers_train: 16
   num_workers_val: 8
   manual_seed: 42
+  point_source: "element"    # <-- the arm's variable (with use_twist_head)

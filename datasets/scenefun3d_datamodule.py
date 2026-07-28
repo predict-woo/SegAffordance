@@ -19,6 +19,10 @@ class SF3DDataModule(pl.LightningDataModule):
         num_workers_train: int,
         num_workers_val: int,
         manual_seed: int,
+        point_source: str = "motion_origin",
+        lmdb_path: Optional[str] = None,
+        key_cache_path: Optional[str] = None,
+        return_trajectory_2d: bool = False,
     ) -> None:
         super().__init__()
         self.train_data_dir = train_data_dir
@@ -29,6 +33,15 @@ class SF3DDataModule(pl.LightningDataModule):
         self.num_workers_train = num_workers_train
         self.num_workers_val = num_workers_val
         self.manual_seed = manual_seed
+        # Passed straight through to SF3DDataset: what the interaction point
+        # is supervised with ("motion_origin" | "element"), an optional LMDB
+        # override (e.g. a /dev/shm staging copy), and an optional pickle that
+        # memoises the sensor-filtered key list (297s -> 3s on a cold volume).
+        self.point_source = point_source
+        self.lmdb_path = lmdb_path
+        self.key_cache_path = key_cache_path
+        # Emit the 15-tuple with the 2D trajectory columns (the 2D arm).
+        self.return_trajectory_2d = return_trajectory_2d
 
         self.train_dataset: Optional[Dataset] = None
         self.val_dataset: Optional[Dataset] = None
@@ -49,6 +62,10 @@ class SF3DDataModule(pl.LightningDataModule):
                     mask_transform=mask_transform,
                     depth_transform=depth_transform,
                     image_size_for_mask_reconstruction=self.input_size,
+                    point_source=self.point_source,
+                    lmdb_path=self.lmdb_path,
+                    key_cache_path=self.key_cache_path,
+                    return_trajectory_2d=self.return_trajectory_2d,
                 )
 
                 self.train_dataset, self.val_dataset = split_dataset_by_scene(
