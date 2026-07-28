@@ -24,3 +24,6 @@ pretrain/RN50.pt
 sample_viz/
 label_viz*/
 label_audit/
+
+# SF3D dataset-audit renders (tools/sf3d_vis_samples.py & friends)
+sf3d_viz/

@@ -2,7 +2,7 @@
 # One training pod per experiment, run in parallel, deleted when done.
 #
 #   bash runpod/train_pod.sh create  <name>
-#   bash runpod/train_pod.sh launch  <name> <exp_id> <config> [pythonpath]
+#   bash runpod/train_pod.sh launch  <name> <exp_id> <config> [train_script] [pythonpath]
 #   bash runpod/train_pod.sh status  <name> <exp_id>
 #   bash runpod/train_pod.sh delete  <name>
 #
@@ -72,21 +72,27 @@ PY
     ;;
 
   launch)
-    name="$2"; exp="$3"; cfg="$4"; pp="${5:-}"
+    name="$2"; exp="$3"; cfg="$4"; script="${5:-train_OPDReal_better.py}"; pp="${6:-}"
     host="segaff-${name}"
+    # Warm the page cache before launching: the volume serves sequential reads
+    # at ~155 MB/s but random faults at ~1.4 MB/s, so a cold RN50.pt stalls
+    # model construction for minutes and a cold SF3D LMDB makes the key scan
+    # crawl. ~25s total, saves 10+ min.
+    ssh -o BatchMode=yes "$host" "cat /workspace/models/RN50.pt > /dev/null 2>&1 || true
+      case '${cfg}' in *sf3d*) time cat /workspace/datasets/sf3d_processed_v2/data.lmdb/data.mdb > /dev/null;; esac"
     # Detached: nohup inside a subshell, in its OWN ssh invocation. Plain
     # `& disown` in the same ssh call can hang the session.
     ssh -o BatchMode=yes "$host" "( cd /workspace/SegAffordance && mkdir -p experiments/${exp}/logs experiments/${exp}/checkpoints && \
       HF_HOME=/root/hfcache HF_HUB_OFFLINE=1 ${pp:+PYTHONPATH=$pp} \
-      nohup /workspace/venv/bin/python train_OPDReal_better.py fit --config ${cfg} \
+      nohup /workspace/venv/bin/python ${script} fit --config ${cfg} \
       > experiments/${exp}/logs/train.log 2>&1 < /dev/null & ) ; sleep 2; echo launched"
-    echo "$name -> $exp"
+    echo "$name -> $exp ($script)"
     ;;
 
   status)
     name="$2"; exp="$3"
     ssh -o BatchMode=yes "segaff-${name}" "
-      pgrep -f 'train_OPDReal_bette[r]' >/dev/null && echo 'proc: RUNNING' || echo 'proc: ENDED'
+      pgrep -f '_better\.py fi[t]' >/dev/null && echo 'proc: RUNNING' || echo 'proc: ENDED'
       nvidia-smi --query-gpu=name,memory.used,utilization.gpu --format=csv,noheader
       ls /workspace/SegAffordance/experiments/${exp}/checkpoints/ 2>/dev/null | grep best- \
         | sed 's/.*valloss\\([0-9.]*\\)\\.ckpt/\\1 &/' | sort -g | head -3 | cut -d' ' -f2-"
