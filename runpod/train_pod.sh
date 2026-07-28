@@ -79,10 +79,15 @@ PY
     # model construction for minutes and a cold SF3D LMDB makes the key scan
     # crawl. ~25s total, saves 10+ min.
     ssh -o BatchMode=yes "$host" "cat /workspace/models/RN50.pt > /dev/null 2>&1 || true
-      case '${cfg}' in *sf3d*) time cat /workspace/datasets/sf3d_processed_v2/data.lmdb/data.mdb > /dev/null;; esac"
+      case '${cfg}' in *sf3d*)
+        time cat /workspace/datasets/sf3d_processed_v2/data.lmdb/data.mdb > /dev/null
+        time cat /workspace/datasets/sf3d_processed_v2/frames.lmdb/data.mdb > /dev/null 2>/dev/null || true
+      ;; esac"
     # Detached: nohup inside a subshell, in its OWN ssh invocation. Plain
     # `& disown` in the same ssh call can hang the session.
-    ssh -o BatchMode=yes "$host" "( cd /workspace/SegAffordance && mkdir -p experiments/${exp}/logs experiments/${exp}/checkpoints && \
+    # ulimit: pods default to 1024 open files; >=96 dataloader workers dies
+    # with Errno 24. Raised unconditionally — cheap insurance at any count.
+    ssh -o BatchMode=yes "$host" "( ulimit -n 65536; cd /workspace/SegAffordance && mkdir -p experiments/${exp}/logs experiments/${exp}/checkpoints && \
       HF_HOME=/root/hfcache HF_HUB_OFFLINE=1 ${pp:+PYTHONPATH=$pp} \
       nohup /workspace/venv/bin/python ${script} fit --config ${cfg} \
       > experiments/${exp}/logs/train.log 2>&1 < /dev/null & ) ; sleep 2; echo launched"

@@ -71,7 +71,7 @@ model:
   optimizer_params:
     lr: 0.00001
     weight_decay: 0.0001
-    scheduler_milestones: [50, 55]
+    scheduler_milestones: [15, 17]
     scheduler_gamma: 0.1
 
   config:
@@ -82,7 +82,10 @@ model:
     manual_seed: 42
 
 trainer:
-  max_epochs: 60
+  # 18 epochs (~7.5M samples) fits the 8h single-GPU budget at the GPU-bound
+  # ~280-320 samples/s; 60 epochs would be ~24h. Extend from last.ckpt if
+  # the curves are still moving. Milestones scaled with the schedule.
+  max_epochs: 18
   accelerator: "gpu"
   devices: 1
   precision: 16
@@ -111,11 +114,16 @@ data:
   # Memoised sensor-filtered key list (297s -> 3s startup; created by the
   # first run, validated against the LMDB entry count and cutoff).
   key_cache_path: "/workspace/cache/sf3d_v2_keys_cutoff05.pkl"
+  # Training-sized frame bytes in ONE mmap-served LMDB. Without it, per-
+  # sample full-res file reads bottleneck on the FUSE daemon at ~73
+  # samples/s with the GPU 75% idle (profiled 2026-07-28). Warm it
+  # sequentially before launch (train_pod.sh does).
+  frame_cache_path: "/workspace/datasets/sf3d_processed_v2/frames.lmdb"
   val_split_ratio: 0.1
   input_size: [256, 256]
-  batch_size_train: 64
-  batch_size_val: 64
-  num_workers_train: 16
-  num_workers_val: 8
+  batch_size_train: 128
+  batch_size_val: 128
+  num_workers_train: 64
+  num_workers_val: 32
   manual_seed: 42
   return_trajectory_2d: true    # <-- the arm's variable

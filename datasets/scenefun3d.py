@@ -1,8 +1,10 @@
+import io
 import os
 import json
 from pathlib import Path
 
 # from torch._tensor import Tensor # Not directly used, can be removed if not needed elsewhere
+import cv2
 import numpy as np
 from PIL import Image
 import torch
@@ -41,6 +43,7 @@ class SF3DDataset(Dataset):
         key_cache_path: Optional[str] = None,
         return_trajectory_2d: bool = False,
         point_source: str = "motion_origin",
+        frame_cache_path: Optional[str] = None,
     ):
         """
         Args:
@@ -105,6 +108,31 @@ class SF3DDataset(Dataset):
                 f"point_source must be 'motion_origin' or 'element', got {point_source!r}"
             )
         self.point_source = point_source
+
+        # Optional frame cache (tools/sf3d_build_frame_cache.py): one LMDB of
+        # training-sized frame bytes. Without it every sample pulls ~826 KB of
+        # full-res files through the FUSE mount, whose single daemon caps the
+        # whole pipeline at ~73 samples/s no matter how many workers
+        # (profiled 2026-07-28); with it, ~81 KB from one mmap-served file.
+        self.frame_env = None
+        if frame_cache_path is not None:
+            frame_cache = Path(frame_cache_path)
+            if not frame_cache.exists():
+                raise FileNotFoundError(f"frame cache not found at {frame_cache}")
+            self.frame_env = lmdb.open(
+                str(frame_cache), readonly=True, lock=False,
+                readahead=False, meminit=False,
+            )
+            with self.frame_env.begin(write=False) as ftxn:
+                meta = pickle.loads(ftxn.get(b"__metadata__"))
+            cache_size = meta["depth_size"]
+            th, tw = self.image_size_for_mask_reconstruction
+            if (th, tw) != (cache_size, cache_size):
+                raise ValueError(
+                    f"frame cache was built for input size {cache_size}, "
+                    f"dataset wants {(th, tw)} — rebuild with "
+                    f"tools/sf3d_build_frame_cache.py --depth-size"
+                )
 
         if not self.lmdb_path.exists():
             raise FileNotFoundError(f"LMDB database not found at {self.lmdb_path}")
@@ -211,8 +239,40 @@ class SF3DDataset(Dataset):
         # Path is relative to lmdb_data_root/images
         rgb_image_filename = item_data["rgb_image_path"]
         rgb_image_actual_path = self.lmdb_data_root / "images" / rgb_image_filename
-        rgb_image_pil = Image.open(rgb_image_actual_path).convert("RGB")
-        original_width, original_height = rgb_image_pil.size
+        target_h, target_w = self.image_size_for_mask_reconstruction
+
+        frame_blob = None
+        if self.frame_env is not None:
+            with self.frame_env.begin(write=False) as ftxn:
+                raw = ftxn.get(rgb_image_filename.encode())
+            if raw is None:
+                raise KeyError(
+                    f"frame cache has no entry for {rgb_image_filename} — "
+                    "rebuild with tools/sf3d_build_frame_cache.py"
+                )
+            frame_blob = pickle.loads(raw)
+
+        if frame_blob is not None:
+            # Cached frames are already draft-sized; the original dimensions
+            # (which mask coordinates and point normalisation live in) were
+            # recorded at build time because the small JPEG no longer knows them.
+            original_width, original_height = frame_blob["orig_size"]
+            rgb_image_pil = Image.open(io.BytesIO(frame_blob["jpeg"])).convert("RGB")
+        else:
+            # One sequential read, then decode from memory: on the MooseFS
+            # volume per-file metadata ops (open/stat) and buffered small reads
+            # are the dominant cost, not bytes (profiled 2026-07-28).
+            rgb_image_pil = Image.open(io.BytesIO(rgb_image_actual_path.read_bytes()))
+            # The ORIGINAL dimensions come from the header, before any decode —
+            # mask coordinates and point normalisation are in original pixels.
+            original_width, original_height = rgb_image_pil.size
+            # Draft-mode JPEG decode: per-sample CPU is dominated by decoding
+            # 1920x1440 JPEGs that are immediately resized to 256. draft()
+            # decodes DCT-downscaled (here 1/4 -> 480x360), ~6x cheaper, and
+            # the follow-up resize is from a 4x smaller source. No-op for
+            # non-JPEG files.
+            rgb_image_pil.draft("RGB", (target_w, target_h))
+            rgb_image_pil = rgb_image_pil.convert("RGB")
 
         if self.rgb_transform:
             rgb_image_tensor = self.rgb_transform(rgb_image_pil)
@@ -224,18 +284,46 @@ class SF3DDataset(Dataset):
         # --- Load Depth Image (or create placeholder) ---
         depth_image_filename = item_data.get("depth_image_path")
         depth_pil = None
-        if depth_image_filename:
+        if frame_blob is not None:
+            depth_np_uint16 = cv2.imdecode(
+                np.frombuffer(frame_blob["depth_png"], np.uint8),
+                cv2.IMREAD_UNCHANGED,
+            )
+            if depth_np_uint16.shape != (target_h, target_w):
+                depth_np_uint16 = cv2.resize(
+                    depth_np_uint16, (target_w, target_h),
+                    interpolation=cv2.INTER_NEAREST,
+                )
+            depth_pil = Image.fromarray(
+                depth_np_uint16.astype(np.float32) / 1000.0, mode="F"
+            )
+        elif depth_image_filename:
             depth_image_actual_path = self.lmdb_data_root / "depth" / depth_image_filename
-            if depth_image_actual_path.exists():
-                try:
-                    # Load depth image. SceneFun3D depth is stored as 16-bit PNG in millimeters.
-                    depth_pil_uint16 = Image.open(depth_image_actual_path)
-                    depth_np_uint16 = np.array(depth_pil_uint16, dtype=np.uint16)
-                    # Convert to float32 and scale to meters
-                    depth_np_float32 = depth_np_uint16.astype(np.float32) / 1000.0
-                    depth_pil = Image.fromarray(depth_np_float32, mode="F")
-                except Exception as e:
-                    print(f"Warning: could not load depth image {depth_image_actual_path}. Using zero depth. Error: {e}")
+            # No exists() probe: that is one more FUSE stat per sample; the
+            # read below raises the same information.
+            try:
+                # SceneFun3D depth is a 16-bit PNG in millimetres. Read as one
+                # sequential blob, decode in memory (cv2.imread's access
+                # pattern is slow over FUSE), and nearest-resize the uint16
+                # BEFORE the float conversion so the mm->m cast runs on 256^2
+                # pixels rather than the full 1920x1440. The old PIL-decode +
+                # full-res float path was ~56 ms/sample, the single largest
+                # per-sample cost (profiled 2026-07-28).
+                depth_blob = np.frombuffer(
+                    depth_image_actual_path.read_bytes(), dtype=np.uint8
+                )
+                depth_np_uint16 = cv2.imdecode(depth_blob, cv2.IMREAD_UNCHANGED)
+                if depth_np_uint16 is None:
+                    raise IOError("cv2.imdecode returned None")
+                depth_np_uint16 = cv2.resize(
+                    depth_np_uint16,
+                    (target_w, target_h),
+                    interpolation=cv2.INTER_NEAREST,
+                )
+                depth_np_float32 = depth_np_uint16.astype(np.float32) / 1000.0
+                depth_pil = Image.fromarray(depth_np_float32, mode="F")
+            except Exception as e:
+                print(f"Warning: could not load depth image {depth_image_actual_path}. Using zero depth. Error: {e}")
         
         if depth_pil is None:
             # Create a placeholder if depth image is not found or fails to load

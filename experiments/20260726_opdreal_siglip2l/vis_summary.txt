@@ -1,0 +1,30 @@
+checkpoint: experiments/20260726_opdreal_siglip2l/checkpoints/best-epoch17-valloss0.4087.ckpt
+split: valid  samples: 24
+mean IoU: 0.590   IoU>0.5: 18/24
+type acc: 24/24
+mean axis err: 8.4 deg  (rot-only: 7.6 deg)
+
+00_idx317_iou0.83.png  iou=0.829 type_gt=rot type_pred=rot ax_err=2.5deg  desc=Close the open right cabinet door.
+01_idx692_iou0.51.png  iou=0.506 type_gt=trans type_pred=trans ax_err=3.8deg  desc=Pull out the bottom-center drawer.
+02_idx938_iou0.82.png  iou=0.822 type_gt=trans type_pred=trans ax_err=25.3deg  desc=Close the open drawer.
+03_idx1283_iou0.59.png  iou=0.585 type_gt=trans type_pred=trans ax_err=3.4deg  desc=Close the open drawer.
+04_idx1868_iou0.69.png  iou=0.689 type_gt=trans type_pred=trans ax_err=7.0deg  desc=Push the open left drawer closed.
+05_idx2090_iou0.41.png  iou=0.412 type_gt=rot type_pred=rot ax_err=1.0deg  desc=Close the large lower cabinet door.
+06_idx2491_iou0.67.png  iou=0.668 type_gt=rot type_pred=rot ax_err=5.4deg  desc=Close the open cabinet door beside the sink.
+07_idx2676_iou0.60.png  iou=0.604 type_gt=trans type_pred=trans ax_err=7.5deg  desc=Pull out the bottom drawer.
+08_idx2738_iou0.71.png  iou=0.714 type_gt=rot type_pred=rot ax_err=1.8deg  desc=Close the open microwave door.
+09_idx2756_iou0.00.png  iou=0.000 type_gt=trans type_pred=trans ax_err=5.9deg  desc=Push the upper drawer closed.
+10_idx3213_iou0.07.png  iou=0.072 type_gt=trans type_pred=trans ax_err=15.8deg  desc=Push the upper drawer closed.
+11_idx3270_iou0.64.png  iou=0.644 type_gt=trans type_pred=trans ax_err=4.7deg  desc=Close the open drawer on the left.
+12_idx3402_iou0.86.png  iou=0.862 type_gt=trans type_pred=trans ax_err=9.4deg  desc=Pull out the upper drawer.
+13_idx4092_iou0.37.png  iou=0.366 type_gt=trans type_pred=trans ax_err=4.7deg  desc=Push the open bottom drawer closed.
+14_idx4170_iou0.75.png  iou=0.753 type_gt=trans type_pred=trans ax_err=6.6deg  desc=Pull out the upper drawer.
+15_idx4375_iou0.65.png  iou=0.653 type_gt=rot type_pred=rot ax_err=0.8deg  desc=Close the open left cabinet door.
+16_idx4415_iou0.57.png  iou=0.567 type_gt=trans type_pred=trans ax_err=3.7deg  desc=Close the open middle drawer on the left.
+17_idx4659_iou0.70.png  iou=0.703 type_gt=trans type_pred=trans ax_err=5.0deg  desc=Push the open upper drawer closed.
+18_idx4899_iou0.73.png  iou=0.727 type_gt=trans type_pred=trans ax_err=26.4deg  desc=Push the open drawer closed.
+19_idx5357_iou0.30.png  iou=0.303 type_gt=rot type_pred=rot ax_err=2.6deg  desc=Open the narrow door on the left side of the machine.
+20_idx5452_iou0.77.png  iou=0.767 type_gt=trans type_pred=trans ax_err=5.5deg  desc=Open the upper drawer.
+21_idx5605_iou0.84.png  iou=0.835 type_gt=trans type_pred=trans ax_err=1.6deg  desc=Pull out the upper-left drawer.
+22_idx6442_iou0.33.png  iou=0.335 type_gt=trans type_pred=trans ax_err=13.0deg  desc=Close the small drawer beneath the open upper-right drawer.
+23_idx7865_iou0.74.png  iou=0.737 type_gt=rot type_pred=rot ax_err=38.8deg  desc=Close the open yellow lid on the trash bin.

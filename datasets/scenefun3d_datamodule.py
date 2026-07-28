@@ -23,6 +23,7 @@ class SF3DDataModule(pl.LightningDataModule):
         lmdb_path: Optional[str] = None,
         key_cache_path: Optional[str] = None,
         return_trajectory_2d: bool = False,
+        frame_cache_path: Optional[str] = None,
     ) -> None:
         super().__init__()
         self.train_data_dir = train_data_dir
@@ -42,6 +43,8 @@ class SF3DDataModule(pl.LightningDataModule):
         self.key_cache_path = key_cache_path
         # Emit the 15-tuple with the 2D trajectory columns (the 2D arm).
         self.return_trajectory_2d = return_trajectory_2d
+        # Training-sized frame bytes in one LMDB (tools/sf3d_build_frame_cache.py).
+        self.frame_cache_path = frame_cache_path
 
         self.train_dataset: Optional[Dataset] = None
         self.val_dataset: Optional[Dataset] = None
@@ -66,6 +69,7 @@ class SF3DDataModule(pl.LightningDataModule):
                     lmdb_path=self.lmdb_path,
                     key_cache_path=self.key_cache_path,
                     return_trajectory_2d=self.return_trajectory_2d,
+                    frame_cache_path=self.frame_cache_path,
                 )
 
                 self.train_dataset, self.val_dataset = split_dataset_by_scene(
@@ -101,6 +105,9 @@ class SF3DDataModule(pl.LightningDataModule):
             num_workers=self.num_workers_val,
             pin_memory=True,
             drop_last=False,
+            # Without this the val workers are torn down and respawned every
+            # epoch — measured ~1-2 min of dead time per epoch at 32 workers.
+            persistent_workers=self.num_workers_val > 0,
             generator=torch.Generator().manual_seed(self.manual_seed),  # Deterministic shuffling
         )
 
