@@ -34,6 +34,11 @@ model:
     vae_weight: 0.5
     motion_type_weight: 0.5
     trajectory_weight: 0.5     # Weight for trajectory prediction loss
+    # NOTE: cross_gt's revolute branch lost its "plane" term on 2026-07-28 --
+    # it required every trajectory point to sit at the motion origin's height
+    # along the axis, which is wrong (a handle sweeps at its OWN height) and
+    # penalised correct geometry by the squared along-axis offset. No config
+    # change is needed to get the fix; see CrossGTGeometricLoss.
     geometric_weight: 0.5      # Weight for geometric consistency loss (pred vector <-> gt traj)
     trajectory_to_motion_weight: 0.5  # Weight for geometric consistency loss (pred traj <-> gt vector)
     # loss parameters
@@ -66,15 +71,27 @@ trainer:
         monitor: "val/loss_total"
         mode: "min"
         save_top_k: 10
-        filename: "best-{epoch}-{val/loss_total:.4f}"
+        auto_insert_metric_name: false
+        filename: "best-epoch{epoch:02d}-valloss{val/loss_total:.4f}"
   log_every_n_steps: 10
 
-# RunPod paths: dataset lives on the network volume; datasets/scenefun3d.py
-# additionally requires data.lmdb to be copied to /dev/shm/data.lmdb first
-# (11.6GB — fits the pod's 14GB shm):
-#   cp -r /workspace/datasets/sf3d_processed/data.lmdb /dev/shm/data.lmdb
+# RunPod paths: dataset lives on the network volume.
+#
+# sf3d_processed_v2 (rebuilt 2026-07-28, 458,264 records) supersedes
+# sf3d_processed: splat masks instead of convex hulls, revolute arcs centred at
+# the element's height, 2D trajectories, and per-record provenance
+# (visibility_ratio, sensor_check). Its images/ and depth/ are symlinks to
+# sf3d_processed, which still holds the frames -- they were not regenerated.
+#
+# The reader no longer hardcodes /dev/shm. Staging there is still worth it for
+# training, since scanning the keys touches every leaf page and the volume
+# serves that at ~1.4 MB/s versus ~155 MB/s for a sequential copy:
+#   mkdir -p /dev/shm/data.lmdb && \
+#   cp /workspace/datasets/sf3d_processed_v2/data.lmdb/data.mdb /dev/shm/data.lmdb/
+# then pass lmdb_path=/dev/shm/data.lmdb (images/depth still come from
+# train_data_dir).
 data:
-  train_data_dir: "/workspace/datasets/sf3d_processed"
+  train_data_dir: "/workspace/datasets/sf3d_processed_v2"
   val_split_ratio: 0.1
   input_size: [256, 256]
   batch_size_train: 16
