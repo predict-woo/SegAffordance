@@ -34,6 +34,17 @@ class ModelParams:
     # direction with omega = 0. Additive alongside the axis/type heads; see
     # model/losses/twist.py. SF3D-only supervision (needs a 3D origin).
     use_twist_head: bool = False
+    # Feed the GT articulation type to the model as an auxiliary input: an
+    # embedding of {trans, rot, NULL} concatenated into the head condition
+    # vector. Trained with conditioning dropout — each sample's type is
+    # replaced by the learned NULL token with motion_type_input_dropout
+    # probability — so the model also works with no type given. Val/test
+    # ALWAYS run with NULL: metrics and checkpoint selection reflect the
+    # deployment condition, and the hint can be supplied at inference when
+    # available for a free accuracy boost.
+    use_motion_type_input: bool = False
+    motion_type_input_dropout: float = 0.5
+    motion_type_embedding_dim: int = 16
     # Which vision+text encoder to use: "clip_rn50" | "siglip2" | "dinov3"
     backbone: str = "clip_rn50"
     # HF id / hub entry for the non-CLIP backbones

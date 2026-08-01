@@ -97,10 +97,12 @@ class OPDRealTrainingModule(pl.LightningModule):
         self.indices_to_visualize: typing.Optional[set] = None
 
     def forward(
-        self, img, depth, tokenized_word, mask_condition, point_condition, motion_gt
+        self, img, depth, tokenized_word, mask_condition, point_condition, motion_gt,
+        motion_type_input=None,
     ):
         return self.model(
-            img, depth, tokenized_word, mask_condition, point_condition, motion_gt
+            img, depth, tokenized_word, mask_condition, point_condition, motion_gt,
+            motion_type_input,
         )
 
     def _common_step(self, batch, batch_idx, step_type="train"):
@@ -114,7 +116,29 @@ class OPDRealTrainingModule(pl.LightningModule):
             list(word_str_list), self.model_params.word_len
         ).to(self.device)
 
-        outputs = self(img, depth, tokenized_words, mask_gt, point_gt_norm, motion_gt)
+        # Auxiliary type hint with conditioning dropout: during training each
+        # sample's GT type is replaced by the NULL token with probability
+        # motion_type_input_dropout; at val the hint is withheld entirely
+        # (None -> NULL for all), so val metrics and checkpoint selection
+        # reflect the no-hint deployment condition.
+        motion_type_input = None
+        if (
+            getattr(self.model, "use_motion_type_input", False)
+            and step_type == "train"
+            and motion_type_gt is not None
+        ):
+            types = motion_type_gt.to(self.device).long()
+            null_index = self.model.motion_type_embedding.num_embeddings - 1
+            drop_p = getattr(self.model_params, "motion_type_input_dropout", 0.5)
+            dropped = torch.rand(types.shape, device=types.device) < drop_p
+            motion_type_input = torch.where(
+                dropped, torch.full_like(types, null_index), types
+            )
+
+        outputs = self(
+            img, depth, tokenized_words, mask_gt, point_gt_norm, motion_gt,
+            motion_type_input,
+        )
         mask_pred_logits = outputs.mask_logits
         point_pred_logits = outputs.point_logits
         coords_hat = outputs.coords_hat

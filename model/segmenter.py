@@ -112,6 +112,22 @@ class CRIS(nn.Module):
         # the above + coordinates
         vae_condition_dim = vae_feature_dim + 2
 
+        # Optional auxiliary input: the articulation type, embedded and
+        # appended to the condition vector every head consumes. One extra
+        # learned NULL token is the "no hint" state — used for conditioning
+        # dropout during training and ALWAYS at val/test, so the model never
+        # depends on the hint being available. Must be set up before the
+        # heads below so vae_condition_dim includes the embedding.
+        self.use_motion_type_input = getattr(model_params, "use_motion_type_input", False)
+        if self.use_motion_type_input:
+            type_emb_dim = getattr(model_params, "motion_type_embedding_dim", 16)
+            self.motion_type_embedding = nn.Embedding(
+                model_params.num_motion_types + 1, type_emb_dim
+            )
+            vae_condition_dim += type_emb_dim
+        else:
+            self.motion_type_embedding = None
+
         self.use_cvae = getattr(model_params, "use_cvae", True)
         if self.use_cvae:
             self.motion_vae = MotionVAE(
@@ -184,7 +200,10 @@ class CRIS(nn.Module):
         """Tokenize with whatever tokenizer the active backbone was trained on."""
         return self.backbone.tokenize(texts, context_length)
 
-    def forward(self, img, depth, word, mask, interaction_point, motion_gt=None):
+    def forward(
+        self, img, depth, word, mask, interaction_point, motion_gt=None,
+        motion_type_input=None,
+    ):
         """
         img: (B, 3, H, W)
         depth: (B, 1, H, W)
@@ -192,6 +211,9 @@ class CRIS(nn.Module):
         mask: (B, 1, H, W)
         interaction_point: (B, 2) -> value in [0,1]
         motion_gt: (B, 3) -> ground truth motion vector
+        motion_type_input: (B,) long in [0, num_motion_types] — the auxiliary
+            type hint (num_motion_types = the NULL token). None means NULL
+            for every sample. Ignored unless use_motion_type_input.
         """
         # padding mask used in decoder
 
@@ -266,6 +288,17 @@ class CRIS(nn.Module):
         )
         # The VAE is conditioned on object features, global features, and the interaction point.
         vae_condition = torch.cat([vae_encoder_features, coords_hat], dim=1)
+
+        if self.use_motion_type_input:
+            null_index = self.motion_type_embedding.num_embeddings - 1
+            if motion_type_input is None:
+                motion_type_input = torch.full(
+                    (b,), null_index, dtype=torch.long, device=vae_condition.device
+                )
+            type_emb = self.motion_type_embedding(
+                motion_type_input.to(vae_condition.device).long()
+            )
+            vae_condition = torch.cat([vae_condition, type_emb], dim=1)
 
         trajectory_pred = (
             self.trajectory_predictor(vae_condition)
