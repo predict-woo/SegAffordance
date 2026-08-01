@@ -27,6 +27,14 @@ model:
     use_depth: true                  # SF3D uses depth
     use_cvae: true                   # Toggle CVAE motion head (default true)
     use_twist_head: true
+    # GT articulation type as an auxiliary input, with conditioning
+    # dropout: 50% of training samples see a learned NULL token instead,
+    # and val/test ALWAYS run hint-free (NULL) -- metrics reflect the
+    # no-hint deployment condition. Added 2026-08-02; the pre-typein
+    # twist run (6 epochs, val 1.026) is archived and NOT comparable.
+    use_motion_type_input: true
+    motion_type_input_dropout: 0.5
+    motion_type_embedding_dim: 16
     use_2d_trajectory_head: true
     depth_feat_channels: [128, 256]
     fpn_in: [512, 1024, 1024]      # Input channels for FPN from backbone.

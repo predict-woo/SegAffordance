@@ -15,6 +15,12 @@ here (twist L2 pins omega); video pretraining must set it > 0.
 the 3D metrics?) and 20260728_sf3d_2d (legacy data-anchored 2D arm, not yet
 run).
 
+**Update 2026-08-02:** relaunched with `use_motion_type_input: true`
+(GT type as auxiliary input, 50% conditioning dropout, val/test always
+hint-free). The earlier partial run predates this architecture change
+and is not comparable (its 6-epoch checkpoints live in
+`checkpoints_pre_typein/`).
+
 **Result:** (pending)
 
 **Decision:** (pending)

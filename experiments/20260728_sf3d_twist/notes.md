@@ -17,6 +17,12 @@ test/twist_axis_err_deg, test/twist_pass_rate_ma, test/twist_axis_line_dist_m.
 NOTE test/mean_point_error and mean_origin_error_m are NOT comparable with
 motion_origin runs (different point GT).
 
+**Update 2026-08-02:** relaunched with `use_motion_type_input: true`
+(GT type as auxiliary input, 50% conditioning dropout, val/test always
+hint-free). The earlier partial run predates this architecture change
+and is not comparable (its 6-epoch checkpoints live in
+`checkpoints_pre_typein/`).
+
 **Result:** (pending)
 
 **Decision:** (pending)
