@@ -165,12 +165,25 @@ def backproject_points(K_norm: torch.Tensor, uv: torch.Tensor, depth: torch.Tens
     return rays * depth.unsqueeze(-1)
 
 
-def _point_to_polyline_distance(points: torch.Tensor, polyline: torch.Tensor) -> torch.Tensor:
+def _point_to_polyline_distance(
+    points: torch.Tensor,
+    polyline: torch.Tensor,
+    segment_mask: typing.Optional[torch.Tensor] = None,
+) -> torch.Tensor:
     """(B, N, 2) points, (B, M, 2) polyline -> (B, N) distance to the polyline.
 
     Distance to the *segments*, not to the sampled vertices: sampling a conic
     at M points and measuring to the vertices would put a floor of half the
     vertex spacing under the residual.
+
+    ``segment_mask`` (B, M-1) selects which segments may be matched. Excluded
+    segments are scored at a large FINITE constant, so they never win the min
+    and carry zero gradient (finite, not inf: an inf that meets a zero-weight
+    point mask downstream would make inf * 0 = NaN). Callers use this to drop
+    segments whose 3D pre-images sit behind the camera's near plane — a
+    straight 2D segment bridging a camera-plane crossing is not a projection
+    of the real curve (the true projection wraps through infinity), and
+    matching a point to such a fake bridge would reward wrong geometry.
     """
     start = polyline[:, :-1].unsqueeze(1)              # (B, 1, M-1, 2)
     end = polyline[:, 1:].unsqueeze(1)                 # (B, 1, M-1, 2)
@@ -178,7 +191,10 @@ def _point_to_polyline_distance(points: torch.Tensor, polyline: torch.Tensor) ->
     rel = points.unsqueeze(2) - start                  # (B, N, M-1, 2)
     t = (rel * seg).sum(-1) / (seg * seg).sum(-1).clamp(min=1e-12)
     closest = start + t.clamp(0.0, 1.0).unsqueeze(-1) * seg
-    return (points.unsqueeze(2) - closest).norm(dim=-1).min(dim=-1).values
+    dist = (points.unsqueeze(2) - closest).norm(dim=-1)  # (B, N, M-1)
+    if segment_mask is not None:
+        dist = dist.masked_fill(~segment_mask.unsqueeze(1), 1e4)
+    return dist.min(dim=-1).values
 
 
 def _rotate_about_axis(axis: torch.Tensor, vec: torch.Tensor, thetas: torch.Tensor) -> torch.Tensor:
@@ -226,6 +242,7 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
         radius_ref: float = 1.0,
         num_arc_samples: int = 64,
         degenerate_threshold: float = 1e-6,
+        near_plane: float = 0.05,
     ):
         super().__init__()
         self.weight = weight
@@ -234,6 +251,9 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
         self.num_arc_samples = num_arc_samples
         # A track with no extent has no curve to lie on.
         self.degenerate_threshold = degenerate_threshold
+        # Arc samples nearer the camera than this are excluded from the
+        # projected polyline (same reasoning as ScrewConsistencyLoss).
+        self.near_plane = near_plane
 
     def forward(self, outputs, targets, depth=None) -> LossTerms:
         track = targets.trajectory_2d
@@ -275,7 +295,7 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
         )
 
         line_dists = self._prismatic_residual(K_norm, track, start_3d, axis)
-        arc_dists, radius = self._revolute_residual(
+        arc_dists, radius, arc_visible = self._revolute_residual(
             K_norm, track, start_3d, axis, outputs.coords_hat.float(),
             outputs.origin_depth.float(),
         )
@@ -290,10 +310,15 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
         )
 
         extent = ((track - track[:, 0:1]).norm(dim=-1) * point_mask).max(dim=1).values
+        # arc_visible: a sample whose arc hypothesis is entirely behind the
+        # near plane would score the masked-fill constant, swamping the batch
+        # mean and the type gate — drop it instead (rare: the arc passes
+        # through the track's anchored start, which is in front).
         valid = (
             (extent > self.degenerate_threshold)
             & (point_mask[:, 0] > 0)
             & (mask_count >= 2)
+            & arc_visible
         )
         term = (
             per_sample[valid].mean()
@@ -325,7 +350,10 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
         return torch.where(degenerate, rel.norm(dim=-1), cross.abs())
 
     def _revolute_residual(self, K_norm, track, start_3d, axis, coords_hat, origin_depth):
-        """Per-point distance to the projected circle. Returns ((B, N), radius)."""
+        """Per-point distance to the projected circle.
+
+        Returns ((B, N) distances, (B,) radius, (B,) any-visible-segment).
+        """
         centre = backproject_points(K_norm, coords_hat, origin_depth)
         offset = start_3d - centre
         parallel = (offset * axis).sum(-1, keepdim=True) * axis
@@ -335,8 +363,11 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
             -math.pi, math.pi, self.num_arc_samples, device=track.device
         )
         curve_3d = centre.unsqueeze(1) + _rotate_about_axis(axis, offset, thetas)
+        z = curve_3d[..., 2]
+        seg_visible = (z[:, :-1] > self.near_plane) & (z[:, 1:] > self.near_plane)
         curve_2d = project_points(K_norm, curve_3d).clamp(min=-4.0, max=5.0)
-        return _point_to_polyline_distance(track, curve_2d), radius
+        dists = _point_to_polyline_distance(track, curve_2d, seg_visible)
+        return dists, radius, seg_visible.any(dim=1)
 
 
 class CrossGTGeometricLoss(GeometricConsistencyLoss):
@@ -514,6 +545,7 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
         segment_threshold: float = 1e-3,
         field_threshold: float = 1e-4,
         num_orbit_samples: int = 64,
+        near_plane: float = 0.05,
     ):
         super().__init__()
         self.gt_weight = gt_weight
@@ -523,6 +555,13 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
         self.segment_threshold = segment_threshold
         self.field_threshold = field_threshold
         self.num_orbit_samples = num_orbit_samples
+        # Orbit samples closer to the camera than this (metres) are excluded
+        # from the projected polyline. No real observed element sits within
+        # 5 cm of the camera, so nothing legitimate is lost — while gradients
+        # through the projection stay bounded (d(u)/dz ~ 1/z^2 explodes as
+        # z -> 0 even for validly in-front points) and no polyline segment
+        # ever bridges a camera-plane crossing.
+        self.near_plane = near_plane
 
     def forward(self, outputs, targets, depth=None) -> LossTerms:
         if outputs.twist_pred is None:
@@ -611,17 +650,26 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
         )
         omega_norm = twist[..., :3].norm(dim=-1, keepdim=True)
         ts = base.unsqueeze(0) / omega_norm.clamp(min=1.0)
-        orbit_2d = project_points(K_norm, screw_orbit(twist, anchor, ts))
-        # Orbit samples behind the camera project to ~1/eps coordinates.
-        # Clamp to a box a few frames wide: those segments stay far from the
-        # [0,1] track (never win the min) but remain finite in value and
-        # gradient. Belt to the autocast-off braces above.
-        orbit_2d = orbit_2d.clamp(min=-4.0, max=5.0)
+        orbit_3d = screw_orbit(twist, anchor, ts)
+        # Only segments fully in front of the near plane are matchable: a 2D
+        # observation cannot constrain orbit geometry it cannot see, the true
+        # projection of a plane-crossing arc wraps through infinity (a
+        # straight bridge segment would be fake geometry), and 1/z^2
+        # projection gradients stay bounded. Excluded segments contribute
+        # exactly nothing — by construction, not by clamping accident.
+        z = orbit_3d[..., 2]
+        seg_visible = (z[:, :-1] > self.near_plane) & (z[:, 1:] > self.near_plane)
+        # Numerical backstop only (the mask is the real guard): keeps any
+        # projected coordinate finite in value and gradient.
+        orbit_2d = project_points(K_norm, orbit_3d).clamp(min=-4.0, max=5.0)
 
-        dists = _point_to_polyline_distance(track, orbit_2d)
+        dists = _point_to_polyline_distance(track, orbit_2d, seg_visible)
         count = point_mask.sum(dim=1)
         per_sample = (dists * point_mask).sum(dim=1) / count.clamp(min=1.0)
-        row_valid = (count > 0) & anchor_ok
+        # The orbit passes through the anchor (in front of the camera), so a
+        # sample with no visible segment normally means the anchor itself was
+        # bad; either way there is nothing observable to score.
+        row_valid = (count > 0) & anchor_ok & seg_visible.any(dim=1)
         if bool(row_valid.any()):
             return per_sample[row_valid].mean()
         return self._zero(twist)

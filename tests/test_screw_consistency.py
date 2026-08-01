@@ -275,12 +275,15 @@ def test_omega_shrink_only_fires_with_a_track():
     assert "L_screw_omega" not in terms_3d
 
 
-def test_track_term_finite_when_orbit_sweeps_behind_the_camera():
+def test_track_term_finite_and_bounded_when_orbit_sweeps_behind_the_camera():
     # The step-49 NaN of run 20260728_sf3d_2d_twist: a hinge near the camera
     # plane makes the orbit through the anchor (z=2) sweep through z <= 0;
     # those samples project to ~1/eps coordinates, which overflowed to inf
     # under fp16 autocast and produced inf - inf = NaN in the polyline
-    # distance. Loss and gradient must stay finite.
+    # distance. With the near-plane segment mask, loss and gradient must be
+    # not only finite but BOUNDED: projection gradients scale as 1/z^2, so
+    # without the mask a validly in-front sample at z ~ 1e-3 could produce a
+    # ~1e6-magnitude gradient even though nothing is inf.
     near_hinge = torch.tensor([[0.05, 0.0, 0.1]])
     vertical_axis = torch.tensor([[0.0, 1.0, 0.0]])
     twist = twist_from_gt(vertical_axis, ROT, near_hinge)
@@ -291,6 +294,52 @@ def test_track_term_finite_when_orbit_sweeps_behind_the_camera():
     assert torch.isfinite(terms["L_screw_track"]).all()
     total.backward()
     assert torch.isfinite(twist.grad).all()
+    assert twist.grad.abs().max().item() < 1e3
+
+
+def test_polyline_distance_ignores_masked_segments():
+    from model.losses.geometric import _point_to_polyline_distance
+
+    polyline = torch.tensor([[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]]])
+    point = torch.tensor([[[0.5, 0.1]]])  # 0.1 from segment 0, ~0.5 from segment 1
+    both = _point_to_polyline_distance(point, polyline)
+    masked = _point_to_polyline_distance(
+        point, polyline, segment_mask=torch.tensor([[False, True]])
+    )
+    assert abs(both.item() - 0.1) < 1e-6
+    assert masked.item() > 0.4  # the nearby segment is excluded, not matched
+
+
+def test_no_matchable_segment_spans_the_camera_plane():
+    # A plane-crossing orbit's true projection wraps through infinity; a
+    # straight polyline segment bridging the crossing is fabricated geometry.
+    # The guarantee is a chain of two properties: (1) STRUCTURAL — the
+    # visibility mask requires BOTH endpoints in front of the near plane, so
+    # no matchable segment ever spans the boundary; (2) BEHAVIOURAL — masked
+    # segments can never win the min (test_polyline_distance_ignores_masked_
+    # segments). Together: fake bridges cannot be matched.
+    #
+    # (An end-to-end "far track point scores a large distance" assertion is
+    # deliberately NOT made: with a hinge near the camera, the legitimately
+    # visible orbit stretch projects across most of the frame — small
+    # distances there are honest geometry, not bridge artifacts.)
+    import math
+    from model.losses.twist import screw_orbit
+
+    near_hinge = torch.tensor([[0.05, 0.0, 0.1]])
+    vertical_axis = torch.tensor([[0.0, 1.0, 0.0]])
+    twist = twist_from_gt(vertical_axis, ROT, near_hinge)
+    loss = ScrewConsistencyLoss(gt_weight=1.0, self_weight=1.0, track_weight=1.0)
+
+    ts = torch.linspace(-math.pi, math.pi, loss.num_orbit_samples).unsqueeze(0)
+    orbit = screw_orbit(twist, ELEMENT.unsqueeze(0), ts)
+    z = orbit[..., 2]
+    in_front = z > loss.near_plane
+    # the geometry genuinely crosses the plane (otherwise this tests nothing)
+    assert bool(in_front.any()) and bool((~in_front).any())
+    seg_visible = in_front[:, :-1] & in_front[:, 1:]
+    boundary_crossing = in_front[:, :-1] != in_front[:, 1:]
+    assert not bool((seg_visible & boundary_crossing).any())
 
 
 # --- the 15-tuple SF3D batch path ----------------------------------------
