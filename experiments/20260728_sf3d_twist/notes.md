@@ -23,6 +23,15 @@ hint-free). The earlier partial run predates this architecture change
 and is not comparable (its 6-epoch checkpoints live in
 `checkpoints_pre_typein/`).
 
-**Result:** (pending)
+**Result:** best val 0.9891 at epoch 4, then clear overfit (peak 1.094 ep8;
+LR drop at 13 stabilised ~1.02 without reclaiming the minimum). Test (43,870
+val samples, hint-free): type 95.1%, MA 40.0%, axis 26.2° (18.9° matched),
+mIoU 0.083 / PDet 2.9% (masks are tiny at 256² — median GT ~14 px; needs a
+baseline arm before reading much into it). Twist head decoded: type-from-|ω|
+68.2%, axis 38.9°, GT-origin→axis-line 4.18 m — the twist head underperforms
+the legacy axis/type heads in this recipe.
 
-**Decision:** (pending)
+**Decision:** future SF3D arms should drop the LR milestone much earlier
+(~ep4-6) or add early stopping; run the geo_crossgt baseline for mask/axis
+context; twist-head loss weights deserve a sweep before judging the
+parameterisation itself.

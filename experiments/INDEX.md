@@ -37,3 +37,7 @@ det is a reporting metric, not a selection one. Note the two disagree: frozen
 CLIP ep26 reaches det 69.3% vs ep11's 66.6% despite worse val loss, and
 SigLIP 2 ep24 reaches 69.2% vs ep17's 68.4%. Treat cross-model det gaps under
 ~1.5pt as noise.
+| [20260728_sf3d_twist](20260728_sf3d_twist/) | SF3D v2 | twist+screw, element point, type-input, 16 ep | 0.9891 (ep4) | 0.083† | 2.9%† | 95.1%† | 26.2† | twist metrics: type-from-ω 68%, axis 38.9°, line-dist 4.18 m |
+| [20260728_sf3d_2d_twist](20260728_sf3d_2d_twist/) | SF3D v2 | + 2D head + screw track term, 16 ep | 1.0906 (ep15) | 0.093† | 3.7%† | 95.1%† | 26.9† | beats twist arm on ALL twist metrics (75%, 34.9°, 2.63 m); still improving at ep15 |
+
+† SF3D rows: full 43,870-sample val split, not the OPD 300-sample protocol.

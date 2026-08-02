@@ -21,6 +21,15 @@ hint-free). The earlier partial run predates this architecture change
 and is not comparable (its 6-epoch checkpoints live in
 `checkpoints_pre_typein/`).
 
-**Result:** (pending)
+**Result:** best val 1.0906 at epoch 15 — improved EVERY epoch, no overfit
+bend; undertrained at 16 epochs (opposite of the twist arm). Test (43,870
+samples, hint-free): type 95.1%, MA 40.7%, axis 26.9° (16.2° matched), mIoU
+0.093 / PDet 3.7%. Twist head decoded: type-from-|ω| 75.4%, axis 34.9°,
+GT-origin→axis-line 2.63 m — **beats the twist arm on every twist metric**
+(+7.2pp type, −4° axis, −37% line distance) and slightly on masks. The
+prediction-anchored 2D-track supervision helps 3D articulation.
 
-**Decision:** (pending)
+**Decision:** the 2D arm is the stronger recipe — extend it (resume from
+last.ckpt or retrain longer) before any video-mining investment; profile its
+~2× step cost if it becomes the default. Val-loss numbers are NOT comparable
+across arms (different loss terms); compare on test/twist_* only.
