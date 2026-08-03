@@ -134,10 +134,17 @@ Practical notes:
   Edition (~$1.99/hr) and Workstation Edition (~$1.89/hr), with independent
   stock; `train_pod.sh create` tries both. Failed creates make nothing, so
   retrying is always safe.
-- **No bootstrap needed.** `/workspace/venv`, the code, datasets and cached
-  model weights all come from the shared network volume. A `pip install` done
-  once on any pod (into `/workspace/venv`) is visible to every later pod — so
-  install new deps on the dev pod, then training pods just work.
+- **No manual bootstrap needed.** The code, datasets and cached model
+  weights come from the shared network volume; the python env is a plain
+  venv on the pod's **local NVMe** (`/opt/venv`), rebuilt from the committed
+  `requirements.lock` by `runpod/ensure_env.sh` (~50s cold — the datacenter
+  pipe to PyPI beats any volume-staging scheme — and a sub-second no-op when
+  current). `setup.sh`, `dev.sh run` and `train_pod.sh launch` all call it,
+  so every pod boots the exact same package set. Never put a venv on the
+  volume itself: imports pay the FUSE small-file tax. To add/change a dep:
+  edit `requirements.txt`, run `bash runpod/ensure_env.sh --relock` on the
+  dev pod, commit both files (Mac side) — every pod picks it up on its next
+  `ensure_env` call.
 - **Training pods have no mutagen.** They see code through the volume. If the
   dev pod is off (so the mirror is down), `scp` straight to a training pod's
   `/workspace/SegAffordance/`; identical content reconciles cleanly later.

@@ -72,8 +72,12 @@ training pod alive after its run. The volume bills $35/mo regardless.
   still have created the volume — check `network-volume list` before retrying.
 - Network volumes are locked to their datacenter forever (resize up only).
   Only some DCs support volumes; the volume-create error message lists them.
-- The `runpod/pytorch:*-ubuntu2404` image enforces PEP 668 — pip needs
-  `--break-system-packages` (setup.sh handles it).
+- Python NEVER runs from the image's system python or from a venv on the
+  volume: `runpod/ensure_env.sh` builds the env from `requirements.lock` on
+  pod-local `/opt/venv` (called by setup.sh / `dev.sh run` /
+  `train_pod.sh launch`; sub-second no-op when current). To change deps:
+  edit `requirements.txt`, `bash runpod/ensure_env.sh --relock` on the dev
+  pod, commit both files.
 - If `dev.sh start` warns the pod has no GPU, the host's stock was taken while
   stopped: delete the pod and recreate it from the runbook (state on
   `/workspace` survives).

@@ -1,3 +1,10 @@
+# Top-level intent only — the installable artifact is requirements.lock,
+# regenerated with runpod/ensure_env.sh --relock after editing this file.
+# torch/torchvision are pinned to the cu128 builds matching the pod image's
+# CUDA; the lock freezes every transitive dep (incl. the nvidia-* libs whose
+# cu12/cu13 drift once cost a debugging session).
+torch==2.9.1
+torchvision==0.24.1
 wandb
 lmdb
 regex
@@ -6,7 +13,6 @@ pycocotools
 tqdm
 lightning
 opencv-python
-torchvision
 h5py
 tyro
 jsonargparse[signatures]>=4.27.7

@@ -55,9 +55,10 @@ print(f\"{p['name']} ({p['id']}): {p['desiredStatus']}  \${p['costPerHr']}/hr\")
     wait_for_ssh "$id"
     bash "$SCRIPT_DIR/update-ssh-config.sh" "$id"
     if ssh -o BatchMode=yes "$HOST_ALIAS" nvidia-smi --query-gpu=name --format=csv,noheader; then
-      # Container disk (incl. ~/.bashrc and any system pip installs) is wiped
-      # on every stop — re-run the idempotent bootstrap. Fast once
-      # /workspace/venv exists.
+      # Container disk (incl. ~/.bashrc and /opt/venv) is wiped on every
+      # stop — re-run the idempotent bootstrap, which rebuilds the venv on
+      # local NVMe from requirements.lock (~50s cold).
+      echo "bootstrapping (rebuilds venv on local NVMe, ~1 min)..."
       ssh "$HOST_ALIAS" "bash /workspace/SegAffordance/runpod/setup.sh" >/dev/null 2>&1 \
         || echo "WARNING: setup.sh failed — run 'bash runpod/dev.sh run bash runpod/setup.sh' manually" >&2
       echo "ready: ssh $HOST_ALIAS"
@@ -77,12 +78,12 @@ print(f\"{p['name']} ({p['id']}): {p['desiredStatus']}  \${p['costPerHr']}/hr\")
     ;;
   run)
     [ $# -gt 0 ] || { echo "usage: dev.sh run <cmd...>" >&2; exit 2; }
-    # Use the project venv on the volume, not the image's system python: the
-    # latter has torch but no numpy/lightning/wandb, so `python foo.py` dies at
-    # `import numpy`. /workspace/venv is the environment training actually runs
-    # in and is shared by every pod that mounts the volume.
+    # Use the project venv on local NVMe, not the image's system python: the
+    # latter has torch but no numpy/lightning/wandb, so `python foo.py` dies
+    # at `import numpy`. ensure_env is a sub-second no-op when the venv
+    # already matches requirements.lock, and (re)builds it when not.
     ssh -o BatchMode=yes "$HOST_ALIAS" \
-      '[ -d /workspace/venv ] && export PATH=/workspace/venv/bin:$PATH; cd /workspace/SegAffordance 2>/dev/null || cd /workspace; '"$*"
+      'bash /workspace/SegAffordance/runpod/ensure_env.sh >&2 && export PATH=/opt/venv/bin:$PATH; cd /workspace/SegAffordance 2>/dev/null || cd /workspace; '"$*"
     ;;
   sync)
     mutagen sync list ethz-workspace

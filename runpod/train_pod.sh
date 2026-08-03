@@ -12,9 +12,10 @@
 # the dev pod squats the GPU and blocks exactly the smoke tests you need in
 # order to launch the next run.
 #
-# Training pods need NO bootstrap: /workspace/venv, the code, the datasets and
-# any cached model weights all live on the shared network volume. A pip install
-# done once on any pod (into /workspace/venv) is visible to every later pod.
+# Training pods need NO manual bootstrap: code, datasets and cached model
+# weights live on the shared network volume, and `launch` builds the python
+# env on the pod's local NVMe from the committed requirements.lock (~50s,
+# runpod/ensure_env.sh) — imports from the FUSE volume are painfully slow.
 set -u
 
 VOLUME_ID=bckt1t9uuf
@@ -79,7 +80,8 @@ PY
     # at ~155 MB/s but random faults at ~1.4 MB/s, so a cold RN50.pt stalls
     # model construction for minutes and a cold SF3D LMDB makes the key scan
     # crawl. ~25s total, saves 10+ min.
-    ssh -o BatchMode=yes "$host" "cat /workspace/models/RN50.pt > /dev/null 2>&1 || true
+    ssh -o BatchMode=yes "$host" "bash /workspace/SegAffordance/runpod/ensure_env.sh
+      cat /workspace/models/RN50.pt > /dev/null 2>&1 || true
       case '${cfg}' in *sf3d*)
         time cat /workspace/datasets/sf3d_processed_v2/data.lmdb/data.mdb > /dev/null
         time cat /workspace/datasets/sf3d_processed_v2/frames.lmdb/data.mdb > /dev/null 2>/dev/null || true
@@ -90,7 +92,7 @@ PY
     # with Errno 24. Raised unconditionally — cheap insurance at any count.
     ssh -o BatchMode=yes "$host" "( ulimit -n 65536; cd /workspace/SegAffordance && mkdir -p experiments/${exp}/logs experiments/${exp}/checkpoints && \
       HF_HOME=/root/hfcache HF_HUB_OFFLINE=1 ${pp:+PYTHONPATH=$pp} \
-      nohup /workspace/venv/bin/python ${script} fit --config ${cfg} \
+      nohup /opt/venv/bin/python ${script} fit --config ${cfg} \
       > experiments/${exp}/logs/train.log 2>&1 < /dev/null & ) ; sleep 2; echo launched"
     echo "$name -> $exp ($script)"
     ;;
