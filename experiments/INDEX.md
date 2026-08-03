@@ -43,4 +43,4 @@ SigLIP 2 ep24 reaches 69.2% vs ep17's 68.4%. Treat cross-model det gaps under
 † SF3D rows: full 43,870-sample val split, not the OPD 300-sample protocol.
 | 20260804_sf3d_twist_clip | SF3D | twist arm gen-2: no CVAE, delta-cumsum traj, sign-sensitive twist L2 | val 1.183@ep13, still improving; twist axis 39.6deg, dir 64.8%, traj_dir 75.2%, pass_ma 23.0%, mIoU 0.10 | fix round validated; reference ckpt = last (ep15) |
 | 20260804_sf3d_twist_dinov3 | SF3D | gen-2 twist arm on frozen DINOv3 ViT-L + dino.txt | val plateaued ep2 (1.346); twist axis 49.7deg, dir 60.4%, pass_ma 8.1%, mIoU 0.007 | weak — CLIP stays the backbone |
-| 20260804_sf3d_2donly | SF3D | 2D-only proof: no 3D GT in training (projection loss + screw-self 1-cos + omega prior) | (running) | (pending) |
+| 20260804_sf3d_2donly | SF3D | 2D-only proof: no 3D GT in training (projection loss + screw-self 1-cos + omega prior) | L_twist fell 0.69->0.60 untrained, twist_dir 60%; axis ~random, type collapsed to trans | mechanism works, signal weak — use as pretraining before 3D finetune; tune omega prior |
