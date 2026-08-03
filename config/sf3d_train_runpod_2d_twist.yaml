@@ -25,7 +25,13 @@ model:
     clip_pretrain: "pretrain/RN50.pt" # Assumes a valid CLIP model is at this path
     word_len: 77                     # Standard CLIP context length
     use_depth: true                  # SF3D uses depth
-    use_cvae: true                   # Toggle CVAE motion head (default true)
+    # CVAE dropped 2026-08-03: its KLD had collapsed to ~3e-5 (posterior ==
+    # prior, z carried nothing) so it was a deterministic MLP with extra
+    # parameters and loss terms — and the multimodal output it was meant to
+    # protect (trajectory) never went through z anyway. MotionMLP predicts
+    # the same axis + type logits; L_vae degenerates to plain axis MSE.
+    # NOT resumable from use_cvae checkpoints (module names differ).
+    use_cvae: false
     use_twist_head: true
     # GT articulation type as an auxiliary input, with conditioning
     # dropout: 50% of training samples see a learned NULL token instead,
