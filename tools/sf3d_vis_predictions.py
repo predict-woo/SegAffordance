@@ -83,6 +83,23 @@ def put_lines(img, lines, color=(255, 255, 255)):
     return img
 
 
+def draw_points_norm(img, uv_norm, valid, color, radius=4):
+    """uv_norm: (M, 2) in [0,1]-ish; one dot per valid point, start point
+    ringed white so sweep direction is readable."""
+    h, w = img.shape[:2]
+    first = True
+    for i in range(len(uv_norm)):
+        if not valid[i]:
+            continue
+        p = (int(round(uv_norm[i, 0] * w)), int(round(uv_norm[i, 1] * h)))
+        if -w < p[0] < 2 * w and -h < p[1] < 2 * h:
+            cv2.circle(img, p, radius, color, -1, cv2.LINE_AA)
+            if first:
+                cv2.circle(img, p, radius + 3, (255, 255, 255), 2, cv2.LINE_AA)
+        first = False
+    return img
+
+
 def draw_polyline_norm(img, uv_norm, valid, color, thickness=3):
     """uv_norm: (M, 2) in [0,1]-ish; draws only consecutive valid pairs."""
     h, w = img.shape[:2]
@@ -107,6 +124,10 @@ def main():
                     help="dated batch dir under viz/, e.g. viz/YYYYMMDD_<subject>_panels")
     ap.add_argument("--num", type=int, default=16)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--traj-only", action="store_true",
+                    help="trajectory-focused panels: GT track and predicted 3D "
+                         "trajectory drawn as POINTS (start ringed white); no "
+                         "mask overlay, no twist orbit, no 2D track")
     args = ap.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -154,18 +175,24 @@ def main():
 
         # ---- GT panel
         gt = frame.copy()
-        gt_mask = F.interpolate(mask_t[None].float(), size=(H, W), mode="nearest")[0, 0].numpy()
-        gt = overlay_mask(gt, gt_mask, (0, 200, 0))
+        if not args.traj_only:
+            gt_mask = F.interpolate(mask_t[None].float(), size=(H, W), mode="nearest")[0, 0].numpy()
+            gt = overlay_mask(gt, gt_mask, (0, 200, 0))
         traj_uv = (traj2d_px / img_size[None, :]).numpy()
         gt_valid = traj2d_valid.numpy()
-        gt = draw_polyline_norm(gt, traj_uv, gt_valid, (255, 220, 0))
         gt_lines = [f"GT [{ 'rot' if int(type_gt) else 'trans' }]", desc[:52]]
-        if gt_valid.any():
+        if args.traj_only:
+            gt = draw_points_norm(gt, traj_uv, gt_valid, (255, 220, 0))
+            if not gt_valid.any():
+                gt_lines.append("(GT track: no point visible in frame)")
+        elif gt_valid.any():
+            gt = draw_polyline_norm(gt, traj_uv, gt_valid, (255, 220, 0))
             # end-of-sweep marker so the motion direction is readable
             end = np.flatnonzero(gt_valid)[-1]
             ep = (int(traj_uv[end, 0] * W), int(traj_uv[end, 1] * H))
             cv2.circle(gt, ep, 5, (255, 220, 0), -1)
         else:
+            gt = draw_polyline_norm(gt, traj_uv, gt_valid, (255, 220, 0))
             gt_lines.append("(GT track: no point visible in frame)")
         gp = (int(point_gt[0] * W), int(point_gt[1] * H))
         cv2.circle(gt, gp, 6, (255, 255, 255), -1)
@@ -179,9 +206,10 @@ def main():
                 out = model(img_t[None].to(device), depth_t[None].to(device),
                             word, None, None, None, None)
             p = frame.copy()
-            pm = torch.sigmoid(out.mask_logits)[0, 0].cpu()
-            pm = F.interpolate(pm[None, None], size=(H, W), mode="bilinear")[0, 0].numpy()
-            p = overlay_mask(p, (pm > 0.5).astype(np.float32), (0, 0, 230))
+            if not args.traj_only:
+                pm = torch.sigmoid(out.mask_logits)[0, 0].cpu()
+                pm = F.interpolate(pm[None, None], size=(H, W), mode="bilinear")[0, 0].numpy()
+                p = overlay_mask(p, (pm > 0.5).astype(np.float32), (0, 0, 230))
             coords = out.coords_hat[0].cpu()
             pp = (int(coords[0] * W), int(coords[1] * H))
             cv2.circle(p, pp, 6, (255, 255, 255), -1)
@@ -203,11 +231,14 @@ def main():
                 traj_abs = anchor.unsqueeze(1) + out.trajectory_pred[0:1].cpu().float()
                 tv = (traj_abs[0, :, 2] > 0.05).numpy()
                 tuv = project_points(K_norm, traj_abs)[0].clamp(-2, 3).numpy()
-                p = draw_polyline_norm(p, tuv, tv, (255, 0, 255))
+                if args.traj_only:
+                    p = draw_points_norm(p, tuv, tv, (255, 0, 255))
+                else:
+                    p = draw_polyline_norm(p, tuv, tv, (255, 0, 255))
 
             # 2D track head (relative to its own first point, anchored at
             # coords_hat — the same element point the track starts from).
-            if out.trajectory_2d_pred is not None:
+            if out.trajectory_2d_pred is not None and not args.traj_only:
                 track = (coords[None] + out.trajectory_2d_pred[0].cpu().float()).numpy()
                 p = draw_polyline_norm(p, track, np.ones(len(track), bool), (0, 140, 255))
 
@@ -215,15 +246,17 @@ def main():
                 tw = out.twist_pred[0].cpu().float()
                 is_rev, direction, _ = decode_twist(tw[None])
                 om = tw[:3].norm().item()
-                ts = torch.linspace(-math.pi, math.pi, 96)[None] / max(om, 1.0)
-                orbit = screw_orbit(tw[None], anchor, ts)[0]
-                ov = (orbit[:, 2] > 0.05).numpy() if anchor_ok else np.zeros(96, bool)
-                ouv = project_points(K_norm, orbit[None])[0].clamp(-2, 3).numpy()
-                p = draw_polyline_norm(p, ouv, ov, (0, 230, 230))
+                if not args.traj_only:
+                    ts = torch.linspace(-math.pi, math.pi, 96)[None] / max(om, 1.0)
+                    orbit = screw_orbit(tw[None], anchor, ts)[0]
+                    ov = (orbit[:, 2] > 0.05).numpy() if anchor_ok else np.zeros(96, bool)
+                    ouv = project_points(K_norm, orbit[None])[0].clamp(-2, 3).numpy()
+                    p = draw_polyline_norm(p, ouv, ov, (0, 230, 230))
                 lines.append(f"cls={cls_type}  |w|={om:.2f} -> {'rot' if bool(is_rev[0]) else 'trans'}")
             else:
                 lines.append(f"cls={cls_type}")
-            lines.append("mag=traj3d  orn=trk2d  yel=orbit")
+            lines.append("mag=traj3d pts" if args.traj_only
+                         else "mag=traj3d  orn=trk2d  yel=orbit")
             p = put_lines(p, lines)
             panels.append(p)
 

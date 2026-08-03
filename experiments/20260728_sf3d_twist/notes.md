@@ -37,3 +37,5 @@ context; twist-head loss weights deserve a sweep before judging the
 parameterisation itself.
 
 vis: viz/20260803_sf3d_twist_vs_2d_twist_panels (GT vs both arms, 16 val samples)
+
+vis: viz/20260803_sf3d_twist_traj_points (trajectory-only point rendering — predicted sequences are jittery/unordered, hedge direction around the anchor)

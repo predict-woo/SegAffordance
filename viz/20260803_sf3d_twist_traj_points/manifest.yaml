@@ -1,0 +1,13 @@
+command: tools/sf3d_vis_predictions.py --model twist experiments/20260728_sf3d_twist/config.yaml
+  experiments/20260728_sf3d_twist/checkpoints/best-epoch04-valloss0.9891.ckpt --out
+  viz/20260803_sf3d_twist_traj_points --num 16 --traj-only
+tool_commit: 8ae60dd
+generated: '2026-08-03T14:38:12+00:00'
+models:
+- name: twist
+  config: experiments/20260728_sf3d_twist/config.yaml
+  ckpt: experiments/20260728_sf3d_twist/checkpoints/best-epoch04-valloss0.9891.ckpt
+num: 16
+seed: 0
+data_root: /workspace/datasets/sf3d_processed_v2
+key_cache: /workspace/cache/sf3d_v2_keys_cutoff05.pkl
