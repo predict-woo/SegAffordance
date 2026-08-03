@@ -133,9 +133,16 @@ data:
   key_cache_path: "/workspace/cache/sf3d_v2_keys_cutoff05.pkl"
   # Training-sized frame bytes in ONE mmap-served LMDB. Without it, per-
   # sample full-res file reads bottleneck on the FUSE daemon at ~73
-  # samples/s with the GPU 75% idle (profiled 2026-07-28). Warm it
-  # sequentially before launch (train_pod.sh does).
+  # samples/s with the GPU 75% idle (profiled 2026-07-28). train_pod.sh
+  # launch stages both LMDBs into /dev/shm and overrides these paths on the
+  # CLI — FUSE mmap gets cost ~3.5 ms even page-cache-warm.
   frame_cache_path: "/workspace/datasets/sf3d_processed_v2/frames.lmdb"
+  # cv2-only decode + uint8 RGB (normalized on GPU in the model) + reused
+  # mask buffers: 25.4 -> 12.7 ms/sample, pipeline 280 -> 435 samples/s at
+  # 40 workers (profiled 2026-08-03 on the ~10-core cgroup quota). Masks/
+  # depth/bbox bit-identical to the legacy path; only the RGB resize kernel
+  # differs, so pre-2026-08 checkpoints are not exactly comparable.
+  fast_pipeline: true
   val_split_ratio: 0.1
   input_size: [256, 256]
   batch_size_train: 128

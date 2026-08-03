@@ -76,15 +76,21 @@ PY
   launch)
     name="$2"; exp="$3"; cfg="$4"; script="${5:-train_OPDReal_better.py}"; pp="${6:-}"
     host="segaff-${name}"
-    # Warm the page cache before launching: the volume serves sequential reads
-    # at ~155 MB/s but random faults at ~1.4 MB/s, so a cold RN50.pt stalls
-    # model construction for minutes and a cold SF3D LMDB makes the key scan
-    # crawl. ~25s total, saves 10+ min.
+    # Warm RN50 into the page cache (a cold read stalls model construction
+    # for minutes), and stage the SF3D LMDBs into /dev/shm: even warm, FUSE
+    # mmap access costs ~3.5 ms per LMDB get (profiled 2026-08-03, ~7 ms of
+    # the 12.7 ms/sample) — from tmpfs it's a plain memcpy. Sequential cp
+    # runs at ~155 MB/s, ~2.5 min for 26 GB, once per pod.
+    extra=""
+    case "$cfg" in *sf3d*)
+      extra="--data.lmdb_path /dev/shm/data.lmdb --data.frame_cache_path /dev/shm/frames.lmdb"
+    ;; esac
     ssh -o BatchMode=yes "$host" "bash /workspace/SegAffordance/runpod/ensure_env.sh
       cat /workspace/models/RN50.pt > /dev/null 2>&1 || true
       case '${cfg}' in *sf3d*)
-        time cat /workspace/datasets/sf3d_processed_v2/data.lmdb/data.mdb > /dev/null
-        time cat /workspace/datasets/sf3d_processed_v2/frames.lmdb/data.mdb > /dev/null 2>/dev/null || true
+        mkdir -p /dev/shm/data.lmdb /dev/shm/frames.lmdb
+        [ -f /dev/shm/data.lmdb/data.mdb ] || time cp /workspace/datasets/sf3d_processed_v2/data.lmdb/data.mdb /dev/shm/data.lmdb/
+        [ -f /dev/shm/frames.lmdb/data.mdb ] || time cp /workspace/datasets/sf3d_processed_v2/frames.lmdb/data.mdb /dev/shm/frames.lmdb/
       ;; esac"
     # Detached: nohup inside a subshell, in its OWN ssh invocation. Plain
     # `& disown` in the same ssh call can hang the session.
@@ -92,7 +98,7 @@ PY
     # with Errno 24. Raised unconditionally — cheap insurance at any count.
     ssh -o BatchMode=yes "$host" "( ulimit -n 65536; cd /workspace/SegAffordance && mkdir -p experiments/${exp}/logs experiments/${exp}/checkpoints && \
       HF_HOME=/root/hfcache HF_HUB_OFFLINE=1 ${pp:+PYTHONPATH=$pp} \
-      nohup /opt/venv/bin/python ${script} fit --config ${cfg} \
+      nohup /opt/venv/bin/python ${script} fit --config ${cfg} ${extra} \
       > experiments/${exp}/logs/train.log 2>&1 < /dev/null & ) ; sleep 2; echo launched"
     echo "$name -> $exp ($script)"
     ;;

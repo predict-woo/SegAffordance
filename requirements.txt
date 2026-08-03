@@ -16,3 +16,4 @@ opencv-python
 h5py
 tyro
 jsonargparse[signatures]>=4.27.7
+pytest

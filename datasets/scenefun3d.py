@@ -20,6 +20,18 @@ import random
 
 LMDB_DATASET_VERSION_COMPATIBLE = "1.0"  # For checking compatibility
 
+# Dataloader workers each fork their own cv2, whose default per-op thread
+# pool oversubscribes the (quota-limited) CPUs N-workers-fold and thrashes.
+# All cv2 calls here are small (256-480px) — single-threaded is fastest.
+# Set at import time so forked workers inherit it.
+cv2.setNumThreads(0)
+
+# ImageNet stats, matching get_default_transforms. The fast pipeline ships
+# raw uint8 RGB and the model normalizes on GPU (model/segmenter.py uses
+# these same constants).
+IMAGENET_MEAN = (0.485, 0.456, 0.406)
+IMAGENET_STD = (0.229, 0.224, 0.225)
+
 
 class SF3DDataset(Dataset):
     """
@@ -44,6 +56,7 @@ class SF3DDataset(Dataset):
         return_trajectory_2d: bool = False,
         point_source: str = "motion_origin",
         frame_cache_path: Optional[str] = None,
+        fast_pipeline: bool = False,
     ):
         """
         Args:
@@ -108,6 +121,24 @@ class SF3DDataset(Dataset):
                 f"point_source must be 'motion_origin' or 'element', got {point_source!r}"
             )
         self.point_source = point_source
+
+        # Fast per-sample path (profiled 2026-08-03: legacy ~25 ms/sample of
+        # pure CPU, which under RunPod's ~10-core cgroup quota caps the whole
+        # pipeline at ~310 samples/s — below the training GPU): cv2 JPEG
+        # decode straight to target size, raw uint8 CHW RGB (the model
+        # normalizes on GPU — model/segmenter.py), numpy->tensor depth with
+        # no PIL round-trip, mask splatted into a reused per-worker buffer
+        # with the bbox taken from the coordinate list instead of a full-res
+        # np.where. Masks, depth, bbox and metadata are BIT-IDENTICAL to the
+        # legacy path (nearest gather on the exact PIL grid); only the RGB
+        # resize kernel differs (cv2 INTER_AREA vs PIL bilinear, mean abs
+        # diff ~0.005 normalized), so runs that must stay exactly comparable
+        # to pre-2026-08 checkpoints keep this off. Requires frame_cache_path.
+        self.fast_pipeline = fast_pipeline
+        if fast_pipeline and frame_cache_path is None:
+            raise ValueError("fast_pipeline=True requires frame_cache_path")
+        self._mask_bufs: Dict[Tuple[int, int], np.ndarray] = {}
+        self._nearest_grids: Dict[Tuple[int, int], tuple] = {}
 
         # Optional frame cache (tools/sf3d_build_frame_cache.py): one LMDB of
         # training-sized frame bytes. Without it every sample pulls ~826 KB of
@@ -252,7 +283,22 @@ class SF3DDataset(Dataset):
                 )
             frame_blob = pickle.loads(raw)
 
-        if frame_blob is not None:
+        if self.fast_pipeline:
+            # cv2 decode + INTER_AREA resize, out as uint8 CHW RGB. Skips the
+            # whole PIL/ToTensor/Normalize stack (~11 ms/sample); the model
+            # normalizes on GPU (CRIS.forward, on img.dtype == uint8).
+            original_width, original_height = frame_blob["orig_size"]
+            bgr = cv2.imdecode(
+                np.frombuffer(frame_blob["jpeg"], np.uint8), cv2.IMREAD_COLOR
+            )
+            if bgr.shape[:2] != (target_h, target_w):
+                bgr = cv2.resize(
+                    bgr, (target_w, target_h), interpolation=cv2.INTER_AREA
+                )
+            rgb_image_tensor = torch.from_numpy(
+                np.ascontiguousarray(bgr[:, :, ::-1].transpose(2, 0, 1))
+            )
+        elif frame_blob is not None:
             # Cached frames are already draft-sized; the original dimensions
             # (which mask coordinates and point normalisation live in) were
             # recorded at build time because the small JPEG no longer knows them.
@@ -274,16 +320,18 @@ class SF3DDataset(Dataset):
             rgb_image_pil.draft("RGB", (target_w, target_h))
             rgb_image_pil = rgb_image_pil.convert("RGB")
 
-        if self.rgb_transform:
-            rgb_image_tensor = self.rgb_transform(rgb_image_pil)
-        else:
-            rgb_image_tensor = transforms.ToTensor()(
-                rgb_image_pil
-            )  # Default if no transform
+        if not self.fast_pipeline:
+            if self.rgb_transform:
+                rgb_image_tensor = self.rgb_transform(rgb_image_pil)
+            else:
+                rgb_image_tensor = transforms.ToTensor()(
+                    rgb_image_pil
+                )  # Default if no transform
         
         # --- Load Depth Image (or create placeholder) ---
         depth_image_filename = item_data.get("depth_image_path")
         depth_pil = None
+        depth_image_tensor = None
         if frame_blob is not None:
             depth_np_uint16 = cv2.imdecode(
                 np.frombuffer(frame_blob["depth_png"], np.uint8),
@@ -294,9 +342,16 @@ class SF3DDataset(Dataset):
                     depth_np_uint16, (target_w, target_h),
                     interpolation=cv2.INTER_NEAREST,
                 )
-            depth_pil = Image.fromarray(
-                depth_np_uint16.astype(np.float32) / 1000.0, mode="F"
-            )
+            if self.fast_pipeline:
+                # Already target-sized: tensor directly, mm -> m. The legacy
+                # PIL "F" round-trip only fed a Resize that was a no-op here.
+                depth_image_tensor = torch.from_numpy(
+                    depth_np_uint16.astype(np.float32)
+                ).unsqueeze(0).div_(1000.0)
+            else:
+                depth_pil = Image.fromarray(
+                    depth_np_uint16.astype(np.float32) / 1000.0, mode="F"
+                )
         elif depth_image_filename:
             depth_image_actual_path = self.lmdb_data_root / "depth" / depth_image_filename
             # No exists() probe: that is one more FUSE stat per sample; the
@@ -325,55 +380,98 @@ class SF3DDataset(Dataset):
             except Exception as e:
                 print(f"Warning: could not load depth image {depth_image_actual_path}. Using zero depth. Error: {e}")
         
-        if depth_pil is None:
-            # Create a placeholder if depth image is not found or fails to load
-            # zero_depth = np.zeros((original_height, original_width), dtype=np.float32)
-            # depth_pil = Image.fromarray(zero_depth, mode="F")
-            raise ValueError(f"Depth image not found at {depth_image_actual_path}")
+        if depth_image_tensor is None:
+            if depth_pil is None:
+                # Create a placeholder if depth image is not found or fails to load
+                # zero_depth = np.zeros((original_height, original_width), dtype=np.float32)
+                # depth_pil = Image.fromarray(zero_depth, mode="F")
+                raise ValueError(f"Depth image not found at {depth_image_actual_path}")
 
-        if self.depth_transform:
-            depth_image_tensor = self.depth_transform(depth_pil)
-        else:
-            depth_image_tensor = transforms.ToTensor()(depth_pil)
+            if self.depth_transform:
+                depth_image_tensor = self.depth_transform(depth_pil)
+            else:
+                depth_image_tensor = transforms.ToTensor()(depth_pil)
 
 
-        mask_np = np.zeros((original_height, original_width), dtype=np.uint8)
         mask_coords_yx = item_data.get("mask_coordinates_yx", [])
-        if mask_coords_yx:  # Ensure there are coordinates
-            rows, cols = zip(*mask_coords_yx)  # Separate y and x
-            mask_np[np.array(rows), np.array(cols)] = 255  # Fill in the mask
-
-        mask_pil = Image.fromarray(
-            mask_np, mode="L"
-        )  # Convert to PIL Image (Grayscale)
-        
-        # --- Bounding Box from Mask ---
-        rows, cols = np.where(mask_np > 0)
-        if rows.size > 0:
-            x_min, x_max = cols.min(), cols.max()
-            y_min, y_max = rows.min(), rows.max()
-            bbox_tensor = torch.tensor([x_min, y_min, x_max - x_min, y_max - y_min], dtype=torch.float32)
+        if self.fast_pipeline:
+            # bbox straight from the coordinate list (identical to the legacy
+            # full-res np.where — the coords ARE the set pixels), splat into a
+            # REUSED per-worker buffer (no 2.7 MB alloc per sample), then
+            # nearest-downsample as a direct gather on PIL's sampling grid
+            # (src = floor((dst+0.5)*scale), verified bit-identical to
+            # PIL NEAREST — cv2.INTER_NEAREST uses a different grid and
+            # disagreed at IoU 0.4-0.6 on these sparse splat masks). Zero only
+            # the touched pixels afterwards so the buffer stays reusable.
+            if mask_coords_yx:
+                coords = np.asarray(mask_coords_yx, dtype=np.int64)
+                rows_a, cols_a = coords[:, 0], coords[:, 1]
+                bbox_tensor = torch.tensor(
+                    [cols_a.min(), rows_a.min(),
+                     cols_a.max() - cols_a.min(), rows_a.max() - rows_a.min()],
+                    dtype=torch.float32,
+                )
+                buf = self._mask_bufs.get((original_height, original_width))
+                if buf is None:
+                    buf = np.zeros((original_height, original_width), dtype=np.uint8)
+                    self._mask_bufs[(original_height, original_width)] = buf
+                grid = self._nearest_grids.get((original_height, original_width))
+                if grid is None:
+                    r_idx = np.minimum(
+                        ((np.arange(target_h) + 0.5) * (original_height / target_h)).astype(np.int64),
+                        original_height - 1,
+                    )
+                    c_idx = np.minimum(
+                        ((np.arange(target_w) + 0.5) * (original_width / target_w)).astype(np.int64),
+                        original_width - 1,
+                    )
+                    grid = np.ix_(r_idx, c_idx)
+                    self._nearest_grids[(original_height, original_width)] = grid
+                buf[rows_a, cols_a] = 255
+                small = buf[grid]
+                buf[rows_a, cols_a] = 0
+                mask_tensor = torch.from_numpy(
+                    (small > 127).astype(np.float32)
+                ).unsqueeze(0)
+            else:
+                bbox_tensor = torch.zeros(4, dtype=torch.float32)
+                mask_tensor = torch.zeros((1, target_h, target_w), dtype=torch.float32)
         else:
-            bbox_tensor = torch.zeros(4, dtype=torch.float32)
+            mask_np = np.zeros((original_height, original_width), dtype=np.uint8)
+            if mask_coords_yx:  # Ensure there are coordinates
+                rows, cols = zip(*mask_coords_yx)  # Separate y and x
+                mask_np[np.array(rows), np.array(cols)] = 255  # Fill in the mask
 
+            mask_pil = Image.fromarray(
+                mask_np, mode="L"
+            )  # Convert to PIL Image (Grayscale)
 
-        if self.mask_transform:
-            mask_tensor = self.mask_transform(mask_pil)
-        else:
-            # Default: resize to a fixed size (e.g., same as RGB transform if any) and convert to binary tensor
-            # This should align with what get_default_transforms provided previously.
-            # Let's use self.image_size_for_mask_reconstruction for consistency.
-            default_mask_processing = transforms.Compose(
-                [
-                    transforms.Resize(
-                        self.image_size_for_mask_reconstruction,
-                        interpolation=transforms.InterpolationMode.NEAREST,
-                    ),
-                    transforms.ToTensor(),
-                    lambda x: (x > 0.5).float(),  # Ensure binary {0., 1.}
-                ]
-            )
-            mask_tensor = default_mask_processing(mask_pil)
+            # --- Bounding Box from Mask ---
+            rows, cols = np.where(mask_np > 0)
+            if rows.size > 0:
+                x_min, x_max = cols.min(), cols.max()
+                y_min, y_max = rows.min(), rows.max()
+                bbox_tensor = torch.tensor([x_min, y_min, x_max - x_min, y_max - y_min], dtype=torch.float32)
+            else:
+                bbox_tensor = torch.zeros(4, dtype=torch.float32)
+
+            if self.mask_transform:
+                mask_tensor = self.mask_transform(mask_pil)
+            else:
+                # Default: resize to a fixed size (e.g., same as RGB transform if any) and convert to binary tensor
+                # This should align with what get_default_transforms provided previously.
+                # Let's use self.image_size_for_mask_reconstruction for consistency.
+                default_mask_processing = transforms.Compose(
+                    [
+                        transforms.Resize(
+                            self.image_size_for_mask_reconstruction,
+                            interpolation=transforms.InterpolationMode.NEAREST,
+                        ),
+                        transforms.ToTensor(),
+                        lambda x: (x > 0.5).float(),  # Ensure binary {0., 1.}
+                    ]
+                )
+                mask_tensor = default_mask_processing(mask_pil)
 
         # --- Load Description ---
         description = item_data["description"]

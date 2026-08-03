@@ -44,6 +44,8 @@ idna==3.4
     # via
     #   requests
     #   yarl
+iniconfig==2.3.0
+    # via pytest
 jinja2==3.1.6
     # via torch
 jsonargparse==4.50.0
@@ -119,6 +121,7 @@ packaging==24.1
     # via
     #   lightning
     #   lightning-utilities
+    #   pytest
     #   pytorch-lightning
     #   torchmetrics
     #   wandb
@@ -126,6 +129,8 @@ pillow==12.2.0
     # via torchvision
 platformdirs==4.11.0
     # via wandb
+pluggy==1.6.0
+    # via pytest
 propcache==0.5.2
     # via
     #   aiohttp
@@ -138,6 +143,10 @@ pydantic==2.13.4
     # via wandb
 pydantic-core==2.46.4
     # via pydantic
+pygments==2.20.0
+    # via pytest
+pytest==9.1.1
+    # via -r /workspace/SegAffordance/requirements.txt
 pytorch-lightning==2.6.5
     # via lightning
 pyyaml==6.0.3

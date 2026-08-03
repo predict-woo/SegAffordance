@@ -24,6 +24,7 @@ class SF3DDataModule(pl.LightningDataModule):
         key_cache_path: Optional[str] = None,
         return_trajectory_2d: bool = False,
         frame_cache_path: Optional[str] = None,
+        fast_pipeline: bool = False,
     ) -> None:
         super().__init__()
         self.train_data_dir = train_data_dir
@@ -45,6 +46,9 @@ class SF3DDataModule(pl.LightningDataModule):
         self.return_trajectory_2d = return_trajectory_2d
         # Training-sized frame bytes in one LMDB (tools/sf3d_build_frame_cache.py).
         self.frame_cache_path = frame_cache_path
+        # cv2-only decode + uint8 RGB (GPU-normalized in the model) + reused
+        # mask buffers: ~5x cheaper per sample. See SF3DDataset.fast_pipeline.
+        self.fast_pipeline = fast_pipeline
 
         self.train_dataset: Optional[Dataset] = None
         self.val_dataset: Optional[Dataset] = None
@@ -70,6 +74,7 @@ class SF3DDataModule(pl.LightningDataModule):
                     key_cache_path=self.key_cache_path,
                     return_trajectory_2d=self.return_trajectory_2d,
                     frame_cache_path=self.frame_cache_path,
+                    fast_pipeline=self.fast_pipeline,
                 )
 
                 self.train_dataset, self.val_dataset = split_dataset_by_scene(

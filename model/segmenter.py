@@ -40,6 +40,18 @@ def soft_argmax2d(logits: torch.Tensor) -> torch.Tensor:
 class CRIS(nn.Module):
     def __init__(self, model_params):
         super().__init__()
+        # The fast input pipeline (datasets/scenefun3d.py fast_pipeline)
+        # ships raw uint8 RGB and normalization happens here on the GPU —
+        # per-sample CPU normalization was a top cost under RunPod's cgroup
+        # CPU quota. Constants match get_default_transforms (ImageNet).
+        self.register_buffer(
+            "_rgb_mean", torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1),
+            persistent=False,
+        )
+        self.register_buffer(
+            "_rgb_std", torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1),
+            persistent=False,
+        )
         ## Vision & Text Encoder
         # encode_image (B, 3, H, W) -> v2: (B, fpn_in[0], H/8, W/8), v3: (B, fpn_in[1], H/16, W/16), v4: (B, fpn_in[2], H/32, W/32)
         # encode_text (B, L: word_len) -> word_features: (B, L, backbone.word_dim), state: (B, backbone.state_dim)
@@ -215,6 +227,10 @@ class CRIS(nn.Module):
             type hint (num_motion_types = the NULL token). None means NULL
             for every sample. Ignored unless use_motion_type_input.
         """
+        if img.dtype == torch.uint8:
+            # Fast-pipeline input: normalize on device (see __init__).
+            img = (img.float().div_(255.0) - self._rgb_mean) / self._rgb_std
+
         # padding mask used in decoder
 
         pad_mask = self.backbone.pad_mask(word)

@@ -127,6 +127,10 @@ data:
   # samples/s with the GPU 75% idle (profiled 2026-07-28). Warm it
   # sequentially before launch (train_pod.sh does).
   frame_cache_path: "/workspace/datasets/sf3d_processed_v2/frames.lmdb"
+  # cv2-only decode + uint8 RGB (normalized on GPU in the model) + reused
+  # mask buffers; masks/depth/bbox bit-identical to the legacy path (see
+  # sf3d_train_runpod_twist.yaml for the profile numbers).
+  fast_pipeline: true
   val_split_ratio: 0.1
   input_size: [256, 256]
   batch_size_train: 128
