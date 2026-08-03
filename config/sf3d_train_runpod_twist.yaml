@@ -95,10 +95,11 @@ model:
     manual_seed: 42
 
 trainer:
-  # 16 epochs (~6.8M samples) fits the 8h single-GPU budget at the measured
-  # in-flight rate (~250-300 samples/s, GPU-bound with the frame cache and
-  # freshly warmed LMDBs). Extend from last.ckpt if the curves are still
-  # moving; milestones scale with the schedule.
+  # 16 epochs (~6.8M samples) ≈ 4.5h at the measured rate (373 samples/s
+  # end-to-end on an RTX PRO 6000, GPU-bound with 3 ms data wait —
+  # profiled 2026-08-03 with fast_pipeline + /dev/shm LMDBs; the pipeline
+  # alone sustains 2,780 samples/s). Extend from last.ckpt if the curves
+  # are still moving; milestones scale with the schedule.
   max_epochs: 16
   accelerator: "gpu"
   devices: 1
