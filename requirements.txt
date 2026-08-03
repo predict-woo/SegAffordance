@@ -17,3 +17,4 @@ h5py
 tyro
 jsonargparse[signatures]>=4.27.7
 pytest
+termcolor          # imported by the dinov3 repo checkout (backbone "dinov3")

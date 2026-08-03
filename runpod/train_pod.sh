@@ -87,6 +87,9 @@ PY
     ;; esac
     ssh -o BatchMode=yes "$host" "bash /workspace/SegAffordance/runpod/ensure_env.sh
       cat /workspace/models/RN50.pt > /dev/null 2>&1 || true
+      case '${cfg}' in *dinov3*)
+        cat /workspace/cache/dinov3/*.pth > /dev/null 2>&1 || true
+      ;; esac
       case '${cfg}' in *sf3d*)
         mkdir -p /dev/shm/data.lmdb /dev/shm/frames.lmdb
         [ -f /dev/shm/data.lmdb/data.mdb ] || time cp /workspace/datasets/sf3d_processed_v2/data.lmdb/data.mdb /dev/shm/data.lmdb/

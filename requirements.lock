@@ -167,6 +167,8 @@ setuptools==78.1.0
     #   torch
 sympy==1.14.0
     # via torch
+termcolor==3.3.0
+    # via -r /workspace/SegAffordance/requirements.txt
 torch==2.9.1+cu128
     # via
     #   -r /workspace/SegAffordance/requirements.txt
