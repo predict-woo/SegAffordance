@@ -81,7 +81,12 @@ model:
     motion_type_weight: 0.5
     trajectory_weight: 0.5     # Weight for trajectory prediction loss
     trajectory_2d_weight: 0.5  # masked relative-track MSE (the 2D head)
-    twist_weight: 0.5          # sign-agnostic L2 on the twist 6-vector
+    twist_weight: 0.5          # L2 on the twist 6-vector
+    # Direction is semantic on SF3D — the preprocessor derives the GT
+    # trajectory FROM the signed axis (trans marches along +motion_dir, rot
+    # sweeps right-handed about it), so the stored sign is canonical and the
+    # loss is plain sign-SENSITIVE MSE (added 2026-08-04).
+    twist_sign_agnostic: false
     geometric_loss: "screw"
     screw_gt_weight: 0.5       # pred twist field <-> gt 3D trajectory
     screw_self_weight: 0.5     # pred twist field <-> pred trajectory @ pred point

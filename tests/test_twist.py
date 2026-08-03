@@ -116,3 +116,35 @@ def test_loss_noops_without_twist_head_or_without_3d_origin():
     opd_targets = make_targets(axis, ROT, None)  # OPD batches have no origin
     total, terms = loss_fn(make_outputs(torch.randn(1, 6)), opd_targets)
     assert total.item() == 0.0 and terms == {}
+
+
+# ---- direction supervision (sign_agnostic=False, SF3D) ----
+
+
+def test_sign_sensitive_loss_penalises_the_flipped_prediction():
+    # SF3D's stored sign is canonical (the preprocessor derives the GT
+    # trajectory FROM it), so the reversed screw must be a real error.
+    axis = torch.tensor([[0.0, 0.0, 1.0]])
+    origin = torch.tensor([[0.3, -0.1, 1.2]])
+    gt = twist_from_gt(axis, ROT, origin)
+    targets = make_targets(axis, ROT, origin)
+
+    sensitive = TwistLoss(weight=1.0, sign_agnostic=False)
+    loss_aligned, _ = sensitive(make_outputs(gt.clone()), targets)
+    loss_flipped, _ = sensitive(make_outputs(-gt.clone()), targets)
+    assert loss_aligned.item() < 1e-8
+    assert loss_flipped.item() > 0.1
+
+    # the default stays direction-blind (OPD annotates only the axis line)
+    agnostic = TwistLoss(weight=1.0, sign_agnostic=True)
+    loss_flip_ag, _ = agnostic(make_outputs(-gt.clone()), targets)
+    assert loss_flip_ag.item() < 1e-8
+
+
+def test_sign_sensitive_prismatic_direction():
+    direction = torch.tensor([[0.0, 1.0, 0.0]])
+    gt = twist_from_gt(direction, TRANS, torch.zeros(1, 3))
+    targets = make_targets(direction, TRANS, torch.zeros(1, 3))
+    sensitive = TwistLoss(weight=1.0, sign_agnostic=False)
+    loss_flipped, _ = sensitive(make_outputs(-gt.clone()), targets)
+    assert loss_flipped.item() > 0.1

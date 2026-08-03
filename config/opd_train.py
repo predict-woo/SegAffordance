@@ -111,6 +111,12 @@ class LossParams:
     # Sign-agnostic L2 on the se(3) twist head (use_twist_head). Units are
     # comparable to the trajectory MSE: omega is unitless O(1), v is metres.
     twist_weight: float = 0.5
+    # True (default): score the better of (omega,v)/(-omega,-v) — correct for
+    # OPD, where only the axis LINE is annotated. False (SF3D): the stored
+    # sign is canonical (the preprocessor derives the GT trajectory from it,
+    # tools/sf3d_process.py), so plain sign-SENSITIVE MSE — the head must
+    # commit to the semantic sweep direction.
+    twist_sign_agnostic: bool = True
     # Read only by the "screw" variant: predicted twist's velocity field vs
     # the GT trajectory, and vs the model's OWN trajectory anchored at its
     # OWN interaction point (no teacher forcing in the self term).

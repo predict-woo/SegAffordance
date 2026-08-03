@@ -72,7 +72,8 @@ class OPDRealTrainingModule(pl.LightningModule):
         # No-ops unless the model has a twist head AND the batch carries a 3D
         # origin (SF3D), same convention as the geometric losses.
         self.twist_loss = TwistLoss(
-            weight=getattr(self.loss_params, "twist_weight", 0.5)
+            weight=getattr(self.loss_params, "twist_weight", 0.5),
+            sign_agnostic=getattr(self.loss_params, "twist_sign_agnostic", True),
         )
 
         if finetune_from_path:

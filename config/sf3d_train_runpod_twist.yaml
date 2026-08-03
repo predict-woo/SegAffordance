@@ -84,7 +84,12 @@ model:
     vae_weight: 0.5
     motion_type_weight: 0.5
     trajectory_weight: 0.5     # Weight for trajectory prediction loss
-    twist_weight: 0.5          # <-- sign-agnostic L2 on the twist 6-vector
+    twist_weight: 0.5          # L2 on the twist 6-vector
+    # Direction is semantic on SF3D — the preprocessor derives the GT
+    # trajectory FROM the signed axis (trans marches along +motion_dir, rot
+    # sweeps right-handed about it), so the stored sign is canonical and the
+    # loss is plain sign-SENSITIVE MSE (added 2026-08-04).
+    twist_sign_agnostic: false
     # Twist-native consistency replaces the branchy cross_gt: one velocity-
     # field residual for both motion types (helix family: circle and line are
     # interior cases), no type gate. The self term anchors the PREDICTED
