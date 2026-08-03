@@ -1,3 +1,13 @@
+# 20260804_sf3d_twist_dinov3: the twist arm on a FROZEN DINOv3 ViT-L/16 +
+# dino.txt text tower. Copied from sf3d_train_runpod_twist.yaml with ONLY
+# the backbone block changed (and freeze_backbone — SF3D cannot support
+# fine-tuning a 300M ViT any more than OPDReal could), so the backbone is
+# the single variable vs the CLIP RN50 twist run. Weights are the gated
+# .pth files under /workspace/cache/dinov3/ (see knowledge/ and
+# config/opdreal_train_runpod_dinov3.yaml, the OPDReal precedent).
+#
+# Below is the original twist-arm header:
+#
 # 20260728_sf3d_twist: unified screw-motion (se(3) twist) arm.
 #
 # Differs from sf3d_train_runpod_geo_crossgt.yaml in three blocks
@@ -26,9 +36,17 @@
 seed_everything: 42
 
 model:
+  freeze_backbone: true
   model_params:
-    clip_pretrain: "pretrain/RN50.pt" # Assumes a valid CLIP model is at this path
-    word_len: 77                     # Standard CLIP context length
+    backbone: "dinov3"
+    backbone_id: "facebook/dinov3-vitl16-pretrain-lvd1689m"
+    text_source: "dinotxt"
+    dinotxt_weights: "/workspace/cache/dinov3/dinov3_vitl16_dinotxt_vision_head_and_text_encoder-a442d8f5.pth"
+    dinov3_backbone_weights: "/workspace/cache/dinov3/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth"
+    dinov3_repo_dir: "/workspace/cache/dinov3repo"
+    backbone_image_size: 256
+    clip_pretrain: "pretrain/RN50.pt" # unused by this backbone
+    word_len: 77                     # dino.txt reuses CLIP BPE (77 ctx)
     use_depth: true                  # SF3D uses depth
     # CVAE dropped 2026-08-03: its KLD had collapsed to ~3e-5 (posterior ==
     # prior, z carried nothing) so it was a deterministic MLP with extra
@@ -129,7 +147,7 @@ trainer:
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        dirpath: "/workspace/SegAffordance/experiments/20260804_sf3d_twist_clip/checkpoints"
+        dirpath: "/workspace/SegAffordance/experiments/20260804_sf3d_twist_dinov3/checkpoints"
         monitor: "val/loss_total"
         mode: "min"
         save_top_k: 3
@@ -139,7 +157,7 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: "/workspace/SegAffordance/experiments/20260804_sf3d_twist_clip/logs"
+      save_dir: "/workspace/SegAffordance/experiments/20260804_sf3d_twist_dinov3/logs"
       name: "csv"
   log_every_n_steps: 10
 
