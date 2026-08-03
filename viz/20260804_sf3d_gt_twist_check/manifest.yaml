@@ -1,0 +1,6 @@
+command: tools/sf3d_vis_gt_twist.py --out viz/20260804_sf3d_gt_twist_check --num 12
+tool_commit: cd51085
+generated: '2026-08-03T15:41:55+00:00'
+num: 12
+seed: 0
+data_root: /workspace/datasets/sf3d_processed_v2
