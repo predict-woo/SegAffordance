@@ -144,6 +144,7 @@ class CRIS(nn.Module):
             self.motion_type_embedding = None
 
         self.use_cvae = getattr(model_params, "use_cvae", True)
+        self.use_motion_type_head = getattr(model_params, "use_motion_type_head", True)
         if self.use_cvae:
             self.motion_vae = MotionVAE(
                 feature_dim=vae_feature_dim,
@@ -160,6 +161,7 @@ class CRIS(nn.Module):
                 input_dim=vae_condition_dim,
                 hidden_dim=model_params.vae_hidden_dim,
                 num_motion_types=model_params.num_motion_types,
+                with_type_head=getattr(model_params, "use_motion_type_head", True),
             )
 
         # 3D element-sweep head. Off during 2D pretraining: video data has no
@@ -365,6 +367,8 @@ class CRIS(nn.Module):
             motion_pred, motion_type_logits = self.motion_mlp(vae_condition)  # type: ignore[operator]
             # Convert sigmoid output [0,1] to axis vector in [-1,1]
             motion_pred = (motion_pred - 0.5) * 2.0
+        if not self.use_motion_type_head:
+            motion_type_logits = None  # also covers the CVAE path
 
         return ModelOutputs(
             mask_logits=mask_pred,

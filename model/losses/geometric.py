@@ -546,8 +546,15 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
         field_threshold: float = 1e-4,
         num_orbit_samples: int = 64,
         near_plane: float = 0.05,
+        sign_agnostic: bool = True,
     ):
         super().__init__()
+        # sign_agnostic=False (SF3D, via LossParams.twist_sign_agnostic):
+        # the field residual becomes cosine distance (1 - cos), so the
+        # consistency terms REINFORCE the semantic sweep direction the
+        # sign-sensitive twist L2 trains, instead of accepting a flipped
+        # twist as perfect (sin^2 scores both signs identically).
+        self.sign_agnostic = sign_agnostic
         self.gt_weight = gt_weight
         self.self_weight = self_weight
         self.track_weight = track_weight
@@ -696,7 +703,12 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
         )
 
         cos = (delta * field).sum(-1) / (delta_norm * field_norm).clamp(min=1e-12)
-        residual = 1.0 - cos.pow(2).clamp(max=1.0)  # sin^2: sign-agnostic
+        if self.sign_agnostic:
+            residual = 1.0 - cos.pow(2).clamp(max=1.0)  # sin^2: axis line only
+        else:
+            # Cosine distance, the standard direction-sensitive alignment
+            # loss: aligned = 0, perpendicular = 1, flipped = 2.
+            residual = 1.0 - cos.clamp(min=-1.0, max=1.0)
 
         seg_count = seg_valid.float().sum(dim=1)
         per_sample = (residual * seg_valid.float()).sum(dim=1) / seg_count.clamp(min=1.0)
@@ -739,6 +751,9 @@ def build_geometric_loss(loss_params) -> GeometricConsistencyLoss:
             self_weight=getattr(loss_params, "screw_self_weight", 0.5),
             track_weight=getattr(loss_params, "screw_track_weight", 0.5),
             omega_shrink=getattr(loss_params, "screw_omega_shrink", 0.0),
+            # One dataset-level switch: direction semantics apply to the
+            # twist L2 and the consistency terms together.
+            sign_agnostic=getattr(loss_params, "twist_sign_agnostic", True),
         )
     if name == "none":
         return NoGeometricLoss()

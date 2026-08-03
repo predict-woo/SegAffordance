@@ -183,9 +183,13 @@ class OPDRealTrainingModule(pl.LightningModule):
             L_motion = (1.0 - cos_sim.pow(2)).mean()
             L_vae, L_recon, L_kld = L_motion, L_motion, torch.zeros((), device=motion_pred.device)
 
-        L_motion_type = self.motion_type_loss_fn(
-            motion_type_logits, motion_type_gt.to(motion_type_logits.device)
-        )
+        if motion_type_logits is not None:
+            L_motion_type = self.motion_type_loss_fn(
+                motion_type_logits, motion_type_gt.to(motion_type_logits.device)
+            )
+        else:
+            # Type head off (use_motion_type_head: false, 2D-only pretraining)
+            L_motion_type = torch.zeros((), device=motion_pred.device)
 
         total_loss = (
             (self.loss_params.mask_weight * L_mask)
@@ -467,7 +471,10 @@ class OPDRealTrainingModule(pl.LightningModule):
                     motion_gt=motion_gt[i],
                     motion_pred=motion_pred[i],
                     motion_type_gt=motion_type_gt_list[i],
-                    motion_type_pred_logits=motion_type_logits[i],
+                    motion_type_pred_logits=(
+                        motion_type_logits[i] if motion_type_logits is not None
+                        else torch.zeros(2, device=motion_pred.device)
+                    ),
                     trajectory_gt=trajectory_gt_list[i],
                     trajectory_pred=trajectory_pred[i],
                     camera_intrinsic=camera_intrinsic_list[i],
@@ -543,7 +550,10 @@ class OPDRealTrainingModule(pl.LightningModule):
         mask_pred_upsampled = F.interpolate(
             mask_pred_prob, size=mask_gt.shape[-2:], mode="bilinear", align_corners=False
         )
-        pred_types = torch.argmax(motion_type_logits, dim=1)
+        if motion_type_logits is not None:
+            pred_types = torch.argmax(motion_type_logits, dim=1)
+        else:
+            pred_types = torch.zeros(img.size(0), dtype=torch.long, device=img.device)
 
         batch_size = img.size(0)
         # Optional visualization settings

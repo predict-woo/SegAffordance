@@ -216,7 +216,10 @@ def main():
             cv2.circle(p, pp, 6, (0, 0, 230), 2)
 
             lines = [name]
-            cls_type = "rot" if int(out.motion_type_logits[0].argmax()) == 1 else "trans"
+            if out.motion_type_logits is not None:
+                cls_type = "rot" if int(out.motion_type_logits[0].argmax()) == 1 else "trans"
+            else:
+                cls_type = "n/a"
 
             # Shared prediction-side anchor: own point lifted with the input
             # depth (exactly as the screw self/track terms anchor it).

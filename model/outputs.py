@@ -28,8 +28,10 @@ class ModelOutputs:
     coords_hat: torch.Tensor
     #: (B, 3) motion axis, unnormalised and sign-agnostic
     motion_pred: torch.Tensor
-    #: (B, num_motion_types) — class 1 is rotation/revolute
-    motion_type_logits: torch.Tensor
+    #: (B, num_motion_types) — class 1 is rotation/revolute. None when the
+    #: type head is off (`use_motion_type_head: false`); consumers fall back
+    #: to the twist's |omega| where a type is needed.
+    motion_type_logits: Optional[torch.Tensor] = None
     #: (B, num_points, 3) trajectory, relative to its own first point.
     #: The element's swept path. None when the head is disabled
     #: (`use_trajectory_head: false`), as in 2D pretraining where no

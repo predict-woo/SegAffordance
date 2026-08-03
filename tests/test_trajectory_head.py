@@ -36,3 +36,17 @@ def test_position_loss_reaches_every_delta():
 def test_direct_readout_unchanged():
     head = TrajectoryMLP(input_dim=32, hidden_dim=16, num_points=20)
     assert head(torch.randn(4, 32)).shape == (4, 20, 3)
+
+
+def test_motion_mlp_type_head_optional():
+    from model.layers import MotionMLP
+
+    with_head = MotionMLP(input_dim=16, hidden_dim=8, with_type_head=True)
+    m, t = with_head(torch.randn(3, 16))
+    assert t is not None and t.shape == (3, 2)
+
+    without = MotionMLP(input_dim=16, hidden_dim=8, with_type_head=False)
+    m, t = without(torch.randn(3, 16))
+    assert t is None
+    # truly parameter-free: nothing type-related in the state dict
+    assert not any("type_head" in k for k in without.state_dict())

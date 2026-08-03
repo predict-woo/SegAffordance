@@ -365,3 +365,37 @@ def test_unpack_batch_15_normalises_track_and_derives_anchor_depth():
     assert torch.equal(targets.trajectory_2d_valid, valid)
     assert torch.allclose(targets.anchor_depth, trajectory[:, 0, 2])
     assert targets.trajectory is trajectory
+
+
+# ---- direction-sensitive field residual (sign_agnostic=False) ----
+
+
+def _forward_sweep(twist, anchor, n=20, t_max=0.8):
+    ts = torch.linspace(0.0, t_max, n)[None]
+    return screw_orbit(twist, anchor, ts)
+
+
+def test_field_residual_flipped_twist_is_free_only_when_agnostic():
+    axis = torch.tensor([[0.0, 0.0, 1.0]])
+    origin = torch.tensor([[0.3, -0.1, 1.2]])
+    gt = twist_from_gt(axis, torch.tensor([1]), origin)
+    traj = _forward_sweep(gt, anchor=torch.tensor([[0.8, 0.2, 1.5]]))
+
+    agnostic = ScrewConsistencyLoss(gt_weight=1.0, self_weight=1.0, sign_agnostic=True)
+    sensitive = ScrewConsistencyLoss(gt_weight=1.0, self_weight=1.0, sign_agnostic=False)
+
+    # aligned twist: ~0 either way
+    assert agnostic._field_residual(gt, traj).item() < 1e-4
+    assert sensitive._field_residual(gt, traj).item() < 1e-4
+    # flipped twist: invisible to sin^2, maximal (~2) under cosine distance
+    assert agnostic._field_residual(-gt, traj).item() < 1e-4
+    assert sensitive._field_residual(-gt, traj).item() > 1.5
+
+
+def test_field_residual_direction_sensitive_for_prismatic():
+    direction = torch.tensor([[0.0, 1.0, 0.0]])
+    gt = twist_from_gt(direction, torch.tensor([0]), torch.zeros(1, 3))
+    traj = _forward_sweep(gt, anchor=torch.tensor([[0.1, 0.0, 1.0]]))
+    sensitive = ScrewConsistencyLoss(gt_weight=1.0, self_weight=1.0, sign_agnostic=False)
+    assert sensitive._field_residual(gt, traj).item() < 1e-4
+    assert sensitive._field_residual(-gt, traj).item() > 1.5

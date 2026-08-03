@@ -50,6 +50,10 @@ class ModelParams:
     # deployment condition, and the hint can be supplied at inference when
     # available for a free accuracy boost.
     use_motion_type_input: bool = False
+    # Type PREDICTION head (logits + CE loss consumer). Off for 2D-only
+    # pretraining, where no type labels exist — type is then emergent from
+    # the twist's |omega| (the eval decodes and scores it anyway).
+    use_motion_type_head: bool = True
     motion_type_input_dropout: float = 0.5
     motion_type_embedding_dim: int = 16
     # NHWC memory format for the conv stack. Numerically equivalent; removes

@@ -291,7 +291,13 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         mask_pred_upsampled = F.interpolate(
             mask_pred_prob, size=mask_gt.shape[-2:], mode="bilinear", align_corners=False
         )
-        pred_types = torch.argmax(motion_type_logits, dim=1)
+        if motion_type_logits is not None:
+            pred_types = torch.argmax(motion_type_logits, dim=1)
+        elif outputs.twist_pred is not None:
+            # Type head off: type is emergent from the twist's |omega|.
+            pred_types = decode_twist(outputs.twist_pred.detach().float())[0].long()
+        else:
+            pred_types = torch.zeros(img.size(0), dtype=torch.long, device=img.device)
 
         twist_decoded = (
             decode_twist(outputs.twist_pred.detach().float())

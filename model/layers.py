@@ -259,7 +259,8 @@ class MotionVAE(nn.Module):
 
 
 class MotionMLP(nn.Module):
-    def __init__(self, input_dim: int, hidden_dim: int = 256, num_motion_types: int = 2):
+    def __init__(self, input_dim: int, hidden_dim: int = 256, num_motion_types: int = 2,
+                 with_type_head: bool = True):
         super().__init__()
         self.backbone = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
@@ -271,12 +272,16 @@ class MotionMLP(nn.Module):
             nn.Linear(hidden_dim, 3),
             nn.Sigmoid(),
         )
-        self.type_head = nn.Linear(hidden_dim, num_motion_types)
+        # Optional: no parameters at all when off (2D-only pretraining has
+        # no type labels; type is emergent from the twist's |omega|).
+        self.type_head = (
+            nn.Linear(hidden_dim, num_motion_types) if with_type_head else None
+        )
 
     def forward(self, condition: torch.Tensor):
         h = self.backbone(condition)
         motion_pred = self.motion_head(h)
-        motion_type_logits = self.type_head(h)
+        motion_type_logits = self.type_head(h) if self.type_head is not None else None
         return motion_pred, motion_type_logits
 
 
