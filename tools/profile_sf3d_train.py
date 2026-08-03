@@ -177,6 +177,89 @@ def phase_step(module, dm, n_batches):
     del it, dl
 
 
+def phase_parts(module, dm, n_batches):
+    """CUDA-event timing per model stage and per loss term.
+
+    Wraps instance forwards, so nn.Module __call__ picks up the timed
+    version. GPU time is attributed to whichever stage recorded it; glue
+    (interpolates, soft-argmax, condition assembly) lands in 'fwd other'.
+    """
+    module.cuda().train()
+    opt = torch.optim.AdamW(module.parameters(), lr=1e-5)
+    scaler = torch.amp.GradScaler("cuda")
+    pending, sums = [], {}
+
+    def wrap(obj, attr, key):
+        if obj is None:
+            return
+        fn = getattr(obj, attr, None)
+        if fn is None:
+            return
+
+        def timed(*a, **k):
+            s = torch.cuda.Event(enable_timing=True)
+            e = torch.cuda.Event(enable_timing=True)
+            s.record()
+            out = fn(*a, **k)
+            e.record()
+            pending.append((key, s, e))
+            return out
+
+        setattr(obj, attr, timed)
+
+    m = module.model
+    wrap(m.backbone, "encode_image", "backbone.encode_image")
+    wrap(m.backbone, "encode_text", "backbone.encode_text")
+    for name in ("word_proj", "depth_encoder", "neck", "decoder", "proj",
+                 "motion_vae", "motion_mlp", "trajectory_predictor",
+                 "trajectory_2d_predictor", "twist_predictor",
+                 "origin_depth_head"):
+        wrap(getattr(m, name, None), "forward", f"model.{name}")
+    for name in ("mask_loss_fn", "point_map_loss_fn", "vae_loss_fn",
+                 "motion_type_loss_fn", "trajectory_loss_fn",
+                 "geometric_loss", "twist_loss"):
+        wrap(getattr(module, name, None), "forward", f"loss.{name}")
+
+    dl = dm.train_dataloader()
+    it = iter(dl)
+    bs = dl.batch_size
+
+    def one_step(batch, measure=False):
+        opt.zero_grad(set_to_none=True)
+        t0 = time.perf_counter()
+        with torch.autocast("cuda", dtype=torch.float16):
+            loss = module._common_step(batch, 0, "train")
+        if isinstance(loss, dict):
+            loss = loss["loss"]
+        torch.cuda.synchronize()
+        t1 = time.perf_counter()
+        scaler.scale(loss).backward()
+        scaler.step(opt)
+        scaler.update()
+        torch.cuda.synchronize()
+        t2 = time.perf_counter()
+        if measure:
+            sums["fwd total"] = sums.get("fwd total", 0.0) + (t1 - t0) * 1000
+            sums["bwd+opt"] = sums.get("bwd+opt", 0.0) + (t2 - t1) * 1000
+            for key, s, e in pending:
+                sums[key] = sums.get(key, 0.0) + s.elapsed_time(e)
+        pending.clear()
+
+    for _ in range(3):
+        one_step(to_cuda(next(it)))
+    for _ in range(n_batches):
+        one_step(to_cuda(next(it)), measure=True)
+
+    fwd_parts = sum(v for k, v in sums.items()
+                    if k.startswith(("model.", "backbone.", "loss.")))
+    sums["fwd other (glue)"] = sums["fwd total"] - fwd_parts
+    total = sums["fwd total"] + sums["bwd+opt"]
+    print(f"[parts] {n_batches} steps x {bs}; step total {total / n_batches:.0f} ms/batch")
+    for k, v in sorted(sums.items(), key=lambda kv: -kv[1]):
+        print(f"[parts]   {k:28s} {v / n_batches:8.1f} ms/batch  {100 * v / total:5.1f}%")
+    del it, dl
+
+
 def phase_ops(module, dm, n_batches):
     module.cuda().train()
     opt = torch.optim.AdamW(module.parameters(), lr=1e-5)
@@ -210,7 +293,8 @@ def phase_ops(module, dm, n_batches):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config/sf3d_train_runpod_twist.yaml")
-    ap.add_argument("--phase", default="all", choices=["all", "data", "item", "step", "ops"])
+    ap.add_argument("--phase", default="all",
+                    choices=["all", "data", "item", "step", "parts", "ops"])
     ap.add_argument("--batches", type=int, default=30)
     ap.add_argument("--workers", type=int, default=0, help="override num_workers_train")
     ap.add_argument("--batch-size", type=int, default=0, help="override batch_size_train")
@@ -234,6 +318,8 @@ def main():
         phase_data(dm, args.batches)
     elif args.phase == "step":
         phase_step(module, dm, args.batches)
+    elif args.phase == "parts":
+        phase_parts(module, dm, args.batches)
     elif args.phase == "ops":
         phase_ops(module, dm, min(args.batches, 6))
 
