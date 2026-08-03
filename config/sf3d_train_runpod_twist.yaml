@@ -38,6 +38,10 @@ model:
     # NOT resumable from use_cvae checkpoints (module names differ).
     use_cvae: false
     use_twist_head: true
+    # Heads emit per-step deltas integrated by cumsum (point 0 == 0 exactly;
+    # coords_hat anchors the curve). Added 2026-08-04 after the point-cloud
+    # diagnosis (viz/20260803_sf3d_twist_traj_points).
+    trajectory_delta_cumsum: true
     # GT articulation type as an auxiliary input, with conditioning
     # dropout: 50% of training samples see a learned NULL token instead,
     # and val/test ALWAYS run hint-free (NULL) -- metrics reflect the

@@ -26,6 +26,13 @@ class ModelParams:
     use_trajectory_head: bool = True
     # 2D hand/contact-track head. Enable for 2D pretraining.
     use_2d_trajectory_head: bool = False
+    # Trajectory heads predict num_points-1 per-step DELTAS integrated by
+    # cumsum, with point 0 pinned to exactly 0 (the interaction point is the
+    # absolute anchor). The loss stays in position space. Fixes the
+    # jittery/unordered point clouds the direct 20-point readout produced
+    # (viz/20260803_sf3d_twist_traj_points). Applies to both the 3D and 2D
+    # trajectory heads.
+    trajectory_delta_cumsum: bool = False
     # Predict metric depth of the 3D joint origin, giving a full
     # {type, axis, origin} articulation. Required by geometric_loss="projected".
     predict_origin_depth: bool = False

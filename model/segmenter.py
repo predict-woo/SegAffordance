@@ -172,6 +172,7 @@ class CRIS(nn.Module):
                 input_dim=vae_condition_dim,
                 hidden_dim=model_params.vae_hidden_dim,  # reuse this param
                 num_points=20,
+                delta_cumsum=getattr(model_params, "trajectory_delta_cumsum", False),
             )
         else:
             self.trajectory_predictor = None
@@ -183,6 +184,7 @@ class CRIS(nn.Module):
                 input_dim=vae_condition_dim,
                 hidden_dim=model_params.vae_hidden_dim,
                 num_points=20,
+                delta_cumsum=getattr(model_params, "trajectory_delta_cumsum", False),
             )
         else:
             self.trajectory_2d_predictor = None

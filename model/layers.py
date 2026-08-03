@@ -281,9 +281,21 @@ class MotionMLP(nn.Module):
 
 
 class TrajectoryMLP(nn.Module):
-    def __init__(self, input_dim: int, hidden_dim: int = 256, num_points: int = 20):
+    def __init__(self, input_dim: int, hidden_dim: int = 256, num_points: int = 20,
+                 delta_cumsum: bool = False):
         super().__init__()
         self.num_points = num_points
+        # delta_cumsum: predict num_points-1 per-step displacement vectors and
+        # integrate (cumsum) into relative positions, with point 0 pinned to
+        # exactly 0 — the interaction point supplies the absolute anchor. The
+        # loss stays in POSITION space (an off delta shifts every downstream
+        # point and is penalised accordingly — supervising deltas themselves
+        # would let drift hide). Same function class as the direct readout
+        # (cumsum of a linear map is a linear map), but the sequence is a
+        # connected path by construction: per-point errors can't decorrelate
+        # into the zigzag clouds the direct head produced (see
+        # viz/20260803_sf3d_twist_traj_points).
+        self.delta_cumsum = delta_cumsum
         self.backbone = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(True),
@@ -291,11 +303,17 @@ class TrajectoryMLP(nn.Module):
             nn.ReLU(True),
         )
         # Each point has 3 coordinates (x, y, z)
-        self.trajectory_head = nn.Linear(hidden_dim, num_points * 3)
+        out_points = num_points - 1 if delta_cumsum else num_points
+        self.trajectory_head = nn.Linear(hidden_dim, out_points * 3)
 
     def forward(self, condition: torch.Tensor):
         h = self.backbone(condition)
         trajectory_pred = self.trajectory_head(h)
+        if self.delta_cumsum:
+            deltas = trajectory_pred.view(-1, self.num_points - 1, 3)
+            rel = torch.cumsum(deltas, dim=1)
+            zero = rel.new_zeros(rel.size(0), 1, 3)
+            return torch.cat([zero, rel], dim=1)
         # Reshape to (B, num_points, 3)
         trajectory_pred = trajectory_pred.view(
             trajectory_pred.size(0), self.num_points, 3
@@ -314,20 +332,29 @@ class Trajectory2DMLP(nn.Module):
     different curve in 3D finetuning.
     """
 
-    def __init__(self, input_dim: int, hidden_dim: int = 256, num_points: int = 20):
+    def __init__(self, input_dim: int, hidden_dim: int = 256, num_points: int = 20,
+                 delta_cumsum: bool = False):
         super().__init__()
         self.num_points = num_points
+        # Same delta-cumsum construction as TrajectoryMLP (see its comment).
+        self.delta_cumsum = delta_cumsum
         self.backbone = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(True),
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(True),
         )
-        self.trajectory_head = nn.Linear(hidden_dim, num_points * 2)
+        out_points = num_points - 1 if delta_cumsum else num_points
+        self.trajectory_head = nn.Linear(hidden_dim, out_points * 2)
 
     def forward(self, condition: torch.Tensor):
         h = self.backbone(condition)
         out = self.trajectory_head(h)
+        if self.delta_cumsum:
+            deltas = out.view(-1, self.num_points - 1, 2)
+            rel = torch.cumsum(deltas, dim=1)
+            zero = rel.new_zeros(rel.size(0), 1, 2)
+            return torch.cat([zero, rel], dim=1)
         return out.view(out.size(0), self.num_points, 2)
 
 

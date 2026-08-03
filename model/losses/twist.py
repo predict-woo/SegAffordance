@@ -136,23 +136,68 @@ def point_to_line_distance(
     return (rel - along).norm(dim=-1)
 
 
+def orient_twist_to_sweep(
+    twist: torch.Tensor,        # (B, 6) candidate GT twist, arbitrary sign
+    trajectory: torch.Tensor,   # (B, N, 3) GT sweep, ABSOLUTE camera frame
+    eps: float = 1e-4,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Resolve the twist's sign against the observed sweep direction.
+
+    ``(omega, v)`` and ``(-omega, -v)`` are the same screw LINE traversed in
+    opposite senses. The trajectory breaks that tie: its ordering is semantic
+    (the element sweeps TOWARD the goal state), so the canonical GT twist is
+    the sign whose velocity field ``u(p) = omega x p + v`` pushes the points
+    along the sweep. Scored as ``sum_i <u(p_i), p_{i+1} - p_i>`` over all
+    segments — one dot product per segment, robust to per-point noise, and
+    the same formula covers both types (prismatic: u = v, constant).
+
+    Returns (oriented twist, confident (B,) bool). Rows whose agreement score
+    is below ``eps`` (degenerate/near-zero sweeps) keep their input sign and
+    are flagged not-confident — callers should fall back to sign-agnostic
+    scoring there rather than train toward an arbitrary sign.
+    """
+    omega, v = twist[..., :3], twist[..., 3:]
+    pts = trajectory.float()[:, :-1]                        # (B, N-1, 3)
+    seg = trajectory.float()[:, 1:] - trajectory.float()[:, :-1]
+    field = torch.linalg.cross(
+        omega.unsqueeze(1).expand_as(pts), pts, dim=-1
+    ) + v.unsqueeze(1)
+    score = (field * seg).sum(dim=(-1, -2))                 # (B,)
+    confident = score.abs() > eps
+    oriented = torch.where((score < 0).unsqueeze(-1), -twist, twist)
+    return oriented, confident
+
+
 class TwistLoss(nn.Module):
-    """Sign-agnostic L2 between the predicted and GT twist.
+    """L2 between the predicted and GT twist.
 
     ``(omega, v) -> (-omega, -v)`` is the same screw axis traversed the other
-    way, and the dataset's axis signs are not trustworthy (every existing axis
-    loss/metric here is sign-agnostic — see ``_axis_error_deg`` and the
-    ``1 - cos^2`` MLP loss), so the loss scores the better of the two signs.
-    Flipping omega and v TOGETHER is what preserves the axis line; scoring
-    their signs independently would allow geometrically wrong combinations.
+    way, and the dataset's stored axis signs are not trustworthy (every
+    existing axis loss/metric here is sign-agnostic — see ``_axis_error_deg``
+    and the ``1 - cos^2`` MLP loss). Two modes:
+
+    sign_agnostic=True (default, OPD-safe)
+        Scores the better of the two signs. Flipping omega and v TOGETHER is
+        what preserves the axis line; scoring their signs independently would
+        allow geometrically wrong combinations.
+
+    sign_agnostic=False (SF3D)
+        Direction MATTERS there — the sweep sense is the task semantics
+        ("open X" moves one way). The stored sign still isn't trusted;
+        instead the GT twist is oriented against the GT trajectory's sweep
+        (``orient_twist_to_sweep``) and scored with plain MSE, so the head
+        is trained to commit to the semantic direction. Rows where the sweep
+        is too degenerate to orient (and batches without a trajectory) fall
+        back to sign-agnostic scoring instead of learning an arbitrary sign.
 
     No-ops on batches missing a 3D origin (OPD) or when the twist head is off,
     following the geometric-loss convention.
     """
 
-    def __init__(self, weight: float):
+    def __init__(self, weight: float, sign_agnostic: bool = True):
         super().__init__()
         self.weight = weight
+        self.sign_agnostic = sign_agnostic
 
     def forward(self, outputs: ModelOutputs, targets: StepTargets) -> LossTerms:
         if (
@@ -171,7 +216,19 @@ class TwistLoss(nn.Module):
             targets.motion_origin_3d.to(device),
         )
         pred = outputs.twist_pred.float()
-        err_pos = (pred - gt).pow(2).mean(dim=-1)
-        err_neg = (pred + gt).pow(2).mean(dim=-1)
-        term = torch.minimum(err_pos, err_neg).mean()
+
+        if not self.sign_agnostic and targets.trajectory is not None:
+            gt, confident = orient_twist_to_sweep(
+                gt, targets.trajectory.to(device)
+            )
+            err_pos = (pred - gt).pow(2).mean(dim=-1)
+            err_neg = (pred + gt).pow(2).mean(dim=-1)
+            per_row = torch.where(
+                confident, err_pos, torch.minimum(err_pos, err_neg)
+            )
+            term = per_row.mean()
+        else:
+            err_pos = (pred - gt).pow(2).mean(dim=-1)
+            err_neg = (pred + gt).pow(2).mean(dim=-1)
+            term = torch.minimum(err_pos, err_neg).mean()
         return self.weight * term, {"L_twist": term}
