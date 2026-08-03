@@ -52,6 +52,12 @@ model:
     vae_hidden_dim: 256
     # motion type
     num_motion_types: 2
+    # NHWC conv layout + torch.compile: 845 -> 529 ms/batch on the dev GPU
+    # (1.6x; profiled 2026-08-03 — the decode-path convs/upsamples dominate
+    # the step and cuDNN's NCHW->NHWC shuffling was ~5% of GPU time).
+    # Numerically equivalent layout; compile pays ~minutes at first step.
+    channels_last: true
+    compile_model: true
 
   loss_params:
     # Loss functions

@@ -45,6 +45,15 @@ class ModelParams:
     use_motion_type_input: bool = False
     motion_type_input_dropout: float = 0.5
     motion_type_embedding_dim: int = 16
+    # NHWC memory format for the conv stack. Numerically equivalent; removes
+    # the NCHW->NHWC conversion cuDNN otherwise inserts around every conv to
+    # reach the tensor cores (~5% of GPU time as pure layout shuffling,
+    # profiled 2026-08-03) and speeds the convs themselves.
+    channels_last: bool = False
+    # torch.compile the whole model in-place (nn.Module.compile(), which
+    # keeps state_dict keys unprefixed so checkpoints stay loadable by the
+    # eval/viz tools). First steps pay compilation (~minutes).
+    compile_model: bool = False
     # Which vision+text encoder to use: "clip_rn50" | "siglip2" | "dinov3"
     backbone: str = "clip_rn50"
     # HF id / hub entry for the non-CLIP backbones

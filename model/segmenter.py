@@ -52,6 +52,9 @@ class CRIS(nn.Module):
             "_rgb_std", torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1),
             persistent=False,
         )
+        # NHWC for the conv stack (see ModelParams.channels_last). Parameters
+        # are converted here; forward converts the img/depth inputs to match.
+        self.channels_last = getattr(model_params, "channels_last", False)
         ## Vision & Text Encoder
         # encode_image (B, 3, H, W) -> v2: (B, fpn_in[0], H/8, W/8), v3: (B, fpn_in[1], H/16, W/16), v4: (B, fpn_in[2], H/32, W/32)
         # encode_text (B, L: word_len) -> word_features: (B, L, backbone.word_dim), state: (B, backbone.state_dim)
@@ -208,6 +211,9 @@ class CRIS(nn.Module):
         else:
             self.origin_depth_head = None
 
+        if self.channels_last:
+            self.to(memory_format=torch.channels_last)
+
     def tokenize(self, texts, context_length):
         """Tokenize with whatever tokenizer the active backbone was trained on."""
         return self.backbone.tokenize(texts, context_length)
@@ -230,6 +236,10 @@ class CRIS(nn.Module):
         if img.dtype == torch.uint8:
             # Fast-pipeline input: normalize on device (see __init__).
             img = (img.float().div_(255.0) - self._rgb_mean) / self._rgb_std
+        if self.channels_last:
+            img = img.to(memory_format=torch.channels_last)
+            if depth is not None:
+                depth = depth.to(memory_format=torch.channels_last)
 
         # padding mask used in decoder
 

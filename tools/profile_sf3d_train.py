@@ -34,12 +34,17 @@ from datasets.scenefun3d_datamodule import SF3DDataModule
 from train_SF3D_better import SF3DTrainingModule
 
 
-def build(cfg_path, workers, batch_size, fast=False):
+def build(cfg_path, workers, batch_size, fast=False, channels_last=False, compile_model=False):
     with open(cfg_path) as f:
         cfg = yaml.safe_load(f)
     m = cfg["model"]
+    mp = dict(m["model_params"])
+    if channels_last:
+        mp["channels_last"] = True
+    if compile_model:
+        mp["compile_model"] = True
     module = SF3DTrainingModule(
-        model_params=ModelParams(**m["model_params"]),
+        model_params=ModelParams(**mp),
         loss_params=LossParams(**m["loss_params"]),
         optimizer_params=OptimizerParams(**m["optimizer_params"]),
         config=Config(**m["config"]),
@@ -300,6 +305,8 @@ def main():
     ap.add_argument("--batch-size", type=int, default=0, help="override batch_size_train")
     ap.add_argument("--item-samples", type=int, default=300)
     ap.add_argument("--fast", action="store_true", help="enable data.fast_pipeline")
+    ap.add_argument("--channels-last", action="store_true", help="override model channels_last")
+    ap.add_argument("--compile", action="store_true", help="override model compile_model")
     args = ap.parse_args()
 
     torch.backends.cudnn.benchmark = True
@@ -308,9 +315,11 @@ def main():
         # pool alive for the life of the process, so stacking phases OOMs the
         # box (learned the hard way — the OOM killer takes the main silently).
         sys.exit("--phase all is not supported in-process; run phases separately")
-    module, dm = build(args.config, args.workers, args.batch_size, args.fast)
+    module, dm = build(args.config, args.workers, args.batch_size, args.fast,
+                       args.channels_last, args.compile)
     print(f"[{args.phase}] config={args.config} batch={dm.batch_size_train} "
-          f"workers={dm.num_workers_train} fast={args.fast}")
+          f"workers={dm.num_workers_train} fast={args.fast} "
+          f"cl={args.channels_last} compile={args.compile}")
 
     if args.phase == "item":
         phase_item(dm, args.item_samples)

@@ -46,7 +46,15 @@ class OPDRealTrainingModule(pl.LightningModule):
         self.config = config
         self.freeze_backbone = freeze_backbone
 
+        # Inputs are fixed-size (256², word_len 77), so autotuned cudnn
+        # algorithm selection always pays for itself.
+        torch.backends.cudnn.benchmark = True
+
         self.model = CRIS(model_params)
+        if getattr(model_params, "compile_model", False):
+            # In-place compile keeps state_dict keys unprefixed (no
+            # _orig_mod.), so checkpoints stay loadable everywhere.
+            self.model.compile()
 
         self.mask_loss_fn = DiceBCELoss(
             bce_weight=self.loss_params.bce_weight,
