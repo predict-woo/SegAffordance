@@ -19,13 +19,15 @@ plus text: classifier type, type-from-|omega|, |omega|.
 Inference is deployment-condition: CVAE prior sampling (motion_gt=None) and
 NO type hint (motion_type_input=None -> NULL token).
 
-Run from the repo root on a pod:
+Run from the repo root on a pod. --out must be a dated batch directory
+under viz/ (see CLAUDE.md, "Visualization organization"); a manifest.yaml
+with the exact command/commit/checkpoints is written next to the images:
     python tools/sf3d_vis_predictions.py \
         --model twist experiments/20260728_sf3d_twist/config.yaml \
                 experiments/20260728_sf3d_twist/checkpoints/best-epoch04-valloss0.9891.ckpt \
         --model 2d_twist experiments/20260728_sf3d_2d_twist/config.yaml \
                 experiments/20260728_sf3d_2d_twist/checkpoints/best-epoch15-valloss1.0906.ckpt \
-        --out sf3d_viz/pred_compare --num 16
+        --out viz/20260803_sf3d_twist_vs_2d_twist_panels --num 16
 """
 
 import argparse
@@ -42,6 +44,7 @@ import yaml
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.opd_train import ModelParams
+from viz_manifest import write_manifest
 from datasets.scenefun3d import SF3DDataset, get_default_transforms, split_dataset_by_scene
 from model.losses.geometric import backproject_points, normalized_intrinsics, project_points
 from model.losses.twist import decode_twist, screw_orbit
@@ -100,7 +103,8 @@ def main():
                     metavar=("NAME", "CONFIG", "CKPT"))
     ap.add_argument("--data-root", default="/workspace/datasets/sf3d_processed_v2")
     ap.add_argument("--key-cache", default="/workspace/cache/sf3d_v2_keys_cutoff05.pkl")
-    ap.add_argument("--out", default="sf3d_viz/pred_compare")
+    ap.add_argument("--out", required=True,
+                    help="dated batch dir under viz/, e.g. viz/YYYYMMDD_<subject>_panels")
     ap.add_argument("--num", type=int, default=16)
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
@@ -229,6 +233,12 @@ def main():
                     combo, [cv2.IMWRITE_JPEG_QUALITY, 90])
         print(f"wrote {rank:02d}_{t_lbl}_val{vi}.jpg  ({desc[:48]})")
 
+    write_manifest(
+        args.out,
+        models=[{"name": n, "config": c, "ckpt": k} for n, c, k in args.model],
+        num=args.num, seed=args.seed,
+        data_root=args.data_root, key_cache=args.key_cache,
+    )
     print(f"done -> {args.out}")
 
 

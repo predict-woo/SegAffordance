@@ -20,10 +20,11 @@ experiments/**/vis/
 # CLIP weights: symlink to /workspace/models/RN50.pt, created by runpod/setup.sh
 pretrain/RN50.pt
 
-# throwaway sample/audit renders from tools/show_opd_samples.py & tools/label_render.py
-sample_viz/
-label_viz*/
-label_audit/
-
-# SF3D dataset-audit renders (tools/sf3d_vis_samples.py & friends)
-sf3d_viz/
+# viz/: dated visualization batches (see CLAUDE.md). Per-batch README.md,
+# manifest.yaml and the INDEX are tracked; the images themselves are not
+# (they live on both sides of the mutagen mirror).
+viz/**
+!viz/*/
+!viz/INDEX.md
+!viz/*/README.md
+!viz/*/manifest.yaml

@@ -35,3 +35,5 @@ the legacy axis/type heads in this recipe.
 (~ep4-6) or add early stopping; run the geo_crossgt baseline for mask/axis
 context; twist-head loss weights deserve a sweep before judging the
 parameterisation itself.
+
+vis: viz/20260803_sf3d_twist_vs_2d_twist_panels (GT vs both arms, 16 val samples)

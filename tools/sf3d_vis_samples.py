@@ -28,7 +28,10 @@ Usage (on the pod, from /workspace/SegAffordance). Copy the LMDB to shm first
 
     cp /workspace/datasets/sf3d_processed/data.lmdb/data.mdb /dev/shm/data.lmdb/
     python tools/sf3d_vis_samples.py --lmdb-path /dev/shm/data.lmdb \
-        --out-dir sf3d_viz --num-samples 100 --seed 42
+        --out-dir viz/YYYYMMDD_<subject>_dataset_audit --num-samples 100 --seed 42
+
+--out-dir must be a dated batch directory under viz/ (see CLAUDE.md,
+"Visualization organization"); a manifest.yaml is written next to the images.
 """
 
 import argparse
@@ -40,6 +43,8 @@ from pathlib import Path
 import cv2
 import lmdb
 import numpy as np
+
+from viz_manifest import write_manifest
 
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -365,7 +370,8 @@ def main():
                     help="override the LMDB location (default <lmdb-root>/data.lmdb). "
                          "Point at a /dev/shm copy: a key scan against the MooseFS "
                          "volume page-faults at ~1.4 MB/s.")
-    ap.add_argument("--out-dir", type=Path, default=Path("sf3d_viz"))
+    ap.add_argument("--out-dir", type=Path, required=True,
+                    help="dated batch dir under viz/, e.g. viz/YYYYMMDD_<subject>_dataset_audit")
     ap.add_argument("--num-samples", type=int, default=100)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--panel-width", type=int, default=620)
@@ -476,6 +482,12 @@ def main():
         if dv:
             print(f"  depth valid in zoom: mean {100 * np.mean(dv):.0f}%, "
                   f"samples <50% valid: {sum(1 for v in dv if v < 0.5)}")
+
+    write_manifest(
+        args.out_dir,
+        lmdb=str(args.lmdb_path or args.lmdb_root),
+        num_samples=args.num_samples, seed=args.seed,
+    )
 
 
 if __name__ == "__main__":

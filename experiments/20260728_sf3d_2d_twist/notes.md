@@ -33,3 +33,5 @@ prediction-anchored 2D-track supervision helps 3D articulation.
 last.ckpt or retrain longer) before any video-mining investment; profile its
 ~2× step cost if it becomes the default. Val-loss numbers are NOT comparable
 across arms (different loss terms); compare on test/twist_* only.
+
+vis: viz/20260803_sf3d_twist_vs_2d_twist_panels (GT vs both arms, 16 val samples)

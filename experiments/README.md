@@ -27,3 +27,7 @@ Workflow for a new experiment:
 3. Afterwards: copy `logs/csv/version_0/metrics.csv` to `metrics.csv`, run
    `tools/vis_predictions.py --out .../vis`, copy its `summary.txt` to
    `vis_summary.txt`, write `notes.md`, add a row to `INDEX.md`, commit.
+
+Post-hoc renders (comparison panels, audits) do NOT go here — they get a
+dated batch under `viz/` (see `CLAUDE.md`, "Visualization organization")
+with a pointer line `vis: viz/YYYYMMDD_...` in the relevant `notes.md`.

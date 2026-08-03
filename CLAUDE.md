@@ -97,6 +97,31 @@ and CSVLogger `save_dir` at the new experiment dir, launch on a training pod,
 then fill in the tracked files and INDEX row and commit. The `config/` file
 and the experiment's `config.yaml` should stay identical.
 
+## Visualization organization
+
+Every batch of rendered images (prediction panels, dataset audits, debug
+renders) gets a dated directory `viz/YYYYMMDD_<subject>_<what>/` — never an
+ad-hoc top-level dir. Rules:
+
+- **One batch = one dir, dated.** Regenerating with a newer checkpoint or
+  tool is a NEW dir on the new date; old renders are never silently
+  overwritten (nothing is worse than a panel you can't attribute to a
+  checkpoint).
+- **Tracked in git:** the batch `README.md` (what it shows, exact regen
+  command, checkpoints by experiment ID + filename, a few sentences of
+  interpretation), `manifest.yaml` (auto-written by the viz tools: argv,
+  tool commit, timestamp), and `viz/INDEX.md` (one line per batch, newest
+  first — update it when adding a batch). The images themselves are
+  gitignored but sync through the mutagen mirror.
+- **Cross-link:** a batch about specific experiments gets a pointer line in
+  each experiment's `notes.md` (`vis: viz/YYYYMMDD_...`).
+- **Exception:** images produced BY a training run (the trainer's
+  val-visualization dumps) stay in that run's `experiments/<id>/vis/`.
+  `viz/` is for everything rendered after the fact by a tool.
+- New viz tools should call `write_manifest` from `tools/viz_manifest.py`
+  on their output dir and take a required `--out`/`--out-dir` pointing into
+  `viz/` (see `tools/sf3d_vis_predictions.py` for the pattern).
+
 ## Current state / TODO
 
 - **Euler access was revoked (2026-07-16)**; all datasets were rebuilt from
