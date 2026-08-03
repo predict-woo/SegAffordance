@@ -5,11 +5,16 @@ composite JPEG per sample:
 
     [ GT | model A pred | model B pred ... ]
 
-GT panel: mask (green), element point, projected GT trajectory (cyan).
-Pred panels: predicted mask (red), predicted point (coords_hat), the decoded
-twist's ORBIT through the model's own anchor projected into the frame
-(yellow) — an arc for revolute, a straight line for prismatic — plus text:
-classifier type, type-from-|omega|, |omega|.
+GT panel: mask (green), element point, projected GT trajectory (cyan; a
+note replaces it when no GT point is valid in this frame).
+Pred panels: predicted mask (red), predicted point (coords_hat), and three
+curves anchored exactly the way the losses anchor them (coords_hat lifted
+with the INPUT depth — no GT):
+  * magenta — the 3D trajectory head's swept path, projected into the frame
+  * orange  — the 2D track head's path (2d_twist arm only)
+  * yellow  — the decoded twist's ORBIT (arc for revolute, line for
+    prismatic)
+plus text: classifier type, type-from-|omega|, |omega|.
 
 Inference is deployment-condition: CVAE prior sampling (motion_gt=None) and
 NO type hint (motion_type_input=None -> NULL token).
@@ -148,11 +153,20 @@ def main():
         gt_mask = F.interpolate(mask_t[None].float(), size=(H, W), mode="nearest")[0, 0].numpy()
         gt = overlay_mask(gt, gt_mask, (0, 200, 0))
         traj_uv = (traj2d_px / img_size[None, :]).numpy()
-        gt = draw_polyline_norm(gt, traj_uv, traj2d_valid.numpy(), (255, 220, 0))
+        gt_valid = traj2d_valid.numpy()
+        gt = draw_polyline_norm(gt, traj_uv, gt_valid, (255, 220, 0))
+        gt_lines = [f"GT [{ 'rot' if int(type_gt) else 'trans' }]", desc[:52]]
+        if gt_valid.any():
+            # end-of-sweep marker so the motion direction is readable
+            end = np.flatnonzero(gt_valid)[-1]
+            ep = (int(traj_uv[end, 0] * W), int(traj_uv[end, 1] * H))
+            cv2.circle(gt, ep, 5, (255, 220, 0), -1)
+        else:
+            gt_lines.append("(GT track: no point visible in frame)")
         gp = (int(point_gt[0] * W), int(point_gt[1] * H))
         cv2.circle(gt, gp, 6, (255, 255, 255), -1)
         cv2.circle(gt, gp, 6, (0, 0, 0), 2)
-        gt = put_lines(gt, [f"GT [{ 'rot' if int(type_gt) else 'trans' }]", desc[:52]])
+        gt = put_lines(gt, gt_lines)
 
         panels = [gt]
         for name, model in models:
@@ -171,23 +185,41 @@ def main():
 
             lines = [name]
             cls_type = "rot" if int(out.motion_type_logits[0].argmax()) == 1 else "trans"
+
+            # Shared prediction-side anchor: own point lifted with the input
+            # depth (exactly as the screw self/track terms anchor it).
+            K_norm = normalized_intrinsics(K[None].float(), img_size[None].float())
+            grid = (coords[None] * 2.0 - 1.0).view(1, 1, 1, 2)
+            z = F.grid_sample(depth_t[None].float(), grid, align_corners=False).view(1)
+            anchor = backproject_points(K_norm, coords[None].float(), z)
+            anchor_ok = z.item() > 1e-3
+
+            # 3D trajectory head: swept path through the anchor, projected.
+            if out.trajectory_pred is not None and anchor_ok:
+                traj_abs = anchor.unsqueeze(1) + out.trajectory_pred[0:1].cpu().float()
+                tv = (traj_abs[0, :, 2] > 0.05).numpy()
+                tuv = project_points(K_norm, traj_abs)[0].clamp(-2, 3).numpy()
+                p = draw_polyline_norm(p, tuv, tv, (255, 0, 255))
+
+            # 2D track head (relative to its own first point, anchored at
+            # coords_hat — the same element point the track starts from).
+            if out.trajectory_2d_pred is not None:
+                track = (coords[None] + out.trajectory_2d_pred[0].cpu().float()).numpy()
+                p = draw_polyline_norm(p, track, np.ones(len(track), bool), (0, 140, 255))
+
             if out.twist_pred is not None:
                 tw = out.twist_pred[0].cpu().float()
                 is_rev, direction, _ = decode_twist(tw[None])
                 om = tw[:3].norm().item()
-                # anchor: own point lifted with the input depth (as the loss does)
-                K_norm = normalized_intrinsics(K[None].float(), img_size[None].float())
-                grid = (coords[None] * 2.0 - 1.0).view(1, 1, 1, 2)
-                z = F.grid_sample(depth_t[None].float(), grid, align_corners=False).view(1)
-                anchor = backproject_points(K_norm, coords[None].float(), z)
                 ts = torch.linspace(-math.pi, math.pi, 96)[None] / max(om, 1.0)
                 orbit = screw_orbit(tw[None], anchor, ts)[0]
-                ov = (orbit[:, 2] > 0.05).numpy()
+                ov = (orbit[:, 2] > 0.05).numpy() if anchor_ok else np.zeros(96, bool)
                 ouv = project_points(K_norm, orbit[None])[0].clamp(-2, 3).numpy()
                 p = draw_polyline_norm(p, ouv, ov, (0, 230, 230))
                 lines.append(f"cls={cls_type}  |w|={om:.2f} -> {'rot' if bool(is_rev[0]) else 'trans'}")
             else:
                 lines.append(f"cls={cls_type}")
+            lines.append("mag=traj3d  orn=trk2d  yel=orbit")
             p = put_lines(p, lines)
             panels.append(p)
 
