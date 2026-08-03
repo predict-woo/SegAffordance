@@ -16,6 +16,7 @@ from torch.utils.data import Dataset
 from config.opd_train import Config, LossParams, ModelParams, OptimizerParams
 from datasets.opdreal_datamodule import OPDRealDataModule
 from model.losses import TwistLoss, build_geometric_loss
+from model.losses.geometric import TrajectoryProjectionLoss
 from model.segmenter import CRIS
 from model.targets import StepTargets, unpack_batch
 from utils.tools import DiceBCELoss, MotionVAELoss, create_composite_visualization, make_gaussian_map
@@ -71,6 +72,9 @@ class OPDRealTrainingModule(pl.LightningModule):
         self.geometric_loss = build_geometric_loss(self.loss_params)
         # No-ops unless the model has a twist head AND the batch carries a 3D
         # origin (SF3D), same convention as the geometric losses.
+        self.traj_projection_loss = TrajectoryProjectionLoss(
+            weight=getattr(self.loss_params, "trajectory_proj_weight", 0.0)
+        )
         self.twist_loss = TwistLoss(
             weight=getattr(self.loss_params, "twist_weight", 0.5),
             sign_agnostic=getattr(self.loss_params, "twist_sign_agnostic", True),
@@ -267,6 +271,9 @@ class OPDRealTrainingModule(pl.LightningModule):
         # variant can lift the predicted 2D point to a metric anchor.
         geometric_total, geometric_terms = self.geometric_loss(outputs, targets, depth)
         total_loss = total_loss + geometric_total
+        proj_total, proj_terms = self.traj_projection_loss(outputs, targets, depth)
+        total_loss = total_loss + proj_total
+        geometric_terms = {**geometric_terms, **proj_terms}
         for term_name, term_value in geometric_terms.items():
             self.log(
                 f"{step_type}/{term_name}",

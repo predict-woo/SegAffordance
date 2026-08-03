@@ -46,6 +46,13 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         self._test_twist_type_correct_all = 0
         self._test_twist_ma_correct_all = 0
         self._test_twist_line_dist_rotational = []
+        # Direction metrics (2026-08-04): the axis metrics above are
+        # sign-agnostic, so they cannot show whether the sign-sensitive
+        # training actually taught direction. dir_correct = the predicted
+        # twist direction agrees IN SIGN with the GT (whose stored sign is
+        # canonical — the preprocessor derives the trajectory from it).
+        self._test_twist_dir_correct_all = 0
+        self._test_traj_dir_cos = []
 
     @staticmethod
     def _save_sf3d_test_debug_visualizations(
@@ -389,6 +396,10 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                 ):
                     self._test_twist_ma_correct_all += 1
 
+                gt_dir = F.normalize(motion_gt[i].float(), p=2, dim=-1, eps=1e-8)
+                if (tw_dir[i].to(gt_dir.device) * gt_dir).sum() > 0:
+                    self._test_twist_dir_correct_all += 1
+
                 if (
                     camera_params_in_batch
                     and motion_type_gt[i] == 1
@@ -400,6 +411,22 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                         tw_dir[i],
                     ).item()
                     self._test_twist_line_dist_rotational.append(line_dist)
+
+            # Net sweep direction of the predicted 3D trajectory vs GT
+            # (cos > 0 = the curve heads the right way).
+            if (
+                outputs.trajectory_pred is not None
+                and trajectory_gt is not None
+            ):
+                pred_net = outputs.trajectory_pred[i, -1] - outputs.trajectory_pred[i, 0]
+                gt_net = (
+                    trajectory_gt[i, -1] - trajectory_gt[i, 0]
+                ).to(pred_net.device).float()
+                denom = pred_net.norm() * gt_net.norm()
+                if denom > 1e-8:
+                    self._test_traj_dir_cos.append(
+                        ((pred_net * gt_net).sum() / denom).item()
+                    )
 
             # --- Original evaluation for IoU-matched samples ---
             if iou_val > self.config.test_iou_threshold:
@@ -589,6 +616,21 @@ class SF3DTrainingModule(OPDRealTrainingModule):
             self.log(
                 "test/twist_axis_line_dist_m", twist_line_dist, logger=True, sync_dist=True
             )
+            if total_predictions > 0:
+                twist_dir_acc = (
+                    100.0 * self._test_twist_dir_correct_all / total_predictions
+                )
+                self.log("test/twist_dir_acc", twist_dir_acc, logger=True, sync_dist=True)
+
+        if self._test_traj_dir_cos:
+            traj_dir_cos = float(
+                torch.tensor(self._test_traj_dir_cos).mean().item()
+            )
+            traj_dir_acc = 100.0 * float(
+                (torch.tensor(self._test_traj_dir_cos) > 0).float().mean().item()
+            )
+            self.log("test/traj_dir_cos", traj_dir_cos, logger=True, sync_dist=True)
+            self.log("test/traj_dir_acc", traj_dir_acc, logger=True, sync_dist=True)
 
         if self.trainer.is_global_zero:
             print("\n--- SF3D Test Results ---")

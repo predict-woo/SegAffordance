@@ -129,8 +129,13 @@ class LossParams:
     # Observed 2D track vs the projected orbit through the model's own
     # anchor. Fully prediction-anchored — no anchor_depth from the data.
     screw_track_weight: float = 0.5
+    # Predicted 3D trajectory projected into the image vs the observed 2D
+    # track, index-matched (ordered + direction-sensitive by construction).
+    # THE data term of 2D-only pretraining; 0 disables (3D arms).
+    trajectory_proj_weight: float = 0.0
     # Occam prior |omega| for settings where nothing else pins omega (video
-    # pretraining). Leave 0 where the direct twist L2 supervises it (SF3D).
+    # pretraining and the 2D-only arm). Leave 0 where the direct twist L2
+    # supervises it (3D arms).
     screw_omega_shrink: float = 0.0
     
 @dataclass

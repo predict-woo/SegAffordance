@@ -34,7 +34,8 @@ from datasets.scenefun3d_datamodule import SF3DDataModule
 from train_SF3D_better import SF3DTrainingModule
 
 
-def build(cfg_path, workers, batch_size, fast=False, channels_last=False, compile_model=False):
+def build(cfg_path, workers, batch_size, fast=False, channels_last=False,
+          compile_model=False, force_no_compile=False):
     with open(cfg_path) as f:
         cfg = yaml.safe_load(f)
     m = cfg["model"]
@@ -43,6 +44,10 @@ def build(cfg_path, workers, batch_size, fast=False, channels_last=False, compil
         mp["channels_last"] = True
     if compile_model:
         mp["compile_model"] = True
+    if force_no_compile:
+        # phase 'parts' wraps submodule forwards with CUDA events — that
+        # instrumentation cannot live inside a compiled graph.
+        mp["compile_model"] = False
     module = SF3DTrainingModule(
         model_params=ModelParams(**mp),
         loss_params=LossParams(**m["loss_params"]),
@@ -222,7 +227,7 @@ def phase_parts(module, dm, n_batches):
         wrap(getattr(m, name, None), "forward", f"model.{name}")
     for name in ("mask_loss_fn", "point_map_loss_fn", "vae_loss_fn",
                  "motion_type_loss_fn", "trajectory_loss_fn",
-                 "geometric_loss", "twist_loss"):
+                 "geometric_loss", "twist_loss", "traj_projection_loss"):
         wrap(getattr(module, name, None), "forward", f"loss.{name}")
 
     dl = dm.train_dataloader()
@@ -316,7 +321,8 @@ def main():
         # box (learned the hard way — the OOM killer takes the main silently).
         sys.exit("--phase all is not supported in-process; run phases separately")
     module, dm = build(args.config, args.workers, args.batch_size, args.fast,
-                       args.channels_last, args.compile)
+                       args.channels_last, args.compile,
+                       force_no_compile=(args.phase == "parts"))
     print(f"[{args.phase}] config={args.config} batch={dm.batch_size_train} "
           f"workers={dm.num_workers_train} fast={args.fast} "
           f"cl={args.channels_last} compile={args.compile}")

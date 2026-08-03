@@ -626,16 +626,24 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
             total = total + self.self_weight * self_term
             terms["L_screw_self"] = self_term
 
-        if anchor is not None and targets.trajectory_2d is not None:
+        if (
+            self.track_weight > 0.0
+            and anchor is not None
+            and targets.trajectory_2d is not None
+        ):
             track_term = self._track_residual(
                 twist, anchor, anchor_ok, K_norm, targets, device
             )
             total = total + self.track_weight * track_term
             terms["L_screw_track"] = track_term
-            if self.omega_shrink > 0.0:
-                omega_term = twist[..., :3].norm(dim=-1).mean()
-                total = total + self.omega_shrink * omega_term
-                terms["L_screw_omega"] = omega_term
+
+        # Occam prior on |omega| — independent of the track term (the 2D-only
+        # arm runs track_weight 0 with the projection loss instead, and still
+        # needs the prior since nothing else pins |omega| there).
+        if self.omega_shrink > 0.0:
+            omega_term = twist[..., :3].norm(dim=-1).mean()
+            total = total + self.omega_shrink * omega_term
+            terms["L_screw_omega"] = omega_term
 
         return total, terms
 
@@ -762,3 +770,78 @@ def build_geometric_loss(loss_params) -> GeometricConsistencyLoss:
         f"unknown geometric_loss {name!r} — expected 'cross_gt', 'pred_pred', "
         f"'projected', 'screw' or 'none'"
     )
+
+
+class TrajectoryProjectionLoss(nn.Module):
+    """Predicted 3D trajectory, projected into the image, vs the observed
+    2D track — the data term of 2D-only pretraining.
+
+    The absolute predicted curve is anchor + trajectory_pred, where the
+    anchor is the model's own interaction point lifted with the INPUT depth
+    map (the same prediction-side anchoring as the screw self term — no GT
+    enters). Projection with the normalized intrinsics gives (B, N, 2) in
+    [0, 1], compared to ``targets.trajectory_2d`` INDEX-MATCHED: point i to
+    point i. That correspondence is temporal, so the loss is ordered and
+    direction-sensitive by construction — it supersedes the orbit/polyline
+    track term, whose unordered matching let a flipped twist score
+    perfectly via its backward branch.
+
+    Per-point mask: GT validity AND predicted z > near_plane (a point the
+    model places behind the camera has no meaningful projection; such
+    points are replaced by a fixed dummy BEFORE projecting so no inf/nan
+    ever enters the graph, then masked out of the loss). Rows with a bad
+    anchor (depth hole) are dropped. Runs in an fp32 island: projections of
+    near-camera points overflow fp16 (see ScrewConsistencyLoss).
+    """
+
+    def __init__(self, weight: float, near_plane: float = 0.05):
+        super().__init__()
+        self.weight = weight
+        self.near_plane = near_plane
+
+    def _zero(self, ref: torch.Tensor) -> torch.Tensor:
+        return torch.zeros((), device=ref.device, dtype=torch.float32)
+
+    def forward(self, outputs, targets, depth) -> LossTerms:
+        if (
+            self.weight == 0.0
+            or outputs.trajectory_pred is None
+            or targets.trajectory_2d is None
+            or targets.camera_intrinsic is None
+            or targets.img_size is None
+            or depth is None
+        ):
+            return self._zero(outputs.motion_pred), {}
+        device = outputs.trajectory_pred.device
+        device_type = "cuda" if outputs.trajectory_pred.is_cuda else "cpu"
+        with torch.autocast(device_type=device_type, enabled=False):
+            K_norm = normalized_intrinsics(
+                targets.camera_intrinsic.to(device), targets.img_size.to(device)
+            )
+            coords = outputs.coords_hat.float()
+            grid = (coords * 2.0 - 1.0).view(-1, 1, 1, 2)
+            z = F.grid_sample(
+                depth.to(device).float(), grid, align_corners=False
+            ).view(-1)
+            anchor = backproject_points(K_norm, coords, z)
+            anchor_ok = z > 1e-3
+
+            traj_abs = anchor.unsqueeze(1) + outputs.trajectory_pred.float()
+            in_front = traj_abs[..., 2] > self.near_plane
+            dummy = torch.tensor([0.0, 0.0, 1.0], device=device)
+            safe = torch.where(in_front.unsqueeze(-1), traj_abs, dummy)
+            proj = project_points(K_norm, safe)
+
+            track = targets.trajectory_2d.to(device).float()
+            if targets.trajectory_2d_valid is not None:
+                valid = targets.trajectory_2d_valid.to(device).bool()
+            else:
+                valid = torch.ones_like(in_front, dtype=torch.bool)
+            mask = (valid & in_front & anchor_ok.unsqueeze(1)).float()
+
+            count = mask.sum()
+            if count < 1.0:
+                return self._zero(outputs.motion_pred), {}
+            sq = (proj - track).pow(2).sum(-1)
+            term = (sq * mask).sum() / count
+        return self.weight * term, {"L_traj_proj": term}

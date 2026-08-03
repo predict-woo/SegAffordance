@@ -261,7 +261,11 @@ def test_track_term_masks_invalid_points():
     assert torch.allclose(clean["L_screw_track"], dirty["L_screw_track"])
 
 
-def test_omega_shrink_only_fires_with_a_track():
+def test_omega_shrink_fires_whenever_configured():
+    # CHANGED 2026-08-04: the prior used to be tied to the presence of a 2D
+    # track; it is now independent — the 2D-only arm runs track_weight 0
+    # (the projection loss supersedes the track term) and still needs the
+    # prior, since nothing else pins |omega| there.
     twist = twist_from_gt(AXIS.unsqueeze(0), ROT, HINGE.unsqueeze(0))
     loss = ScrewConsistencyLoss(
         gt_weight=1.0, self_weight=1.0, track_weight=1.0, omega_shrink=0.1
@@ -272,7 +276,11 @@ def test_omega_shrink_only_fires_with_a_track():
 
     arc = arc_about_axis(AXIS, HINGE, ELEMENT, ANGLES).unsqueeze(0)
     _, terms_3d = loss(make_outputs(twist), gt_targets(arc))
-    assert "L_screw_omega" not in terms_3d
+    assert abs(terms_3d["L_screw_omega"].item() - 1.0) < 1e-5
+
+    no_shrink = ScrewConsistencyLoss(gt_weight=1.0, self_weight=1.0, omega_shrink=0.0)
+    _, terms_off = no_shrink(make_outputs(twist), gt_targets(arc))
+    assert "L_screw_omega" not in terms_off
 
 
 def test_track_term_finite_and_bounded_when_orbit_sweeps_behind_the_camera():
