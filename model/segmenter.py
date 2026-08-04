@@ -156,14 +156,19 @@ class CRIS(nn.Module):
             self.motion_mlp = None
         else:
             self.motion_vae = None
-            # MLP will take the same condition used by the VAE decoder
+            # MLP will take the same condition used by the VAE decoder.
+            # With BOTH sub-heads off (twist-only arms) skip the module
+            # entirely — its shared backbone would otherwise run every step
+            # feeding nothing.
+            _with_type = getattr(model_params, "use_motion_type_head", True)
+            _with_motion = getattr(model_params, "use_motion_head", True)
             self.motion_mlp = MotionMLP(
                 input_dim=vae_condition_dim,
                 hidden_dim=model_params.vae_hidden_dim,
                 num_motion_types=model_params.num_motion_types,
-                with_type_head=getattr(model_params, "use_motion_type_head", True),
-                with_motion_head=getattr(model_params, "use_motion_head", True),
-            )
+                with_type_head=_with_type,
+                with_motion_head=_with_motion,
+            ) if (_with_type or _with_motion) else None
 
         # 3D element-sweep head. Off during 2D pretraining: video data has no
         # element-sweep GT, so it would receive no gradient at all. It is a
@@ -356,6 +361,8 @@ class CRIS(nn.Module):
         # motion_gt can be None during pure inference, but for train/val it's provided.
         mu = None
         log_var = None
+        motion_pred = None
+        motion_type_logits = None
         if self.use_cvae:
             if motion_gt is not None:
                 motion_pred, motion_type_logits, mu, log_var = self.motion_vae(  # type: ignore[operator]
@@ -365,7 +372,7 @@ class CRIS(nn.Module):
                 # During pure inference (e.g. in a test script), sample z from prior.
                 # mu/log_var do not exist in this case and stay None.
                 motion_pred, motion_type_logits = self.motion_vae.inference(vae_condition)  # type: ignore[operator]
-        else:
+        elif self.motion_mlp is not None:
             motion_pred, motion_type_logits = self.motion_mlp(vae_condition)  # type: ignore[operator]
             if motion_pred is not None:
                 # Convert sigmoid output [0,1] to axis vector in [-1,1]

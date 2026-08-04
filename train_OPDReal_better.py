@@ -197,8 +197,8 @@ class OPDRealTrainingModule(pl.LightningModule):
                 motion_type_logits, motion_type_gt.to(motion_type_logits.device)
             )
         else:
-            # Type head off (use_motion_type_head: false, 2D-only pretraining)
-            L_motion_type = torch.zeros((), device=motion_pred.device)
+            # Type head off (use_motion_type_head: false)
+            L_motion_type = torch.zeros((), device=coords_hat.device)
 
         total_loss = (
             (self.loss_params.mask_weight * L_mask)
@@ -486,7 +486,7 @@ class OPDRealTrainingModule(pl.LightningModule):
                     motion_type_gt=motion_type_gt_list[i],
                     motion_type_pred_logits=(
                         motion_type_logits[i] if motion_type_logits is not None
-                        else torch.zeros(2, device=motion_pred.device)
+                        else torch.zeros(2, device=coords_hat.device)
                     ),
                     trajectory_gt=trajectory_gt_list[i],
                     trajectory_pred=trajectory_pred[i],

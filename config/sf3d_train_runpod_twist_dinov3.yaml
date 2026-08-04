@@ -60,6 +60,11 @@ model:
     # falls back to the twist's decoded direction. The legacy axis loss
     # (vae_weight) goes to 0 with it.
     use_motion_head: false
+    # Type head off too (2026-08-05): type is emergent from |omega| — the
+    # twist is the single motion representation. Eval derives predicted
+    # type from the decoded twist (M Pass and type metrics measure the
+    # emergent type). The GT type INPUT hint below is unchanged.
+    use_motion_type_head: false
     # Structurally pitch-free twists: TwistMLP projects v against omega in
     # its output map — pure rotations/translations only, no helices.
     twist_pitch_free: true
@@ -107,7 +112,7 @@ model:
     point_map_weight: 0.5
     coord_weight: 0.5          # Weight for the L1 coordinate regression loss
     vae_weight: 0.0            # axis head off — no axis loss
-    motion_type_weight: 0.5
+    motion_type_weight: 0.0    # no type head
     trajectory_weight: 0.5     # Weight for trajectory prediction loss
     twist_weight: 0.5          # L2 on the twist 6-vector
     # Direction is semantic on SF3D — the preprocessor derives the GT
