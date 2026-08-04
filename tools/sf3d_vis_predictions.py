@@ -12,8 +12,9 @@ curves anchored exactly the way the losses anchor them (coords_hat lifted
 with the INPUT depth — no GT):
   * magenta — the 3D trajectory head's swept path, projected into the frame
   * orange  — the 2D track head's path (2d_twist arm only)
-  * yellow  — the decoded twist's ORBIT (arc for revolute, line for
-    prismatic)
+  * yellow  — the decoded twist's forward SWEEP from the predicted point:
+    90 deg for revolute / 0.1 m for prismatic (the GT conventions), in the
+    committed direction — the predicted counterpart of the cyan GT track
 plus text: classifier type, type-from-|omega|, |omega|.
 
 Inference is deployment-condition: CVAE prior sampling (motion_gt=None) and
@@ -250,11 +251,20 @@ def main():
                 is_rev, direction, _ = decode_twist(tw[None])
                 om = tw[:3].norm().item()
                 if not args.traj_only:
-                    ts = torch.linspace(-math.pi, math.pi, 96)[None] / max(om, 1.0)
+                    # Forward-only sweep of the GT extent (90 deg revolute /
+                    # 0.1 m prismatic — the preprocessor's conventions), so
+                    # the orbit IS the predicted counterpart of the cyan GT
+                    # track: same start (the predicted point), same length,
+                    # direction as committed by the sign-sensitive twist.
+                    if bool(is_rev[0]):
+                        t_max = (math.pi / 2.0) / max(om, 1e-3)
+                    else:
+                        t_max = 0.1 / max(tw[3:].norm().item(), 1e-3)
+                    ts = torch.linspace(0.0, t_max, 48)[None]
                     orbit = screw_orbit(tw[None], anchor, ts)[0]
-                    ov = (orbit[:, 2] > 0.05).numpy() if anchor_ok else np.zeros(96, bool)
+                    ov = (orbit[:, 2] > 0.05).numpy() if anchor_ok else np.zeros(48, bool)
                     ouv = project_points(K_norm, orbit[None])[0].clamp(-2, 3).numpy()
-                    p = draw_polyline_norm(p, ouv, ov, (0, 230, 230))
+                    p = draw_polyline_norm(p, ouv, ov, (0, 230, 230), thickness=4)
                 lines.append(f"cls={cls_type}  |w|={om:.2f} -> {'rot' if bool(is_rev[0]) else 'trans'}")
             else:
                 lines.append(f"cls={cls_type}")

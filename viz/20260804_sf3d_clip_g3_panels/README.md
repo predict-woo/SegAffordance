@@ -2,7 +2,11 @@
 
 Full panels ([GT | clip_g3], 12 samples, best-epoch08) — mask overlay,
 predicted point, projected 3D trajectory (magenta line), decoded twist
-orbit (yellow). Companion to [[20260804_sf3d_clip_g3_traj_points]].
+forward SWEEP (yellow): from the predicted point, in the committed
+direction, for the GT extent convention (90 deg revolute / 0.1 m
+prismatic) — the predicted counterpart of the cyan GT track. Where it
+overshoots the GT arc, you are seeing the axis-radius error
+(line_dist) directly. Companion to [[20260804_sf3d_clip_g3_traj_points]].
 
 Notable vs gen-2: trajectories are smooth lines (no scribble — the 1-cos
 effect, see the traj-points batch); decoded orbits are clean planar

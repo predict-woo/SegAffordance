@@ -1,8 +1,8 @@
 command: tools/sf3d_vis_predictions.py --model clip_g3 experiments/20260804_sf3d_twist_g3/config.yaml
   experiments/20260804_sf3d_twist_g3/checkpoints/best-epoch08-valloss0.9042.ckpt --out
   viz/20260804_sf3d_clip_g3_panels --num 12
-tool_commit: f5be6ca
-generated: '2026-08-04T08:36:40+00:00'
+tool_commit: 5b047fc
+generated: '2026-08-04T08:39:26+00:00'
 models:
 - name: clip_g3
   config: experiments/20260804_sf3d_twist_g3/config.yaml
