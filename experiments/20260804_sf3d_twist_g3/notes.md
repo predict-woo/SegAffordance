@@ -40,3 +40,5 @@ commitment went down, and the three stacked changes cannot be
 attributed individually from this run.
 
 vis: viz/20260804_sf3d_clip_g3_traj_points (zigzag gone — sin^2 fold-back hypothesis confirmed)
+
+vis: viz/20260805_sf3d_g3_clip_vs_dinov3 (head-to-head at best ckpts)

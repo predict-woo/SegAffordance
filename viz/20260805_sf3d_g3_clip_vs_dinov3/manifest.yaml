@@ -1,0 +1,17 @@
+command: tools/sf3d_vis_predictions.py --model clip_g3 experiments/20260804_sf3d_twist_g3/config.yaml
+  experiments/20260804_sf3d_twist_g3/checkpoints/best-epoch08-valloss0.9042.ckpt --model
+  dinov3_g3 experiments/20260804_sf3d_twist_dinov3_g3/config.yaml experiments/20260804_sf3d_twist_dinov3_g3/checkpoints/best-epoch13-valloss0.8789.ckpt
+  --out viz/20260805_sf3d_g3_clip_vs_dinov3 --num 12
+tool_commit: 6d15bf1
+generated: '2026-08-04T15:22:42+00:00'
+models:
+- name: clip_g3
+  config: experiments/20260804_sf3d_twist_g3/config.yaml
+  ckpt: experiments/20260804_sf3d_twist_g3/checkpoints/best-epoch08-valloss0.9042.ckpt
+- name: dinov3_g3
+  config: experiments/20260804_sf3d_twist_dinov3_g3/config.yaml
+  ckpt: experiments/20260804_sf3d_twist_dinov3_g3/checkpoints/best-epoch13-valloss0.8789.ckpt
+num: 12
+seed: 0
+data_root: /workspace/datasets/sf3d_processed_v2
+key_cache: /workspace/cache/sf3d_v2_keys_cutoff05.pkl
