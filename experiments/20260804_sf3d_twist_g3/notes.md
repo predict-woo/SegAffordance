@@ -38,3 +38,5 @@ type-head-removal + pitch-free combination needs an ablation before
 adopting both permanently — direction went up while type/axis
 commitment went down, and the three stacked changes cannot be
 attributed individually from this run.
+
+vis: viz/20260804_sf3d_clip_g3_traj_points (zigzag gone — sin^2 fold-back hypothesis confirmed)
