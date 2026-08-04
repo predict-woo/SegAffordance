@@ -66,7 +66,7 @@ class NoGeometricLoss(GeometricConsistencyLoss):
     """Contributes nothing. Used on OPD and as the ablation arm."""
 
     def forward(self, outputs, targets, depth=None) -> LossTerms:
-        return self._zero(outputs.motion_pred), {}
+        return self._zero(outputs.coords_hat), {}
 
 
 class PredPredGeometricLoss(GeometricConsistencyLoss):
@@ -102,8 +102,8 @@ class PredPredGeometricLoss(GeometricConsistencyLoss):
         self.degenerate_threshold = degenerate_threshold
 
     def forward(self, outputs, targets, depth=None) -> LossTerms:
-        if targets.trajectory is None:
-            return self._zero(outputs.motion_pred), {}
+        if targets.trajectory is None or outputs.motion_pred is None:
+            return self._zero(outputs.coords_hat), {}
 
         # fp32 throughout: runs train at precision 16, and R is a ratio of
         # sums of squares that should not be formed under autocast.
@@ -125,7 +125,7 @@ class PredPredGeometricLoss(GeometricConsistencyLoss):
         if bool(valid.any()):
             term = per_sample[valid].mean()
         else:
-            term = self._zero(outputs.motion_pred)
+            term = self._zero(outputs.coords_hat)
 
         # The key is emitted whenever the dataset has trajectories at all, so
         # the CSV logger sees a stable set of columns across steps.
@@ -264,9 +264,9 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
             or targets.anchor_depth is None
             or outputs.origin_depth is None
         ):
-            return self._zero(outputs.motion_pred), {}
+            return self._zero(outputs.coords_hat), {}
 
-        device = outputs.motion_pred.device
+        device = outputs.coords_hat.device
         # Same fp16 overflow hazard as ScrewConsistencyLoss: projected curve
         # points near the camera plane reach ~1e6 and overflow under autocast.
         with torch.autocast(device_type=device.type, enabled=False):
@@ -323,7 +323,7 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
         term = (
             per_sample[valid].mean()
             if bool(valid.any())
-            else self._zero(outputs.motion_pred)
+            else self._zero(outputs.coords_hat)
         )
         return self.weight * term, {"L_geo_projected": term}
 
@@ -405,7 +405,7 @@ class CrossGTGeometricLoss(GeometricConsistencyLoss):
 
     def forward(self, outputs, targets, depth=None) -> LossTerms:
         if targets.trajectory is None or targets.motion_origin_3d is None:
-            return self._zero(outputs.motion_pred), {}
+            return self._zero(outputs.coords_hat), {}
 
         device = outputs.trajectory_pred.device
         trajectory_gt = targets.trajectory.to(device)
@@ -572,7 +572,7 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
 
     def forward(self, outputs, targets, depth=None) -> LossTerms:
         if outputs.twist_pred is None:
-            return self._zero(outputs.motion_pred), {}
+            return self._zero(outputs.coords_hat), {}
 
         device = outputs.twist_pred.device
         # fp32 is load-bearing, not hygiene: orbit points near the camera
@@ -586,7 +586,7 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
 
     def _forward_fp32(self, outputs, targets, depth, device) -> LossTerms:
         twist = outputs.twist_pred.float()
-        total = self._zero(outputs.motion_pred)
+        total = self._zero(outputs.coords_hat)
         terms: Dict[str, torch.Tensor] = {}
 
         if targets.trajectory is not None:
@@ -811,7 +811,7 @@ class TrajectoryProjectionLoss(nn.Module):
             or targets.img_size is None
             or depth is None
         ):
-            return self._zero(outputs.motion_pred), {}
+            return self._zero(outputs.coords_hat), {}
         device = outputs.trajectory_pred.device
         device_type = "cuda" if outputs.trajectory_pred.is_cuda else "cpu"
         with torch.autocast(device_type=device_type, enabled=False):
@@ -841,7 +841,7 @@ class TrajectoryProjectionLoss(nn.Module):
 
             count = mask.sum()
             if count < 1.0:
-                return self._zero(outputs.motion_pred), {}
+                return self._zero(outputs.coords_hat), {}
             sq = (proj - track).pow(2).sum(-1)
             term = (sq * mask).sum() / count
         return self.weight * term, {"L_traj_proj": term}

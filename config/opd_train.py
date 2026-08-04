@@ -50,6 +50,19 @@ class ModelParams:
     # deployment condition, and the hint can be supplied at inference when
     # available for a free accuracy boost.
     use_motion_type_input: bool = False
+    # Motion-axis PREDICTION head (the legacy 3-dim axis regressor). Off in
+    # twist arms: the twist head carries the axis, and eval falls back to
+    # the twist's decoded direction for axis metrics.
+    use_motion_head: bool = True
+    # Head-structural pitch removal: TwistMLP's output map ends in a
+    # smoothed orthogonal projection v <- v - (v.omega)omega/(|omega|^2+eps^2),
+    # so the head's output space IS the pitch-free variety {omega.v = 0}:
+    # exact orthogonality in the revolute regime, smoothly the identity as
+    # omega -> 0 (where pitch is vacuous and v must stay free for
+    # translation). A literal 5-parameter chart cannot exist — the variety's
+    # v-fiber jumps dimension at omega = 0, and any global chart
+    # reintroduces the prismatic singularity the twist removes.
+    twist_pitch_free: bool = False
     # Type PREDICTION head (logits + CE loss consumer). Off for 2D-only
     # pretraining, where no type labels exist — type is then emergent from
     # the twist's |omega| (the eval decodes and scores it anyway).

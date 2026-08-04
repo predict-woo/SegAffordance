@@ -34,6 +34,13 @@ model:
     # NOT resumable from use_cvae checkpoints (module names differ).
     use_cvae: false
     use_twist_head: true
+    # Axis head off (2026-08-05): the twist head carries the axis; eval
+    # falls back to the twist's decoded direction. The legacy axis loss
+    # (vae_weight) goes to 0 with it.
+    use_motion_head: false
+    # Structurally pitch-free twists: TwistMLP projects v against omega in
+    # its output map — pure rotations/translations only, no helices.
+    twist_pitch_free: true
     # Heads emit per-step deltas integrated by cumsum (point 0 == 0 exactly;
     # coords_hat anchors the curve). Added 2026-08-04 after the point-cloud
     # diagnosis (viz/20260803_sf3d_twist_traj_points).

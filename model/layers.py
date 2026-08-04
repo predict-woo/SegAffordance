@@ -260,7 +260,7 @@ class MotionVAE(nn.Module):
 
 class MotionMLP(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: int = 256, num_motion_types: int = 2,
-                 with_type_head: bool = True):
+                 with_type_head: bool = True, with_motion_head: bool = True):
         super().__init__()
         self.backbone = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
@@ -268,10 +268,11 @@ class MotionMLP(nn.Module):
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(True),
         )
+        # Optional (twist arms: the twist head carries the axis).
         self.motion_head = nn.Sequential(
             nn.Linear(hidden_dim, 3),
             nn.Sigmoid(),
-        )
+        ) if with_motion_head else None
         # Optional: no parameters at all when off (2D-only pretraining has
         # no type labels; type is emergent from the twist's |omega|).
         self.type_head = (
@@ -280,7 +281,7 @@ class MotionMLP(nn.Module):
 
     def forward(self, condition: torch.Tensor):
         h = self.backbone(condition)
-        motion_pred = self.motion_head(h)
+        motion_pred = self.motion_head(h) if self.motion_head is not None else None
         motion_type_logits = self.type_head(h) if self.type_head is not None else None
         return motion_pred, motion_type_logits
 
@@ -373,8 +374,18 @@ class TwistMLP(nn.Module):
     two motion types.
     """
 
-    def __init__(self, input_dim: int, hidden_dim: int = 256):
+    def __init__(self, input_dim: int, hidden_dim: int = 256,
+                 pitch_free: bool = False, pitch_eps: float = 0.05):
         super().__init__()
+        # pitch_free: the output map ends in a smoothed orthogonal
+        # projection of v against omega, making the output space exactly
+        # the pitch-free variety {omega . v = 0} — no helical motions.
+        # Exact for |omega| >> eps (revolute), smoothly the identity as
+        # omega -> 0 (prismatic, where pitch is vacuous). See
+        # ModelParams.twist_pitch_free for why a literal 5-parameter chart
+        # cannot exist.
+        self.pitch_free = pitch_free
+        self.pitch_eps = pitch_eps
         self.backbone = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(True),
@@ -384,7 +395,15 @@ class TwistMLP(nn.Module):
         self.twist_head = nn.Linear(hidden_dim, 6)
 
     def forward(self, condition: torch.Tensor):
-        return self.twist_head(self.backbone(condition))
+        out = self.twist_head(self.backbone(condition))
+        if self.pitch_free:
+            omega, v = out[..., :3], out[..., 3:]
+            axial = (v * omega).sum(-1, keepdim=True)
+            v = v - axial * omega / (
+                omega.pow(2).sum(-1, keepdim=True) + self.pitch_eps ** 2
+            )
+            out = torch.cat([omega, v], dim=-1)
+        return out
 
 
 class OriginDepthHead(nn.Module):

@@ -162,6 +162,7 @@ class CRIS(nn.Module):
                 hidden_dim=model_params.vae_hidden_dim,
                 num_motion_types=model_params.num_motion_types,
                 with_type_head=getattr(model_params, "use_motion_type_head", True),
+                with_motion_head=getattr(model_params, "use_motion_head", True),
             )
 
         # 3D element-sweep head. Off during 2D pretraining: video data has no
@@ -201,6 +202,7 @@ class CRIS(nn.Module):
             self.twist_predictor = TwistMLP(
                 input_dim=vae_condition_dim,
                 hidden_dim=model_params.vae_hidden_dim,
+                pitch_free=getattr(model_params, "twist_pitch_free", False),
             )
         else:
             self.twist_predictor = None
@@ -365,8 +367,9 @@ class CRIS(nn.Module):
                 motion_pred, motion_type_logits = self.motion_vae.inference(vae_condition)  # type: ignore[operator]
         else:
             motion_pred, motion_type_logits = self.motion_mlp(vae_condition)  # type: ignore[operator]
-            # Convert sigmoid output [0,1] to axis vector in [-1,1]
-            motion_pred = (motion_pred - 0.5) * 2.0
+            if motion_pred is not None:
+                # Convert sigmoid output [0,1] to axis vector in [-1,1]
+                motion_pred = (motion_pred - 0.5) * 2.0
         if not self.use_motion_type_head:
             motion_type_logits = None  # also covers the CVAE path
 

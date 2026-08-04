@@ -172,7 +172,7 @@ class TwistLoss(nn.Module):
             or targets.motion_type is None
             or targets.motion_origin_3d is None
         ):
-            zero = torch.zeros((), device=outputs.motion_pred.device, dtype=torch.float32)
+            zero = torch.zeros((), device=outputs.coords_hat.device, dtype=torch.float32)
             return zero, {}
 
         device = outputs.twist_pred.device

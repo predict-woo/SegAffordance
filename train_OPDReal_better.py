@@ -177,7 +177,12 @@ class OPDRealTrainingModule(pl.LightningModule):
         L_point_map = self.point_map_loss_fn(point_pred_logits, point_gt_heatmap)
         L_coord = self.coord_loss_fn(coords_hat, point_gt_norm.to(coords_hat.device))
 
-        if getattr(self.model, "use_cvae", True):
+        if motion_pred is None:
+            # Axis head off (use_motion_head: false, twist arms): the twist
+            # head carries the axis; no axis loss.
+            zero = torch.zeros((), device=coords_hat.device)
+            L_vae, L_recon, L_kld = zero, zero, zero
+        elif getattr(self.model, "use_cvae", True):
             L_vae, L_recon, L_kld = self.vae_loss_fn(
                 motion_pred, motion_gt.to(motion_pred.device), mu, log_var
             )
@@ -476,7 +481,8 @@ class OPDRealTrainingModule(pl.LightningModule):
                     point_gt_norm=point_gt_norm_sample,
                     point_pred_heatmap=point_pred_sigmoid_sample,
                     motion_gt=motion_gt[i],
-                    motion_pred=motion_pred[i],
+                    motion_pred=(motion_pred[i] if motion_pred is not None
+                                 else torch.zeros(3, device=coords_hat.device)),
                     motion_type_gt=motion_type_gt_list[i],
                     motion_type_pred_logits=(
                         motion_type_logits[i] if motion_type_logits is not None
@@ -590,7 +596,9 @@ class OPDRealTrainingModule(pl.LightningModule):
                 self._test_num_matched += 1
 
                 # Axis error (degrees, direction-agnostic)
-                axis_err = self._axis_error_deg(motion_pred[i], motion_gt[i]).item()
+                axis_i = (motion_pred[i] if motion_pred is not None
+                          else torch.zeros(3, device=motion_gt.device))
+                axis_err = self._axis_error_deg(axis_i, motion_gt[i]).item()
                 self._test_axis_errors_matched.append(axis_err)
 
                 is_axis_correct = axis_err <= self.config.test_motion_threshold_deg
@@ -680,7 +688,10 @@ class OPDRealTrainingModule(pl.LightningModule):
                         image_tensor=img[i].detach().cpu(),
                         point_pred_prob_tensor=point_pred_prob[i].detach().cpu(),
                         mask_pred_prob_tensor=mask_pred_prob[i].detach().cpu(),
-                        motion_pred=motion_pred[i].detach().cpu(),
+                        motion_pred=(
+                            motion_pred[i] if motion_pred is not None
+                            else torch.zeros(3)
+                        ).detach().cpu(),
                         pred_motion_type=int(pred_types[i].item()),
                         gt_point_norm=point_gt_norm[i].detach().cpu(),
                         gt_mask_tensor=mask_gt[i].detach().cpu(),

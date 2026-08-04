@@ -367,7 +367,14 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                     self._test_origin_errors_rotational_all.append(origin_error)
 
             # --- Motion and Axis evaluation (for all samples) ---
-            axis_err = self._axis_error_deg(motion_pred[i], motion_gt[i]).item()
+            if motion_pred is not None:
+                axis_src = motion_pred[i]
+            elif twist_decoded is not None:
+                # Axis head off: the twist direction IS the axis prediction.
+                axis_src = twist_decoded[1][i]
+            else:
+                axis_src = torch.zeros(3, device=motion_gt.device)
+            axis_err = self._axis_error_deg(axis_src, motion_gt[i]).item()
             # print(f"Axis error: {axis_err}")
             self._test_axis_errors_all.append(axis_err)
 
@@ -464,7 +471,10 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                                 full_image_path=full_image_path,
                                 point_pred_prob_tensor=point_pred_prob[i].detach().cpu(),
                                 mask_pred_prob_tensor=mask_pred_prob[i].detach().cpu(),
-                                motion_pred=motion_pred[i].detach().cpu(),
+                                motion_pred=(
+                                    motion_pred[i] if motion_pred is not None
+                                    else torch.zeros(3)
+                                ).detach().cpu(),
                                 pred_motion_type=int(pred_types[i].item()),
                                 gt_point_norm=point_gt_norm[i].detach().cpu(),
                                 gt_mask_tensor=mask_gt[i].detach().cpu(),

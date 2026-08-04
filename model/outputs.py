@@ -26,8 +26,10 @@ class ModelOutputs:
     point_logits: torch.Tensor
     #: (B, 2) soft-argmax of point_logits, normalised to [0, 1]
     coords_hat: torch.Tensor
-    #: (B, 3) motion axis, unnormalised and sign-agnostic
-    motion_pred: torch.Tensor
+    #: (B, 3) motion axis, unnormalised and sign-agnostic. None when the
+    #: axis head is off (`use_motion_head: false`, twist arms) — consumers
+    #: fall back to the twist's decoded direction.
+    motion_pred: Optional[torch.Tensor] = None
     #: (B, num_motion_types) — class 1 is rotation/revolute. None when the
     #: type head is off (`use_motion_type_head: false`); consumers fall back
     #: to the twist's |omega| where a type is needed.

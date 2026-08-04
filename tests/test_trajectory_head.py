@@ -50,3 +50,47 @@ def test_motion_mlp_type_head_optional():
     assert t is None
     # truly parameter-free: nothing type-related in the state dict
     assert not any("type_head" in k for k in without.state_dict())
+
+
+def test_motion_mlp_motion_head_optional():
+    from model.layers import MotionMLP
+
+    without = MotionMLP(input_dim=16, hidden_dim=8, with_motion_head=False)
+    m, t = without(torch.randn(3, 16))
+    assert m is None and t is not None
+    assert not any("motion_head" in k for k in without.state_dict())
+
+
+def test_twist_mlp_pitch_free_projection():
+    from model.layers import TwistMLP
+
+    head = TwistMLP(input_dim=16, hidden_dim=8, pitch_free=True)
+    x = torch.randn(64, 16)
+    out = head(x)
+    omega, v = out[..., :3], out[..., 3:]
+    dot = (omega * v).sum(-1).abs()
+    norm = omega.norm(dim=-1)
+    # revolute regime: essentially exact orthogonality (pitch-free)
+    strong = norm > 0.5
+    if strong.any():
+        cos_axial = dot[strong] / (norm[strong] * v[strong].norm(dim=-1) + 1e-9)
+        assert cos_axial.max().item() < 0.02
+    # gradients flow through the projection
+    out.sum().backward()
+    assert torch.isfinite(head.twist_head.weight.grad).all()
+
+
+def test_twist_mlp_pitch_free_keeps_prismatic_v():
+    from model.layers import TwistMLP
+
+    head = TwistMLP(input_dim=4, hidden_dim=4, pitch_free=True, pitch_eps=0.05)
+    # force omega ~ 0 by zeroing the omega rows of the final linear layer
+    with torch.no_grad():
+        head.twist_head.weight[:3].zero_()
+        head.twist_head.bias[:3].zero_()
+        head.twist_head.bias[3:] = torch.tensor([0.0, 1.0, 0.0])
+        head.twist_head.weight[3:].zero_()
+    out = head(torch.randn(2, 4))
+    # omega = 0 -> the projection must be the identity: v survives intact
+    assert torch.allclose(out[..., 3:], torch.tensor([0.0, 1.0, 0.0]).expand(2, 3), atol=1e-6)
+    assert torch.allclose(out[..., :3], torch.zeros(2, 3), atol=1e-6)
