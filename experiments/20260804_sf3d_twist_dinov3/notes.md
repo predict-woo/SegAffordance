@@ -20,3 +20,5 @@ consistency change). Eval logs: logs/eval_best.log, logs/eval_last.log.
 **Decision:** CLIP remains the backbone for the twist work. Direction
 supervision needs the 1-cos generation (this run trained with sin^2
 consistency; only the twist L2 pushed direction).
+
+vis: viz/20260804_sf3d_gen2_panels + viz/20260804_sf3d_gen2_traj_points (3-arm comparison at last.ckpt)

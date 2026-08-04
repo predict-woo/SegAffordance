@@ -29,3 +29,5 @@ twist) is validated — val no longer collapses early and every twist
 metric beats the old generation. Use last.ckpt as the reference
 checkpoint. Next lever: retrain with the 1-cos consistency (committed
 after this launch) to push direction accuracy.
+
+vis: viz/20260804_sf3d_gen2_panels + viz/20260804_sf3d_gen2_traj_points (3-arm comparison at last.ckpt)

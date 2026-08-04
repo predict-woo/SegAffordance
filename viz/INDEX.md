@@ -8,6 +8,8 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
 |---|---|---|
+| [20260804_sf3d_gen2_traj_points](20260804_sf3d_gen2_traj_points/README.md) | gen-2 arms, trajectory-only points — delta-cumsum turned clouds into ordered sweeps (clip) | `tools/sf3d_vis_predictions.py --traj-only` |
+| [20260804_sf3d_gen2_panels](20260804_sf3d_gen2_panels/README.md) | gen-2 full panels: clip vs dinov3 vs 2donly at last.ckpt | `tools/sf3d_vis_predictions.py` |
 | [20260804_sf3d_gt_twist_check](20260804_sf3d_gt_twist_check/README.md) | GT twist orbit (both signs) vs GT trajectory, 12 samples — 12/12 stored-sign OK | `tools/sf3d_vis_gt_twist.py` |
 | [20260803_sf3d_twist_traj_points](20260803_sf3d_twist_traj_points/README.md) | twist arm, trajectories only, drawn as points — exposes jittery/unordered predicted sequences | `tools/sf3d_vis_predictions.py --traj-only` |
 | [20260803_sf3d_twist_vs_2d_twist_panels](20260803_sf3d_twist_vs_2d_twist_panels/README.md) | GT vs twist vs 2d_twist prediction panels, 16 stratified val samples | `tools/sf3d_vis_predictions.py` |

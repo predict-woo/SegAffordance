@@ -1,0 +1,21 @@
+command: tools/sf3d_vis_predictions.py --model clip experiments/20260804_sf3d_twist_clip/config.yaml
+  experiments/20260804_sf3d_twist_clip/checkpoints/last.ckpt --model dinov3 experiments/20260804_sf3d_twist_dinov3/config.yaml
+  experiments/20260804_sf3d_twist_dinov3/checkpoints/last.ckpt --model 2donly experiments/20260804_sf3d_2donly/config.yaml
+  experiments/20260804_sf3d_2donly/checkpoints/last.ckpt --out viz/20260804_sf3d_gen2_panels
+  --num 12
+tool_commit: ad5be7d
+generated: '2026-08-04T04:01:20+00:00'
+models:
+- name: clip
+  config: experiments/20260804_sf3d_twist_clip/config.yaml
+  ckpt: experiments/20260804_sf3d_twist_clip/checkpoints/last.ckpt
+- name: dinov3
+  config: experiments/20260804_sf3d_twist_dinov3/config.yaml
+  ckpt: experiments/20260804_sf3d_twist_dinov3/checkpoints/last.ckpt
+- name: 2donly
+  config: experiments/20260804_sf3d_2donly/config.yaml
+  ckpt: experiments/20260804_sf3d_2donly/checkpoints/last.ckpt
+num: 12
+seed: 0
+data_root: /workspace/datasets/sf3d_processed_v2
+key_cache: /workspace/cache/sf3d_v2_keys_cutoff05.pkl

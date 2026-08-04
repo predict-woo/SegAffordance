@@ -30,3 +30,5 @@ settings. Next steps if pursued: use 2D as PRETRAINING before 3D
 finetune (the intended regime anyway), tune/anneal screw_omega_shrink
 (it collapsed |omega| toward trans), and consider depth-gradient cues to
 constrain the out-of-plane direction component.
+
+vis: viz/20260804_sf3d_gen2_panels + viz/20260804_sf3d_gen2_traj_points (3-arm comparison at last.ckpt)
