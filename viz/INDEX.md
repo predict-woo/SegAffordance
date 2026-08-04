@@ -8,6 +8,7 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
 |---|---|---|
+| [20260804_sf3d_clip_g3_panels](20260804_sf3d_clip_g3_panels/README.md) | clip gen-3 full panels — smooth trajectories, planar pitch-free orbits, visible masks | `tools/sf3d_vis_predictions.py` |
 | [20260804_sf3d_clip_g3_traj_points](20260804_sf3d_clip_g3_traj_points/README.md) | clip gen-3 trajectory points — 1-cos killed the fold-back zigzag AND the under-extension | `tools/sf3d_vis_predictions.py --traj-only` |
 | [20260804_sf3d_gen2_traj_points](20260804_sf3d_gen2_traj_points/README.md) | gen-2 arms, trajectory-only points — delta-cumsum turned clouds into ordered sweeps (clip) | `tools/sf3d_vis_predictions.py --traj-only` |
 | [20260804_sf3d_gen2_panels](20260804_sf3d_gen2_panels/README.md) | gen-2 full panels: clip vs dinov3 vs 2donly at last.ckpt | `tools/sf3d_vis_predictions.py` |
