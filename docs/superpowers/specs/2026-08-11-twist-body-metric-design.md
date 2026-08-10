@@ -116,8 +116,18 @@ retains its healthy gradient ∝ δ. Only radius-relevant directions gain
   from `targets.trajectory[:, 0]`; if trajectory is absent, fall back to the
   current Euclidean form (OPD paths are no-ops anyway).
 - `config/opd_train.py::LossParams`: add `twist_metric_rho: float = 0.25`.
-  Retune `twist_weight` so the loss magnitude at init roughly matches the
-  old scale (the new units are m²; expect a different natural weight).
+  `twist_weight` stays **0.5** — measured on 600 stratified val GT rows
+  (pred = 0 reference): mean init scale 0.603 (body) vs 0.634 (current
+  MSE), ratio 0.95. The metric redistributes across types (old: revolute
+  rows 6.6× prismatic via the camera-gauge `‖v‖≈1.76`; new: prismatic
+  1.00 vs revolute 0.21, i.e. metres of actual motion at the object —
+  the GT time convention prices 1 m of handle travel like 1 rad of
+  sweep). Watch-item, not a knob: if revolute twist learning lags under
+  the new balance, revisit.
+- Normalization convention: the field term is `‖Δf(p0)‖²` SUMMED over
+  xyz (a physical squared norm). Make the trajectory MSE use the same
+  per-point norm² convention so the two terms — which are in identical
+  units (m² at the object) after this change — stay directly comparable.
 - SF3D twist configs: set `twist_metric_rho` explicitly.
 - Tests (`tests/test_twist.py`): zero at `Δξ=0`; gauge invariance under a
   synthetic origin shift; the pricing table above as regression assertions;
