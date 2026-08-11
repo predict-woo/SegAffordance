@@ -71,11 +71,23 @@ scale — roughly 4% of the early-training total, vs ~1% before).
 - **Inference/eval**: `(xi*, tau*) = bundles[argmax logits]` —
   deterministic, one twist + one trajectory that tell the same story;
   decode, viz, and all metrics unchanged downstream.
-- **Consistency losses** (`screw_gt`, `screw_self`): applied to the
-  SELECTED bundle — winner `k*` during training (GT-informed, consistent
-  with the supervision), argmax-logit at val/test. `screw_self` now
-  checks a twist against its OWN bundled trajectory, which is the
-  structural-consistency payoff of bundling.
+- **Consistency losses** — the gating rule is: GT-anchored terms follow
+  the annealed winner weights; GT-free terms apply to every hypothesis.
+  - `screw_gt` (twist field vs GT trajectory, GT-anchored): per-bundle
+    residuals weighted by the SAME `stopgrad(q_T(k))` as the regression
+    distortion — all bundles early, winner-only as T→0. A hard
+    winner-only gate would be inconsistent with the soft regression
+    weighting; an ungated version would drag every expert toward every
+    sample's GT mode and erode specialization.
+  - `screw_self` (twist vs its OWN bundled trajectory, GT-free): mean
+    over ALL K bundles, every sample, unweighted. It never pulls toward
+    GT, so it cannot fight specialization — and every bundle must be
+    internally coherent because argmax-logit can select any of them at
+    eval. (Winner-only would leave losing bundles free to drift into
+    twist/trajectory disagreement off their home modes.) All bundles
+    share the single predicted-point anchor. Compute is negligible
+    (analytic residual, ×K).
+  - At val/test, metrics read the argmax-logit bundle as elsewhere.
 - **OPD / sign-agnostic path**: distortion becomes
   `min(L_body(xi_k, xi_gt), L_body(xi_k, -xi_gt))` inside `d_k`; the rest
   is identical. (OPD batches lack a 3D origin so the loss is a no-op
@@ -135,6 +147,11 @@ What this deliberately does NOT touch:
 - Bundle integrity: the winner index selects the SAME k for twist and
   trajectory; a sample whose GT trajectory matches bundle A but twist
   matches bundle B still trains one bundle (the joint-distortion winner).
+- Consistency gating: `screw_gt` per-bundle residuals carry the same
+  `q_T` weights as the regression term (verify at high and low T);
+  `screw_self` averages over all K bundles regardless of winner, and
+  each bundle's residual pairs twist k with trajectory k (never a
+  cross-bundle pair).
 - T → large: weights ≈ uniform (mean-regression start); T → 0: weight
   1 on the winner only.
 - Stop-grad: no gradient through the weights themselves.
