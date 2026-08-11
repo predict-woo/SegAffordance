@@ -113,9 +113,16 @@ model:
     # 0.5 carries over: measured init scale 0.603 (body) vs 0.634 (MSE).
     twist_weight: 0.5
     twist_metric_rho: 0.25
-    # Annealed WTA: T0 -> 0.01 over 80% of epochs, then hard winner.
-    twist_wta_T0: 10.0
-    twist_wta_anneal_frac: 0.8
+    # Short warm start, then hard WTA. The first attempt (T0 10, anneal over
+    # 80% of epochs) MERGED all hypotheses onto the barycenter: 8+ epochs of
+    # near-uniform softmin pulled every head to the posterior mean (measured
+    # pairwise hypothesis distance 0.005 at epoch 9, selected |omega| median
+    # 0.04, CE pinned at ln 4) — an identical-outputs fixed point that WTA
+    # cannot escape at lr 1e-5. Start AT the mode-distance scale instead and
+    # go hard by epoch 2, so random-init diversity persists and heads
+    # specialize from the start.
+    twist_wta_T0: 0.5
+    twist_wta_anneal_frac: 0.125
     twist_hyp_ce_weight: 0.1
     # Direction is semantic on SF3D — the preprocessor derives the GT
     # trajectory FROM the signed axis (trans marches along +motion_dir, rot

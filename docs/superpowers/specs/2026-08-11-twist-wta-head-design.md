@@ -64,10 +64,19 @@ was doubly capped by the hedge; amplification is only meaningful now
 that WTA makes the term reducible. 4.0 gives it an ~8x larger gradient
 scale — roughly 4% of the early-training total, vs ~1% before).
 
-- **Temperature schedule**: exponential decay per epoch, `T(e) = T0 * rho^e`
-  with `T0 = 10`, `rho` chosen so `T ≈ 0.01` at ~80% of `max_epochs`
-  (aWTA's recipe); hard WTA (pure winner) for the remainder. High T =
-  every hypothesis trains (no dead heads); low T = full specialization.
+- **Temperature schedule** (REVISED 2026-08-11 after the first g4 attempt):
+  short warm start `T0 = 0.5` decaying to 0.01 over the first ~12.5% of
+  epochs (`twist_wta_anneal_frac 0.125`), then hard WTA. The original
+  recipe (`T0 10`, anneal over 80%) failed empirically: a long
+  near-uniform softmin phase pulls every hypothesis toward each sample's
+  GT, i.e. every head converges to the posterior-mean barycenter —
+  measured at epoch 9: pairwise hypothesis body-distance 0.005
+  (functionally identical), selected `|omega|` median 0.04 (a DEEPER
+  hedge than gen-3), CE pinned at ln 4. Identical outputs give identical
+  softmin weights and identical gradients — a symmetric fixed point WTA
+  cannot escape at lr 1e-5. Starting AT the mode-distance scale keeps the
+  random-init diversity alive so each head wins a region immediately;
+  the brief soft phase is only insurance against day-one dead heads.
 - **Inference/eval**: `(xi*, tau*) = bundles[argmax logits]` —
   deterministic, one twist + one trajectory that tell the same story;
   decode, viz, and all metrics unchanged downstream.
