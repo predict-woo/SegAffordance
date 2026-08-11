@@ -10,7 +10,7 @@
 > consistent instead of leaving screw_self to fight an inconsistent
 > selection.
 
-**Status: approved design — NOT yet implemented.** Companion to
+**Status: IMPLEMENTED 2026-08-11 (commit 7c6b677; smoke-validated on the dev pod).** Companion to
 `2026-08-11-twist-body-metric-design.md`; the two are one change set and
 should be implemented together (the body metric is the distortion measure
 this loss quantizes under).

@@ -1,6 +1,6 @@
 # Twist loss: body-frame kinetic-energy metric (sensitivity fix)
 
-**Status: approved design — NOT yet implemented.** This fixes the loss
+**Status: IMPLEMENTED 2026-08-11 (commit 7c6b677; smoke-validated on the dev pod).** This fixes the loss
 *pricing* only; the companion fix for mode-averaging (hedging) is
 `2026-08-11-twist-wta-head-design.md` (approved same day). Implement both
 together — the WTA loss uses this metric as its distortion measure.
