@@ -6,8 +6,9 @@
 <title>Fixing SF3D Articulation Training — Diagnosis &amp; Fixes</title>
 <style>
   :root {
-    --bg: #10141a; --card: #171d26; --ink: #e8ecf1; --dim: #93a0b0;
-    --acc: #5eb0ef; --good: #57c98a; --bad: #e56a6a; --warn: #e0b45c;
+    --bg: #ffffff; --card: #f5f7fa; --ink: #14181d; --dim: #5a6572;
+    --acc: #1a6fc4; --good: #1e8f57; --bad: #c43d3d; --warn: #a97b1f;
+    --line: #d8dee6; --codebg: #eef1f5;
     --mono: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -25,16 +26,16 @@
   ul { padding-left: 1.2rem; margin-bottom: .8rem; }
   .cols { display: flex; gap: 2rem; align-items: stretch; flex-wrap: wrap; }
   .cols > div { flex: 1 1 320px; }
-  .card { background: var(--card); border: 1px solid #232c38; border-radius: 10px;
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
           padding: 1.1rem 1.3rem; margin: .6rem 0; }
   .num { font-size: 2rem; font-weight: 700; }
   .bad  { color: var(--bad); } .good { color: var(--good); } .warn { color: var(--warn); }
   .acc { color: var(--acc); }
-  code, .formula { font-family: var(--mono); font-size: .92em; background: #0c1015;
+  code, .formula { font-family: var(--mono); font-size: .92em; background: var(--codebg);
          border-radius: 6px; padding: .1em .35em; }
   .formula { display: inline-block; padding: .6em .9em; margin: .4rem 0; font-size: 1.05em; }
   table { border-collapse: collapse; margin: .8rem 0; width: 100%; }
-  th, td { text-align: left; padding: .45em .8em; border-bottom: 1px solid #232c38; }
+  th, td { text-align: left; padding: .45em .8em; border-bottom: 1px solid var(--line); }
   th { color: var(--dim); font-weight: 600; font-size: .85em; text-transform: uppercase; letter-spacing: .05em; }
   td.r, th.r { text-align: right; font-family: var(--mono); }
   .nav { position: fixed; bottom: 1.1rem; right: 1.4rem; color: var(--dim);
@@ -83,23 +84,23 @@
   <svg viewBox="0 0 760 210">
     <!-- left door -->
     <g transform="translate(60,30)">
-      <rect x="0" y="130" width="120" height="10" fill="#3a4656"/>
-      <path d="M 0 135 A 120 120 0 0 1 62 32" fill="none" stroke="#57c98a" stroke-width="3" stroke-dasharray="6 5"/>
-      <circle cx="120" cy="135" r="5" fill="#5eb0ef"/>
+      <rect x="0" y="130" width="120" height="10" fill="#55606e"/>
+      <path d="M 0 135 A 120 120 0 0 1 62 32" fill="none" stroke="#1e8f57" stroke-width="3" stroke-dasharray="6 5"/>
+      <circle cx="120" cy="135" r="5" fill="#1a6fc4"/>
       <text x="18" y="20" class="lbl">swings left</text>
     </g>
     <g transform="translate(300,30)">
-      <rect x="0" y="130" width="120" height="10" fill="#3a4656"/>
-      <path d="M 120 135 A 120 120 0 0 0 58 32" fill="none" stroke="#57c98a" stroke-width="3" stroke-dasharray="6 5"/>
-      <circle cx="0" cy="135" r="5" fill="#5eb0ef"/>
+      <rect x="0" y="130" width="120" height="10" fill="#55606e"/>
+      <path d="M 120 135 A 120 120 0 0 0 58 32" fill="none" stroke="#1e8f57" stroke-width="3" stroke-dasharray="6 5"/>
+      <circle cx="0" cy="135" r="5" fill="#1a6fc4"/>
       <text x="18" y="20" class="lbl">swings right</text>
     </g>
     <text x="470" y="130" style="font-size:26px" class="lbl">&rarr;</text>
     <g transform="translate(530,30)">
-      <rect x="0" y="130" width="120" height="10" fill="#3a4656"/>
-      <text x="-4" y="20" class="lbl" fill="#e56a6a">MSE optimum: stays put,</text>
-      <text x="-4" y="40" class="lbl" fill="#e56a6a">hinge at infinity</text>
-      <path d="M 0 120 L 120 118" stroke="#e56a6a" stroke-width="3"/>
+      <rect x="0" y="130" width="120" height="10" fill="#55606e"/>
+      <text x="-4" y="20" class="lbl" fill="#c43d3d">MSE optimum: stays put,</text>
+      <text x="-4" y="40" class="lbl" fill="#c43d3d">hinge at infinity</text>
+      <path d="M 0 120 L 120 118" stroke="#c43d3d" stroke-width="3"/>
     </g>
   </svg>
   <ul>
@@ -148,32 +149,32 @@
   <h2><span class="tag">Fix 2 — winner-takes-all hypotheses</span>Let the model tell four stories and commit to one</h2>
   <svg viewBox="0 0 760 190">
     <g transform="translate(10,20)">
-      <rect x="0" y="40" width="150" height="60" rx="8" fill="#171d26" stroke="#232c38"/>
+      <rect x="0" y="40" width="150" height="60" rx="8" fill="#f5f7fa" stroke="#c9d1da"/>
       <text x="75" y="65" text-anchor="middle" class="lbl">image features</text>
       <text x="75" y="85" text-anchor="middle">(shared backbone)</text>
     </g>
     <g font-weight="600">
-      <line x1="170" y1="90" x2="230" y2="30" stroke="#3a4656" stroke-width="2"/>
-      <line x1="170" y1="90" x2="230" y2="72" stroke="#3a4656" stroke-width="2"/>
-      <line x1="170" y1="90" x2="230" y2="114" stroke="#3a4656" stroke-width="2"/>
-      <line x1="170" y1="90" x2="230" y2="156" stroke="#3a4656" stroke-width="2"/>
+      <line x1="170" y1="90" x2="230" y2="30" stroke="#9aa5b1" stroke-width="2"/>
+      <line x1="170" y1="90" x2="230" y2="72" stroke="#9aa5b1" stroke-width="2"/>
+      <line x1="170" y1="90" x2="230" y2="114" stroke="#9aa5b1" stroke-width="2"/>
+      <line x1="170" y1="90" x2="230" y2="156" stroke="#9aa5b1" stroke-width="2"/>
     </g>
     <g transform="translate(235,8)">
-      <rect x="0" y="0" width="270" height="38" rx="6" fill="#171d26" stroke="#57c98a"/>
-      <text x="10" y="24" class="lbl" fill="#57c98a">1: swings left&nbsp;&nbsp;(twist + arc)</text>
-      <rect x="0" y="46" width="270" height="38" rx="6" fill="#171d26" stroke="#232c38"/>
+      <rect x="0" y="0" width="270" height="38" rx="6" fill="#f5f7fa" stroke="#1e8f57"/>
+      <text x="10" y="24" class="lbl" fill="#1e8f57">1: swings left&nbsp;&nbsp;(twist + arc)</text>
+      <rect x="0" y="46" width="270" height="38" rx="6" fill="#f5f7fa" stroke="#c9d1da"/>
       <text x="10" y="70" class="lbl">2: swings right (twist + arc)</text>
-      <rect x="0" y="92" width="270" height="38" rx="6" fill="#171d26" stroke="#232c38"/>
+      <rect x="0" y="92" width="270" height="38" rx="6" fill="#f5f7fa" stroke="#c9d1da"/>
       <text x="10" y="116" class="lbl">3: slides out&nbsp;&nbsp;&nbsp;(twist + line)</text>
-      <rect x="0" y="138" width="270" height="38" rx="6" fill="#171d26" stroke="#232c38"/>
+      <rect x="0" y="138" width="270" height="38" rx="6" fill="#f5f7fa" stroke="#c9d1da"/>
       <text x="10" y="162" class="lbl">4: spare</text>
     </g>
     <g transform="translate(545,55)">
-      <rect x="0" y="0" width="190" height="66" rx="8" fill="#171d26" stroke="#5eb0ef"/>
-      <text x="95" y="27" text-anchor="middle" class="lbl" fill="#5eb0ef">selector logits</text>
+      <rect x="0" y="0" width="190" height="66" rx="8" fill="#f5f7fa" stroke="#1a6fc4"/>
+      <text x="95" y="27" text-anchor="middle" class="lbl" fill="#1a6fc4">selector logits</text>
       <text x="95" y="49" text-anchor="middle">argmax &rarr; one bundle out</text>
     </g>
-    <line x1="510" y1="27" x2="545" y2="80" stroke="#3a4656" stroke-width="2"/>
+    <line x1="510" y1="27" x2="545" y2="80" stroke="#9aa5b1" stroke-width="2"/>
   </svg>
   <ul>
     <li>Each hypothesis is a <b>bundled</b> (twist, trajectory) — one coherent story. Per sample, only the bundle closest to ground truth trains on it (softmin-annealed so no hypothesis dies early); a selector picks one at inference.</li>
