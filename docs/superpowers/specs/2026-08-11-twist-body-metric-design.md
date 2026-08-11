@@ -125,9 +125,10 @@ retains its healthy gradient ∝ δ. Only radius-relevant directions gain
   sweep). Watch-item, not a knob: if revolute twist learning lags under
   the new balance, revisit.
 - Normalization convention: the field term is `‖Δf(p0)‖²` SUMMED over
-  xyz (a physical squared norm). Make the trajectory MSE use the same
-  per-point norm² convention so the two terms — which are in identical
-  units (m² at the object) after this change — stay directly comparable.
+  xyz (a physical squared norm). The trajectory MSE keeps its existing
+  mean-over-points-and-dims convention (= per-point norm²/3) — no code
+  churn; the constant factor 3 is absorbed into `trajectory_weight`.
+  When comparing the two terms' magnitudes, remember the ×3.
 - SF3D twist configs: set `twist_metric_rho` explicitly.
 - Tests (`tests/test_twist.py`): zero at `Δξ=0`; gauge invariance under a
   synthetic origin shift; the pricing table above as regression assertions;

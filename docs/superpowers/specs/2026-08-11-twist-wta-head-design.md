@@ -61,7 +61,8 @@ with `w_tw = twist_weight = 0.5` and `w_traj = trajectory_weight = 4.0`
 (raised from 0.5: at 0.5 the trajectory term carried ~1% of the total
 loss its entire life — init scale 0.018 m² vs 0.6 for the twist — and
 was doubly capped by the hedge; amplification is only meaningful now
-that WTA makes the term reducible. 4.0 lifts it to a ~8% share).
+that WTA makes the term reducible. 4.0 gives it an ~8x larger gradient
+scale — roughly 4% of the early-training total, vs ~1% before).
 
 - **Temperature schedule**: exponential decay per epoch, `T(e) = T0 * rho^e`
   with `T0 = 10`, `rho` chosen so `T ≈ 0.01` at ~80% of `max_epochs`
