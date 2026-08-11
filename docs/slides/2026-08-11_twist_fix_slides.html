@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixing SF3D Articulation Training — Diagnosis &amp; Fixes</title>
+<style>
+  :root {
+    --bg: #10141a; --card: #171d26; --ink: #e8ecf1; --dim: #93a0b0;
+    --acc: #5eb0ef; --good: #57c98a; --bad: #e56a6a; --warn: #e0b45c;
+    --mono: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink);
+         font: 17px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .slide { display: none; min-height: 100vh; padding: 4.5rem 6vw 5rem;
+           flex-direction: column; justify-content: center; max-width: 1100px; margin: 0 auto; }
+  .slide.active { display: flex; }
+  h1 { font-size: 2.3rem; line-height: 1.2; margin-bottom: 1rem; }
+  h2 { font-size: 1.7rem; margin-bottom: 1.4rem; }
+  h2 .tag { font-size: .8rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+            color: var(--acc); display: block; margin-bottom: .4rem; }
+  p, li { color: var(--ink); margin-bottom: .6rem; }
+  .dim { color: var(--dim); }
+  ul { padding-left: 1.2rem; margin-bottom: .8rem; }
+  .cols { display: flex; gap: 2rem; align-items: stretch; flex-wrap: wrap; }
+  .cols > div { flex: 1 1 320px; }
+  .card { background: var(--card); border: 1px solid #232c38; border-radius: 10px;
+          padding: 1.1rem 1.3rem; margin: .6rem 0; }
+  .num { font-size: 2rem; font-weight: 700; }
+  .bad  { color: var(--bad); } .good { color: var(--good); } .warn { color: var(--warn); }
+  .acc { color: var(--acc); }
+  code, .formula { font-family: var(--mono); font-size: .92em; background: #0c1015;
+         border-radius: 6px; padding: .1em .35em; }
+  .formula { display: inline-block; padding: .6em .9em; margin: .4rem 0; font-size: 1.05em; }
+  table { border-collapse: collapse; margin: .8rem 0; width: 100%; }
+  th, td { text-align: left; padding: .45em .8em; border-bottom: 1px solid #232c38; }
+  th { color: var(--dim); font-weight: 600; font-size: .85em; text-transform: uppercase; letter-spacing: .05em; }
+  td.r, th.r { text-align: right; font-family: var(--mono); }
+  .nav { position: fixed; bottom: 1.1rem; right: 1.4rem; color: var(--dim);
+         font-size: .85rem; font-family: var(--mono); }
+  .hint { position: fixed; bottom: 1.1rem; left: 1.4rem; color: var(--dim); font-size: .85rem; }
+  svg { max-width: 100%; height: auto; display: block; margin: .6rem auto; }
+  svg text { font: 13px -apple-system, "Segoe UI", sans-serif; fill: var(--dim); }
+  svg .lbl { fill: var(--ink); font-weight: 600; }
+  .footer-note { color: var(--dim); font-size: .85rem; margin-top: 1.6rem; }
+</style>
+</head>
+<body>
+
+<!-- ================= SLIDE 1: title ================= -->
+<section class="slide active">
+  <h1>Why our articulation model predicted<br>giant radii and frozen trajectories<br><span class="acc">— and how we fixed it</span></h1>
+  <p class="dim" style="margin-top:.8rem">SegAffordance · SF3D twist arm · diagnosis and gen-4 redesign, Aug 2026</p>
+  <div class="card" style="margin-top:2rem">
+    <p style="margin:0">One sentence: the network was trained with losses whose <b>optimum under ambiguity is the average of the possible answers</b> — and for articulated motion, the average of the possible answers is a physically absurd motion. We replaced the loss geometry (body-frame metric) and made the model commit to one answer (winner-takes-all hypotheses).</p>
+  </div>
+</section>
+
+<!-- ================= SLIDE 2: symptoms ================= -->
+<section class="slide">
+  <h2><span class="tag">The symptoms</span>Measured on the trained gen-3 model (800 validation samples)</h2>
+  <div class="cols">
+    <div class="card">
+      <div class="num bad">0.295</div>
+      <p>median predicted <code>‖&omega;‖</code> on revolute joints — ground truth is <b>1.0</b>. 77% of rotating parts decode as sliding.</p>
+    </div>
+    <div class="card">
+      <div class="num bad">10&times;</div>
+      <p>median radius inflation, <b>one-sided</b>: 96% of predictions have a radius larger than GT (0.25&nbsp;m &rarr; 1.4&nbsp;m). This is the "too-flat arcs" in the renders.</p>
+    </div>
+    <div class="card">
+      <div class="num bad">0.0182</div>
+      <p>trajectory loss after 16 epochs — the baseline of <b>predicting no motion at all</b> scores 0.0181. The trajectory head learned nothing.</p>
+    </div>
+  </div>
+  <p class="footer-note">Also explained: emergent motion-type accuracy ~60% (it's the &omega;-collapse, not a type problem), direction accuracy ~71%.</p>
+</section>
+
+<!-- ================= SLIDE 3: root cause 1 ================= -->
+<section class="slide">
+  <h2><span class="tag">Root cause 1 — mode averaging</span>MSE predicts the mean; the mean of two valid motions is an invalid motion</h2>
+  <svg viewBox="0 0 760 210">
+    <!-- left door -->
+    <g transform="translate(60,30)">
+      <rect x="0" y="130" width="120" height="10" fill="#3a4656"/>
+      <path d="M 0 135 A 120 120 0 0 1 62 32" fill="none" stroke="#57c98a" stroke-width="3" stroke-dasharray="6 5"/>
+      <circle cx="120" cy="135" r="5" fill="#5eb0ef"/>
+      <text x="18" y="20" class="lbl">swings left</text>
+    </g>
+    <g transform="translate(300,30)">
+      <rect x="0" y="130" width="120" height="10" fill="#3a4656"/>
+      <path d="M 120 135 A 120 120 0 0 0 58 32" fill="none" stroke="#57c98a" stroke-width="3" stroke-dasharray="6 5"/>
+      <circle cx="0" cy="135" r="5" fill="#5eb0ef"/>
+      <text x="18" y="20" class="lbl">swings right</text>
+    </g>
+    <text x="470" y="130" style="font-size:26px" class="lbl">&rarr;</text>
+    <g transform="translate(530,30)">
+      <rect x="0" y="130" width="120" height="10" fill="#3a4656"/>
+      <text x="-4" y="20" class="lbl" fill="#e56a6a">MSE optimum: stays put,</text>
+      <text x="-4" y="40" class="lbl" fill="#e56a6a">hinge at infinity</text>
+      <path d="M 0 120 L 120 118" stroke="#e56a6a" stroke-width="3"/>
+    </g>
+  </svg>
+  <ul>
+    <li>When the image doesn't determine the answer (door vs drawer, swing direction, hinge side), the MSE-optimal prediction is the <b>probability-weighted average</b> of the possibilities.</li>
+    <li>In twist coordinates: average of revolute (<code>‖&omega;‖=1</code>) and prismatic (<code>&omega;=0</code>) &rarr; <code>‖&omega;‖ = P(rot) &lt; 1</code>. The decoded axis position divides by <code>‖&omega;‖&sup2;</code>, so the hinge flies away &rarr; radius inflates as ~1/P(rot). <b>Always larger, never smaller.</b></li>
+    <li>Same for trajectories: mean of "arc left" and "arc right" is <b>zero motion</b> — exactly what we measured.</li>
+    <li>Verified: a toy network trained with our exact loss on ambiguous data lands exactly on this average; the old branched (classify-then-regress) design does not — matching "the old implementation was fine".</li>
+  </ul>
+</section>
+
+<!-- ================= SLIDE 4: root cause 2 ================= -->
+<section class="slide">
+  <h2><span class="tag">Root cause 2 — mispriced errors</span>The loss charged almost nothing for exactly the errors that mattered</h2>
+  <p>The 6-vector MSE <code>‖&Delta;&omega;‖&sup2; + ‖&Delta;v‖&sup2;</code> is secretly a physical metric — of a body sitting <b>at the camera origin</b>, ~2&nbsp;m away from the object whose motion we predict. Priced in that gauge:</p>
+  <table>
+    <tr><th>error</th><th class="r">cost (relative to a full sign flip)</th></tr>
+    <tr><td>axis 0.5&nbsp;m too far away (radius 3&times; wrong)</td><td class="r bad">1.4%</td></tr>
+    <tr><td>the observed <code>‖&omega;‖</code> collapse to 0.3</td><td class="r bad">2.7%</td></tr>
+    <tr><td>axis direction tilt of 6&deg;</td><td class="r">0.23%&nbsp; (fine — quadratic small-angle law)</td></tr>
+  </table>
+  <ul>
+    <li>The loss surface is nearly <b>flat</b> along radius-controlling directions while the decoded geometry is hyperbolically sensitive there — weight decay and noise park <code>&omega;</code> low for free.</li>
+    <li>The auxiliary consistency losses can't push back: they compare <b>directions only</b> (scale-free), and on a 15&deg; arc they cannot tell radius 0.18&nbsp;m from 0.61&nbsp;m.</li>
+  </ul>
+</section>
+
+<!-- ================= SLIDE 5: fix 1 ================= -->
+<section class="slide">
+  <h2><span class="tag">Fix 1 — body-frame metric</span>Price errors by how wrongly they move <em>the object</em></h2>
+  <p class="formula">L(&Delta;&xi;) &nbsp;=&nbsp; ‖&Delta;&omega; &times; p&#8320; + &Delta;v‖&sup2; &nbsp;+&nbsp; &rho;&sup2;&thinsp;‖&Delta;&omega;‖&sup2;</p>
+  <ul>
+    <li>The classical rigid-body kinetic-energy metric on se(3), with the body placed at the observed element point <code>p&#8320;</code> (&rho; = 0.25&nbsp;m part scale). First term = the <b>velocity error at the object, in m&sup2;</b>.</li>
+    <li>Gauge-invariant (the old loss changed if you moved the camera origin; this one can't), still convex, no motion-type branches, sign-sensitive.</li>
+  </ul>
+  <table>
+    <tr><th>error</th><th class="r">old MSE</th><th class="r">body metric</th></tr>
+    <tr><td>radius 3&times; wrong</td><td class="r bad">1.4%</td><td class="r good">50%</td></tr>
+    <tr><td><code>‖&omega;‖</code> collapse to 0.3</td><td class="r bad">2.7%</td><td class="r good">330%</td></tr>
+    <tr><td>6&deg; axis tilt</td><td class="r">0.23%</td><td class="r">0.12% (law unchanged)</td></tr>
+  </table>
+  <p class="dim">Radius-relevant directions gain ~40–100&times; relative gradient; direction pricing keeps its healthy &prop;&delta; law. Overall loss scale is preserved (measured 0.95&times;), so no re-tuning cascade.</p>
+</section>
+
+<!-- ================= SLIDE 6: fix 2 ================= -->
+<section class="slide">
+  <h2><span class="tag">Fix 2 — winner-takes-all hypotheses</span>Let the model tell four stories and commit to one</h2>
+  <svg viewBox="0 0 760 190">
+    <g transform="translate(10,20)">
+      <rect x="0" y="40" width="150" height="60" rx="8" fill="#171d26" stroke="#232c38"/>
+      <text x="75" y="65" text-anchor="middle" class="lbl">image features</text>
+      <text x="75" y="85" text-anchor="middle">(shared backbone)</text>
+    </g>
+    <g font-weight="600">
+      <line x1="170" y1="90" x2="230" y2="30" stroke="#3a4656" stroke-width="2"/>
+      <line x1="170" y1="90" x2="230" y2="72" stroke="#3a4656" stroke-width="2"/>
+      <line x1="170" y1="90" x2="230" y2="114" stroke="#3a4656" stroke-width="2"/>
+      <line x1="170" y1="90" x2="230" y2="156" stroke="#3a4656" stroke-width="2"/>
+    </g>
+    <g transform="translate(235,8)">
+      <rect x="0" y="0" width="270" height="38" rx="6" fill="#171d26" stroke="#57c98a"/>
+      <text x="10" y="24" class="lbl" fill="#57c98a">1: swings left&nbsp;&nbsp;(twist + arc)</text>
+      <rect x="0" y="46" width="270" height="38" rx="6" fill="#171d26" stroke="#232c38"/>
+      <text x="10" y="70" class="lbl">2: swings right (twist + arc)</text>
+      <rect x="0" y="92" width="270" height="38" rx="6" fill="#171d26" stroke="#232c38"/>
+      <text x="10" y="116" class="lbl">3: slides out&nbsp;&nbsp;&nbsp;(twist + line)</text>
+      <rect x="0" y="138" width="270" height="38" rx="6" fill="#171d26" stroke="#232c38"/>
+      <text x="10" y="162" class="lbl">4: spare</text>
+    </g>
+    <g transform="translate(545,55)">
+      <rect x="0" y="0" width="190" height="66" rx="8" fill="#171d26" stroke="#5eb0ef"/>
+      <text x="95" y="27" text-anchor="middle" class="lbl" fill="#5eb0ef">selector logits</text>
+      <text x="95" y="49" text-anchor="middle">argmax &rarr; one bundle out</text>
+    </g>
+    <line x1="510" y1="27" x2="545" y2="80" stroke="#3a4656" stroke-width="2"/>
+  </svg>
+  <ul>
+    <li>Each hypothesis is a <b>bundled</b> (twist, trajectory) — one coherent story. Per sample, only the bundle closest to ground truth trains on it (softmin-annealed so no hypothesis dies early); a selector picks one at inference.</li>
+    <li>No hypothesis is ever forced to explain "left" and "right" at once &rarr; <b>averaging is structurally impossible</b>. Theory: hypotheses converge onto the modes of the answer distribution (Voronoi quantization), never between them. Standard in motion forecasting (aMCL/aWTA, 2024–25).</li>
+    <li>Toy replication of our failure: MSE head &rarr; <code>‖&omega;‖ = 0.49</code>, radius 3&times;; WTA winner &rarr; <code>‖&omega;‖ &gt; 0.95</code>, radius &asymp; GT — on identical ambiguous data.</li>
+  </ul>
+</section>
+
+<!-- ================= SLIDE 7: status ================= -->
+<section class="slide">
+  <h2><span class="tag">Status</span>Implemented, tested, training</h2>
+  <ul>
+    <li><b>Diagnosis is measured, not conjectured</b>: 800-sample checkpoint study, closed-form + trained-toy reproductions, and an intervention test (feeding the true motion type changed nothing &rarr; sign/geometry ambiguity dominates, so only mode commitment can fix it).</li>
+    <li><b>Both fixes implemented</b> behind config flags; 109 unit tests including: gauge invariance, the pricing table as regression assertions, winner-only gradients, and the commitment-vs-averaging toy as an automated test.</li>
+    <li><b>Trajectory supervision re-weighted</b> (0.5 &rarr; 4.0) — meaningful only now that the term is reducible; previously it idled at ~1% of the loss against a hedge-capped optimum.</li>
+    <li><b>gen-4 run in flight</b> (RTX 4090 pod, ~4&nbsp;h). Pre-registered acceptance: revolute <code>‖&omega;‖ &asymp; 1</code> (was 0.295), radius ratio &asymp; 1 (was 10&times;), trajectory loss well below the 0.018 zero-motion baseline, type/direction accuracy up.</li>
+  </ul>
+  <p class="footer-note">Full write-ups: <code>docs/superpowers/specs/2026-08-11-twist-body-metric-design.md</code> and <code>…-twist-wta-head-design.md</code> in the SegAffordance repo.</p>
+</section>
+
+<div class="nav"><span id="pos">1</span>/<span id="total">?</span></div>
+<div class="hint">&larr; &rarr; or click to navigate</div>
+
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  let i = 0;
+  document.getElementById('total').textContent = slides.length;
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, j) => s.classList.toggle('active', j === i));
+    document.getElementById('pos').textContent = i + 1;
+  }
+  addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') show(i + 1);
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') show(i - 1);
+    if (e.key === 'Home') show(0);
+    if (e.key === 'End') show(slides.length - 1);
+  });
+  addEventListener('click', e => { if (!e.target.closest('a')) show(i + 1); });
+</script>
+</body>
+</html>
