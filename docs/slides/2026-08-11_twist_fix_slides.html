@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fixing SF3D Articulation Training — Diagnosis &amp; Fixes</title>
+<script>
+  MathJax = { tex: { inlineMath: [['\\(', '\\)']] }, chtml: { scale: 1.02 } };
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
 <style>
   :root {
     --bg: #ffffff; --card: #f5f7fa; --ink: #14181d; --dim: #5a6572;
@@ -64,7 +68,7 @@
   <div class="cols">
     <div class="card">
       <div class="num bad">0.295</div>
-      <p>median predicted <code>‖&omega;‖</code> on revolute joints — ground truth is <b>1.0</b>. 77% of rotating parts decode as sliding.</p>
+      <p>median predicted \(\|\omega\|\) on revolute joints — ground truth is <b>1.0</b>. 77% of rotating parts decode as sliding.</p>
     </div>
     <div class="card">
       <div class="num bad">10&times;</div>
@@ -105,7 +109,7 @@
   </svg>
   <ul>
     <li>When the image doesn't determine the answer (door vs drawer, swing direction, hinge side), the MSE-optimal prediction is the <b>probability-weighted average</b> of the possibilities.</li>
-    <li>In twist coordinates: average of revolute (<code>‖&omega;‖=1</code>) and prismatic (<code>&omega;=0</code>) &rarr; <code>‖&omega;‖ = P(rot) &lt; 1</code>. The decoded axis position divides by <code>‖&omega;‖&sup2;</code>, so the hinge flies away &rarr; radius inflates as ~1/P(rot). <b>Always larger, never smaller.</b></li>
+    <li>In twist coordinates: average of revolute (\(\|\omega\|=1\)) and prismatic (\(\omega=0\)) \(\Rightarrow\) \(\|\omega\| = P(\text{rot}) < 1\). The decoded axis position \(q = \omega \times v / \|\omega\|^2\) divides by \(\|\omega\|^2\), so the hinge flies away &rarr; radius inflates as \(\sim 1/P(\text{rot})\). <b>Always larger, never smaller.</b></li>
     <li>Same for trajectories: mean of "arc left" and "arc right" is <b>zero motion</b> — exactly what we measured.</li>
     <li>Verified: a toy network trained with our exact loss on ambiguous data lands exactly on this average; the old branched (classify-then-regress) design does not — matching "the old implementation was fine".</li>
   </ul>
@@ -114,11 +118,11 @@
 <!-- ================= SLIDE 4: root cause 2 ================= -->
 <section class="slide">
   <h2><span class="tag">Root cause 2 — mispriced errors</span>The loss charged almost nothing for exactly the errors that mattered</h2>
-  <p>The 6-vector MSE <code>‖&Delta;&omega;‖&sup2; + ‖&Delta;v‖&sup2;</code> is secretly a physical metric — of a body sitting <b>at the camera origin</b>, ~2&nbsp;m away from the object whose motion we predict. Priced in that gauge:</p>
+  <p>The 6-vector MSE \(\|\Delta\omega\|^2 + \|\Delta v\|^2\) is secretly a physical metric — of a body sitting <b>at the camera origin</b>, ~2&nbsp;m away from the object whose motion we predict. Priced in that gauge:</p>
   <table>
     <tr><th>error</th><th class="r">cost (relative to a full sign flip)</th></tr>
     <tr><td>axis 0.5&nbsp;m too far away (radius 3&times; wrong)</td><td class="r bad">1.4%</td></tr>
-    <tr><td>the observed <code>‖&omega;‖</code> collapse to 0.3</td><td class="r bad">2.7%</td></tr>
+    <tr><td>the observed \(\|\omega\|\) collapse to 0.3</td><td class="r bad">2.7%</td></tr>
     <tr><td>axis direction tilt of 6&deg;</td><td class="r">0.23%&nbsp; (fine — quadratic small-angle law)</td></tr>
   </table>
   <ul>
@@ -130,18 +134,18 @@
 <!-- ================= SLIDE 5: fix 1 ================= -->
 <section class="slide">
   <h2><span class="tag">Fix 1 — body-frame metric</span>Price errors by how wrongly they move <em>the object</em></h2>
-  <p class="formula">L(&Delta;&xi;) &nbsp;=&nbsp; ‖&Delta;&omega; &times; p&#8320; + &Delta;v‖&sup2; &nbsp;+&nbsp; &rho;&sup2;&thinsp;‖&Delta;&omega;‖&sup2;</p>
+  <p style="font-size:1.25em;margin:.6rem 0 1rem">\[ \mathcal{L}(\Delta\xi) \;=\; \underbrace{\left\lVert \Delta\omega \times p_0 + \Delta v \right\rVert^2}_{\text{velocity error at the object}} \;+\; \rho^2\,\lVert \Delta\omega \rVert^2 \]</p>
   <ul>
-    <li>The classical rigid-body kinetic-energy metric on se(3), with the body placed at the observed element point <code>p&#8320;</code> (&rho; = 0.25&nbsp;m part scale). First term = the <b>velocity error at the object, in m&sup2;</b>.</li>
+    <li>The classical rigid-body kinetic-energy metric on se(3), with the body placed at the observed element point \(p_0\) (\(\rho = 0.25\) m part scale), in m&sup2; at the object.</li>
     <li>Gauge-invariant (the old loss changed if you moved the camera origin; this one can't), still convex, no motion-type branches, sign-sensitive.</li>
   </ul>
   <table>
     <tr><th>error</th><th class="r">old MSE</th><th class="r">body metric</th></tr>
     <tr><td>radius 3&times; wrong</td><td class="r bad">1.4%</td><td class="r good">50%</td></tr>
-    <tr><td><code>‖&omega;‖</code> collapse to 0.3</td><td class="r bad">2.7%</td><td class="r good">330%</td></tr>
+    <tr><td>\(\|\omega\|\) collapse to 0.3</td><td class="r bad">2.7%</td><td class="r good">330%</td></tr>
     <tr><td>6&deg; axis tilt</td><td class="r">0.23%</td><td class="r">0.12% (law unchanged)</td></tr>
   </table>
-  <p class="dim">Radius-relevant directions gain ~40–100&times; relative gradient; direction pricing keeps its healthy &prop;&delta; law. Overall loss scale is preserved (measured 0.95&times;), so no re-tuning cascade.</p>
+  <p class="dim">Radius-relevant directions gain ~40–100&times; relative gradient; direction pricing keeps its healthy \(\propto\delta\) law. Overall loss scale is preserved (measured 0.95&times;), so no re-tuning cascade.</p>
 </section>
 
 <!-- ================= SLIDE 6: fix 2 ================= -->
@@ -179,7 +183,7 @@
   <ul>
     <li>Each hypothesis is a <b>bundled</b> (twist, trajectory) — one coherent story. Per sample, only the bundle closest to ground truth trains on it (softmin-annealed so no hypothesis dies early); a selector picks one at inference.</li>
     <li>No hypothesis is ever forced to explain "left" and "right" at once &rarr; <b>averaging is structurally impossible</b>. Theory: hypotheses converge onto the modes of the answer distribution (Voronoi quantization), never between them. Standard in motion forecasting (aMCL/aWTA, 2024–25).</li>
-    <li>Toy replication of our failure: MSE head &rarr; <code>‖&omega;‖ = 0.49</code>, radius 3&times;; WTA winner &rarr; <code>‖&omega;‖ &gt; 0.95</code>, radius &asymp; GT — on identical ambiguous data.</li>
+    <li>Toy replication of our failure: MSE head \(\Rightarrow \|\omega\| = 0.49\), radius 3&times;; WTA winner \(\Rightarrow \|\omega\| > 0.95\), radius &asymp; GT — on identical ambiguous data.</li>
   </ul>
 </section>
 
@@ -190,7 +194,7 @@
     <li><b>Diagnosis is measured, not conjectured</b>: 800-sample checkpoint study, closed-form + trained-toy reproductions, and an intervention test (feeding the true motion type changed nothing &rarr; sign/geometry ambiguity dominates, so only mode commitment can fix it).</li>
     <li><b>Both fixes implemented</b> behind config flags; 109 unit tests including: gauge invariance, the pricing table as regression assertions, winner-only gradients, and the commitment-vs-averaging toy as an automated test.</li>
     <li><b>Trajectory supervision re-weighted</b> (0.5 &rarr; 4.0) — meaningful only now that the term is reducible; previously it idled at ~1% of the loss against a hedge-capped optimum.</li>
-    <li><b>gen-4 run in flight</b> (RTX 4090 pod, ~4&nbsp;h). Pre-registered acceptance: revolute <code>‖&omega;‖ &asymp; 1</code> (was 0.295), radius ratio &asymp; 1 (was 10&times;), trajectory loss well below the 0.018 zero-motion baseline, type/direction accuracy up.</li>
+    <li><b>gen-4 run in flight</b> (RTX 4090 pod, ~4&nbsp;h). Pre-registered acceptance: revolute \(\|\omega\| \approx 1\) (was 0.295), radius ratio &asymp; 1 (was 10&times;), trajectory loss well below the 0.018 zero-motion baseline, type/direction accuracy up.</li>
   </ul>
   <p class="footer-note">Full write-ups: <code>docs/superpowers/specs/2026-08-11-twist-body-metric-design.md</code> and <code>…-twist-wta-head-design.md</code> in the SegAffordance repo.</p>
 </section>
