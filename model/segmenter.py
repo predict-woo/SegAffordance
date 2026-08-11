@@ -174,6 +174,10 @@ class CRIS(nn.Module):
         # element-sweep GT, so it would receive no gradient at all. It is a
         # leaf — nothing consumes its output and vae_condition_dim is computed
         # independently — so removing it changes nothing upstream.
+        # K > 1: winner-takes-all articulation bundles — the trajectory head
+        # emits one trajectory per twist hypothesis, selected jointly by the
+        # twist head's logits (2026-08-11 WTA spec). Requires the twist head.
+        self.twist_num_hypotheses = getattr(model_params, "twist_num_hypotheses", 1)
         self.use_trajectory_head = getattr(model_params, "use_trajectory_head", True)
         if self.use_trajectory_head:
             self.trajectory_predictor = TrajectoryMLP(
@@ -181,6 +185,7 @@ class CRIS(nn.Module):
                 hidden_dim=model_params.vae_hidden_dim,  # reuse this param
                 num_points=20,
                 delta_cumsum=getattr(model_params, "trajectory_delta_cumsum", False),
+                num_hypotheses=self.twist_num_hypotheses,
             )
         else:
             self.trajectory_predictor = None
@@ -208,9 +213,18 @@ class CRIS(nn.Module):
                 input_dim=vae_condition_dim,
                 hidden_dim=model_params.vae_hidden_dim,
                 pitch_free=getattr(model_params, "twist_pitch_free", False),
+                num_hypotheses=self.twist_num_hypotheses,
             )
         else:
             self.twist_predictor = None
+        if self.twist_num_hypotheses > 1 and not (
+            self.use_twist_head and self.use_trajectory_head
+        ):
+            raise ValueError(
+                "twist_num_hypotheses > 1 needs both use_twist_head and "
+                "use_trajectory_head: hypotheses are (twist, trajectory) "
+                "bundles selected by one set of logits."
+            )
 
         # Metric depth of the joint origin, completing {type, axis, origin}.
         self.predict_origin_depth = getattr(model_params, "predict_origin_depth", False)
@@ -337,8 +351,8 @@ class CRIS(nn.Module):
             )
             vae_condition = torch.cat([vae_condition, type_emb], dim=1)
 
-        trajectory_pred = (
-            self.trajectory_predictor(vae_condition)
+        trajectory_all = (
+            self.trajectory_predictor(vae_condition)          # (B, K, N, 3)
             if self.trajectory_predictor is not None
             else None
         )
@@ -352,11 +366,28 @@ class CRIS(nn.Module):
             if self.origin_depth_head is not None
             else None
         )
-        twist_pred = (
-            self.twist_predictor(vae_condition)
-            if self.twist_predictor is not None
-            else None
-        )
+        twist_pred = trajectory_pred = None
+        twist_hyps = trajectory_hyps = twist_logits = None
+        if self.twist_predictor is not None:
+            twist_all, twist_logits = self.twist_predictor(vae_condition)
+            if self.twist_num_hypotheses == 1:
+                twist_pred = twist_all[:, 0]
+                twist_logits = None
+                if trajectory_all is not None:
+                    trajectory_pred = trajectory_all[:, 0]
+            else:
+                # Argmax-logit bundle selection: twist_pred/trajectory_pred
+                # carry the SELECTED hypothesis (what eval, viz, and every
+                # legacy consumer sees); the full sets ride along for the
+                # WTA loss and consistency gating.
+                sel = twist_logits.argmax(dim=1)              # (B,)
+                idx = torch.arange(twist_all.size(0), device=twist_all.device)
+                twist_pred = twist_all[idx, sel]
+                trajectory_pred = trajectory_all[idx, sel]
+                twist_hyps = twist_all
+                trajectory_hyps = trajectory_all
+        elif trajectory_all is not None:
+            trajectory_pred = trajectory_all[:, 0]
 
         # motion_gt can be None during pure inference, but for train/val it's provided.
         mu = None
@@ -390,6 +421,9 @@ class CRIS(nn.Module):
             trajectory_2d_pred=trajectory_2d_pred,
             origin_depth=origin_depth,
             twist_pred=twist_pred,
+            twist_hyps=twist_hyps,
+            trajectory_hyps=trajectory_hyps,
+            twist_logits=twist_logits,
             mu=mu,
             log_var=log_var,
         )

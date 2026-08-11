@@ -16,7 +16,7 @@ from torch.utils.data import Dataset
 from config.opd_train import Config, LossParams, ModelParams, OptimizerParams
 from datasets.opdreal_datamodule import OPDRealDataModule
 from model.losses import TwistLoss, build_geometric_loss
-from model.losses.geometric import TrajectoryProjectionLoss
+from model.losses.geometric import ScrewConsistencyLoss, TrajectoryProjectionLoss
 from model.segmenter import CRIS
 from model.targets import StepTargets, unpack_batch
 from utils.tools import DiceBCELoss, MotionVAELoss, create_composite_visualization, make_gaussian_map
@@ -78,6 +78,9 @@ class OPDRealTrainingModule(pl.LightningModule):
         self.twist_loss = TwistLoss(
             weight=getattr(self.loss_params, "twist_weight", 0.5),
             sign_agnostic=getattr(self.loss_params, "twist_sign_agnostic", True),
+            metric_rho=getattr(self.loss_params, "twist_metric_rho", 0.25),
+            trajectory_weight=getattr(self.loss_params, "trajectory_weight", 0.5),
+            hyp_ce_weight=getattr(self.loss_params, "twist_hyp_ce_weight", 0.1),
         )
 
         if finetune_from_path:
@@ -207,6 +210,13 @@ class OPDRealTrainingModule(pl.LightningModule):
             + (self.loss_params.vae_weight * L_vae)
             + (self.loss_params.motion_type_weight * L_motion_type)
         )
+        # Weighted terms collected for the optional per-term gradient-norm
+        # diagnostic (Config.log_term_grad_norm_interval_steps).
+        grad_terms = {
+            "mask": self.loss_params.mask_weight * L_mask,
+            "point_map": self.loss_params.point_map_weight * L_point_map,
+            "coord": self.loss_params.coord_weight * L_coord,
+        }
 
         # 2D hand/contact track (2D pretraining). Made relative to its own
         # first point, matching how the head predicts and how the 3D
@@ -237,7 +247,48 @@ class OPDRealTrainingModule(pl.LightningModule):
                 sync_dist=True,
             )
 
-        if targets.trajectory is not None and outputs.trajectory_pred is not None:
+        # Unified screw-motion supervision (use_twist_head): annealed WTA over
+        # the K articulation bundles — when active on this batch it ALSO
+        # supervises the 3D trajectory inside its distortion (aux
+        # "handled_traj"), so the standalone term below must be skipped to
+        # avoid double-counting. Runs first because its winner weights gate
+        # the screw consistency terms.
+        twist_total, twist_terms, twist_aux = self.twist_loss(outputs, targets)
+        total_loss = total_loss + twist_total
+        grad_terms["twist_wta"] = twist_total
+        for term_name, term_value in twist_terms.items():
+            self.log(
+                f"{step_type}/{term_name}",
+                term_value,
+                on_step=(step_type == "train"),
+                on_epoch=True,
+                logger=True,
+                sync_dist=True,
+            )
+        if (
+            step_type == "train"
+            and twist_aux["winner"] is not None
+            and outputs.twist_logits is not None
+        ):
+            self.log(
+                "train/twist_T",
+                float(self.twist_loss.temperature),
+                on_step=True, on_epoch=False, logger=True,
+            )
+            win = F.one_hot(
+                twist_aux["winner"], outputs.twist_logits.shape[1]
+            ).float().mean(dim=0)
+            for k in range(win.numel()):
+                self.log(
+                    f"train/wta_win_{k}", win[k],
+                    on_step=False, on_epoch=True, logger=True, sync_dist=True,
+                )
+
+        if (
+            targets.trajectory is not None
+            and outputs.trajectory_pred is not None
+            and not twist_aux["handled_traj"]
+        ):
             # Convert GT trajectory to relative coordinates (first point at origin);
             # the model predicts relative, so they compare directly.
             trajectory_gt_device = targets.trajectory.to(outputs.trajectory_pred.device)
@@ -247,22 +298,10 @@ class OPDRealTrainingModule(pl.LightningModule):
                 outputs.trajectory_pred, trajectory_gt_relative
             )
             total_loss = total_loss + self.loss_params.trajectory_weight * L_trajectory
+            grad_terms["trajectory"] = self.loss_params.trajectory_weight * L_trajectory
             self.log(
                 f"{step_type}/L_trajectory",
                 L_trajectory,
-                on_step=(step_type == "train"),
-                on_epoch=True,
-                logger=True,
-                sync_dist=True,
-            )
-
-        # Unified screw-motion supervision (use_twist_head).
-        twist_total, twist_terms = self.twist_loss(outputs, targets)
-        total_loss = total_loss + twist_total
-        for term_name, term_value in twist_terms.items():
-            self.log(
-                f"{step_type}/{term_name}",
-                term_value,
                 on_step=(step_type == "train"),
                 on_epoch=True,
                 logger=True,
@@ -273,9 +312,16 @@ class OPDRealTrainingModule(pl.LightningModule):
         # Which scheme runs is set by loss_params.geometric_loss; every variant
         # no-ops when the batch lacks the targets it needs, so this is safe to
         # call unconditionally. The input depth map is passed so the screw
-        # variant can lift the predicted 2D point to a metric anchor.
-        geometric_total, geometric_terms = self.geometric_loss(outputs, targets, depth)
+        # variant can lift the predicted 2D point to a metric anchor. The
+        # screw variant takes the annealed WTA weights to gate its GT term.
+        if isinstance(self.geometric_loss, ScrewConsistencyLoss):
+            geometric_total, geometric_terms = self.geometric_loss(
+                outputs, targets, depth, hyp_weights=twist_aux["weights"]
+            )
+        else:
+            geometric_total, geometric_terms = self.geometric_loss(outputs, targets, depth)
         total_loss = total_loss + geometric_total
+        grad_terms["screw"] = geometric_total
         proj_total, proj_terms = self.traj_projection_loss(outputs, targets, depth)
         total_loss = total_loss + proj_total
         geometric_terms = {**geometric_terms, **proj_terms}
@@ -354,6 +400,34 @@ class OPDRealTrainingModule(pl.LightningModule):
             logger=True,
             sync_dist=True,
         )
+
+        # Smoke-run diagnostic: per-term gradient norms into the shared
+        # backbone, to verify small-magnitude geometric terms are not drowned
+        # by the high-floor mask/point_map gradients (WTA spec acceptance
+        # check). One extra backward per term per logged step; off by default.
+        interval = getattr(self.config, "log_term_grad_norm_interval_steps", 0)
+        if (
+            step_type == "train"
+            and interval > 0
+            and (self.global_step % interval) == 0
+        ):
+            params = [
+                p for p in self.model.backbone.parameters() if p.requires_grad
+            ]
+            for name, term in grad_terms.items():
+                if not (torch.is_tensor(term) and term.requires_grad):
+                    continue
+                grads = torch.autograd.grad(
+                    term, params, retain_graph=True, allow_unused=True
+                )
+                sq = sum(
+                    g.float().pow(2).sum() for g in grads if g is not None
+                )
+                if torch.is_tensor(sq):
+                    self.log(
+                        f"train/grad_norm/{name}", sq.sqrt(),
+                        on_step=True, on_epoch=False, logger=True,
+                    )
         return total_loss
 
     def training_step(self, batch, batch_idx):
@@ -369,13 +443,33 @@ class OPDRealTrainingModule(pl.LightningModule):
         ):
             self.log_visualizations()
 
+    def _wta_temperature(self, epoch: int) -> float:
+        """Annealing schedule (WTA spec): exponential decay from T0 to 0.01
+        over `twist_wta_anneal_frac` of max_epochs, then hard winner (0)."""
+        T0 = getattr(self.loss_params, "twist_wta_T0", 10.0)
+        frac = getattr(self.loss_params, "twist_wta_anneal_frac", 0.8)
+        max_epochs = self.trainer.max_epochs if self.trainer is not None else None
+        if not max_epochs or max_epochs <= 0:
+            return 0.0
+        anneal_epochs = max(1.0, frac * max_epochs)
+        if epoch >= anneal_epochs:
+            return 0.0
+        t_min = 0.01
+        return float(T0 * (t_min / T0) ** (epoch / anneal_epochs))
+
     def on_validation_epoch_start(self):
+        # Val/test always score the hard winner (T = 0) so val losses are
+        # comparable across epochs regardless of the annealing schedule.
+        self.twist_loss.temperature = 0.0
         # Reset reservoir and RNG each epoch for reproducibility and variety
         self._vis_buffer = []
         self._vis_seen_count = 0
         self._vis_rng = torch.Generator(device="cpu").manual_seed(
             int(self.base_seed + int(self.current_epoch))
         )
+
+    def on_test_epoch_start(self):
+        self.twist_loss.temperature = 0.0
 
     def validation_step(self, batch, batch_idx):
         loss = self._common_step(batch, batch_idx, "val")
@@ -402,6 +496,9 @@ class OPDRealTrainingModule(pl.LightningModule):
                     param.requires_grad = False
 
     def on_train_epoch_start(self):
+        # WTA annealing: the loss object carries the epoch's temperature
+        # (val/test hooks reset it to 0 = hard winner).
+        self.twist_loss.temperature = self._wta_temperature(int(self.current_epoch))
         # Keep a frozen backbone truly frozen: eval mode stops BatchNorm/dropout
         # updates that requires_grad=False alone would not prevent.
         if self.freeze_backbone:

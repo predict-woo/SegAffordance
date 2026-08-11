@@ -570,7 +570,7 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
         # ever bridges a camera-plane crossing.
         self.near_plane = near_plane
 
-    def forward(self, outputs, targets, depth=None) -> LossTerms:
+    def forward(self, outputs, targets, depth=None, hyp_weights=None) -> LossTerms:
         if outputs.twist_pred is None:
             return self._zero(outputs.coords_hat), {}
 
@@ -582,17 +582,43 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
         # do NOT protect against this — autocast re-casts einsum inputs to
         # fp16 regardless. This killed run 20260728_sf3d_2d_twist at step 49.
         with torch.autocast(device_type=device.type, enabled=False):
-            return self._forward_fp32(outputs, targets, depth, device)
+            return self._forward_fp32(outputs, targets, depth, device, hyp_weights)
 
-    def _forward_fp32(self, outputs, targets, depth, device) -> LossTerms:
-        twist = outputs.twist_pred.float()
+    def _forward_fp32(self, outputs, targets, depth, device, hyp_weights=None) -> LossTerms:
+        # WTA hypothesis gating (2026-08-11 spec): the GT-anchored gt-term
+        # follows the annealed winner weights `hyp_weights` (same
+        # stopgrad(q_T) as the WTA regression — all bundles early, winner
+        # as T -> 0); the GT-free self-term averages over ALL K bundles
+        # unconditionally, pairing each twist with its OWN trajectory.
+        # K = 1 reduces both to the previous single-twist behaviour.
+        if outputs.twist_hyps is not None:
+            twists = outputs.twist_hyps.float()                  # (B, K, 6)
+        else:
+            twists = outputs.twist_pred.float().unsqueeze(1)     # (B, 1, 6)
+        B, K = twists.shape[0], twists.shape[1]
+        flat = twists.reshape(B * K, 6)
+        if hyp_weights is None:
+            # Fallback (callers that predate the WTA wiring): uniform.
+            hyp_weights = twists.new_full((B, K), 1.0 / K)
+        hyp_weights = hyp_weights.detach().float()
+
         total = self._zero(outputs.coords_hat)
         terms: Dict[str, torch.Tensor] = {}
 
         if targets.trajectory is not None:
-            gt_term = self._field_residual(
-                twist, targets.trajectory.to(device).float()
+            traj = targets.trajectory.to(device).float()         # (B, N, 3)
+            res, valid = self._field_residual_rows(
+                flat, traj.repeat_interleave(K, dim=0)
             )
+            res, valid = res.view(B, K), valid.view(B, K)
+            w = hyp_weights * valid.float()
+            row_ok = w.sum(dim=1) > 0
+            if bool(row_ok.any()):
+                gt_term = (
+                    (res * w).sum(dim=1)[row_ok] / w.sum(dim=1)[row_ok]
+                ).mean()
+            else:
+                gt_term = self._zero(flat)  # all rows degenerate: neutral
             total = total + self.gt_weight * gt_term
             terms["L_screw_twist_gt_traj"] = gt_term
 
@@ -618,11 +644,22 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
             anchor = backproject_points(K_norm, coords, z)
             anchor_ok = z > 1e-3
 
-        if anchor is not None and outputs.trajectory_pred is not None:
-            trajectory_abs = anchor.unsqueeze(1) + outputs.trajectory_pred.float()
-            self_term = self._field_residual(
-                twist, trajectory_abs, sample_mask=anchor_ok
+        if anchor is not None and (
+            outputs.trajectory_hyps is not None or outputs.trajectory_pred is not None
+        ):
+            if outputs.trajectory_hyps is not None:
+                traj_h = outputs.trajectory_hyps.float()          # (B, K, N, 3)
+            else:
+                traj_h = outputs.trajectory_pred.float().unsqueeze(1)
+            trajectory_abs = anchor.view(B, 1, 1, 3) + traj_h
+            res, valid = self._field_residual_rows(
+                flat, trajectory_abs.reshape(B * K, *trajectory_abs.shape[2:])
             )
+            valid = valid.view(B, K) & anchor_ok.unsqueeze(1)
+            if bool(valid.any()):
+                self_term = res.view(B, K)[valid].mean()
+            else:
+                self_term = self._zero(flat)
             total = total + self.self_weight * self_term
             terms["L_screw_self"] = self_term
 
@@ -631,8 +668,11 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
             and anchor is not None
             and targets.trajectory_2d is not None
         ):
+            # Track term and Occam prior act on the SELECTED twist: both are
+            # 2D-arm (K = 1) constructs today, and for K > 1 the selected
+            # bundle is the deployed prediction.
             track_term = self._track_residual(
-                twist, anchor, anchor_ok, K_norm, targets, device
+                outputs.twist_pred.float(), anchor, anchor_ok, K_norm, targets, device
             )
             total = total + self.track_weight * track_term
             terms["L_screw_track"] = track_term
@@ -641,7 +681,7 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
         # arm runs track_weight 0 with the projection loss instead, and still
         # needs the prior since nothing else pins |omega| there).
         if self.omega_shrink > 0.0:
-            omega_term = twist[..., :3].norm(dim=-1).mean()
+            omega_term = outputs.twist_pred.float()[..., :3].norm(dim=-1).mean()
             total = total + self.omega_shrink * omega_term
             terms["L_screw_omega"] = omega_term
 
@@ -689,12 +729,14 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
             return per_sample[row_valid].mean()
         return self._zero(twist)
 
-    def _field_residual(
+    def _field_residual_rows(
         self,
-        twist: torch.Tensor,          # (B, 6)
-        trajectory_abs: torch.Tensor,  # (B, N, 3) camera frame, ABSOLUTE
-        sample_mask: typing.Optional[torch.Tensor] = None,  # (B,) bool
-    ) -> torch.Tensor:
+        twist: torch.Tensor,           # (R, 6)
+        trajectory_abs: torch.Tensor,  # (R, N, 3) camera frame, ABSOLUTE
+    ) -> typing.Tuple[torch.Tensor, torch.Tensor]:
+        """Per-row residual: (R,) mean residual over valid segments and (R,)
+        bool row validity (any valid segment). Reduction over rows — and any
+        hypothesis weighting — is the caller's job."""
         omega, v = twist[..., :3], twist[..., 3:]
         delta = trajectory_abs[:, 1:] - trajectory_abs[:, :-1]
         mid = 0.5 * (trajectory_abs[:, 1:] + trajectory_abs[:, :-1])
@@ -719,8 +761,16 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
             residual = 1.0 - cos.clamp(min=-1.0, max=1.0)
 
         seg_count = seg_valid.float().sum(dim=1)
-        per_sample = (residual * seg_valid.float()).sum(dim=1) / seg_count.clamp(min=1.0)
-        row_valid = seg_count > 0
+        per_row = (residual * seg_valid.float()).sum(dim=1) / seg_count.clamp(min=1.0)
+        return per_row, seg_count > 0
+
+    def _field_residual(
+        self,
+        twist: torch.Tensor,          # (B, 6)
+        trajectory_abs: torch.Tensor,  # (B, N, 3) camera frame, ABSOLUTE
+        sample_mask: typing.Optional[torch.Tensor] = None,  # (B,) bool
+    ) -> torch.Tensor:
+        per_sample, row_valid = self._field_residual_rows(twist, trajectory_abs)
         if sample_mask is not None:
             row_valid = row_valid & sample_mask
         if bool(row_valid.any()):

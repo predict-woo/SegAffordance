@@ -6,16 +6,21 @@ from model.layers import Trajectory2DMLP, TrajectoryMLP
 
 
 def test_delta_cumsum_first_point_exactly_zero():
-    for cls, dim in ((TrajectoryMLP, 3), (Trajectory2DMLP, 2)):
-        head = cls(input_dim=32, hidden_dim=16, num_points=20, delta_cumsum=True)
-        out = head(torch.randn(4, 32))
-        assert out.shape == (4, 20, dim)
-        assert torch.all(out[:, 0] == 0)
+    # TrajectoryMLP carries a hypothesis axis (B, K, N, 3) — K = 1 here;
+    # Trajectory2DMLP is unchanged (B, N, 2).
+    head3 = TrajectoryMLP(input_dim=32, hidden_dim=16, num_points=20, delta_cumsum=True)
+    out3 = head3(torch.randn(4, 32))
+    assert out3.shape == (4, 1, 20, 3)
+    assert torch.all(out3[:, :, 0] == 0)
+    head2 = Trajectory2DMLP(input_dim=32, hidden_dim=16, num_points=20, delta_cumsum=True)
+    out2 = head2(torch.randn(4, 32))
+    assert out2.shape == (4, 20, 2)
+    assert torch.all(out2[:, 0] == 0)
 
 
 def test_delta_cumsum_is_integrated_path():
     head = TrajectoryMLP(input_dim=32, hidden_dim=16, num_points=20, delta_cumsum=True)
-    out = head(torch.randn(2, 32))
+    out = head(torch.randn(2, 32))[:, 0]
     # consecutive differences reproduce the deltas — i.e. the output is a
     # connected path, not independent readouts
     diffs = out[:, 1:] - out[:, :-1]
@@ -26,7 +31,7 @@ def test_position_loss_reaches_every_delta():
     # An error at the LAST point must produce gradient on the weights that
     # generate every step before it — the coupling that kills zigzag.
     head = TrajectoryMLP(input_dim=8, hidden_dim=8, num_points=5, delta_cumsum=True)
-    out = head(torch.randn(1, 8))
+    out = head(torch.randn(1, 8))[:, 0]
     out[0, -1].pow(2).sum().backward()
     g = head.trajectory_head.weight.grad
     per_step = g.view(4, 3, -1).abs().sum(dim=(1, 2))
@@ -35,7 +40,7 @@ def test_position_loss_reaches_every_delta():
 
 def test_direct_readout_unchanged():
     head = TrajectoryMLP(input_dim=32, hidden_dim=16, num_points=20)
-    assert head(torch.randn(4, 32)).shape == (4, 20, 3)
+    assert head(torch.randn(4, 32)).shape == (4, 1, 20, 3)
 
 
 def test_motion_mlp_type_head_optional():
@@ -66,7 +71,9 @@ def test_twist_mlp_pitch_free_projection():
 
     head = TwistMLP(input_dim=16, hidden_dim=8, pitch_free=True)
     x = torch.randn(64, 16)
-    out = head(x)
+    out, logits = head(x)
+    assert logits is None  # K = 1: no selection logits
+    out = out[:, 0]
     omega, v = out[..., :3], out[..., 3:]
     dot = (omega * v).sum(-1).abs()
     norm = omega.norm(dim=-1)
@@ -90,7 +97,8 @@ def test_twist_mlp_pitch_free_keeps_prismatic_v():
         head.twist_head.bias[:3].zero_()
         head.twist_head.bias[3:] = torch.tensor([0.0, 1.0, 0.0])
         head.twist_head.weight[3:].zero_()
-    out = head(torch.randn(2, 4))
+    out, _logits = head(torch.randn(2, 4))
+    out = out[:, 0]
     # omega = 0 -> the projection must be the identity: v survives intact
     assert torch.allclose(out[..., 3:], torch.tensor([0.0, 1.0, 0.0]).expand(2, 3), atol=1e-6)
     assert torch.allclose(out[..., :3], torch.zeros(2, 3), atol=1e-6)

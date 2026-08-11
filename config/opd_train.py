@@ -68,6 +68,12 @@ class ModelParams:
     # the twist's |omega| (the eval decodes and scores it anyway).
     use_motion_type_head: bool = True
     motion_type_input_dropout: float = 0.5
+    # K > 1: winner-takes-all articulation hypotheses — TwistMLP emits K
+    # (twist, logit) pairs and TrajectoryMLP K matching trajectories; one
+    # bundle is selected by argmax logit. Trained with the annealed WTA loss
+    # (model/losses/twist.py; docs/superpowers/specs/2026-08-11-twist-wta-
+    # head-design.md). Requires use_twist_head AND use_trajectory_head.
+    twist_num_hypotheses: int = 1
     motion_type_embedding_dim: int = 16
     # NHWC memory format for the conv stack. Numerically equivalent; removes
     # the NCHW->NHWC conversion cuDNN otherwise inserts around every conv to
@@ -125,9 +131,24 @@ class LossParams:
     projected_radius_ref: float = 1.0
     # 2D track supervision, used alongside the projected geometric loss.
     trajectory_2d_weight: float = 1.0
-    # Sign-agnostic L2 on the se(3) twist head (use_twist_head). Units are
-    # comparable to the trajectory MSE: omega is unitless O(1), v is metres.
+    # Weight of the twist part of the WTA distortion (use_twist_head). The
+    # loss is the BODY-FRAME kinetic-energy metric anchored at the GT element
+    # point (m² of motion error at the object; twist_body_distance), falling
+    # back to the legacy Euclidean 6-vector MSE on batches without a 3D
+    # trajectory. 0.5 carries over from the old MSE: measured init scale
+    # 0.603 (body) vs 0.634 (MSE) on SF3D val.
     twist_weight: float = 0.5
+    # Gyration radius (metres) of the body metric — prices angular error
+    # independently of how close the object sits to the axis. 0.25 = median
+    # SF3D revolute radius / typical part scale.
+    twist_metric_rho: float = 0.25
+    # Annealed-WTA schedule (twist_num_hypotheses > 1): softmin temperature
+    # decays exponentially T0 -> 0.01 over anneal_frac * max_epochs, then
+    # hard winner. Val/test always score the hard winner.
+    twist_wta_T0: float = 10.0
+    twist_wta_anneal_frac: float = 0.8
+    # Cross-entropy on the bundle-selection logits (winner = label).
+    twist_hyp_ce_weight: float = 0.1
     # True (default): score the better of (omega,v)/(-omega,-v) — correct for
     # OPD, where only the axis LINE is annotated. False (SF3D): the stored
     # sign is canonical (the preprocessor derives the GT trajectory from it,
@@ -174,6 +195,15 @@ class Config:
     test_match_metric: str = "mask"
     # Control logging of test metrics to external loggers like W&B
     log_test_to_wandb: bool = False
+    # > 0: every N train steps, log per-loss-term gradient norms into the
+    # shared backbone (train/grad_norm/<term>) — the smoke-run check that the
+    # small-magnitude geometric terms are not drowned by the high-floor
+    # mask/point_map gradients. Costs one extra backward per term per logged
+    # step; leave 0 for real runs, and run smoke with compile_model false
+    # (autograd.grad inside a compiled graph is not supported). The retained
+    # graph across the extra backwards needs VRAM headroom: batch 128 OOMs a
+    # 24 GB dev GPU — smoke at batch <= 48 there.
+    log_term_grad_norm_interval_steps: int = 0
     # Optional local visualization during test
     test_visualize_debug: bool = False
     test_vis_output_dir: str = "debug_visualizations"

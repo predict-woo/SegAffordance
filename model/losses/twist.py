@@ -136,36 +136,89 @@ def point_to_line_distance(
     return (rel - along).norm(dim=-1)
 
 
+def twist_body_distance(
+    pred: torch.Tensor,   # (..., 6)
+    gt: torch.Tensor,     # broadcastable to pred
+    p0: torch.Tensor,     # (..., 3) broadcastable to pred[..., :3]
+    rho: float,
+) -> torch.Tensor:
+    """(…,) squared kinetic-energy (body-frame) distance between twists.
+
+    ``|Δω × p0 + Δv|² + ρ²|Δω|²`` — the left-invariant rigid-body metric of a
+    unit mass at ``p0`` with gyration radius ``rho``. The first term is the
+    velocity-field error AT THE OBJECT (the field is linear in the twist), so
+    errors are priced by how wrongly they move the observed element, in m².
+    Gauge-invariant: unlike the plain 6-vector MSE (which is this same metric
+    with the body at the CAMERA ORIGIN and rho = 1), the choice of coordinate
+    origin cancels. See docs/superpowers/specs/2026-08-11-twist-body-metric-
+    design.md for the diagnosis this fixes.
+    """
+    d = pred - gt
+    dw, dv = d[..., :3], d[..., 3:]
+    df = torch.linalg.cross(dw, p0.expand_as(dw), dim=-1) + dv
+    return df.pow(2).sum(-1) + rho * rho * dw.pow(2).sum(-1)
+
+
 class TwistLoss(nn.Module):
-    """L2 between the predicted and GT twist.
+    """Annealed winner-takes-all supervision of the articulation bundles.
 
-    ``(omega, v) -> (-omega, -v)`` is the same screw axis traversed the other
-    way. Whether that flip is an error depends on the dataset:
+    Each of the model's K hypotheses is a bundled (twist, trajectory) story
+    about how the object moves. Per sample, the distortion of bundle k is
 
-    sign_agnostic=True (default; OPD)
-        OPD annotates only the axis LINE — signs carry no meaning — so the
-        loss scores the better of the two signs. Flipping omega and v
-        TOGETHER is what preserves the axis line; scoring their signs
-        independently would allow geometrically wrong combinations.
+        d_k = twist_weight * L_body(xi_k, xi_gt)
+            + trajectory_weight * L_traj(tau_k, tau_gt_rel)
 
-    sign_agnostic=False (SF3D)
-        SF3D's stored sign is CANONICAL: the preprocessor generates the GT
-        trajectory from it (trans marches along +motion_dir; rot sweeps
-        right-handed about the signed axis — tools/sf3d_process.py,
-        compute_trajectory_3d_camera_coords), so the sign IS the sweep
-        sense the task defines. Plain MSE; predicting the reversed screw is
-        a real error, consistent with the trajectory head's supervision.
+    (both in m² at the object; L_body is ``twist_body_distance`` anchored at
+    the GT element point ``targets.trajectory[:, 0]``, L_traj the per-point
+    MSE in the standalone loss's mean-over-points-and-dims convention). The
+    regression term is the softmin-annealed WTA sum ``Σ_k sg[q_T(k)] d_k``
+    with ``q_T = softmax(-d/T)`` — every bundle trains at high T, only the
+    winner as T -> 0 (T is set each epoch by the training loop; T = 0 means
+    hard winner, used for all of val/test). A cross-entropy on the K logits
+    with the winner as label trains the selector used at inference. This is
+    what breaks the posterior-mean hedge: no single bundle is ever forced to
+    explain two modes at once (aMCL, arXiv:2407.15580; spec
+    docs/superpowers/specs/2026-08-11-twist-wta-head-design.md).
 
-    No-ops on batches missing a 3D origin (OPD) or when the twist head is off,
-    following the geometric-loss convention.
+    K = 1 (no hypothesis fields on the outputs) reduces exactly to
+    ``twist_weight * L_body + trajectory_weight * L_traj`` with no CE term.
+    When the batch carries no 3D trajectory the twist distortion falls back
+    to the legacy Euclidean 6-vector MSE and no trajectory part is handled.
+
+    Sign handling as before: sign_agnostic=True (OPD — axis LINE only) takes
+    the better of ``±xi_gt`` inside the twist distortion; sign_agnostic=False
+    (SF3D) treats the stored sign as canonical (the preprocessor derives the
+    GT trajectory FROM it).
+
+    No-ops on batches missing a 3D origin (OPD) or when the twist head is
+    off. Returns ``(total, terms, aux)``; ``aux['handled_traj']`` tells the
+    caller the trajectory supervision is subsumed here (do NOT double-count
+    the standalone term), ``aux['weights']``/``aux['winner']`` feed the
+    consistency-loss gating.
     """
 
-    def __init__(self, weight: float, sign_agnostic: bool = True):
+    def __init__(
+        self,
+        weight: float,
+        sign_agnostic: bool = True,
+        metric_rho: float = 0.25,
+        trajectory_weight: float = 0.5,
+        hyp_ce_weight: float = 0.1,
+    ):
         super().__init__()
         self.weight = weight
         self.sign_agnostic = sign_agnostic
+        self.metric_rho = metric_rho
+        self.trajectory_weight = trajectory_weight
+        self.hyp_ce_weight = hyp_ce_weight
+        # Set by the training loop (annealing schedule); 0 = hard winner.
+        self.temperature: float = 0.0
 
-    def forward(self, outputs: ModelOutputs, targets: StepTargets) -> LossTerms:
+    @staticmethod
+    def _no_aux() -> Dict[str, object]:
+        return {"weights": None, "winner": None, "handled_traj": False}
+
+    def forward(self, outputs: ModelOutputs, targets: StepTargets):
         if (
             outputs.twist_pred is None
             or targets.motion is None
@@ -173,19 +226,73 @@ class TwistLoss(nn.Module):
             or targets.motion_origin_3d is None
         ):
             zero = torch.zeros((), device=outputs.coords_hat.device, dtype=torch.float32)
-            return zero, {}
+            return zero, {}, self._no_aux()
 
         device = outputs.twist_pred.device
         gt = twist_from_gt(
             targets.motion.to(device),
             targets.motion_type.to(device),
             targets.motion_origin_3d.to(device),
-        )
-        pred = outputs.twist_pred.float()
-        err_pos = (pred - gt).pow(2).mean(dim=-1)
-        if self.sign_agnostic:
-            err_neg = (pred + gt).pow(2).mean(dim=-1)
-            term = torch.minimum(err_pos, err_neg).mean()
+        )  # (B, 6)
+
+        if outputs.twist_hyps is not None:
+            hyps = outputs.twist_hyps.float()                     # (B, K, 6)
+            traj_hyps = (
+                outputs.trajectory_hyps.float()
+                if outputs.trajectory_hyps is not None else None  # (B, K, N, 3)
+            )
         else:
-            term = err_pos.mean()
-        return self.weight * term, {"L_twist": term}
+            hyps = outputs.twist_pred.float().unsqueeze(1)        # (B, 1, 6)
+            traj_hyps = (
+                outputs.trajectory_pred.float().unsqueeze(1)
+                if outputs.trajectory_pred is not None else None
+            )
+        B, K = hyps.shape[0], hyps.shape[1]
+
+        trajectory = (
+            targets.trajectory.to(device).float()
+            if targets.trajectory is not None else None
+        )
+
+        # Twist distortion: body metric anchored at the GT element point,
+        # legacy Euclidean fallback when the batch has no 3D trajectory.
+        gt_k = gt.unsqueeze(1)                                    # (B, 1, 6)
+        if trajectory is not None:
+            p0 = trajectory[:, 0].unsqueeze(1)                    # (B, 1, 3)
+            d_pos = twist_body_distance(hyps, gt_k, p0, self.metric_rho)
+            d_neg = twist_body_distance(hyps, -gt_k, p0, self.metric_rho)
+        else:
+            d_pos = (hyps - gt_k).pow(2).mean(dim=-1)
+            d_neg = (hyps + gt_k).pow(2).mean(dim=-1)
+        d_twist = torch.minimum(d_pos, d_neg) if self.sign_agnostic else d_pos
+
+        d = self.weight * d_twist                                  # (B, K)
+        terms: Dict[str, torch.Tensor] = {}
+
+        handled_traj = trajectory is not None and traj_hyps is not None
+        if handled_traj:
+            gt_rel = (trajectory - trajectory[:, 0:1]).unsqueeze(1)  # (B,1,N,3)
+            d_traj = (traj_hyps - gt_rel).pow(2).mean(dim=(-1, -2))  # (B, K)
+            d = d + self.trajectory_weight * d_traj
+
+        winner = d.argmin(dim=1)                                   # (B,)
+        if K == 1:
+            q = d.new_ones(B, 1)
+        elif self.temperature > 0.0:
+            q = F.softmax(-d.detach() / self.temperature, dim=1)
+        else:
+            q = F.one_hot(winner, K).to(d.dtype)
+        total = (q.detach() * d).sum(dim=1).mean()
+
+        arange = torch.arange(B, device=device)
+        terms["L_twist"] = d_twist[arange, winner].mean().detach()
+        if handled_traj:
+            terms["L_wta_traj"] = d_traj[arange, winner].mean().detach()
+
+        if outputs.twist_logits is not None and K > 1:
+            ce = F.cross_entropy(outputs.twist_logits.float(), winner)
+            total = total + self.hyp_ce_weight * ce
+            terms["L_hyp_ce"] = ce.detach()
+
+        aux = {"weights": q.detach(), "winner": winner, "handled_traj": handled_traj}
+        return total, terms, aux

@@ -54,6 +54,12 @@ model:
     # coords_hat anchors the curve). Added 2026-08-04 after the point-cloud
     # diagnosis (viz/20260803_sf3d_twist_traj_points).
     trajectory_delta_cumsum: true
+    # gen-4 (2026-08-11): K = 4 winner-takes-all articulation bundles — each
+    # a (twist, trajectory) pair selected by one set of logits. Breaks the
+    # posterior-mean hedge that shrank |omega| to 0.295 and parked the
+    # trajectory head at the zero-motion baseline (specs
+    # docs/superpowers/specs/2026-08-11-twist-*.md).
+    twist_num_hypotheses: 4
     # GT articulation type as an auxiliary input, with conditioning
     # dropout: 50% of training samples see a learned NULL token instead,
     # and val/test ALWAYS run hint-free (NULL) -- metrics reflect the
@@ -95,8 +101,22 @@ model:
     coord_weight: 0.5          # Weight for the L1 coordinate regression loss
     vae_weight: 0.0            # axis head off — no axis loss
     motion_type_weight: 0.0    # no type head
-    trajectory_weight: 0.5     # Weight for trajectory prediction loss
-    twist_weight: 0.5          # L2 on the twist 6-vector
+    # 4.0 (gen-4): the trajectory part of the WTA distortion. At 0.5 the term
+    # carried ~1% of the loss its entire life; amplification is meaningful
+    # only now that WTA makes it reducible (it had converged EXACTLY to the
+    # 0.018 zero-motion baseline).
+    trajectory_weight: 4.0
+    # Body-frame kinetic-energy metric on the twist (gen-4), anchored at the
+    # GT element point: |dw x p0 + dv|^2 + rho^2 |dw|^2 — prices errors in m²
+    # of motion at the OBJECT (the old 6-vector MSE was the same metric with
+    # the body at the camera origin, which is what let |omega| collapse).
+    # 0.5 carries over: measured init scale 0.603 (body) vs 0.634 (MSE).
+    twist_weight: 0.5
+    twist_metric_rho: 0.25
+    # Annealed WTA: T0 -> 0.01 over 80% of epochs, then hard winner.
+    twist_wta_T0: 10.0
+    twist_wta_anneal_frac: 0.8
+    twist_hyp_ce_weight: 0.1
     # Direction is semantic on SF3D — the preprocessor derives the GT
     # trajectory FROM the signed axis (trans marches along +motion_dir, rot
     # sweeps right-handed about it), so the stored sign is canonical and the
@@ -141,7 +161,7 @@ trainer:
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        dirpath: "/workspace/SegAffordance/experiments/20260804_sf3d_twist_g3/checkpoints"
+        dirpath: "/workspace/SegAffordance/experiments/20260811_sf3d_twist_g4/checkpoints"
         monitor: "val/loss_total"
         mode: "min"
         save_top_k: 3
@@ -151,7 +171,7 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: "/workspace/SegAffordance/experiments/20260804_sf3d_twist_g3/logs"
+      save_dir: "/workspace/SegAffordance/experiments/20260811_sf3d_twist_g4/logs"
       name: "csv"
   log_every_n_steps: 10
 

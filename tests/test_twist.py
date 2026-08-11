@@ -85,7 +85,7 @@ def test_loss_is_zero_for_exact_and_for_sign_flipped_prediction():
     loss_fn = TwistLoss(weight=1.0)
     targets = make_targets(axis, ROT, origin)
     for pred in (gt, -gt):  # (omega, v) -> (-omega, -v) is the same axis line
-        total, terms = loss_fn(make_outputs(pred), targets)
+        total, terms, _aux = loss_fn(make_outputs(pred), targets)
         assert total.item() < 1e-10
         assert "L_twist" in terms
 
@@ -99,8 +99,8 @@ def test_loss_penalises_a_wrong_hinge_line_but_not_a_slid_origin():
     slid = twist_from_gt(axis, ROT, origin + 0.9 * axis)  # same line
     displaced = twist_from_gt(axis, ROT, origin + torch.tensor([[0.3, 0.0, 0.0]]))
 
-    slid_loss, _ = loss_fn(make_outputs(slid), targets)
-    displaced_loss, _ = loss_fn(make_outputs(displaced), targets)
+    slid_loss, _, _aux = loss_fn(make_outputs(slid), targets)
+    displaced_loss, _, _aux = loss_fn(make_outputs(displaced), targets)
     assert slid_loss.item() < 1e-10  # what the old plane term wrongly charged
     assert displaced_loss.item() > 1e-3  # a genuinely different hinge line
 
@@ -110,11 +110,11 @@ def test_loss_noops_without_twist_head_or_without_3d_origin():
     origin = torch.tensor([[0.2, 0.0, 2.0]])
     loss_fn = TwistLoss(weight=1.0)
 
-    total, terms = loss_fn(make_outputs(None), make_targets(axis, ROT, origin))
+    total, terms, _aux = loss_fn(make_outputs(None), make_targets(axis, ROT, origin))
     assert total.item() == 0.0 and terms == {}
 
     opd_targets = make_targets(axis, ROT, None)  # OPD batches have no origin
-    total, terms = loss_fn(make_outputs(torch.randn(1, 6)), opd_targets)
+    total, terms, _aux = loss_fn(make_outputs(torch.randn(1, 6)), opd_targets)
     assert total.item() == 0.0 and terms == {}
 
 
@@ -130,14 +130,14 @@ def test_sign_sensitive_loss_penalises_the_flipped_prediction():
     targets = make_targets(axis, ROT, origin)
 
     sensitive = TwistLoss(weight=1.0, sign_agnostic=False)
-    loss_aligned, _ = sensitive(make_outputs(gt.clone()), targets)
-    loss_flipped, _ = sensitive(make_outputs(-gt.clone()), targets)
+    loss_aligned, _, _aux = sensitive(make_outputs(gt.clone()), targets)
+    loss_flipped, _, _aux = sensitive(make_outputs(-gt.clone()), targets)
     assert loss_aligned.item() < 1e-8
     assert loss_flipped.item() > 0.1
 
     # the default stays direction-blind (OPD annotates only the axis line)
     agnostic = TwistLoss(weight=1.0, sign_agnostic=True)
-    loss_flip_ag, _ = agnostic(make_outputs(-gt.clone()), targets)
+    loss_flip_ag, _, _aux = agnostic(make_outputs(-gt.clone()), targets)
     assert loss_flip_ag.item() < 1e-8
 
 
@@ -146,5 +146,5 @@ def test_sign_sensitive_prismatic_direction():
     gt = twist_from_gt(direction, TRANS, torch.zeros(1, 3))
     targets = make_targets(direction, TRANS, torch.zeros(1, 3))
     sensitive = TwistLoss(weight=1.0, sign_agnostic=False)
-    loss_flipped, _ = sensitive(make_outputs(-gt.clone()), targets)
+    loss_flipped, _, _aux = sensitive(make_outputs(-gt.clone()), targets)
     assert loss_flipped.item() > 0.1

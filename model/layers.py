@@ -288,9 +288,13 @@ class MotionMLP(nn.Module):
 
 class TrajectoryMLP(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: int = 256, num_points: int = 20,
-                 delta_cumsum: bool = False):
+                 delta_cumsum: bool = False, num_hypotheses: int = 1):
         super().__init__()
         self.num_points = num_points
+        # num_hypotheses > 1: K trajectories, one per WTA articulation bundle
+        # (selected jointly with the twist by TwistMLP's logits — see the
+        # 2026-08-11 WTA spec). Forward returns (B, K, N, 3).
+        self.num_hypotheses = num_hypotheses
         # delta_cumsum: predict num_points-1 per-step displacement vectors and
         # integrate (cumsum) into relative positions, with point 0 pinned to
         # exactly 0 — the interaction point supplies the absolute anchor. The
@@ -310,21 +314,21 @@ class TrajectoryMLP(nn.Module):
         )
         # Each point has 3 coordinates (x, y, z)
         out_points = num_points - 1 if delta_cumsum else num_points
-        self.trajectory_head = nn.Linear(hidden_dim, out_points * 3)
+        self.trajectory_head = nn.Linear(
+            hidden_dim, num_hypotheses * out_points * 3
+        )
 
     def forward(self, condition: torch.Tensor):
+        """-> (B, K, num_points, 3); K = num_hypotheses (1 for the legacy head)."""
         h = self.backbone(condition)
         trajectory_pred = self.trajectory_head(h)
+        K = self.num_hypotheses
         if self.delta_cumsum:
-            deltas = trajectory_pred.view(-1, self.num_points - 1, 3)
-            rel = torch.cumsum(deltas, dim=1)
-            zero = rel.new_zeros(rel.size(0), 1, 3)
-            return torch.cat([zero, rel], dim=1)
-        # Reshape to (B, num_points, 3)
-        trajectory_pred = trajectory_pred.view(
-            trajectory_pred.size(0), self.num_points, 3
-        )
-        return trajectory_pred
+            deltas = trajectory_pred.view(-1, K, self.num_points - 1, 3)
+            rel = torch.cumsum(deltas, dim=2)
+            zero = rel.new_zeros(rel.size(0), K, 1, 3)
+            return torch.cat([zero, rel], dim=2)
+        return trajectory_pred.view(-1, K, self.num_points, 3)
 
 
 class Trajectory2DMLP(nn.Module):
@@ -375,7 +379,8 @@ class TwistMLP(nn.Module):
     """
 
     def __init__(self, input_dim: int, hidden_dim: int = 256,
-                 pitch_free: bool = False, pitch_eps: float = 0.05):
+                 pitch_free: bool = False, pitch_eps: float = 0.05,
+                 num_hypotheses: int = 1):
         super().__init__()
         # pitch_free: the output map ends in a smoothed orthogonal
         # projection of v against omega, making the output space exactly
@@ -384,18 +389,27 @@ class TwistMLP(nn.Module):
         # omega -> 0 (prismatic, where pitch is vacuous). See
         # ModelParams.twist_pitch_free for why a literal 5-parameter chart
         # cannot exist.
+        # num_hypotheses > 1: K winner-takes-all articulation hypotheses +
+        # K selection logits (see the WTA spec). The logits select the WHOLE
+        # bundle including the matching TrajectoryMLP hypothesis.
         self.pitch_free = pitch_free
         self.pitch_eps = pitch_eps
+        self.num_hypotheses = num_hypotheses
         self.backbone = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(True),
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(True),
         )
-        self.twist_head = nn.Linear(hidden_dim, 6)
+        self.twist_head = nn.Linear(hidden_dim, num_hypotheses * 6)
+        self.logit_head = (
+            nn.Linear(hidden_dim, num_hypotheses) if num_hypotheses > 1 else None
+        )
 
     def forward(self, condition: torch.Tensor):
-        out = self.twist_head(self.backbone(condition))
+        """-> (twists (B, K, 6), logits (B, K) | None)."""
+        h = self.backbone(condition)
+        out = self.twist_head(h).view(-1, self.num_hypotheses, 6)
         if self.pitch_free:
             omega, v = out[..., :3], out[..., 3:]
             axial = (v * omega).sum(-1, keepdim=True)
@@ -403,7 +417,8 @@ class TwistMLP(nn.Module):
                 omega.pow(2).sum(-1, keepdim=True) + self.pitch_eps ** 2
             )
             out = torch.cat([omega, v], dim=-1)
-        return out
+        logits = self.logit_head(h) if self.logit_head is not None else None
+        return out, logits
 
 
 class OriginDepthHead(nn.Module):

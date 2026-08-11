@@ -52,6 +52,18 @@ class ModelOutputs:
     #: prismatic: omega=0 and v is the direction). See model/losses/twist.py.
     #: None unless `use_twist_head`.
     twist_pred: Optional[torch.Tensor] = None
+    #: (B, K, 6) all K WTA articulation hypotheses' twists; None when
+    #: `twist_num_hypotheses` is 1. `twist_pred` is then the argmax-logit
+    #: selection out of these.
+    twist_hyps: Optional[torch.Tensor] = None
+    #: (B, K, num_points, 3) the bundled trajectory of each hypothesis
+    #: (relative to its own first point); `trajectory_pred` is the same
+    #: argmax-logit selection. None when K = 1.
+    trajectory_hyps: Optional[torch.Tensor] = None
+    #: (B, K) bundle-selection logits from the twist head; argmax picks the
+    #: (twist, trajectory) bundle reported in `twist_pred`/`trajectory_pred`.
+    #: None when K = 1.
+    twist_logits: Optional[torch.Tensor] = None
     #: (B, latent_dim) CVAE posterior mean — only when motion_gt was supplied
     mu: Optional[torch.Tensor] = None
     #: (B, latent_dim) CVAE posterior log-variance — likewise
