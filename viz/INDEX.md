@@ -19,3 +19,5 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 | [20260727_sf3d_reproc_debug](20260727_sf3d_reproc_debug/README.md) | One-off debug renders from the sf3d_processed_v2 rebuild (splat-mask A/B, arc-fix checks, per-frame inspections) | ad-hoc scripts, July 27–28 |
 | [20260727_sf3d_v1_dataset_audit](20260727_sf3d_v1_dataset_audit/README.md) | 100-sample audit of the v1 SF3D LMDB (frame/zoom/depth panels, contact sheet, geometry TSV) | `tools/sf3d_vis_samples.py` |
 | [20260720_opd_label_audits](20260720_opd_label_audits/README.md) | OPD sample renders + description-regeneration label audits | `tools/show_opd_samples.py`, `tools/label_render.py` |
+| 20260812_sf3d_g3_vs_g4_panels | g3 vs g4 best ckpts, 16 val samples: g4 trajectories real + localization better; twist orbits still flat (omega hedge) |
+| 20260812_sf3d_g4_traj_points | g4 best, trajectory points only: ordered direction-correct sweeps vs g3's zero-motion stubs |

@@ -62,6 +62,8 @@ magnitude-aware screw_self residual. Decide after inspecting renders
 (the trajectory head is now the reliable articulation readout; the twist
 orbit renders will still show flat arcs).
 
+vis: viz/20260812_sf3d_g3_vs_g4_panels, viz/20260812_sf3d_g4_traj_points
+
 Eval logs: logs/test_best.log, logs/test_last.log. Diagnostics:
 tools/diag_wta_hyps.py, tools/diag_twist_radius.py (both vs best ckpt,
 numbers above). Specs: docs/superpowers/specs/2026-08-11-*.md.
