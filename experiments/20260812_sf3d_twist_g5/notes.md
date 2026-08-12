@@ -51,7 +51,7 @@ radius filter + rho 0.75) is the new articulation baseline. Open items:
 still climbing), rho higher still, or a |omega|-magnitude term in
 screw_self; (c) selector 0.60 has headroom (CE weight / calibration).
 
-vis: (pending next batch)
+vis: viz/20260813_sf3d_g4_vs_g5_panels, viz/20260813_sf3d_g4_vs_g5_panels_b2
 
 Eval logs: logs/test_best.log (test_last.log = same ckpt, see
 ckpt_md5.txt). Diagnostics: logs/diag_hyps.log, logs/diag_radius.log.
