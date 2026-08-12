@@ -1,0 +1,229 @@
+# 20260728_sf3d_twist: unified screw-motion (se(3) twist) arm.
+#
+# Differs from sf3d_train_runpod_geo_crossgt.yaml in three blocks
+# (use_twist_head + twist_weight, geometric_loss "screw", point_source):
+#
+#   * model_params.use_twist_head + loss_params.twist_weight — one 6-vector
+#     (omega, v) for both motion types: revolute carries the axis LINE (the
+#     moment v is invariant to where along the axis the origin sits, so there
+#     is no point on the axis to be noisy over), prismatic is the interior
+#     point omega = 0 (no infinite radius, no far-away axis). Motion type is
+#     emergent from |omega|. See model/losses/twist.py. The axis/type/CVAE
+#     heads still train alongside, so every baseline metric stays comparable.
+#
+#   * data.point_source: "element" — the interaction point is supervised with
+#     the projected element centroid (graspable, on the element for BOTH
+#     types) instead of the motion origin, which for rotation is the hinge:
+#     off the element 63% of the time and border-clamped when off-screen. The
+#     twist head carries the hinge line, so nothing needs a hinge POINT.
+#     NOTE this changes what coords_hat means, so test/mean_point_error and
+#     test/mean_origin_error_m are not comparable with motion_origin runs;
+#     the twist metrics (test/twist_*) are the ones to read.
+#
+# Requires sf3d_processed_v2 (per-record 2D trajectories; older records make
+# point_source="element" raise).
+
+seed_everything: 42
+
+model:
+  # gen-5: FROZEN CLIP backbone (image+text encoders eval-mode, no grads) —
+  # isolates head/decoder learning from backbone drift; also ~faster steps.
+  freeze_backbone: true
+  model_params:
+    clip_pretrain: "pretrain/RN50.pt" # Assumes a valid CLIP model is at this path
+    word_len: 77                     # Standard CLIP context length
+    use_depth: true                  # SF3D uses depth
+    # CVAE dropped 2026-08-03: its KLD had collapsed to ~3e-5 (posterior ==
+    # prior, z carried nothing) so it was a deterministic MLP with extra
+    # parameters and loss terms — and the multimodal output it was meant to
+    # protect (trajectory) never went through z anyway. MotionMLP predicts
+    # the same axis + type logits; L_vae degenerates to plain axis MSE.
+    # NOT resumable from use_cvae checkpoints (module names differ).
+    use_cvae: false
+    use_twist_head: true
+    # Axis head off (2026-08-05): the twist head carries the axis; eval
+    # falls back to the twist's decoded direction. The legacy axis loss
+    # (vae_weight) goes to 0 with it.
+    use_motion_head: false
+    # Type head off too (2026-08-05): type is emergent from |omega| — the
+    # twist is the single motion representation. Eval derives predicted
+    # type from the decoded twist (M Pass and type metrics measure the
+    # emergent type). The GT type INPUT hint below is unchanged.
+    use_motion_type_head: false
+    # Structurally pitch-free twists: TwistMLP projects v against omega in
+    # its output map — pure rotations/translations only, no helices.
+    twist_pitch_free: true
+    # Heads emit per-step deltas integrated by cumsum (point 0 == 0 exactly;
+    # coords_hat anchors the curve). Added 2026-08-04 after the point-cloud
+    # diagnosis (viz/20260803_sf3d_twist_traj_points).
+    trajectory_delta_cumsum: true
+    # gen-4 (2026-08-11): K = 4 winner-takes-all articulation bundles — each
+    # a (twist, trajectory) pair selected by one set of logits. Breaks the
+    # posterior-mean hedge that shrank |omega| to 0.295 and parked the
+    # trajectory head at the zero-motion baseline (specs
+    # docs/superpowers/specs/2026-08-11-twist-*.md).
+    twist_num_hypotheses: 4
+    # GT articulation type as an auxiliary input, with conditioning
+    # dropout: 50% of training samples see a learned NULL token instead,
+    # and val/test ALWAYS run hint-free (NULL) -- metrics reflect the
+    # no-hint deployment condition. Added 2026-08-02; the pre-typein
+    # twist run (6 epochs, val 1.026) is archived and NOT comparable.
+    use_motion_type_input: true
+    motion_type_input_dropout: 0.5
+    motion_type_embedding_dim: 16             # <-- the arm's variable (with point_source)
+    depth_feat_channels: [128, 256]
+    fpn_in: [512, 1024, 1024]      # Input channels for FPN from backbone.
+    fpn_out: [256, 512, 1024]        # Output channels for FPN layers.
+    # Decoder (Transformer)
+    num_layers: 3                    # Number of layers in Transformer decoder
+    num_head: 8                      # Number of attention heads
+    dim_ffn: 1024                    # Dimension of feed-forward network in Transformer
+    dropout: 0.2                     # Dropout rate in Transformer
+    intermediate: False              # Whether the Transformer decoder returns intermediate layer outputs
+    # Projector
+    proj_dropout: 0.25
+    # VAE for Motion Prediction
+    vae_latent_dim: 32
+    vae_hidden_dim: 256
+    # motion type
+    num_motion_types: 2
+    # NHWC conv layout + torch.compile: 845 -> 529 ms/batch on the dev GPU
+    # (1.6x; profiled 2026-08-03 — the decode-path convs/upsamples dominate
+    # the step and cuDNN's NCHW->NHWC shuffling was ~5% of GPU time).
+    # Numerically equivalent layout; compile pays ~minutes at first step.
+    channels_last: true
+    compile_model: true
+
+  loss_params:
+    # Loss functions
+    bce_weight: 0.5             # Weight for BCE loss in DiceBCELoss
+    dice_weight: 0.5            # Weight for Dice loss in DiceBCELoss
+    # loss weights
+    mask_weight: 0.5           # Add this (previously implicit 1.0)
+    point_map_weight: 0.5
+    coord_weight: 0.5          # Weight for the L1 coordinate regression loss
+    vae_weight: 0.0            # axis head off — no axis loss
+    motion_type_weight: 0.0    # no type head
+    # 4.0 (gen-4): the trajectory part of the WTA distortion. At 0.5 the term
+    # carried ~1% of the loss its entire life; amplification is meaningful
+    # only now that WTA makes it reducible (it had converged EXACTLY to the
+    # 0.018 zero-motion baseline).
+    trajectory_weight: 4.0
+    # Body-frame kinetic-energy metric on the twist (gen-4), anchored at the
+    # GT element point: |dw x p0 + dv|^2 + rho^2 |dw|^2 — prices errors in m²
+    # of motion at the OBJECT (the old 6-vector MSE was the same metric with
+    # the body at the camera origin, which is what let |omega| collapse).
+    # 0.5 carries over: measured init scale 0.603 (body) vs 0.634 (MSE).
+    twist_weight: 0.5
+    # 0.75 (gen-5, was 0.25): gen-4 showed WTA cells split only along the
+    # field/trajectory dimensions — at rho=0.25 a full omega-hedge cost just
+    # ~0.03 of distortion, so within-cell axis/sign ambiguity kept averaging
+    # omega to ~0.1. At 0.75 the same hedge costs ~0.28, comparable to the
+    # trajectory terms, forcing cells to also separate omega modes.
+    twist_metric_rho: 0.75
+    # Short warm start, then hard WTA. The first attempt (T0 10, anneal over
+    # 80% of epochs) MERGED all hypotheses onto the barycenter: 8+ epochs of
+    # near-uniform softmin pulled every head to the posterior mean (measured
+    # pairwise hypothesis distance 0.005 at epoch 9, selected |omega| median
+    # 0.04, CE pinned at ln 4) — an identical-outputs fixed point that WTA
+    # cannot escape at lr 1e-5. Start AT the mode-distance scale instead and
+    # go hard by epoch 2, so random-init diversity persists and heads
+    # specialize from the start.
+    twist_wta_T0: 0.5
+    twist_wta_anneal_frac: 0.125
+    twist_hyp_ce_weight: 0.1
+    # Direction is semantic on SF3D — the preprocessor derives the GT
+    # trajectory FROM the signed axis (trans marches along +motion_dir, rot
+    # sweeps right-handed about it), so the stored sign is canonical and the
+    # loss is plain sign-SENSITIVE MSE (added 2026-08-04).
+    twist_sign_agnostic: false
+    # Twist-native consistency replaces the branchy cross_gt: one velocity-
+    # field residual for both motion types (helix family: circle and line are
+    # interior cases), no type gate. The self term anchors the PREDICTED
+    # trajectory at the PREDICTED interaction point lifted with the input
+    # depth map — no teacher forcing.
+    geometric_loss: "screw"
+    screw_gt_weight: 0.5       # pred twist field <-> gt trajectory
+    screw_self_weight: 0.5     # pred twist field <-> pred trajectory @ pred point
+    # loss parameters
+    point_sigma: 8.0            # Sigma for Gaussian heatmap generation (in pixels on the feature map)
+    vae_beta: 0.01
+
+  optimizer_params:
+    lr: 0.00001
+    weight_decay: 0.0001
+    scheduler_milestones: [13, 15]
+    scheduler_gamma: 0.1
+
+  config:
+    log_image_interval_steps: 100
+    input_size: [256, 256]           # Image input size (height, width)
+    enable_wandb: False
+    val_vis_samples: 2
+    manual_seed: 42
+
+trainer:
+  # 16 epochs (~6.8M samples) ≈ 2.8h at the measured rate (665 samples/s
+  # end-to-end on an RTX PRO 6000: fast_pipeline + /dev/shm LMDBs +
+  # channels_last + compile, GPU-bound with 2 ms data wait, profiled
+  # 2026-08-03; was ~272-300 samples/s ≈ 7h before the optimization pass —
+  # the pipeline alone sustains 2,780 samples/s). Extend from last.ckpt if
+  # the curves are still moving; milestones scale with the schedule.
+  max_epochs: 16
+  accelerator: "gpu"
+  devices: 1
+  precision: 16
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: "/workspace/SegAffordance/experiments/20260812_sf3d_twist_g5/checkpoints"
+        monitor: "val/loss_total"
+        mode: "min"
+        save_top_k: 3
+        save_last: true
+        auto_insert_metric_name: false
+        filename: "best-epoch{epoch:02d}-valloss{val/loss_total:.4f}"
+  logger:
+    class_path: pytorch_lightning.loggers.CSVLogger
+    init_args:
+      save_dir: "/workspace/SegAffordance/experiments/20260812_sf3d_twist_g5/logs"
+      name: "csv"
+  log_every_n_steps: 10
+
+# sf3d_processed_v2: splat masks, corrected revolute arcs, 2D trajectories,
+# per-record sensor provenance (reader filters at sensor_max_occluded_frac=0.5
+# -> 417,765 records). Warm the page cache before launch (train_pod.sh does):
+#   cat /workspace/datasets/sf3d_processed_v2/data.lmdb/data.mdb > /dev/null
+# Batch size is provisional until the v2 smoke run settles throughput; keep it
+# identical across all SF3D arms when changing it.
+data:
+  train_data_dir: "/workspace/datasets/sf3d_processed_v2"
+  # Memoised sensor-filtered key list (297s -> 3s startup; created by the
+  # first run, validated against the LMDB entry count and cutoff).
+  key_cache_path: "/workspace/cache/sf3d_v2_keys_cutoff05_minrad010.pkl"
+  # Training-sized frame bytes in ONE mmap-served LMDB. Without it, per-
+  # sample full-res file reads bottleneck on the FUSE daemon at ~73
+  # samples/s with the GPU 75% idle (profiled 2026-07-28). train_pod.sh
+  # launch stages both LMDBs into /dev/shm and overrides these paths on the
+  # CLI — FUSE mmap gets cost ~3.5 ms even page-cache-warm.
+  frame_cache_path: "/workspace/datasets/sf3d_processed_v2/frames.lmdb"
+  # cv2-only decode + uint8 RGB (normalized on GPU in the model) + reused
+  # mask buffers: 25.4 -> 12.7 ms/sample, pipeline 280 -> 435 samples/s at
+  # 40 workers (profiled 2026-08-03 on the ~10-core cgroup quota). Masks/
+  # depth/bbox bit-identical to the legacy path; only the RGB resize kernel
+  # differs, so pre-2026-08 checkpoints are not exactly comparable.
+  fast_pipeline: true
+  # gen-5: drop knob/dial/faucet-class rotations (element-to-axis < 0.10 m;
+  # 40% of revolute records, bimodal with a gap at 3-15 cm). They supervise
+  # omega through pure ambiguity (element ON the axis, stub trajectory) and
+  # drove the omega hedge; part-scale articulation is the model's scope.
+  # Applies to train AND val/test: metrics not comparable to gen-3/4.
+  min_revolute_radius: 0.10
+  val_split_ratio: 0.1
+  input_size: [256, 256]
+  batch_size_train: 128
+  batch_size_val: 128
+  num_workers_train: 64
+  num_workers_val: 32
+  manual_seed: 42
+  point_source: "element"    # <-- the arm's variable (with use_twist_head)
