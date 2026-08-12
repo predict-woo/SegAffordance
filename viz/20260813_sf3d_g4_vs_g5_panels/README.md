@@ -11,6 +11,13 @@ from earlier the same day.
 - g4: `20260811_sf3d_twist_g4/checkpoints/best-epoch13-valloss0.7992.ckpt`
 - g5: `20260812_sf3d_twist_g5/checkpoints/best-epoch11-valloss0.7316.ckpt`
 
+Axis overlays (added same day): GREEN = GT articulation axis (revolute:
+the hinge line through the annotated origin; prismatic: a direction ray
+from the element), RED = the axis decoded from the predicted twist, both
+with a dot at the +sign end; the header's `ax=` is the signed angular
+error of the decoded direction. The thin green copy on model panels is
+the GT reference for direct comparison.
+
 Regenerate (dev pod, repo root):
 
 ```

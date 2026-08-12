@@ -115,6 +115,35 @@ def draw_polyline_norm(img, uv_norm, valid, color, thickness=3):
     return img
 
 
+def draw_axis_3d(img, K_norm, pt, d, center_at, color, t0=-0.35, t1=0.35,
+                 thickness=3):
+    """Project the 3D axis line ``pt + t*d`` as the segment t in [t0, t1]
+    (metres) centred at the axis point closest to ``center_at``, with a
+    filled dot at the +direction end (the canonical sign). For prismatic
+    "axes" pass t0=0 to draw a direction ray from the element instead."""
+    d = np.asarray(d, dtype=np.float64)
+    n = float(np.linalg.norm(d))
+    if n < 1e-8:
+        return img
+    d = d / n
+    pt = np.asarray(pt, dtype=np.float64)
+    rel = np.asarray(center_at, dtype=np.float64) - pt
+    qc = pt + float(np.dot(rel, d)) * d
+    ts = np.linspace(t0, t1, 9)
+    pts3 = qc[None] + ts[:, None] * d[None]
+    valid = pts3[:, 2] > 0.05
+    uv = project_points(
+        K_norm, torch.from_numpy(pts3[None]).float()
+    )[0].clamp(-2, 3).numpy()
+    img = draw_polyline_norm(img, uv, valid, color, thickness)
+    if valid[-1]:
+        h, w = img.shape[:2]
+        e = (int(round(uv[-1, 0] * w)), int(round(uv[-1, 1] * h)))
+        if -w < e[0] < 2 * w and -h < e[1] < 2 * h:
+            cv2.circle(img, e, 6, color, -1, cv2.LINE_AA)
+    return img
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", nargs=3, action="append", required=True,
@@ -198,6 +227,19 @@ def main():
         else:
             gt = draw_polyline_norm(gt, traj_uv, gt_valid, (255, 220, 0))
             gt_lines.append("(GT track: no point visible in frame)")
+        K_norm = normalized_intrinsics(K[None].float(), img_size[None].float())
+        gt_dir = motion_gt.float().numpy()
+        if not args.traj_only:
+            # GT articulation axis (green): revolute = the hinge LINE through
+            # the annotated origin; prismatic = a direction ray from the
+            # element (no axis position exists). Dot marks the + sign end.
+            if int(type_gt) == 1:
+                gt = draw_axis_3d(gt, K_norm, origin_3d.float().numpy(), gt_dir,
+                                  traj3d[0].float().numpy(), (0, 255, 0))
+            else:
+                gt = draw_axis_3d(gt, K_norm, traj3d[0].float().numpy(), gt_dir,
+                                  traj3d[0].float().numpy(), (0, 255, 0),
+                                  t0=0.0, t1=0.25)
         gp = (int(point_gt[0] * W), int(point_gt[1] * H))
         cv2.circle(gt, gp, 6, (255, 255, 255), -1)
         cv2.circle(gt, gp, 6, (0, 0, 0), 2)
@@ -251,7 +293,7 @@ def main():
 
             if out.twist_pred is not None:
                 tw = out.twist_pred[0].cpu().float()
-                is_rev, direction, _ = decode_twist(tw[None])
+                is_rev, direction, axis_point = decode_twist(tw[None])
                 om = tw[:3].norm().item()
                 if not args.traj_only:
                     # Forward-only sweep of the GT extent (90 deg revolute /
@@ -268,11 +310,31 @@ def main():
                     ov = (orbit[:, 2] > 0.05).numpy() if anchor_ok else np.zeros(48, bool)
                     ouv = project_points(K_norm, orbit[None])[0].clamp(-2, 3).numpy()
                     p = draw_polyline_norm(p, ouv, ov, (0, 230, 230), thickness=4)
-                lines.append(f"cls={cls_type}  |w|={om:.2f} -> {'rot' if bool(is_rev[0]) else 'trans'}")
+                    # Decoded axis (red) vs the GT axis (thin green) on the
+                    # same panel: hinge placement + sign at a glance.
+                    anchor3d = anchor[0].cpu().numpy() if anchor_ok else traj3d[0].float().numpy()
+                    if bool(is_rev[0]):
+                        p = draw_axis_3d(p, K_norm, axis_point[0].numpy(),
+                                         direction[0].numpy(), anchor3d, (0, 0, 255))
+                    else:
+                        p = draw_axis_3d(p, K_norm, anchor3d, direction[0].numpy(),
+                                         anchor3d, (0, 0, 255), t0=0.0, t1=0.25)
+                    if int(type_gt) == 1:
+                        p = draw_axis_3d(p, K_norm, origin_3d.float().numpy(), gt_dir,
+                                         traj3d[0].float().numpy(), (0, 255, 0),
+                                         thickness=2)
+                    else:
+                        p = draw_axis_3d(p, K_norm, traj3d[0].float().numpy(), gt_dir,
+                                         traj3d[0].float().numpy(), (0, 255, 0),
+                                         t0=0.0, t1=0.25, thickness=2)
+                gt_dir_n = gt_dir / max(float(np.linalg.norm(gt_dir)), 1e-8)
+                ang = math.degrees(math.acos(
+                    float(np.clip(np.dot(direction[0].numpy(), gt_dir_n), -1.0, 1.0))))
+                lines.append(f"cls={cls_type}  |w|={om:.2f} -> {'rot' if bool(is_rev[0]) else 'trans'}  ax={ang:.0f}deg")
             else:
                 lines.append(f"cls={cls_type}")
             lines.append("mag=traj3d pts" if args.traj_only
-                         else "mag=traj3d  orn=trk2d  yel=orbit")
+                         else "mag=traj3d orn=trk2d yel=orbit grn=GTaxis red=predaxis")
             p = put_lines(p, lines)
             panels.append(p)
 

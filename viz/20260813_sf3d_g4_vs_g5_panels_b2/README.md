@@ -8,6 +8,13 @@ Highlight: `01_rot_val16602.jpg` — "Close the door": gen-5 decodes rot
 at |w| = 0.58 with a wide door-scale orbit and a trajectory tracking the
 GT sweep; gen-4 called it trans at 0.22.
 
+Axis overlays (added same day): GREEN = GT articulation axis (revolute:
+the hinge line through the annotated origin; prismatic: a direction ray
+from the element), RED = the axis decoded from the predicted twist, both
+with a dot at the +sign end; the header's `ax=` is the signed angular
+error of the decoded direction. The thin green copy on model panels is
+the GT reference for direct comparison.
+
 Regenerate (dev pod, repo root):
 
 ```

@@ -20,7 +20,7 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 | [20260727_sf3d_v1_dataset_audit](20260727_sf3d_v1_dataset_audit/README.md) | 100-sample audit of the v1 SF3D LMDB (frame/zoom/depth panels, contact sheet, geometry TSV) | `tools/sf3d_vis_samples.py` |
 | [20260720_opd_label_audits](20260720_opd_label_audits/README.md) | OPD sample renders + description-regeneration label audits | `tools/show_opd_samples.py`, `tools/label_render.py` |
 | 20260813_sf3d_g4_vs_g5_panels | g4 vs g5 best, seed 3, FILTERED val split (no knob-class): omega commitment visible — |w| headers up, first door-scale rot orbits |
-| 20260813_sf3d_g4_vs_g5_panels_b2 | 30 more g4-vs-g5 (seed 7, filtered split); highlight 01_rot 'Close the door': g5 rot @ |w|=0.58, door-scale orbit; g4 said trans |
+| 20260813_sf3d_g4_vs_g5_panels_b2 | 30 more g4-vs-g5 (seed 7, filtered split); highlight 01_rot 'Close the door': g5 rot @ |w|=0.58, axis 27deg vs g4's 95deg; GT/pred axes overlaid |
 | 20260812_sf3d_g3_vs_g4_panels_b2 | 30 more g3-vs-g4 panels (seed 7, disjoint samples) — same reading guide as the seed-3 batch |
 | 20260812_sf3d_g3_vs_g4_panels | g3 vs g4 best ckpts, 16 val samples: g4 trajectories real + localization better; twist orbits still flat (omega hedge) |
 | 20260812_sf3d_g4_traj_points | g4 best, trajectory points only: ordered direction-correct sweeps vs g3's zero-motion stubs |
