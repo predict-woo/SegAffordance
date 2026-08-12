@@ -79,6 +79,8 @@ def main():
     ap.add_argument("--ckpt", required=True, help="path or glob; newest match used")
     ap.add_argument("--data-root", default="/workspace/datasets/sf3d_processed_v2")
     ap.add_argument("--key-cache", default="/workspace/cache/sf3d_v2_keys_cutoff05.pkl")
+    ap.add_argument("--min-revolute-radius", type=float, default=0.0,
+                    help="must match the key cache / training config")
     ap.add_argument("--num", type=int, default=800)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out-csv", default=None)
@@ -101,6 +103,7 @@ def main():
         rgb_transform=r, mask_transform=m, depth_transform=d,
         image_size_for_mask_reconstruction=(256, 256),
         point_source="element", return_trajectory_2d=True,
+        min_revolute_radius=args.min_revolute_radius,
     )
     _, val = split_dataset_by_scene(ds, val_split_ratio=0.1, manual_seed=42)
 
