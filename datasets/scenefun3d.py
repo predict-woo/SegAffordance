@@ -52,6 +52,7 @@ class SF3DDataset(Dataset):
         ),  # Needed if original size not stored
         lmdb_path: Optional[str] = None,
         sensor_max_occluded_frac: Optional[float] = 0.5,
+        min_revolute_radius: float = 0.0,
         key_cache_path: Optional[str] = None,
         return_trajectory_2d: bool = False,
         point_source: str = "motion_origin",
@@ -97,6 +98,16 @@ class SF3DDataset(Dataset):
             Path(lmdb_path) if lmdb_path else self.lmdb_data_root / "data.lmdb"
         )
         self.sensor_max_occluded_frac = sensor_max_occluded_frac
+        # Drop revolute records whose element rotates about an axis closer
+        # than this (metres): the knob/dial/faucet mode. Measured on the v2
+        # train split the revolute radius distribution is BIMODAL — 40% sit
+        # under 3 cm (p25 = 1.4 cm), then a gap to the door/cabinet mode at
+        # 0.3-0.5 m — and the knob mode supervises omega through pure
+        # ambiguity (element ON the axis: no field signal, stub trajectory,
+        # unknowable sign), which drove the gen-4 omega hedge. 0.10 sits in
+        # the gap: it removes exactly the knob mode. Prismatic records are
+        # never dropped. 0.0 disables (legacy behaviour).
+        self.min_revolute_radius = min_revolute_radius
         self.key_cache_path = Path(key_cache_path) if key_cache_path else None
 
         # OFF by default: the extra columns cost decode time and only the 2D
@@ -200,6 +211,7 @@ class SF3DDataset(Dataset):
         them. Set sensor_max_occluded_frac=None to disable filtering entirely.
         """
         cutoff = self.sensor_max_occluded_frac
+        min_rad = self.min_revolute_radius
 
         # Cache validity is keyed on the record COUNT, not the path, so a cache
         # built from a /dev/shm copy stays valid for the same database on the
@@ -209,19 +221,25 @@ class SF3DDataset(Dataset):
 
         if self.key_cache_path and self.key_cache_path.is_file():
             cached = pickle.loads(self.key_cache_path.read_bytes())
-            if cached.get("cutoff") == cutoff and cached.get("entries") == entry_count:
+            if (
+                cached.get("cutoff") == cutoff
+                and cached.get("entries") == entry_count
+                and cached.get("min_revolute_radius", 0.0) == min_rad
+            ):
                 print(
                     f"Loaded {len(cached['keys'])} keys from cache "
-                    f"{self.key_cache_path} (cutoff={cutoff})"
+                    f"{self.key_cache_path} (cutoff={cutoff}, min_rev_radius={min_rad})"
                 )
                 return cached["keys"]
 
         keys: List[bytes] = []
         dropped = 0
+        dropped_radius = 0
         unverified = 0
+        scan = cutoff is not None or min_rad > 0.0
         with self.env.begin(write=False) as txn:
             cursor = txn.cursor()
-            if cutoff is None:
+            if not scan:
                 for key, _ in cursor:
                     if key != b"__metadata__":
                         keys.append(key)
@@ -229,30 +247,71 @@ class SF3DDataset(Dataset):
                 for key, value in cursor:
                     if key == b"__metadata__":
                         continue
-                    sensor = pickle.loads(value).get("sensor_check")
-                    if sensor is None:
-                        unverified += 1
-                    elif sensor.get("sensor_occluded_frac", 0.0) > cutoff:
-                        dropped += 1
+                    record = pickle.loads(value)
+                    if cutoff is not None:
+                        sensor = record.get("sensor_check")
+                        if sensor is None:
+                            unverified += 1
+                        elif sensor.get("sensor_occluded_frac", 0.0) > cutoff:
+                            dropped += 1
+                            continue
+                    if min_rad > 0.0 and self._revolute_radius_below(record, min_rad):
+                        dropped_radius += 1
                         continue
                     keys.append(key)
 
-        if cutoff is not None:
-            total = len(keys) + dropped
+        if scan:
+            total = len(keys) + dropped + dropped_radius
             print(
                 f"Sensor filter (occluded_frac > {cutoff}): dropped {dropped} of "
                 f"{total} records ({100.0 * dropped / max(1, total):.2f}%); "
                 f"{unverified} kept without a sensor verdict"
             )
+            if min_rad > 0.0:
+                print(
+                    f"Radius filter (revolute radius < {min_rad} m): dropped "
+                    f"{dropped_radius} ({100.0 * dropped_radius / max(1, total):.2f}%)"
+                )
 
         if self.key_cache_path:
             self.key_cache_path.parent.mkdir(parents=True, exist_ok=True)
             self.key_cache_path.write_bytes(
-                pickle.dumps({"cutoff": cutoff, "entries": entry_count, "keys": keys})
+                pickle.dumps(
+                    {
+                        "cutoff": cutoff,
+                        "entries": entry_count,
+                        "min_revolute_radius": min_rad,
+                        "keys": keys,
+                    }
+                )
             )
             print(f"Cached key list -> {self.key_cache_path}")
 
         return keys
+
+    @staticmethod
+    def _revolute_radius_below(record: dict, min_rad: float) -> bool:
+        """True iff the record is revolute AND its element rotates about an
+        axis closer than ``min_rad`` metres (the knob/dial mode). Records
+        missing any needed field are KEPT (no evidence against them)."""
+        motion_info = record.get("motion_info") or {}
+        original = motion_info.get("original_motion_data") or {}
+        if original.get("motion_type", "trans") not in ("rot", "rotation"):
+            return False
+        frame = motion_info.get("frame_specific_motion_data") or {}
+        axis_dir = frame.get("motion_dir_3d_camera_coords")
+        origin = frame.get("motion_origin_3d_camera_coords")
+        traj = record.get("trajectory_3d_camera_coords")
+        if not axis_dir or not origin or not traj:
+            return False
+        d = np.asarray(axis_dir, dtype=np.float64)
+        n = np.linalg.norm(d)
+        if n < 1e-8:
+            return False
+        d /= n
+        rel = np.asarray(traj[0], dtype=np.float64) - np.asarray(origin, dtype=np.float64)
+        radius = float(np.linalg.norm(rel - np.dot(rel, d) * d))
+        return radius < min_rad
 
     def __len__(self) -> int:
         return len(self.item_keys)

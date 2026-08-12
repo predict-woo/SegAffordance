@@ -26,6 +26,9 @@
 seed_everything: 42
 
 model:
+  # gen-5: FROZEN CLIP backbone (image+text encoders eval-mode, no grads) —
+  # isolates head/decoder learning from backbone drift; also ~faster steps.
+  freeze_backbone: true
   model_params:
     clip_pretrain: "pretrain/RN50.pt" # Assumes a valid CLIP model is at this path
     word_len: 77                     # Standard CLIP context length
@@ -112,7 +115,12 @@ model:
     # the body at the camera origin, which is what let |omega| collapse).
     # 0.5 carries over: measured init scale 0.603 (body) vs 0.634 (MSE).
     twist_weight: 0.5
-    twist_metric_rho: 0.25
+    # 0.75 (gen-5, was 0.25): gen-4 showed WTA cells split only along the
+    # field/trajectory dimensions — at rho=0.25 a full omega-hedge cost just
+    # ~0.03 of distortion, so within-cell axis/sign ambiguity kept averaging
+    # omega to ~0.1. At 0.75 the same hedge costs ~0.28, comparable to the
+    # trajectory terms, forcing cells to also separate omega modes.
+    twist_metric_rho: 0.75
     # Short warm start, then hard WTA. The first attempt (T0 10, anneal over
     # 80% of epochs) MERGED all hypotheses onto the barycenter: 8+ epochs of
     # near-uniform softmin pulled every head to the posterior mean (measured
@@ -168,7 +176,7 @@ trainer:
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        dirpath: "/workspace/SegAffordance/experiments/20260811_sf3d_twist_g4/checkpoints"
+        dirpath: "/workspace/SegAffordance/experiments/20260812_sf3d_twist_g5/checkpoints"
         monitor: "val/loss_total"
         mode: "min"
         save_top_k: 3
@@ -178,7 +186,7 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: "/workspace/SegAffordance/experiments/20260811_sf3d_twist_g4/logs"
+      save_dir: "/workspace/SegAffordance/experiments/20260812_sf3d_twist_g5/logs"
       name: "csv"
   log_every_n_steps: 10
 
@@ -192,7 +200,7 @@ data:
   train_data_dir: "/workspace/datasets/sf3d_processed_v2"
   # Memoised sensor-filtered key list (297s -> 3s startup; created by the
   # first run, validated against the LMDB entry count and cutoff).
-  key_cache_path: "/workspace/cache/sf3d_v2_keys_cutoff05.pkl"
+  key_cache_path: "/workspace/cache/sf3d_v2_keys_cutoff05_minrad010.pkl"
   # Training-sized frame bytes in ONE mmap-served LMDB. Without it, per-
   # sample full-res file reads bottleneck on the FUSE daemon at ~73
   # samples/s with the GPU 75% idle (profiled 2026-07-28). train_pod.sh
@@ -205,6 +213,12 @@ data:
   # depth/bbox bit-identical to the legacy path; only the RGB resize kernel
   # differs, so pre-2026-08 checkpoints are not exactly comparable.
   fast_pipeline: true
+  # gen-5: drop knob/dial/faucet-class rotations (element-to-axis < 0.10 m;
+  # 40% of revolute records, bimodal with a gap at 3-15 cm). They supervise
+  # omega through pure ambiguity (element ON the axis, stub trajectory) and
+  # drove the omega hedge; part-scale articulation is the model's scope.
+  # Applies to train AND val/test: metrics not comparable to gen-3/4.
+  min_revolute_radius: 0.10
   val_split_ratio: 0.1
   input_size: [256, 256]
   batch_size_train: 128

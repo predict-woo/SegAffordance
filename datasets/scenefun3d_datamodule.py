@@ -25,6 +25,7 @@ class SF3DDataModule(pl.LightningDataModule):
         return_trajectory_2d: bool = False,
         frame_cache_path: Optional[str] = None,
         fast_pipeline: bool = False,
+        min_revolute_radius: float = 0.0,
     ) -> None:
         super().__init__()
         self.train_data_dir = train_data_dir
@@ -49,6 +50,9 @@ class SF3DDataModule(pl.LightningDataModule):
         # cv2-only decode + uint8 RGB (GPU-normalized in the model) + reused
         # mask buffers: ~5x cheaper per sample. See SF3DDataset.fast_pipeline.
         self.fast_pipeline = fast_pipeline
+        # Drop knob/dial-class revolute records (element-to-axis distance
+        # below this, metres). See SF3DDataset.min_revolute_radius.
+        self.min_revolute_radius = min_revolute_radius
 
         self.train_dataset: Optional[Dataset] = None
         self.val_dataset: Optional[Dataset] = None
@@ -75,6 +79,7 @@ class SF3DDataModule(pl.LightningDataModule):
                     return_trajectory_2d=self.return_trajectory_2d,
                     frame_cache_path=self.frame_cache_path,
                     fast_pipeline=self.fast_pipeline,
+                    min_revolute_radius=self.min_revolute_radius,
                 )
 
                 self.train_dataset, self.val_dataset = split_dataset_by_scene(
