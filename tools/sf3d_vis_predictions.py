@@ -123,6 +123,8 @@ def main():
     ap.add_argument("--key-cache", default="/workspace/cache/sf3d_v2_keys_cutoff05.pkl")
     ap.add_argument("--out", required=True,
                     help="dated batch dir under viz/, e.g. viz/YYYYMMDD_<subject>_panels")
+    ap.add_argument("--min-revolute-radius", type=float, default=0.0,
+                    help="drop knob-class rotations (must match the key cache)")
     ap.add_argument("--num", type=int, default=16)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--traj-only", action="store_true",
@@ -145,6 +147,7 @@ def main():
         rgb_transform=r, mask_transform=m, depth_transform=d,
         image_size_for_mask_reconstruction=(256, 256),
         point_source="element", return_trajectory_2d=True,
+        min_revolute_radius=args.min_revolute_radius,
     )
     # The SAME val split as training (seed 42, ratio 0.1, split by scene).
     _, val = split_dataset_by_scene(ds, val_split_ratio=0.1, manual_seed=42)

@@ -1,9 +1,10 @@
 command: tools/sf3d_vis_predictions.py --model g4 experiments/20260811_sf3d_twist_g4/config.yaml
   experiments/20260811_sf3d_twist_g4/checkpoints/best-epoch13-valloss0.7992.ckpt --model
   g5 experiments/20260812_sf3d_twist_g5/config.yaml experiments/20260812_sf3d_twist_g5/checkpoints/best-epoch11-valloss0.7316.ckpt
-  --out viz/20260813_sf3d_g4_vs_g5_panels_b2 --num 30 --seed 7
-tool_commit: 7bd6e87
-generated: '2026-08-12T17:29:23+00:00'
+  --key-cache /workspace/cache/sf3d_v2_keys_cutoff05_minrad010.pkl --min-revolute-radius
+  0.10 --out viz/20260813_sf3d_g4_vs_g5_panels_b2 --num 30 --seed 7
+tool_commit: dff0fe6
+generated: '2026-08-12T17:33:31+00:00'
 models:
 - name: g4
   config: experiments/20260811_sf3d_twist_g4/config.yaml
@@ -14,4 +15,4 @@ models:
 num: 30
 seed: 7
 data_root: /workspace/datasets/sf3d_processed_v2
-key_cache: /workspace/cache/sf3d_v2_keys_cutoff05.pkl
+key_cache: /workspace/cache/sf3d_v2_keys_cutoff05_minrad010.pkl
