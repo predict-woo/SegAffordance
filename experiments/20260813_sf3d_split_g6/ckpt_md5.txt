@@ -1,0 +1,2 @@
+40c9a0320822526a7ce8da2ad39fcea8  checkpoints/best-epoch10-valloss1.0214.ckpt
+40c9a0320822526a7ce8da2ad39fcea8  checkpoints/last.ckpt
