@@ -149,6 +149,41 @@ def test_pooling_detached_from_mask_head(split_model):
         split_model.zero_grad(set_to_none=True)
 
 
+def test_pool_with_predicted_mask_flag_semantics():
+    # Pins the flag both ways, in train mode with seeded weights/inputs:
+    #   false (classical) -> pooling reads the GT mask, so changing the GT
+    #     mask MUST change an articulation output;
+    #   true  -> the GT mask is unused by pooling, so the SAME mask change
+    #     leaves every articulation output bit-identical.
+    def _build(pool_flag):
+        torch.manual_seed(123)
+        m = _make_cris(pool_with_predicted_mask=pool_flag)
+        m.train()  # eval always pools with the predicted mask; train is the fork
+        return m
+
+    torch.manual_seed(7)
+    img, depth, word, _ = _inputs()
+    mask_a = torch.zeros(2, 1, 64, 64)
+    mask_a[:, :, :32, :] = 1.0
+    mask_b = torch.zeros(2, 1, 64, 64)
+    mask_b[:, :, 32:, :] = 1.0
+
+    def _art(m, mask):
+        with torch.no_grad():
+            out = m(img, depth, word, mask, None, None)
+        return out.motion_pred, out.trajectory_pred
+
+    m_false = _build(False)
+    ma, ta = _art(m_false, mask_a)
+    mb, tb = _art(m_false, mask_b)
+    assert not torch.equal(ma, mb) or not torch.equal(ta, tb)
+
+    m_true = _build(True)
+    ma, ta = _art(m_true, mask_a)
+    mb, tb = _art(m_true, mask_b)
+    assert torch.equal(ma, mb) and torch.equal(ta, tb)
+
+
 def test_classical_2d_mode_unchanged():
     m = _make_cris()  # all new flags default off
     m.eval()
@@ -157,6 +192,37 @@ def test_classical_2d_mode_unchanged():
         out = m(img, depth, word, mask, None, None)
     assert out.point_logits is not None and out.coords_hat.shape == (2, 2)
     assert out.point_3d_pred is None and out.origin_pred is None
+
+
+def test_hint_on_2d_condition_keeps_classical_column_order():
+    # Checkpoint-compatibility pin: every gen-3/4/5 twist config sets
+    # use_motion_type_input, and those checkpoints were trained with the
+    # condition laid out [features, coords_hat, type_emb]. Loading them
+    # requires the type embedding to occupy the LAST columns, with
+    # coords_hat immediately before it — this test freezes that layout.
+    emb_dim = 16
+    m = _make_cris(use_motion_type_input=True, motion_type_embedding_dim=emb_dim)
+    m.eval()
+    marker = 7.25
+    with torch.no_grad():
+        m.motion_type_embedding.weight.fill_(marker)
+
+    captured = []
+    hook = m.motion_mlp.register_forward_hook(
+        lambda mod, inp, out: captured.append(inp[0].detach())
+    )
+    img, depth, word, mask = _inputs()
+    try:
+        with torch.no_grad():
+            out = m(img, depth, word, mask, None, None)
+    finally:
+        hook.remove()
+
+    cond = captured[0]
+    # Type embedding fills the LAST emb_dim columns...
+    assert torch.all(cond[:, -emb_dim:] == marker)
+    # ...and coords_hat sits immediately before it (classical order).
+    assert torch.allclose(cond[:, -emb_dim - 2:-emb_dim], out.coords_hat)
 
 
 # ---- split losses (Task 3) -------------------------------------------------

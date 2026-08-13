@@ -138,7 +138,9 @@ class CRIS(nn.Module):
         vae_condition_dim = vae_feature_dim + point_cond_dim
 
         # Optional auxiliary input: the articulation type, embedded and
-        # appended to the condition vector every head consumes. One extra
+        # concatenated into the condition vector every head consumes (LAST
+        # on the 2D path — the classical checkpoint layout; before the
+        # 3D-point extension on the 3D path; see forward). One extra
         # learned NULL token is the "no hint" state — used for conditioning
         # dropout during training and ALWAYS at val/test, so the model never
         # depends on the hint being available. Must be set up before the
@@ -372,26 +374,36 @@ class CRIS(nn.Module):
             [motion_features, global_vis_feat, state], dim=1
         )
         # The VAE is conditioned on object features, global features, and the
-        # interaction point. The type hint (if any) joins the BASE condition;
-        # the point extension (coords_hat or the predicted 3D point) comes last.
-        vae_condition = vae_encoder_features
+        # interaction point. The column ORDER is checkpoint-load-bearing:
+        #   2D path (classical): [features, coords_hat, type_emb] — the exact
+        #     layout every twist-era (gen-3/4/5) hint-on checkpoint was
+        #     trained with; do not reorder.
+        #   3D path (gen-6): [features, type_emb, point_3d_pred] — the point
+        #     head consumes the base condition (features + hint, i.e. it
+        #     never sees its own output) and its output extends it last.
+        type_emb = None
         if self.use_motion_type_input:
             null_index = self.motion_type_embedding.num_embeddings - 1
             if motion_type_input is None:
                 motion_type_input = torch.full(
-                    (b,), null_index, dtype=torch.long, device=vae_condition.device
+                    (b,), null_index, dtype=torch.long,
+                    device=vae_encoder_features.device,
                 )
             type_emb = self.motion_type_embedding(
-                motion_type_input.to(vae_condition.device).long()
+                motion_type_input.to(vae_encoder_features.device).long()
             )
-            vae_condition = torch.cat([vae_condition, type_emb], dim=1)
 
+        vae_condition = vae_encoder_features
         point_3d_pred = None
         if self.point_prediction_3d:
+            if type_emb is not None:
+                vae_condition = torch.cat([vae_condition, type_emb], dim=1)
             point_3d_pred = self.point_3d_head(vae_condition)
             vae_condition = torch.cat([vae_condition, point_3d_pred], dim=1)
         else:
             vae_condition = torch.cat([vae_condition, coords_hat], dim=1)
+            if type_emb is not None:
+                vae_condition = torch.cat([vae_condition, type_emb], dim=1)
 
         trajectory_all = (
             self.trajectory_predictor(vae_condition)          # (B, K, N, 3)
