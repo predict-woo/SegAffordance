@@ -59,8 +59,8 @@ flowchart TB
   PROJ --> PH["point heatmap"]:::rest
   PROJ --> OH["origin heatmap (NEW)"]:::newh
 
-  PH --> CH["soft-argmax &#8594; coords_hat (u,v)"]:::rest
-  OH --> CO["soft-argmax &#8594; origin_uv"]:::newh
+  PH --> CH["soft-argmax &#8594; coords_hat (u,v)<br/>(legacy name, classical path)"]:::rest
+  OH --> CO["soft-argmax &#8594; origin_uv (u,v)<br/>(IDENTICAL op, new name)"]:::newh
 
   TRUNK --> COND["condition vector<br/>pooled features + coords_hat + origin_uv"]:::newh
   CH --> COND
