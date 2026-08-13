@@ -158,6 +158,54 @@ flowchart TB
   </tr>
 </table>
 
+<h2>The circle residual (revolute branch of $L_{pp}$)</h2>
+<p>If the model claims "rotation about $(\hat{q},\hat{d})$", its own predicted trajectory must be a circular
+orbit around that axis. A point can be off the orbit in exactly two orthogonal ways, and the residual is
+their sum — the exact squared point-to-circle distance:</p>
+
+<div style="display:flex; gap:28px; align-items:center; flex-wrap:wrap;">
+<svg viewBox="0 0 460 300" style="max-width:460px; flex:1 1 300px;" xmlns="http://www.w3.org/2000/svg">
+  <!-- axis -->
+  <line x1="150" y1="20" x2="150" y2="285" stroke="#c0392b" stroke-width="3"/>
+  <polygon points="150,12 144,26 156,26" fill="#c0392b"/>
+  <text x="158" y="30" font-size="14" fill="#c0392b">predicted axis (q&#770;, d&#770;)</text>
+  <circle cx="150" cy="205" r="4" fill="#c0392b"/>
+  <text x="158" y="222" font-size="13" fill="#c0392b">q&#770;</text>
+  <!-- ideal orbit: ellipse (circle in perspective) around axis at anchor height -->
+  <ellipse cx="150" cy="190" rx="120" ry="34" fill="none" stroke="#1e6b1e" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="285" y="165" font-size="13" fill="#1e6b1e">ideal orbit, radius r&#770;</text>
+  <!-- anchor point on orbit -->
+  <circle cx="270" cy="190" r="5" fill="#1e6b1e"/>
+  <text x="278" y="194" font-size="13" fill="#1e6b1e">anchor (traj point 0)</text>
+  <!-- radius line -->
+  <line x1="150" y1="190" x2="270" y2="190" stroke="#1e6b1e" stroke-width="1.5" stroke-dasharray="3 3"/>
+  <text x="196" y="184" font-size="12" fill="#1e6b1e">r&#770;</text>
+  <!-- predicted trajectory point off the orbit -->
+  <circle cx="238" cy="94" r="5" fill="#23508e"/>
+  <text x="246" y="90" font-size="13" fill="#23508e">predicted traj point d&#8305;</text>
+  <!-- its ideal position on orbit (same azimuth): -->
+  <circle cx="222" cy="162" r="4" fill="none" stroke="#555" stroke-width="1.5"/>
+  <!-- radial error arrow (horizontal, toward/away axis) -->
+  <line x1="222" y1="162" x2="238" y2="158" stroke="#8a6100" stroke-width="2"/>
+  <polygon points="238,158 230,155 232,163" fill="#8a6100"/>
+  <text x="252" y="163" font-size="12" fill="#8a6100">radial: dist to axis &#8722; r&#770;</text>
+  <!-- axial drift arrow (vertical, parallel to axis) -->
+  <line x1="238" y1="158" x2="238" y2="99" stroke="#7a1fa2" stroke-width="2"/>
+  <polygon points="238,94 232,106 244,106" fill="#7a1fa2"/>
+  <text x="246" y="128" font-size="12" fill="#7a1fa2">along-axis drift: d&#8305;&#183;d&#770;</text>
+</svg>
+<div style="flex:1 1 300px; min-width:260px;">
+$$L_{circle} = \underbrace{(\,\mathrm{dist}(d_i,\text{axis}) - \hat{r}\,)^2}_{\text{radial error}} \;+\; \underbrace{(d_i \cdot \hat{d})^2}_{\text{along-axis drift}}$$
+<p><b>Why the second term is load-bearing</b> (found during implementation, spec amended): a predicted
+trajectory that is a <i>straight line parallel to the axis</i> keeps constant distance from the axis the
+whole way — the radial term alone scores it as a <i>perfect circle</i> while it is maximally non-circular.
+The drift term catches exactly that: a true rotation never changes its height along the axis. Drift is
+measured relative to the curve's <b>own first point</b> (not the hinge's height), so it does not
+reintroduce the July plane-term bug, and it never reads $\hat{q}$ — origin gauge freedom along the axis
+is preserved.</p>
+</div>
+</div>
+
 <h2>Inference composition (all linear, no decode that can blow up)</h2>
 <table>
   <tr><th>Quantity</th><th>How</th></tr>
