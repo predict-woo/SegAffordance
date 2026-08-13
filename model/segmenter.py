@@ -131,9 +131,9 @@ class CRIS(nn.Module):
 
         # motion_features + global_vis_features + global_text_features
         vae_feature_dim = model_params.fpn_out[1] + model_params.fpn_in[2] + state_dim
-        # 2D path: condition = features + coords_hat (2). 3D path: the point
+        # 2D path: condition = features + point_uv (2). 3D path: the point
         # head consumes the base features and its 3-dim output extends the
-        # condition instead (spec: "the same role coords_hat played, in 3D").
+        # condition instead (spec: "the same role point_uv played, in 3D").
         point_cond_dim = 3 if self.point_prediction_3d else 2
         vae_condition_dim = vae_feature_dim + point_cond_dim
 
@@ -330,15 +330,15 @@ class CRIS(nn.Module):
         mask_pred = maps[:, 0:1]  # B×1×H_map×W_map
         if self.point_prediction_3d:
             point_pred = None
-            coords_hat = None
+            point_uv = None
         else:
             point_pred = maps[:, 1:2]  # B×1×H_map×W_map, logits, not sigmoided yet
             # soft-argmax → differentiable coordinates in pixel space of the map
-            # coords_px will have x in [0, W_map-1] and y in [0, H_map-1]
-            coords_px = soft_argmax2d(point_pred)  # B×2
+            # point_px will have x in [0, W_map-1] and y in [0, H_map-1]
+            point_px = soft_argmax2d(point_pred)  # B×2
             _, _, H_map, W_map = point_pred.shape
-            coords_hat = coords_px / torch.tensor(
-                [W_map, H_map], dtype=coords_px.dtype, device=coords_px.device
+            point_uv = point_px / torch.tensor(
+                [W_map, H_map], dtype=point_px.dtype, device=point_px.device
             )
 
         # --- Motion VAE part ---
@@ -375,7 +375,7 @@ class CRIS(nn.Module):
         )
         # The VAE is conditioned on object features, global features, and the
         # interaction point. The column ORDER is checkpoint-load-bearing:
-        #   2D path (classical): [features, coords_hat, type_emb] — the exact
+        #   2D path (classical): [features, point_uv, type_emb] — the exact
         #     layout every twist-era (gen-3/4/5) hint-on checkpoint was
         #     trained with; do not reorder.
         #   3D path (gen-6): [features, type_emb, point_3d_pred] — the point
@@ -401,7 +401,7 @@ class CRIS(nn.Module):
             point_3d_pred = self.point_3d_head(vae_condition)
             vae_condition = torch.cat([vae_condition, point_3d_pred], dim=1)
         else:
-            vae_condition = torch.cat([vae_condition, coords_hat], dim=1)
+            vae_condition = torch.cat([vae_condition, point_uv], dim=1)
             if type_emb is not None:
                 vae_condition = torch.cat([vae_condition, type_emb], dim=1)
 
@@ -471,7 +471,7 @@ class CRIS(nn.Module):
         return ModelOutputs(
             mask_logits=mask_pred,
             point_logits=point_pred,
-            coords_hat=coords_hat,
+            point_uv=point_uv,
             motion_pred=motion_pred,
             motion_type_logits=motion_type_logits,
             trajectory_pred=trajectory_pred,

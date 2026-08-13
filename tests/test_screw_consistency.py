@@ -19,13 +19,13 @@ from model.targets import StepTargets, unpack_batch
 
 # --- helpers -------------------------------------------------------------
 
-def make_outputs(twist_pred, trajectory_pred=None, coords_hat=None):
+def make_outputs(twist_pred, trajectory_pred=None, point_uv=None):
     b = twist_pred.shape[0]
     dummy_map = torch.zeros(b, 1, 4, 4)
     return ModelOutputs(
         mask_logits=dummy_map,
         point_logits=dummy_map,
-        coords_hat=coords_hat if coords_hat is not None else torch.zeros(b, 2),
+        point_uv=point_uv if point_uv is not None else torch.zeros(b, 2),
         motion_pred=torch.zeros(b, 3),
         motion_type_logits=torch.zeros(b, 2),
         trajectory_pred=trajectory_pred,
@@ -119,10 +119,10 @@ def make_self_consistency_case(twist_pred):
     K = torch.tensor([[[2.0, 0.0, 1.0], [0.0, 2.0, 1.0], [0.0, 0.0, 1.0]]])
     img_size = torch.tensor([[2.0, 2.0]])
     depth = torch.full((1, 1, 8, 8), 2.0)  # constant input depth: z = 2
-    coords_hat = torch.tensor([[0.5, 0.5]])  # projects/backprojects to ELEMENT
+    point_uv = torch.tensor([[0.5, 0.5]])  # projects/backprojects to ELEMENT
     arc = arc_about_axis(AXIS, HINGE, ELEMENT, ANGLES)
     trajectory_pred = (arc - arc[0:1]).unsqueeze(0)  # relative, like the head
-    outputs = make_outputs(twist_pred, trajectory_pred, coords_hat)
+    outputs = make_outputs(twist_pred, trajectory_pred, point_uv)
     targets = StepTargets(
         motion=AXIS.unsqueeze(0),
         motion_type=ROT,
@@ -174,7 +174,7 @@ def test_noop_without_twist_or_trajectory():
     out_no_twist = ModelOutputs(
         mask_logits=torch.zeros(1, 1, 4, 4),
         point_logits=torch.zeros(1, 1, 4, 4),
-        coords_hat=torch.zeros(1, 2),
+        point_uv=torch.zeros(1, 2),
         motion_pred=torch.zeros(1, 3),
         motion_type_logits=torch.zeros(1, 2),
     )

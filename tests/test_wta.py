@@ -41,7 +41,7 @@ def make_outputs(twist_pred=None, trajectory_pred=None, twist_hyps=None,
     return ModelOutputs(
         mask_logits=dummy_map,
         point_logits=dummy_map,
-        coords_hat=torch.zeros(b, 2),
+        point_uv=torch.zeros(b, 2),
         twist_pred=twist_pred,
         trajectory_pred=trajectory_pred,
         twist_hyps=twist_hyps,
@@ -248,9 +248,9 @@ def consistency_case():
         twist_hyps=hyps, trajectory_hyps=traj_hyps,
         twist_logits=torch.zeros(1, 2),
     )
-    # coords_hat backprojecting to ~P0: u = x/z etc. with the toy intrinsics
-    out.coords_hat[0, 0] = (2.0 * P0[0] / P0[2] + 1.0) / 2.0
-    out.coords_hat[0, 1] = (2.0 * P0[1] / P0[2] + 1.0) / 2.0
+    # point_uv backprojecting to ~P0: u = x/z etc. with the toy intrinsics
+    out.point_uv[0, 0] = (2.0 * P0[0] / P0[2] + 1.0) / 2.0
+    out.point_uv[0, 1] = (2.0 * P0[1] / P0[2] + 1.0) / 2.0
     return out, tg, depth
 
 

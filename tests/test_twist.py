@@ -33,7 +33,7 @@ def make_outputs(twist_pred):
     return ModelOutputs(
         mask_logits=dummy_map,
         point_logits=dummy_map,
-        coords_hat=torch.zeros(b, 2),
+        point_uv=torch.zeros(b, 2),
         motion_pred=torch.zeros(b, 3),
         motion_type_logits=torch.zeros(b, 2),
         twist_pred=twist_pred,

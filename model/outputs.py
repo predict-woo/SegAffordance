@@ -27,7 +27,7 @@ class ModelOutputs:
     point_logits: Optional[torch.Tensor] = None
     #: (B, 2) soft-argmax of point_logits, normalised to [0, 1]. None when
     #: point_logits is None.
-    coords_hat: Optional[torch.Tensor] = None
+    point_uv: Optional[torch.Tensor] = None
     #: (B, 3) motion axis, unnormalised and sign-agnostic. None when the
     #: axis head is off (`use_motion_head: false`, twist arms) — consumers
     #: fall back to the twist's decoded direction.
@@ -45,12 +45,12 @@ class ModelOutputs:
     #: own first point. The hand/contact path — a different quantity from
     #: `trajectory_pred`. None unless `use_2d_trajectory_head`.
     trajectory_2d_pred: Optional[torch.Tensor] = None
-    #: (B,) metric depth of the 3D joint origin. Combined with `coords_hat` and
+    #: (B,) metric depth of the 3D joint origin. Combined with `point_uv` and
     #: the intrinsics this gives the 3D origin the model otherwise never
     #: predicts. None unless `predict_origin_depth`.
     origin_depth: Optional[torch.Tensor] = None
     #: (B, 3) absolute 3D interaction point, camera frame, metres — the
-    #: split-arm replacement for point_logits/coords_hat
+    #: split-arm replacement for point_logits/point_uv
     #: (ModelParams.point_prediction_3d). None on the classical 2D path.
     point_3d_pred: Optional[torch.Tensor] = None
     #: (B, 3) absolute 3D joint origin, camera frame, metres — supervised

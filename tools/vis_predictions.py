@@ -131,7 +131,7 @@ def main():
             )
         mask_logits = out.mask_logits
         point_logits = out.point_logits
-        coords_hat = out.coords_hat
+        point_uv = out.point_uv
         motion_pred = out.motion_pred
         type_logits = out.motion_type_logits
 
@@ -167,7 +167,7 @@ def main():
         gt_panel = put_label(gt_panel, f"GT {type_names[gt_type]} | {desc[:44]}")
 
         pred_panel = overlay_mask(img_bgr, mask_up.numpy(), (0, 80, 255))
-        ppx, ppy = int(coords_hat[0, 0] * W), int(coords_hat[0, 1] * H)
+        ppx, ppy = int(point_uv[0, 0] * W), int(point_uv[0, 1] * H)
         pred_panel = draw_point_axis(pred_panel, ppx, ppy, axis_pred, (255, 200, 0))
         pred_panel = put_label(
             pred_panel,

@@ -19,15 +19,15 @@ def make_case(rel_traj, z0=1.5, coords=(0.5, 0.5)):
     K = torch.tensor([[100.0, 0.0, 50.0], [0.0, 100.0, 50.0], [0.0, 0.0, 1.0]]).expand(B, 3, 3)
     img_size = torch.tensor([[100.0, 100.0]]).expand(B, 2)
     K_norm = normalized_intrinsics(K, img_size)
-    coords_hat = torch.tensor([list(coords)]).expand(B, 2)
+    point_uv = torch.tensor([list(coords)]).expand(B, 2)
     depth = torch.full((B, 1, 8, 8), z0)
-    anchor = backproject_points(K_norm, coords_hat, torch.full((B,), z0))
+    anchor = backproject_points(K_norm, point_uv, torch.full((B,), z0))
     traj_abs = anchor.unsqueeze(1) + rel_traj
     track = project_points(K_norm, traj_abs)
 
     dummy = torch.zeros(B, 1, 4, 4)
     outputs = ModelOutputs(
-        mask_logits=dummy, point_logits=dummy, coords_hat=coords_hat,
+        mask_logits=dummy, point_logits=dummy, point_uv=point_uv,
         motion_pred=torch.zeros(B, 3), motion_type_logits=None,
         trajectory_pred=rel_traj,
     )

@@ -90,7 +90,7 @@ def main():
         twist = twist_from_gt(motion_gt[None], type_gt[None], origin_3d[None])
 
         # anchor: GT interaction point lifted with the input depth map — the
-        # same conversion the prediction-side losses apply to coords_hat
+        # same conversion the prediction-side losses apply to point_uv
         K_norm = normalized_intrinsics(K[None].float(), img_size[None].float())
         grid = (point_gt[None] * 2.0 - 1.0).view(1, 1, 1, 2)
         z = F.grid_sample(depth_t[None].float(), grid, align_corners=False).view(1)

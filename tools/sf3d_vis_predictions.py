@@ -7,8 +7,8 @@ composite JPEG per sample:
 
 GT panel: mask (green), element point, projected GT trajectory (cyan; a
 note replaces it when no GT point is valid in this frame).
-Pred panels: predicted mask (red), predicted point (coords_hat), and three
-curves anchored exactly the way the losses anchor them (coords_hat lifted
+Pred panels: predicted mask (red), predicted point (point_uv), and three
+curves anchored exactly the way the losses anchor them (point_uv lifted
 with the INPUT depth — no GT):
   * magenta — the 3D trajectory head's swept path, projected into the frame
   * orange  — the 2D track head's path (2d_twist arm only)
@@ -18,7 +18,7 @@ with the INPUT depth — no GT):
 plus text: classifier type, type-from-|omega|, |omega|.
 
 Split-arm (gen-6, point_prediction_3d) checkpoints render the same panels
-with the predicted 3D point as marker/anchor (no coords_hat, no depth
+with the predicted 3D point as marker/anchor (no point_uv, no depth
 lifting), the axis-head prediction as the red axis (origin_pred +
 motion_pred, typed by the classifier), and no twist orbit / |w| readout.
 
@@ -261,7 +261,7 @@ def main():
                 pm = torch.sigmoid(out.mask_logits)[0, 0].cpu()
                 pm = F.interpolate(pm[None, None], size=(H, W), mode="bilinear")[0, 0].numpy()
                 p = overlay_mask(p, (pm > 0.5).astype(np.float32), (0, 0, 230))
-            # Prediction-side point + 3D anchor. Twist-era arms: coords_hat
+            # Prediction-side point + 3D anchor. Twist-era arms: point_uv
             # is the marker, lifted with the INPUT depth into the anchor
             # (exactly as the screw self/track terms anchor it). Split arm
             # (gen-6, point_prediction_3d): the predicted 3D point IS the
@@ -273,7 +273,7 @@ def main():
                 anchor_ok = anchor[0, 2].item() > 0.05
                 coords = project_points(K_norm, anchor[:, None])[0, 0].clamp(-2, 3)
             else:
-                coords = out.coords_hat[0].cpu()
+                coords = out.point_uv[0].cpu()
                 grid = (coords[None] * 2.0 - 1.0).view(1, 1, 1, 2)
                 z = F.grid_sample(depth_t[None].float(), grid, align_corners=False).view(1)
                 anchor = backproject_points(K_norm, coords[None].float(), z)
@@ -299,7 +299,7 @@ def main():
                     p = draw_polyline_norm(p, tuv, tv, (255, 0, 255))
 
             # 2D track head (relative to its own first point, anchored at
-            # coords_hat — the same element point the track starts from).
+            # point_uv — the same element point the track starts from).
             if out.trajectory_2d_pred is not None and not args.traj_only:
                 track = (coords[None] + out.trajectory_2d_pred[0].cpu().float()).numpy()
                 p = draw_polyline_norm(p, track, np.ones(len(track), bool), (0, 140, 255))

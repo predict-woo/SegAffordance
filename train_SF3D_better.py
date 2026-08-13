@@ -304,7 +304,7 @@ class SF3DTrainingModule(OPDRealTrainingModule):
             outputs = self(img, depth, tokenized_words, None, None, None)
         mask_pred_logits = outputs.mask_logits
         point_pred_logits = outputs.point_logits
-        coords_hat = outputs.coords_hat
+        point_uv = outputs.point_uv
         motion_pred = outputs.motion_pred
         motion_type_logits = outputs.motion_type_logits
         trajectory_pred = outputs.trajectory_pred
@@ -333,17 +333,17 @@ class SF3DTrainingModule(OPDRealTrainingModule):
             iou_val = self._mask_iou(pred_mask_binary, mask_gt[i]).item()
             self._test_ious.append(iou_val)
 
-            if coords_hat is not None:
-                point_err = torch.linalg.norm(coords_hat[i] - point_gt_norm[i]).item()
+            if point_uv is not None:
+                point_err = torch.linalg.norm(point_uv[i] - point_gt_norm[i]).item()
                 self._test_point_errors.append(point_err)
 
             # --- 3D Origin error calculation for rotational motions ---
             if (
-                coords_hat is not None
+                point_uv is not None
                 and camera_params_in_batch
                 and motion_type_gt[i] == 1
             ):  # Rotational
-                pred_origin_norm = coords_hat[i].detach()
+                pred_origin_norm = point_uv[i].detach()
                 depth_map = depth[i].squeeze()
                 H_img, W_img = depth_map.shape
                 u, v = int(pred_origin_norm[0] * W_img), int(

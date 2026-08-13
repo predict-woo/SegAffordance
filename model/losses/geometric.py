@@ -68,7 +68,7 @@ class NoGeometricLoss(GeometricConsistencyLoss):
     """Contributes nothing. Used on OPD and as the ablation arm."""
 
     def forward(self, outputs, targets, depth=None) -> LossTerms:
-        return self._zero(outputs.coords_hat), {}
+        return self._zero(outputs.point_uv), {}
 
 
 class PredPredGeometricLoss(GeometricConsistencyLoss):
@@ -105,7 +105,7 @@ class PredPredGeometricLoss(GeometricConsistencyLoss):
 
     def forward(self, outputs, targets, depth=None) -> LossTerms:
         if targets.trajectory is None or outputs.motion_pred is None:
-            return self._zero(outputs.coords_hat), {}
+            return self._zero(outputs.point_uv), {}
 
         # fp32 throughout: runs train at precision 16, and R is a ratio of
         # sums of squares that should not be formed under autocast.
@@ -127,7 +127,7 @@ class PredPredGeometricLoss(GeometricConsistencyLoss):
         if bool(valid.any()):
             term = per_sample[valid].mean()
         else:
-            term = self._zero(outputs.coords_hat)
+            term = self._zero(outputs.point_uv)
 
         # The key is emitted whenever the dataset has trajectories at all, so
         # the CSV logger sees a stable set of columns across steps.
@@ -216,7 +216,7 @@ def normalized_intrinsics(K: torch.Tensor, img_size: torch.Tensor) -> torch.Tens
     """K at original resolution -> K projecting camera 3D into [0, 1] coords.
 
     The dataset stores intrinsics for the ORIGINAL frame while every 2D
-    quantity in the model (``coords_hat``, the 2D tracks) is normalised to
+    quantity in the model (``point_uv``, the 2D tracks) is normalised to
     [0, 1]. Folding the resolution into K once keeps the loss independent of
     whatever size the images were resized to. ``img_size`` is (width, height),
     matching ``datasets/scenefun3d.py:235``.
@@ -344,9 +344,9 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
             or targets.anchor_depth is None
             or outputs.origin_depth is None
         ):
-            return self._zero(outputs.coords_hat), {}
+            return self._zero(outputs.point_uv), {}
 
-        device = outputs.coords_hat.device
+        device = outputs.point_uv.device
         # Same fp16 overflow hazard as ScrewConsistencyLoss: projected curve
         # points near the camera plane reach ~1e6 and overflow under autocast.
         with torch.autocast(device_type=device.type, enabled=False):
@@ -376,7 +376,7 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
 
         line_dists = self._prismatic_residual(K_norm, track, start_3d, axis)
         arc_dists, radius, arc_visible = self._revolute_residual(
-            K_norm, track, start_3d, axis, outputs.coords_hat.float(),
+            K_norm, track, start_3d, axis, outputs.point_uv.float(),
             outputs.origin_depth.float(),
         )
         denom = mask_count.clamp(min=1.0)
@@ -403,7 +403,7 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
         term = (
             per_sample[valid].mean()
             if bool(valid.any())
-            else self._zero(outputs.coords_hat)
+            else self._zero(outputs.point_uv)
         )
         return self.weight * term, {"L_geo_projected": term}
 
@@ -429,12 +429,12 @@ class ProjectedGeometricLoss(GeometricConsistencyLoss):
         degenerate = (length.squeeze(-1) < 1e-8).unsqueeze(1)
         return torch.where(degenerate, rel.norm(dim=-1), cross.abs())
 
-    def _revolute_residual(self, K_norm, track, start_3d, axis, coords_hat, origin_depth):
+    def _revolute_residual(self, K_norm, track, start_3d, axis, point_uv, origin_depth):
         """Per-point distance to the projected circle.
 
         Returns ((B, N) distances, (B,) radius, (B,) any-visible-segment).
         """
-        centre = backproject_points(K_norm, coords_hat, origin_depth)
+        centre = backproject_points(K_norm, point_uv, origin_depth)
         offset = start_3d - centre
         parallel = (offset * axis).sum(-1, keepdim=True) * axis
         radius = (offset - parallel).norm(dim=-1)
@@ -485,7 +485,7 @@ class CrossGTGeometricLoss(GeometricConsistencyLoss):
 
     def forward(self, outputs, targets, depth=None) -> LossTerms:
         if targets.trajectory is None or targets.motion_origin_3d is None:
-            return self._zero(outputs.coords_hat), {}
+            return self._zero(outputs.point_uv), {}
 
         device = outputs.trajectory_pred.device
         trajectory_gt = targets.trajectory.to(device)
@@ -589,7 +589,7 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
         the PREDICTED interaction point lifted to 3D with the input depth map
         (an observation the model receives at inference — not teacher
         forcing; no GT enters this term). This is what makes the heads
-        self-consistent at inference, and it gives coords_hat a geometric
+        self-consistent at inference, and it gives point_uv a geometric
         job: the twist's orbit must pass through the element point it marks.
 
     ``L_screw_track``  (needs targets.trajectory_2d + intrinsics + depth)
@@ -652,7 +652,7 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
 
     def forward(self, outputs, targets, depth=None, hyp_weights=None) -> LossTerms:
         if outputs.twist_pred is None:
-            return self._zero(outputs.coords_hat), {}
+            return self._zero(outputs.point_uv), {}
 
         device = outputs.twist_pred.device
         # fp32 is load-bearing, not hygiene: orbit points near the camera
@@ -682,7 +682,7 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
             hyp_weights = twists.new_full((B, K), 1.0 / K)
         hyp_weights = hyp_weights.detach().float()
 
-        total = self._zero(outputs.coords_hat)
+        total = self._zero(outputs.point_uv)
         terms: Dict[str, torch.Tensor] = {}
 
         if targets.trajectory is not None:
@@ -704,7 +704,7 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
 
         # The prediction-side anchor both remaining terms share: the model's
         # own 2D point, lifted with a differentiable lookup of the INPUT depth
-        # map. coords_hat is (x, y) in [0, 1]; grid_sample wants [-1, 1]. A
+        # map. point_uv is (x, y) in [0, 1]; grid_sample wants [-1, 1]. A
         # hole in the depth map gives z ~ 0 and a meaningless anchor, so such
         # samples are masked out of both terms.
         anchor = anchor_ok = K_norm = None
@@ -716,7 +716,7 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
             K_norm = normalized_intrinsics(
                 targets.camera_intrinsic.to(device), targets.img_size.to(device)
             )
-            coords = outputs.coords_hat.float()
+            coords = outputs.point_uv.float()
             grid = (coords * 2.0 - 1.0).view(-1, 1, 1, 2)
             z = F.grid_sample(
                 depth.to(device).float(), grid, align_corners=False
@@ -944,11 +944,11 @@ class TrajectoryProjectionLoss(nn.Module):
             or targets.camera_intrinsic is None
             or targets.img_size is None
             or depth is None
-            # This loss lifts coords_hat to 3D, so the 3D point mode
-            # (coords_hat None) cannot run it — no-op there as well.
-            or outputs.coords_hat is None
+            # This loss lifts point_uv to 3D, so the 3D point mode
+            # (point_uv None) cannot run it — no-op there as well.
+            or outputs.point_uv is None
         ):
-            # mask_logits, not coords_hat: always present in every mode.
+            # mask_logits, not point_uv: always present in every mode.
             return self._zero(outputs.mask_logits), {}
         device = outputs.trajectory_pred.device
         device_type = "cuda" if outputs.trajectory_pred.is_cuda else "cpu"
@@ -956,7 +956,7 @@ class TrajectoryProjectionLoss(nn.Module):
             K_norm = normalized_intrinsics(
                 targets.camera_intrinsic.to(device), targets.img_size.to(device)
             )
-            coords = outputs.coords_hat.float()
+            coords = outputs.point_uv.float()
             grid = (coords * 2.0 - 1.0).view(-1, 1, 1, 2)
             z = F.grid_sample(
                 depth.to(device).float(), grid, align_corners=False
@@ -979,7 +979,7 @@ class TrajectoryProjectionLoss(nn.Module):
 
             count = mask.sum()
             if count < 1.0:
-                return self._zero(outputs.coords_hat), {}
+                return self._zero(outputs.point_uv), {}
             sq = (proj - track).pow(2).sum(-1)
             term = (sq * mask).sum() / count
         return self.weight * term, {"L_traj_proj": term}

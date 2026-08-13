@@ -97,7 +97,7 @@ def make(track_2d, axis, p_revolute, anchor_depth, origin_xy=None, origin_depth=
     outputs = ModelOutputs(
         mask_logits=dummy,
         point_logits=dummy,
-        coords_hat=origin_xy,
+        point_uv=origin_xy,
         motion_pred=axis.unsqueeze(0) if axis.dim() == 1 else axis,
         motion_type_logits=type_logits,
         trajectory_pred=torch.zeros(b, N_POINTS, 3),

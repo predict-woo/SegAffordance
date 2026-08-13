@@ -424,7 +424,7 @@ class TwistMLP(nn.Module):
 class OriginDepthHead(nn.Module):
     """Metric depth (metres) of the 3D joint origin.
 
-    Combined with ``coords_hat`` and the intrinsics this yields the 3D origin
+    Combined with ``point_uv`` and the intrinsics this yields the 3D origin
     the model otherwise never predicts — ``motion_origin_3d`` has always been
     ground-truth-only, which is why the cross-GT geometric loss teacher-forces
     it.

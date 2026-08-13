@@ -158,7 +158,7 @@ class OPDRealTrainingModule(pl.LightningModule):
         )
         mask_pred_logits = outputs.mask_logits
         point_pred_logits = outputs.point_logits
-        coords_hat = outputs.coords_hat
+        point_uv = outputs.point_uv
         motion_pred = outputs.motion_pred
         motion_type_logits = outputs.motion_type_logits
         mu, log_var = outputs.mu, outputs.log_var
@@ -180,7 +180,7 @@ class OPDRealTrainingModule(pl.LightningModule):
             )
             L_point_map = self.point_map_loss_fn(point_pred_logits, point_gt_heatmap)
             L_coord = self.coord_loss_fn(
-                coords_hat, point_gt_norm.to(coords_hat.device)
+                point_uv, point_gt_norm.to(point_uv.device)
             )
         else:
             # 3D point mode: the heatmap channel does not exist; the direct
@@ -610,7 +610,7 @@ class OPDRealTrainingModule(pl.LightningModule):
             outputs = self(img, depth, tokenized_words, mask_gt, point_gt_norm, motion_gt)
         mask_pred_logits = outputs.mask_logits
         point_pred_logits = outputs.point_logits
-        coords_hat = outputs.coords_hat
+        point_uv = outputs.point_uv
         motion_pred = outputs.motion_pred
         motion_type_logits = outputs.motion_type_logits
         trajectory_pred = outputs.trajectory_pred
@@ -712,7 +712,7 @@ class OPDRealTrainingModule(pl.LightningModule):
             outputs = self(img, depth, tokenized_words, None, None, None)
         mask_pred_logits = outputs.mask_logits
         point_pred_logits = outputs.point_logits
-        coords_hat = outputs.coords_hat
+        point_uv = outputs.point_uv
         motion_pred = outputs.motion_pred
         motion_type_logits = outputs.motion_type_logits
 
@@ -745,7 +745,7 @@ class OPDRealTrainingModule(pl.LightningModule):
             self._test_ious.append(iou_val)
 
             # Point error
-            point_err = torch.linalg.norm(coords_hat[i] - point_gt_norm[i]).item()
+            point_err = torch.linalg.norm(point_uv[i] - point_gt_norm[i]).item()
             self._test_point_errors.append(point_err)
             
             # Match gating
@@ -774,7 +774,7 @@ class OPDRealTrainingModule(pl.LightningModule):
                 elif motion_type_gt[i] == 1 and camera_params_in_batch and origin_norm_diagonals is not None:
                     self._test_num_rotational_matched += 1
                     # 1. Get predicted 2D origin and depth map
-                    pred_origin_norm = coords_hat[i].detach() # (x, y) in [0, 1]
+                    pred_origin_norm = point_uv[i].detach() # (x, y) in [0, 1]
                     depth_map = depth[i].squeeze() # (H, W)
                     H, W = depth_map.shape
 

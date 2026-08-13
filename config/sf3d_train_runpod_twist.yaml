@@ -16,7 +16,7 @@
 #     types) instead of the motion origin, which for rotation is the hinge:
 #     off the element 63% of the time and border-clamped when off-screen. The
 #     twist head carries the hinge line, so nothing needs a hinge POINT.
-#     NOTE this changes what coords_hat means, so test/mean_point_error and
+#     NOTE this changes what point_uv means, so test/mean_point_error and
 #     test/mean_origin_error_m are not comparable with motion_origin runs;
 #     the twist metrics (test/twist_*) are the ones to read.
 #
@@ -54,7 +54,7 @@ model:
     # its output map — pure rotations/translations only, no helices.
     twist_pitch_free: true
     # Heads emit per-step deltas integrated by cumsum (point 0 == 0 exactly;
-    # coords_hat anchors the curve). Added 2026-08-04 after the point-cloud
+    # point_uv anchors the curve). Added 2026-08-04 after the point-cloud
     # diagnosis (viz/20260803_sf3d_twist_traj_points).
     trajectory_delta_cumsum: true
     # gen-4 (2026-08-11): K = 4 winner-takes-all articulation bundles — each

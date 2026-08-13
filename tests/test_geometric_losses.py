@@ -41,7 +41,7 @@ def make_outputs(motion_pred, trajectory_pred, p_revolute):
     return ModelOutputs(
         mask_logits=dummy_map,
         point_logits=dummy_map,
-        coords_hat=torch.zeros(b, 2),
+        point_uv=torch.zeros(b, 2),
         motion_pred=motion_pred,
         motion_type_logits=type_logits,
         trajectory_pred=trajectory_pred,
@@ -419,7 +419,7 @@ def test_cross_gt_reproduces_the_pre_refactor_numbers():
     out = ModelOutputs(
         mask_logits=torch.zeros(b, 1, 4, 4),
         point_logits=torch.zeros(b, 1, 4, 4),
-        coords_hat=torch.zeros(b, 2),
+        point_uv=torch.zeros(b, 2),
         motion_pred=motion_pred,
         motion_type_logits=torch.zeros(b, 2),
         trajectory_pred=traj_pred,

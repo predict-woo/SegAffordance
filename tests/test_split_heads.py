@@ -26,7 +26,7 @@ def test_model_outputs_new_fields_default_none():
     assert o.point_3d_pred is None
     assert o.origin_pred is None
     assert o.point_logits is None
-    assert o.coords_hat is None
+    assert o.point_uv is None
 
 
 # ---- segmenter wiring (Task 2) --------------------------------------------
@@ -113,7 +113,7 @@ def test_3d_mode_output_shapes(split_model):
     img, depth, word, mask = _inputs()
     with torch.no_grad():
         out = split_model(img, depth, word, mask, None, None)
-    assert out.point_logits is None and out.coords_hat is None
+    assert out.point_logits is None and out.point_uv is None
     assert out.point_3d_pred.shape == (2, 3)
     assert out.origin_pred.shape == (2, 3)
     assert out.motion_pred.shape == (2, 3)
@@ -190,16 +190,16 @@ def test_classical_2d_mode_unchanged():
     img, depth, word, mask = _inputs()
     with torch.no_grad():
         out = m(img, depth, word, mask, None, None)
-    assert out.point_logits is not None and out.coords_hat.shape == (2, 2)
+    assert out.point_logits is not None and out.point_uv.shape == (2, 2)
     assert out.point_3d_pred is None and out.origin_pred is None
 
 
 def test_hint_on_2d_condition_keeps_classical_column_order():
     # Checkpoint-compatibility pin: every gen-3/4/5 twist config sets
     # use_motion_type_input, and those checkpoints were trained with the
-    # condition laid out [features, coords_hat, type_emb]. Loading them
+    # condition laid out [features, point_uv, type_emb]. Loading them
     # requires the type embedding to occupy the LAST columns, with
-    # coords_hat immediately before it — this test freezes that layout.
+    # point_uv immediately before it — this test freezes that layout.
     emb_dim = 16
     m = _make_cris(use_motion_type_input=True, motion_type_embedding_dim=emb_dim)
     m.eval()
@@ -221,8 +221,8 @@ def test_hint_on_2d_condition_keeps_classical_column_order():
     cond = captured[0]
     # Type embedding fills the LAST emb_dim columns...
     assert torch.all(cond[:, -emb_dim:] == marker)
-    # ...and coords_hat sits immediately before it (classical order).
-    assert torch.allclose(cond[:, -emb_dim - 2:-emb_dim], out.coords_hat)
+    # ...and point_uv sits immediately before it (classical order).
+    assert torch.allclose(cond[:, -emb_dim - 2:-emb_dim], out.point_uv)
 
 
 # ---- split losses (Task 3) -------------------------------------------------

@@ -225,7 +225,7 @@ class TwistLoss(nn.Module):
             or targets.motion_type is None
             or targets.motion_origin_3d is None
         ):
-            # mask_logits, not coords_hat: the 3D point mode has no coords_hat.
+            # mask_logits, not point_uv: the 3D point mode has no point_uv.
             zero = torch.zeros((), device=outputs.mask_logits.device, dtype=torch.float32)
             return zero, {}, self._no_aux()
 

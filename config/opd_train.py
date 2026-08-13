@@ -70,9 +70,9 @@ class ModelParams:
     # gen-6 split arm (docs/superpowers/specs/2026-08-13-split-heads-gen6-design.md).
     # Predict the interaction point DIRECTLY as an absolute 3D camera-frame
     # point (GT trajectory_3d[0]) instead of the 2D heatmap + soft-argmax:
-    # the Projector emits the mask channel only, point_logits/coords_hat are
+    # the Projector emits the mask channel only, point_logits/point_uv are
     # None, and the articulation heads' condition is extended with the
-    # predicted 3D point instead of coords_hat. SF3D-only (needs 3D GT).
+    # predicted 3D point instead of point_uv. SF3D-only (needs 3D GT).
     point_prediction_3d: bool = False
     # Predict the revolute joint origin as an absolute 3D point, supervised
     # toward q* — the GT-axis point perpendicular to the interaction point.
