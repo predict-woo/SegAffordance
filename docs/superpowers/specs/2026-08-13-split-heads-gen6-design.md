@@ -81,9 +81,19 @@ relative-MSE, DiceBCE mask loss and their 0.5 weights.
   c     = q_hat - p_hat        # pred axis point, relative frame
   L_line   = mean_i || d_i x dhat ||^2                    # prismatic
   r_hat    = dist(0, axis line (c, dhat))
-  L_circle = mean_i ( dist(d_i, axis line) - r_hat )^2    # revolute
+  L_circle = mean_i [ ( dist(d_i, axis line) - r_hat )^2  # radial error
+                    + ( d_i . dhat )^2 ]                  # along-axis drift
   L_pp     = P(pris) * L_line + P(rev) * L_circle
   ```
+
+  AMENDED during implementation (Task 4): radius constancy alone does
+  not pin a circle — a straight line PARALLEL to the axis also has
+  constant axis-distance and scored 0 under P(rev)=1. The along-axis
+  drift term completes the squared point-to-circle distance (radial +
+  axial decomposition). It is anchored at the trajectory's OWN first
+  point, not the hinge height, so it does not reintroduce the CrossGT
+  plane-term bug, and it never reads the axis point — origin gauge
+  freedom along dhat is preserved.
 
   The type gate is the SOFT predicted probability (no GT type
   either): gradient into the geometry scales with the type head's

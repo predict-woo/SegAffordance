@@ -152,7 +152,7 @@ flowchart TB
   </tr>
   <tr class="dev">
     <td><code>L_pp</code></td>
-    <td>$P_{pris}\cdot\overline{\lVert d_i \times \hat{d}\rVert^2} \;+\; P_{rev}\cdot\overline{(\,\mathrm{dist}(d_i, \hat{q}\hat{d}\text{-line}) - \hat{r}\,)^2}$</td>
+    <td>$P_{pris}\cdot\overline{\lVert d_i \times \hat{d}\rVert^2} \;+\; P_{rev}\cdot\overline{\big[(\,\mathrm{dist}(d_i, \hat{q}\hat{d}\text{-line}) - \hat{r}\,)^2 + (d_i\cdot\hat{d})^2\big]}$ <br><small>(radial + along-axis drift = squared point-to-circle distance; drift anchored at the curve's own first point)</small></td>
     <td>predicted trajectory &harr; predicted axis line &harr; predicted type — <b>no GT anywhere</b> (soft type gate; degenerate pred curves masked)</td><td>0.5</td>
     <td><span class="tag d">DEVIATION</span> replaces cross-GT teacher forcing; classical residual <i>forms</i>, all-predicted inputs — only possible now that the origin is predicted</td>
   </tr>
