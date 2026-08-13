@@ -12,6 +12,7 @@ from pytorch_lightning.loggers import WandbLogger
 from config.opd_train import Config, LossParams, ModelParams, OptimizerParams
 from datasets.scenefun3d_datamodule import SF3DDataModule
 from model.losses import decode_twist, point_to_line_distance
+from model.losses.split import perpendicular_foot
 from model.segmenter import CRIS
 from train_OPDReal_better import OPDRealTrainingModule
 from utils.tools import create_composite_visualization, make_gaussian_map
@@ -53,6 +54,12 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         # canonical — the preprocessor derives the trajectory from it).
         self._test_twist_dir_correct_all = 0
         self._test_traj_dir_cos = []
+
+        # Split-arm (gen-6) metrics; empty when the arm lacks the heads.
+        self._test_point3d_errors = []        # ||p_hat - traj_gt[0]||, all rows
+        self._test_origin_err_m = []          # ||q_hat - q*||, revolute rows
+        self._test_origin_line_err_m = []     # dist(q_hat, GT axis line)
+        self._test_radius_err_m = []          # |r_pred - r_gt|, revolute rows
 
     @staticmethod
     def _save_sf3d_test_debug_visualizations(
@@ -318,11 +325,16 @@ class SF3DTrainingModule(OPDRealTrainingModule):
             iou_val = self._mask_iou(pred_mask_binary, mask_gt[i]).item()
             self._test_ious.append(iou_val)
 
-            point_err = torch.linalg.norm(coords_hat[i] - point_gt_norm[i]).item()
-            self._test_point_errors.append(point_err)
+            if coords_hat is not None:
+                point_err = torch.linalg.norm(coords_hat[i] - point_gt_norm[i]).item()
+                self._test_point_errors.append(point_err)
 
             # --- 3D Origin error calculation for rotational motions ---
-            if camera_params_in_batch and motion_type_gt[i] == 1:  # Rotational
+            if (
+                coords_hat is not None
+                and camera_params_in_batch
+                and motion_type_gt[i] == 1
+            ):  # Rotational
                 pred_origin_norm = coords_hat[i].detach()
                 depth_map = depth[i].squeeze()
                 H_img, W_img = depth_map.shape
@@ -365,6 +377,42 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                         pred_origin_3d_m - gt_origin_3d
                     ).item()
                     self._test_origin_errors_rotational_all.append(origin_error)
+
+            # --- Split-arm (gen-6) 3D metrics ---
+            if outputs.point_3d_pred is not None and trajectory_gt is not None:
+                p_hat = outputs.point_3d_pred[i].detach().float()
+                p_gt = trajectory_gt[i, 0].to(p_hat.device).float()
+                self._test_point3d_errors.append(
+                    torch.linalg.norm(p_hat - p_gt).item()
+                )
+            if (
+                outputs.origin_pred is not None
+                and motion_type_gt[i] == 1
+                and motion_origin_3d_gt is not None
+                and trajectory_gt is not None
+            ):
+                q_hat = outputs.origin_pred[i].detach().float()
+                o_gt = motion_origin_3d_gt[i].to(q_hat.device).float()
+                d_gt = F.normalize(motion_gt[i].to(q_hat.device).float(), dim=0)
+                p_gt = trajectory_gt[i, 0].to(q_hat.device).float()
+                q_star = perpendicular_foot(o_gt[None], d_gt[None], p_gt[None])[0]
+                self._test_origin_err_m.append(
+                    torch.linalg.norm(q_hat - q_star).item()
+                )
+                self._test_origin_line_err_m.append(
+                    point_to_line_distance(q_hat[None], o_gt[None], d_gt[None])[0].item()
+                )
+                if outputs.motion_pred is not None:
+                    d_hat = F.normalize(
+                        outputs.motion_pred[i].detach().float(), dim=0
+                    )
+                    r_pred = point_to_line_distance(
+                        p_gt[None], q_hat[None], d_hat[None]
+                    )[0].item()
+                    r_gt = point_to_line_distance(
+                        p_gt[None], o_gt[None], d_gt[None]
+                    )[0].item()
+                    self._test_radius_err_m.append(abs(r_pred - r_gt))
 
             # --- Motion and Axis evaluation (for all samples) ---
             if motion_pred is not None:
@@ -642,6 +690,19 @@ class SF3DTrainingModule(OPDRealTrainingModule):
             self.log("test/traj_dir_cos", traj_dir_cos, logger=True, sync_dist=True)
             self.log("test/traj_dir_acc", traj_dir_acc, logger=True, sync_dist=True)
 
+        # --- Split-arm (gen-6) metrics (0.0 when the arm lacks the heads) ---
+        split_stats = {}
+        for name, values in (
+            ("test/point_err_3d_m", self._test_point3d_errors),
+            ("test/origin_err_m", self._test_origin_err_m),
+            ("test/origin_line_err_m", self._test_origin_line_err_m),
+            ("test/radius_err_m", self._test_radius_err_m),
+        ):
+            gathered = self.all_gather(torch.tensor(values, device=self.device))
+            mean = float(gathered.mean().item()) if gathered.numel() > 0 else 0.0
+            self.log(name, mean, on_epoch=True, logger=True, sync_dist=False)
+            split_stats[name] = (mean, gathered.numel())
+
         if self.trainer.is_global_zero:
             print("\n--- SF3D Test Results ---")
             print(f"Total Samples: {total_predictions}")
@@ -667,6 +728,26 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                         "Mean GT-origin -> predicted-axis-line distance "
                         f"(m, rotational): {twist_line_dist:.4f}"
                     )
+            if split_stats["test/point_err_3d_m"][1] > 0:
+                print(f"\n--- Split Heads (gen-6) ---")
+                print(
+                    f"Mean 3D Point Error (m): "
+                    f"{split_stats['test/point_err_3d_m'][0]:.4f}"
+                )
+            if split_stats["test/origin_err_m"][1] > 0:
+                print(
+                    f"Mean Origin Error vs q* (m, rotational): "
+                    f"{split_stats['test/origin_err_m'][0]:.4f}"
+                )
+                print(
+                    "Mean predicted-origin -> GT-axis-line distance "
+                    f"(m, rotational): {split_stats['test/origin_line_err_m'][0]:.4f}"
+                )
+            if split_stats["test/radius_err_m"][1] > 0:
+                print(
+                    f"Mean Radius Error (m, rotational): "
+                    f"{split_stats['test/radius_err_m'][0]:.4f}"
+                )
 
         # Reset accumulators
         self._test_ious.clear()
@@ -686,6 +767,10 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         self._test_twist_type_correct_all = 0
         self._test_twist_ma_correct_all = 0
         self._test_twist_line_dist_rotational.clear()
+        self._test_point3d_errors.clear()
+        self._test_origin_err_m.clear()
+        self._test_origin_line_err_m.clear()
+        self._test_radius_err_m.clear()
 
 
 if __name__ == "__main__":

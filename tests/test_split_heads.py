@@ -1,6 +1,7 @@
 # tests/test_split_heads.py
 from unittest import mock
 
+import numpy as np
 import pytest
 import torch
 import torch.nn as nn
@@ -378,3 +379,18 @@ def test_common_step_split_arm_finite_and_logs_new_terms():
     # 2D point losses are zero-valued on the 3D path (stable CSV columns).
     assert logged["train/L_point_map"] == 0.0
     assert logged["train/L_coord"] == 0.0
+
+
+def test_sf3d_test_step_split_arm_accumulates_3d_metrics():
+    m = _split_module()
+    m.eval()
+    m.log = lambda *a, **k: None
+    m.on_test_start()
+    with torch.no_grad():
+        m.test_step(_sf3d_batch(), 0)
+    # One revolute + one prismatic sample in the batch.
+    assert len(m._test_point3d_errors) == 2
+    assert len(m._test_origin_err_m) == 1          # revolute row only
+    assert len(m._test_origin_line_err_m) == 1
+    assert len(m._test_radius_err_m) == 1
+    assert all(np.isfinite(v) for v in m._test_point3d_errors)
