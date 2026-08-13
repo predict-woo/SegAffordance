@@ -1,6 +1,6 @@
 # Gen-7: heatmap + depth lifts for both articulation points
 
-**Status:** DESIGNED (not implemented)
+**Status:** IMPLEMENTED (2026-08-14)
 **Date:** 2026-08-14
 **Companion visual:** docs/slides/2026-08-14_gen7_structure.html (every
 decision below was made interactively on that page; it is the picture,
