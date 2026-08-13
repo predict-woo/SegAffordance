@@ -53,7 +53,7 @@ flowchart TB
   classDef loss  fill:#fdecea,stroke:#c0392b,color:#7a231a
   classDef gt    fill:#e8eef8,stroke:#23508e,color:#1d3f70,stroke-dasharray: 5 4
 
-  RGB["RGB + depth + text"]:::trunk --> TRUNK["CLIP (unfrozen) + depth-fused FPN<br/>+ transformer decoder"]:::trunk
+  RGB["RGB + depth + text"]:::trunk --> TRUNK["CLIP (FROZEN - user decision)<br/>+ depth-fused FPN + transformer decoder"]:::trunk
   TRUNK --> PROJ["Projector — THREE channels<br/>(shared, language-conditioned)"]:::newh
   PROJ --> MASK["mask logits"]:::trunk
   PROJ --> PH["point heatmap"]:::rest
@@ -92,20 +92,20 @@ projected 3D point lands on its heatmap peak" holds <b>by construction</b> — n
 <table>
   <tr><th>Term</th><th>What</th><th>Status</th></tr>
   <tr><td><code>L_mask</code></td><td>DiceBCE</td><td><span class="tag k">KEPT</span></td></tr>
-  <tr><td><code>L_point_map</code> + <code>L_coord</code></td><td>dense BCE on the point heatmap + L1 on coords_hat — the dense localization pressure gen-6 deleted</td><td><span class="tag r">RESTORED</span></td></tr>
-  <tr><td><code>L_origin_map</code> + <code>L_origin_coord</code></td><td>same pair for the origin channel, target = <b>projected $q^*$</b>; revolute rows only, loss-masked on the ~0.3% out-of-frame rows (no dataset filter, eval split unchanged)</td><td><span class="tag n">NEW</span></td></tr>
-  <tr><td><code>L_depth_p</code>, <code>L_depth_q</code></td><td>scalar regression: $\hat{z}_p$ vs GT element-point z, $\hat{z}_q$ vs $q^*_z$ (revolute only)</td><td><span class="tag n">NEW</span> replaces both 3D-point MSEs</td></tr>
+  <tr><td><code>L_point_map</code>, <code>L_origin_map</code></td><td>dense BCE on both heatmap channels (origin target = <b>projected $q^*$</b>; revolute rows only, loss-masked on the ~0.3% out-of-frame rows — no dataset filter, eval split unchanged). The spatial-shape supervision gen-6 deleted.</td><td><span class="tag r">RESTORED</span> / <span class="tag n">NEW</span></td></tr>
+  <tr><td><code>L_point_3d</code></td><td>$\lVert \mathrm{unproject}(\text{coords\_hat}, \hat{z}_p, K) - p_{gt} \rVert^2$ — <b>compose first, then one 3D loss</b>: pixel and depth errors priced jointly in meters at the object; gradients reach the heatmap through soft-argmax</td><td><span class="tag n">NEW</span> (user decision: composed, not split 2D+z)</td></tr>
+  <tr><td><code>L_origin_3d</code></td><td>$\lVert \mathrm{unproject}(\text{origin\_uv}, \hat{z}_q, K) - q^* \rVert^2$ — same composed form, revolute rows only; $q^*$ canonicalization unchanged</td><td><span class="tag n">NEW</span> (user decision)</td></tr>
   <tr><td><code>L_motion</code> (1&minus;cos), <code>L_type</code> (CE), <code>L_trajectory</code></td><td>unchanged</td><td><span class="tag k">KEPT</span></td></tr>
   <tr><td><code>L_pp</code></td><td>all-predicted consistency incl. along-axis drift term — fed the LIFTED $\hat{p}$, $\hat{q}$</td><td><span class="tag k">KEPT</span></td></tr>
 </table>
-<p class="gone">Gone from gen-6: <code>Point3DHead</code> as direct 3D regression (both uses), <code>L_point_3d</code>, <code>L_origin</code> (3D MSE form — its $q^*$ target and gauge logic survive in 2D+depth form).</p>
+<p class="gone">Gone from gen-6: <code>Point3DHead</code> as direct 3D regression (both uses) and the pooled-vector 3D MSEs — the $q^*$ target and its gauge logic survive, now reached through the heatmap+depth lift. Also gone vs gen-6: the unfrozen backbone (CLIP FROZEN again, user decision — watch item: gen-5's frozen run regressed masks to mIoU 0.090, and gen-7 leans on the mask harder than any generation; if gen-7 masks come out weak, the backbone is the first suspect).</p>
 
 <h2>Why this shape survives 2D-only pretraining</h2>
 <table>
   <tr><th>Module</th><th>3D training (SF3D)</th><th>2D pretraining (video)</th></tr>
   <tr><td>mask + point heatmap + coords</td><td>trains</td><td>trains (2D tracks, masks)</td></tr>
   <tr><td>origin heatmap</td><td>trains (projected $q^*$)</td><td>idles — no gradient, like the trajectory head</td></tr>
-  <tr><td>depth heads $\hat{z}_p$, $\hat{z}_q$</td><td>train (GT z)</td><td>idle — no depth GT needed, no depth-map lookup anywhere</td></tr>
+  <tr><td>depth heads $\hat{z}_p$, $\hat{z}_q$</td><td>train (through the composed 3D losses)</td><td>idle — no depth GT needed, no depth-map lookup anywhere</td></tr>
   <tr><td>direction / type / trajectory / $L_{pp}$</td><td>train</td><td>idle or 2D variants, as today</td></tr>
 </table>
 <p>No branch in the architecture — the 3D lift only exists where K and 3D GT exist. This is the property that ruled out
