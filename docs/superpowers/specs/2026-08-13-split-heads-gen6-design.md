@@ -44,8 +44,7 @@ loss, all weights 0.5, no origin prediction, no filters, no hint.
 
 ## Gen-6 vs classical — full change list
 
-**Kept verbatim:** type CE (incl. label smoothing 0.1), cross-GT
-geometric loss (with the 2026-07-28 plane-term correction), trajectory
+**Kept verbatim:** type CE (incl. label smoothing 0.1), trajectory
 relative-MSE, DiceBCE mask loss and their 0.5 weights.
 
 **Changed, carrying independently-validated fix-era wins:**
@@ -70,6 +69,34 @@ relative-MSE, DiceBCE mask loss and their 0.5 weights.
   modeling).
 - CLIP **unfrozen** (gen-5's frozen backbone is the prime suspect for
   its mask regression to mIoU 0.090).
+- Cross-GT geometric loss -> **prediction-anchored articulation
+  consistency** (user decision: no teacher forcing). New
+  `geometric_loss: "pred_pred_art"` variant — the classical line /
+  circle residual forms, evaluated entirely on PREDICTED quantities
+  in the trajectory's relative frame (first point = 0):
+
+  ```
+  d_i   = pred relative trajectory displacements   (N, 3)
+  dhat  = pred axis direction, normalized
+  c     = q_hat - p_hat        # pred axis point, relative frame
+  L_line   = mean_i || d_i x dhat ||^2                    # prismatic
+  r_hat    = dist(0, axis line (c, dhat))
+  L_circle = mean_i ( dist(d_i, axis line) - r_hat )^2    # revolute
+  L_pp     = P(pris) * L_line + P(rev) * L_circle
+  ```
+
+  The type gate is the SOFT predicted probability (no GT type
+  either): gradient into the geometry scales with the type head's
+  confidence, the same self-switching coupling the July
+  `PredPredGeometricLoss` used. Degenerate predicted trajectories
+  (total displacement below threshold) are masked out of the batch
+  mean, reusing that loss's guard, since a zero curve satisfies any
+  axis. The old cross-GT and energy-ratio pred-pred variants stay in
+  the code, config-gated, unused by this arm. NOTE the July
+  crossgt-vs-predpred experiment pair never ran (the twist arm
+  superseded it), so this coupling is empirically untested; each
+  quantity keeps its own direct GT loss, which is what anchors the
+  mutually-consistent-but-wrong failure mode.
 
 **Removed relative to gen-5 (and relative to classical where noted):**
 
@@ -129,7 +156,7 @@ L = 0.5*L_mask
   + 0.5*L_point_3d(MSE, camera coords)
   + 0.5*L_motion(1-cos) + 0.5*L_motion_type(CE)
   + 0.5*L_trajectory(MSE, relative)
-  + 0.5*L_geo_pred_vector_gt_traj + 0.5*L_geo_pred_traj_gt_vector
+  + 0.5*L_pp(prediction-anchored consistency, soft type gate)
   + w_origin * L_origin
 ```
 
@@ -139,10 +166,11 @@ classical point-map BCE + coord L1 pair at the same total weight
 budget. New `LossParams` fields: `origin_weight` (0.5),
 `point_3d_weight` (0.5); new `ModelParams` fields: `use_origin_head`
 (bool, default false), `point_prediction_3d` (bool, default false).
-The origin does NOT feed the cross-GT geometric loss —
-that keeps teacher-forcing the GT origin, exactly as classical.
-(Consistency against the *predicted* origin is a possible later arm,
-out of scope here.)
+The predicted origin feeds the consistency term's
+revolute branch (the axis line it constrains the trajectory against
+is the fully predicted one); no GT quantity appears anywhere in
+`L_pp`. GT supervision reaches each head only through its own direct
+term.
 
 ## Config
 
@@ -158,12 +186,15 @@ per this spec. Experiment dir: `experiments/2026MMDD_sf3d_split_g6/`.
   -> zero term, no NaN); sign sensitivity of the axis loss
   (antiparallel prediction scores ~2, not 0); OriginMLP / point-head
   shapes; `point_prediction_3d=false` reproduces the classical 2D
-  outputs exactly (OPD-arm regression guard).
+  outputs exactly (OPD-arm regression guard); `pred_pred_art` uses
+  no GT tensors (a perfect prediction set scores ~0 regardless of
+  GT), soft gate selects the right branch at p in {0, 1}, q_hat
+  shifted along d_hat leaves L_circle unchanged (gauge), degenerate
+  predicted trajectory masked out without NaN.
 - Existing twist/WTA tests keep passing (nothing deleted).
 - Smoke on the dev pod before any training-pod launch, as always.
 
 ## Open questions deferred (recorded, not blocking)
 
 - Trajectory re-hedge -> add trajectory-only WTA (see above).
-- Feed predicted origin into a pred-pred consistency term.
 - DINOv3 mask-projector fix; 2D arm updates (pre-existing items).

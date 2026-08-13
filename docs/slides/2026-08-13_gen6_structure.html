@@ -90,10 +90,11 @@ flowchart TB
   TR --> LTR["L_trajectory: relative MSE - 0.5"]:::loss
   GTTR["GT trajectory (relative)"]:::gt --> LTR
 
-  DIR --> GEO1["L_geo: pred axis vs GT trajectory - 0.5<br/>(circle / line residual)"]:::loss
-  GTTR2["GT trajectory + GT origin"]:::gt --> GEO1
-  TR --> GEO2["L_geo: pred trajectory vs GT axis - 0.5"]:::loss
-  GTAX2["GT axis + GT origin"]:::gt --> GEO2
+  DIR --> GEOPP["L_pp: prediction-anchored consistency - 0.5<br/>NO ground truth, NO teacher forcing<br/>P(pris)&#183;line residual + P(rev)&#183;circle residual<br/>about the PREDICTED axis line (q&#770;, d&#770;)"]:::loss
+  TYPE --> GEOPP
+  OR --> GEOPP
+  TR --> GEOPP
+  PT --> GEOPP
 </pre>
 
 <div class="note">
@@ -101,6 +102,14 @@ flowchart TB
   <code>[base condition, predicted point_3d]</code> with gradient flowing &mdash; the same role
   <code>coords_hat</code> played classically, now in metric 3D.
 </div>
+
+<h2>What the outputs mean, per motion type</h2>
+<table>
+  <tr><th>Output</th><th>Prismatic (drawer)</th><th>Revolute (door)</th></tr>
+  <tr><td>$\hat{p}$ — interaction point</td><td colspan="2" style="text-align:center;">the graspable <b>element centroid</b> (the handle) — same meaning for both types, never on the axis</td></tr>
+  <tr><td>$\hat{d}$ — direction</td><td>translation direction (signed: drawer slides toward $+\hat{d}$)</td><td>rotation axis direction (sign = right-hand rotation sense)</td></tr>
+  <tr><td>$\hat{q}$ — origin</td><td><span class="gone">meaningless &mdash; translation has no axis location; head gets zero loss / zero gradient</span></td><td>a point <b>on the hinge line</b> &mdash; the axis in 3D space is $\hat{q} + t\hat{d}$; radius $= \mathrm{dist}(\hat{p}, \text{axis line})$</td></tr>
+</table>
 
 <h2>Loss inventory</h2>
 <table>
@@ -141,11 +150,11 @@ flowchart TB
     <td>20 predicted relative points vs $\text{traj}_{3d} - \text{traj}_{3d}[0]$</td><td>0.5</td>
     <td><span class="tag k">KEPT</span> + delta-cumsum head (fix era)</td>
   </tr>
-  <tr>
-    <td><code>L_geo</code> (&times;2)</td>
-    <td>circle residual (rot) / line residual (trans)</td>
-    <td>cross-GT: pred axis &harr; GT trajectory, and pred trajectory &harr; GT axis; GT origin teacher-forced in both</td><td>0.5 + 0.5</td>
-    <td><span class="tag k">KEPT</span> incl. 2026-07-28 plane-term fix</td>
+  <tr class="dev">
+    <td><code>L_pp</code></td>
+    <td>$P_{pris}\cdot\overline{\lVert d_i \times \hat{d}\rVert^2} \;+\; P_{rev}\cdot\overline{(\,\mathrm{dist}(d_i, \hat{q}\hat{d}\text{-line}) - \hat{r}\,)^2}$</td>
+    <td>predicted trajectory &harr; predicted axis line &harr; predicted type — <b>no GT anywhere</b> (soft type gate; degenerate pred curves masked)</td><td>0.5</td>
+    <td><span class="tag d">DEVIATION</span> replaces cross-GT teacher forcing; classical residual <i>forms</i>, all-predicted inputs — only possible now that the origin is predicted</td>
   </tr>
 </table>
 
@@ -163,7 +172,8 @@ flowchart TB
 <p class="gone">
   Twist head &amp; se(3) parameterization · body metric · K=4 WTA bundles, annealing, selection logits, hyp-CE ·
   screw consistency losses (gt + self) · type-from-$\lVert\omega\rVert$ eval · GT type-hint input ·
-  2D point heatmap + soft-argmax + coord L1 (SF3D arm; OPD arms keep the 2D path) · frozen CLIP
+  2D point heatmap + soft-argmax + coord L1 (SF3D arm; OPD arms keep the 2D path) · frozen CLIP ·
+  cross-GT geometric loss (teacher forcing) — replaced by the all-predicted $L_{pp}$
 </p>
 
 <div class="note">
@@ -171,6 +181,8 @@ flowchart TB
   baseline (the 0.018 signature) under opening-direction ambiguity &mdash; fallback: trajectory-only WTA.
   (2) Dropping the dense point heatmap removes localization supervision &mdash; fallback: Option A
   (3D head alongside the 2D machinery).
+  (3) The all-predicted $L_{pp}$ is empirically untested (the July cross-GT-vs-pred-pred experiment
+  pair never ran); mutually-consistent-but-wrong outputs are anchored only by each head's direct GT term.
 </div>
 
 <script>mermaid.initialize({ startOnLoad: true, theme: 'neutral', flowchart: { htmlLabels: true } });</script>
