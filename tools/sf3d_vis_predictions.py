@@ -22,6 +22,12 @@ with the predicted 3D point as marker/anchor (no point_uv, no depth
 lifting), the axis-head prediction as the red axis (origin_pred +
 motion_pred, typed by the classifier), and no twist orbit / |w| readout.
 
+gen-7 (use_origin_heatmap/predict_point_depth) checkpoints take the same
+split-arm rendering path via their lifted point_3d_pred/origin_pred (the
+tool passes the sample's normalized intrinsics into the forward — a no-op
+for older arms); their ABSOLUTE trajectory is projected directly (no anchor
+translation) and the origin heatmap's uv gets a small red circle marker.
+
 Inference is deployment-condition: CVAE prior sampling (motion_gt=None) and
 NO type hint (motion_type_input=None -> NULL token).
 
@@ -71,7 +77,7 @@ def load_model(config_path, ckpt_path, device):
     missing, unexpected = model.load_state_dict(state, strict=False)
     if missing or unexpected:
         print(f"  load_state_dict: {len(missing)} missing, {len(unexpected)} unexpected")
-    return model.to(device).eval()
+    return model.to(device).eval(), mp
 
 
 def overlay_mask(img, mask01, color, alpha=0.45):
@@ -171,7 +177,8 @@ def main():
     models = []
     for name, cfg, ckpt in args.model:
         print(f"loading {name}: {ckpt}")
-        models.append((name, load_model(cfg, ckpt, device)))
+        model, mp = load_model(cfg, ckpt, device)
+        models.append((name, model, mp))
 
     r, m, d = get_default_transforms((256, 256))
     ds = SF3DDataset(
@@ -251,11 +258,16 @@ def main():
         gt = put_lines(gt, gt_lines)
 
         panels = [gt]
-        for name, model in models:
+        for name, model, mp in models:
             with torch.no_grad():
                 word = model.tokenize([desc], 77).to(device)
+                # Intrinsics into the forward: gen-7 arms lift their 2D heads
+                # (point_uv/origin_uv + depth) into point_3d_pred/origin_pred
+                # with K_norm. A no-op for twist and gen-6 checkpoints (the
+                # segmenter only lifts when its z_p/z_q depth heads exist).
                 out = model(img_t[None].to(device), depth_t[None].to(device),
-                            word, None, None, None, None)
+                            word, None, None, None, None,
+                            K_norm.to(device).float())
             p = frame.copy()
             if not args.traj_only:
                 pm = torch.sigmoid(out.mask_logits)[0, 0].cpu()
@@ -288,9 +300,16 @@ def main():
             else:
                 cls_type = "n/a"
 
-            # 3D trajectory head: swept path through the anchor, projected.
-            if out.trajectory_pred is not None and anchor_ok:
-                traj_abs = anchor.unsqueeze(1) + out.trajectory_pred[0:1].cpu().float()
+            # 3D trajectory head: swept path, projected. Relative heads
+            # (twist / gen-6) are anchored at the predicted point exactly the
+            # way the losses anchor them; gen-7 ABSOLUTE heads predict camera-
+            # frame points directly — project them with no anchor translation.
+            traj_is_absolute = bool(getattr(mp, "trajectory_absolute", False))
+            if out.trajectory_pred is not None and (anchor_ok or traj_is_absolute):
+                if traj_is_absolute:
+                    traj_abs = out.trajectory_pred[0:1].cpu().float()
+                else:
+                    traj_abs = anchor.unsqueeze(1) + out.trajectory_pred[0:1].cpu().float()
                 tv = (traj_abs[0, :, 2] > 0.05).numpy()
                 tuv = project_points(K_norm, traj_abs)[0].clamp(-2, 3).numpy()
                 if args.traj_only:
@@ -368,6 +387,15 @@ def main():
                         p = draw_axis_3d(p, K_norm, traj3d[0].float().numpy(), gt_dir,
                                          traj3d[0].float().numpy(), (0, 255, 0),
                                          t0=0.0, t1=0.25, thickness=2)
+                    # gen-7: the origin heatmap's soft-argmax uv (small red
+                    # circle) alongside the lifted red axis — shows where the
+                    # 2D origin channel fired before the depth lift.
+                    if out.origin_uv is not None:
+                        ou = out.origin_uv[0].cpu().float()
+                        op = (int(round(float(ou[0]) * W)),
+                              int(round(float(ou[1]) * H)))
+                        if -W < op[0] < 2 * W and -H < op[1] < 2 * H:
+                            cv2.circle(p, op, 5, (0, 0, 255), 2, cv2.LINE_AA)
                 gt_dir_n = gt_dir / max(float(np.linalg.norm(gt_dir)), 1e-8)
                 ang = math.degrees(math.acos(
                     float(np.clip(np.dot(d, gt_dir_n), -1.0, 1.0))))

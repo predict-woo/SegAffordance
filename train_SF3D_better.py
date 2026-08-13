@@ -12,6 +12,7 @@ from pytorch_lightning.loggers import WandbLogger
 from config.opd_train import Config, LossParams, ModelParams, OptimizerParams
 from datasets.scenefun3d_datamodule import SF3DDataModule
 from model.losses import decode_twist, point_to_line_distance
+from model.losses.geometric import normalized_intrinsics
 from model.losses.split import perpendicular_foot
 from model.segmenter import CRIS
 from train_OPDReal_better import OPDRealTrainingModule
@@ -60,6 +61,11 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         self._test_origin_err_m = []          # ||q_hat - q*||, revolute rows
         self._test_origin_line_err_m = []     # dist(q_hat, GT axis line)
         self._test_radius_err_m = []          # |r_pred - r_gt|, revolute rows
+
+        # gen-7 self-consistency (absolute trajectory only): the lifted 3D
+        # point and the absolute trajectory head's first point predict the
+        # same quantity — their gap measures head agreement.
+        self._test_point_traj0_gap = []       # ||p_hat - traj_pred[0]||, all rows
 
     @staticmethod
     def _save_sf3d_test_debug_visualizations(
@@ -300,8 +306,21 @@ class SF3DTrainingModule(OPDRealTrainingModule):
             list(word_str_list), self.model_params.word_len
         ).to(self.device)
 
+        # gen-7: fold the batch intrinsics into the normalized form exactly as
+        # _common_step does, so the model's lifted fields (point_3d_pred /
+        # origin_pred) exist at test time and the 3D metric blocks below run.
+        # None (no camera params in the batch) means no lift — as before.
+        K_norm = None
+        if intrinsic_matrix is not None:
+            K_norm = normalized_intrinsics(
+                intrinsic_matrix.to(self.device).float(),
+                _img_size.to(self.device).float(),
+            )
+
         with torch.no_grad():
-            outputs = self(img, depth, tokenized_words, None, None, None)
+            outputs = self(
+                img, depth, tokenized_words, None, None, None, None, K_norm
+            )
         mask_pred_logits = outputs.mask_logits
         point_pred_logits = outputs.point_logits
         point_uv = outputs.point_uv
@@ -421,6 +440,21 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                         p_gt[None], o_gt[None], d_gt[None]
                     )[0].item()
                     self._test_radius_err_m.append(abs(r_pred - r_gt))
+
+            # --- gen-7 self-consistency: lifted point vs absolute traj[0] ---
+            # Only meaningful when the trajectory head is ABSOLUTE (relative
+            # trajectories start near zero by construction — the gap would
+            # just measure ||p_hat||).
+            if (
+                outputs.point_3d_pred is not None
+                and outputs.trajectory_pred is not None
+                and getattr(self.model_params, "trajectory_absolute", False)
+            ):
+                p_hat = outputs.point_3d_pred[i].detach().float()
+                t0 = outputs.trajectory_pred[i, 0].detach().float().to(p_hat.device)
+                self._test_point_traj0_gap.append(
+                    torch.linalg.norm(p_hat - t0).item()
+                )
 
             # --- Motion and Axis evaluation (for all samples) ---
             if motion_pred is not None:
@@ -715,6 +749,7 @@ class SF3DTrainingModule(OPDRealTrainingModule):
             ("test/origin_err_m", self._test_origin_err_m),
             ("test/origin_line_err_m", self._test_origin_line_err_m),
             ("test/radius_err_m", self._test_radius_err_m),
+            ("test/point_traj0_gap_m", self._test_point_traj0_gap),
         ):
             gathered = self.all_gather(torch.tensor(values, device=self.device))
             mean = float(gathered.mean().item()) if gathered.numel() > 0 else 0.0
@@ -766,6 +801,11 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                     f"Mean Radius Error (m, rotational): "
                     f"{split_stats['test/radius_err_m'][0]:.4f}"
                 )
+            if split_stats["test/point_traj0_gap_m"][1] > 0:
+                print(
+                    "Mean lifted-point vs traj[0] gap (m, gen-7): "
+                    f"{split_stats['test/point_traj0_gap_m'][0]:.4f}"
+                )
 
         # Reset accumulators
         self._test_ious.clear()
@@ -789,6 +829,7 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         self._test_origin_err_m.clear()
         self._test_origin_line_err_m.clear()
         self._test_radius_err_m.clear()
+        self._test_point_traj0_gap.clear()
 
 
 if __name__ == "__main__":

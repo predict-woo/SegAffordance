@@ -236,6 +236,28 @@ def _g7_batch():
     return tuple(b)
 
 
+def test_g7_test_step_lifted_metrics_and_point_traj0_gap():
+    # test_step must pass the batch intrinsics into the forward (K_norm, as
+    # _common_step does) so the lifted point_3d_pred/origin_pred exist and the
+    # gen-6 metric blocks run unchanged; the new gen-7 self-consistency gap
+    # ||p_hat - traj_pred[0]|| accumulates for every sample (absolute
+    # trajectory only).
+    import math
+
+    m = _g7_module()
+    m.eval()
+    m.log = lambda *a, **k: None
+    m.on_test_start()
+    with torch.no_grad():
+        m.test_step(_g7_batch(), 0)
+    assert len(m._test_point_traj0_gap) == 2
+    assert all(math.isfinite(v) for v in m._test_point_traj0_gap)
+    # The lifted fields reached the gen-6 metric blocks.
+    assert len(m._test_point3d_errors) == 2
+    assert len(m._test_origin_err_m) == 1          # revolute row only
+    assert all(math.isfinite(v) for v in m._test_point3d_errors)
+
+
 def test_g7_common_step_finite_and_logs_lift_terms():
     m = _g7_module()
     logged = {}
