@@ -22,10 +22,12 @@ class ModelOutputs:
 
     #: (B, 1, H/4, W/4) segmentation logits
     mask_logits: torch.Tensor
-    #: (B, 1, H/4, W/4) interaction-point heatmap logits
-    point_logits: torch.Tensor
-    #: (B, 2) soft-argmax of point_logits, normalised to [0, 1]
-    coords_hat: torch.Tensor
+    #: (B, 1, H/4, W/4) interaction-point heatmap logits. None when the 2D
+    #: point pathway is replaced by the 3D one (ModelParams.point_prediction_3d).
+    point_logits: Optional[torch.Tensor] = None
+    #: (B, 2) soft-argmax of point_logits, normalised to [0, 1]. None when
+    #: point_logits is None.
+    coords_hat: Optional[torch.Tensor] = None
     #: (B, 3) motion axis, unnormalised and sign-agnostic. None when the
     #: axis head is off (`use_motion_head: false`, twist arms) — consumers
     #: fall back to the twist's decoded direction.
@@ -47,6 +49,14 @@ class ModelOutputs:
     #: the intrinsics this gives the 3D origin the model otherwise never
     #: predicts. None unless `predict_origin_depth`.
     origin_depth: Optional[torch.Tensor] = None
+    #: (B, 3) absolute 3D interaction point, camera frame, metres — the
+    #: split-arm replacement for point_logits/coords_hat
+    #: (ModelParams.point_prediction_3d). None on the classical 2D path.
+    point_3d_pred: Optional[torch.Tensor] = None
+    #: (B, 3) absolute 3D joint origin, camera frame, metres — supervised
+    #: toward q*, the GT-axis point perpendicular to the interaction point
+    #: (ModelParams.use_origin_head). Meaningful for revolute only.
+    origin_pred: Optional[torch.Tensor] = None
     #: (B, 6) se(3) twist (omega, v) in the camera frame — one construct for
     #: both motion types (revolute: |omega|=1 and v encodes the axis LINE;
     #: prismatic: omega=0 and v is the direction). See model/losses/twist.py.

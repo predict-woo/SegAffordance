@@ -452,6 +452,30 @@ class OriginDepthHead(nn.Module):
         return F.softplus(self.mlp(condition).squeeze(-1)) + self.min_depth
 
 
+class Point3DHead(nn.Module):
+    """Absolute 3D point in camera coordinates (metres).
+
+    Used twice by the gen-6 split arm: the interaction point (graspable
+    element centroid, GT = trajectory_3d[0]) and the revolute joint origin
+    (GT = q*, the axis point perpendicular to the interaction point).
+    Unconstrained linear output — camera-frame positions have no box to
+    project onto, and canonicalized targets keep the regression local.
+    """
+
+    def __init__(self, input_dim: int, hidden_dim: int = 256):
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(True),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(True),
+            nn.Linear(hidden_dim, 3),
+        )
+
+    def forward(self, condition: torch.Tensor) -> torch.Tensor:
+        return self.mlp(condition)
+
+
 class TransformerDecoder(nn.Module):
     def __init__(
         self, num_layers, d_model, nhead, dim_ffn, dropout, return_intermediate=False
