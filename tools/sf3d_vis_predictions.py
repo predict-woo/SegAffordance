@@ -17,6 +17,11 @@ with the INPUT depth — no GT):
     committed direction — the predicted counterpart of the cyan GT track
 plus text: classifier type, type-from-|omega|, |omega|.
 
+Split-arm (gen-6, point_prediction_3d) checkpoints render the same panels
+with the predicted 3D point as marker/anchor (no coords_hat, no depth
+lifting), the axis-head prediction as the red axis (origin_pred +
+motion_pred, typed by the classifier), and no twist orbit / |w| readout.
+
 Inference is deployment-condition: CVAE prior sampling (motion_gt=None) and
 NO type hint (motion_type_input=None -> NULL token).
 
@@ -256,7 +261,23 @@ def main():
                 pm = torch.sigmoid(out.mask_logits)[0, 0].cpu()
                 pm = F.interpolate(pm[None, None], size=(H, W), mode="bilinear")[0, 0].numpy()
                 p = overlay_mask(p, (pm > 0.5).astype(np.float32), (0, 0, 230))
-            coords = out.coords_hat[0].cpu()
+            # Prediction-side point + 3D anchor. Twist-era arms: coords_hat
+            # is the marker, lifted with the INPUT depth into the anchor
+            # (exactly as the screw self/track terms anchor it). Split arm
+            # (gen-6, point_prediction_3d): the predicted 3D point IS the
+            # anchor and its projection is the marker — no depth lifting.
+            K_norm = normalized_intrinsics(K[None].float(), img_size[None].float())
+            split_arm = out.point_3d_pred is not None
+            if split_arm:
+                anchor = out.point_3d_pred[0:1].cpu().float()  # (1, 3)
+                anchor_ok = anchor[0, 2].item() > 0.05
+                coords = project_points(K_norm, anchor[:, None])[0, 0].clamp(-2, 3)
+            else:
+                coords = out.coords_hat[0].cpu()
+                grid = (coords[None] * 2.0 - 1.0).view(1, 1, 1, 2)
+                z = F.grid_sample(depth_t[None].float(), grid, align_corners=False).view(1)
+                anchor = backproject_points(K_norm, coords[None].float(), z)
+                anchor_ok = z.item() > 1e-3
             pp = (int(coords[0] * W), int(coords[1] * H))
             cv2.circle(p, pp, 6, (255, 255, 255), -1)
             cv2.circle(p, pp, 6, (0, 0, 230), 2)
@@ -266,14 +287,6 @@ def main():
                 cls_type = "rot" if int(out.motion_type_logits[0].argmax()) == 1 else "trans"
             else:
                 cls_type = "n/a"
-
-            # Shared prediction-side anchor: own point lifted with the input
-            # depth (exactly as the screw self/track terms anchor it).
-            K_norm = normalized_intrinsics(K[None].float(), img_size[None].float())
-            grid = (coords[None] * 2.0 - 1.0).view(1, 1, 1, 2)
-            z = F.grid_sample(depth_t[None].float(), grid, align_corners=False).view(1)
-            anchor = backproject_points(K_norm, coords[None].float(), z)
-            anchor_ok = z.item() > 1e-3
 
             # 3D trajectory head: swept path through the anchor, projected.
             if out.trajectory_pred is not None and anchor_ok:
@@ -331,6 +344,34 @@ def main():
                 ang = math.degrees(math.acos(
                     float(np.clip(np.dot(direction[0].numpy(), gt_dir_n), -1.0, 1.0))))
                 lines.append(f"cls={cls_type}  |w|={om:.2f} -> {'rot' if bool(is_rev[0]) else 'trans'}  ax={ang:.0f}deg")
+            elif split_arm and out.motion_pred is not None:
+                # Split arm: no twist to decode. Predicted axis (red, same
+                # convention as the twist-decoded axis) is origin_pred +
+                # normalized motion_pred; type comes from the classifier.
+                d = out.motion_pred[0].cpu().float().numpy()
+                d = d / max(float(np.linalg.norm(d)), 1e-8)
+                if not args.traj_only:
+                    anchor3d = anchor[0].numpy() if anchor_ok else traj3d[0].float().numpy()
+                    if cls_type == "rot" and out.origin_pred is not None:
+                        p = draw_axis_3d(p, K_norm,
+                                         out.origin_pred[0].cpu().float().numpy(),
+                                         d, anchor3d, (0, 0, 255))
+                    else:
+                        p = draw_axis_3d(p, K_norm, anchor3d, d, anchor3d,
+                                         (0, 0, 255), t0=0.0, t1=0.25)
+                    # GT axis (thin green) on the same panel, as on twist arms.
+                    if int(type_gt) == 1:
+                        p = draw_axis_3d(p, K_norm, origin_3d.float().numpy(), gt_dir,
+                                         traj3d[0].float().numpy(), (0, 255, 0),
+                                         thickness=2)
+                    else:
+                        p = draw_axis_3d(p, K_norm, traj3d[0].float().numpy(), gt_dir,
+                                         traj3d[0].float().numpy(), (0, 255, 0),
+                                         t0=0.0, t1=0.25, thickness=2)
+                gt_dir_n = gt_dir / max(float(np.linalg.norm(gt_dir)), 1e-8)
+                ang = math.degrees(math.acos(
+                    float(np.clip(np.dot(d, gt_dir_n), -1.0, 1.0))))
+                lines.append(f"cls={cls_type}  ax={ang:.0f}deg")
             else:
                 lines.append(f"cls={cls_type}")
             lines.append("mag=traj3d pts" if args.traj_only

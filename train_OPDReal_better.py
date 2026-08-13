@@ -623,7 +623,13 @@ class OPDRealTrainingModule(pl.LightningModule):
                 point_gt_norm_sample = point_gt_norm[i]
                 text_description = word_str_list[i]
                 mask_pred_sigmoid_sample = torch.sigmoid(mask_pred_logits[i])
-                point_pred_sigmoid_sample = torch.sigmoid(point_pred_logits[i])
+                # Split arm (point_prediction_3d): no 2D point head — skip
+                # the heatmap panel, keep the rest of the composite.
+                point_pred_sigmoid_sample = (
+                    torch.sigmoid(point_pred_logits[i])
+                    if point_pred_logits is not None
+                    else None
+                )
 
                 composite_image = create_composite_visualization(
                     image_tensor=img_sample,
@@ -633,11 +639,11 @@ class OPDRealTrainingModule(pl.LightningModule):
                     point_pred_heatmap=point_pred_sigmoid_sample,
                     motion_gt=motion_gt[i],
                     motion_pred=(motion_pred[i] if motion_pred is not None
-                                 else torch.zeros(3, device=coords_hat.device)),
+                                 else torch.zeros(3, device=img.device)),
                     motion_type_gt=motion_type_gt_list[i],
                     motion_type_pred_logits=(
                         motion_type_logits[i] if motion_type_logits is not None
-                        else torch.zeros(2, device=coords_hat.device)
+                        else torch.zeros(2, device=img.device)
                     ),
                     trajectory_gt=trajectory_gt_list[i],
                     trajectory_pred=trajectory_pred[i],

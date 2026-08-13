@@ -64,7 +64,7 @@ class SF3DTrainingModule(OPDRealTrainingModule):
     @staticmethod
     def _save_sf3d_test_debug_visualizations(
         full_image_path: str,
-        point_pred_prob_tensor: torch.Tensor,
+        point_pred_prob_tensor: typing.Optional[torch.Tensor],
         mask_pred_prob_tensor: torch.Tensor,
         motion_pred: torch.Tensor,  # 3d vector
         pred_motion_type: int,
@@ -165,29 +165,33 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                 )
             return vis_image
 
-        # --- Visualization 1: Point Heatmap ---
-        point_pred_prob_np = point_pred_prob_tensor.float().numpy().squeeze()
-        point_heatmap_resized = cv2.resize(
-            point_pred_prob_np, (w, h), interpolation=cv2.INTER_LINEAR
-        )
-        point_heatmap_inverted = 1 - point_heatmap_resized
-        point_heatmap_colored = cv2.applyColorMap(
-            (point_heatmap_inverted * 255).astype(np.uint8), cv2.COLORMAP_JET
-        )
-        vis_image_point = cv2.addWeighted(img_bgr.copy(), 0.6, point_heatmap_colored, 0.4, 0)
+        # --- Visualization 1: Point Heatmap (2D-point arms only) ---
+        # Split arms (point_prediction_3d) have no 2D point head: skip this
+        # panel and anchor the mask panel's annotations at the mask argmax.
+        pred_px = pred_py = None
+        if point_pred_prob_tensor is not None:
+            point_pred_prob_np = point_pred_prob_tensor.float().numpy().squeeze()
+            point_heatmap_resized = cv2.resize(
+                point_pred_prob_np, (w, h), interpolation=cv2.INTER_LINEAR
+            )
+            point_heatmap_inverted = 1 - point_heatmap_resized
+            point_heatmap_colored = cv2.applyColorMap(
+                (point_heatmap_inverted * 255).astype(np.uint8), cv2.COLORMAP_JET
+            )
+            vis_image_point = cv2.addWeighted(img_bgr.copy(), 0.6, point_heatmap_colored, 0.4, 0)
 
-        # Get interaction point from argmax of point heatmap
-        (pred_py, pred_px) = np.unravel_index(
-            np.argmax(point_heatmap_resized), point_heatmap_resized.shape
-        )
+            # Get interaction point from argmax of point heatmap
+            (pred_py, pred_px) = np.unravel_index(
+                np.argmax(point_heatmap_resized), point_heatmap_resized.shape
+            )
 
-        vis_image_point = apply_geo_annotations(
-            vis_image_point, pred_px, pred_py, motion_pred.numpy()
-        )
-        out_path_point = os.path.join(
-            output_dir, f"sample_{sample_index:06d}_point.png"
-        )
-        cv2.imwrite(out_path_point, vis_image_point)
+            vis_image_point = apply_geo_annotations(
+                vis_image_point, pred_px, pred_py, motion_pred.numpy()
+            )
+            out_path_point = os.path.join(
+                output_dir, f"sample_{sample_index:06d}_point.png"
+            )
+            cv2.imwrite(out_path_point, vis_image_point)
 
         # --- Visualization 2: Mask Heatmap ---
         mask_prob_np = mask_pred_prob_tensor.float().numpy().squeeze()
@@ -197,6 +201,10 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         mask_heatmap_resized = cv2.resize(
             sigmoid_mask, (w, h), interpolation=cv2.INTER_LINEAR
         )
+        if pred_px is None:
+            (pred_py, pred_px) = np.unravel_index(
+                np.argmax(mask_heatmap_resized), mask_heatmap_resized.shape
+            )
         mask_heatmap_inverted = 1 - mask_heatmap_resized
         mask_heatmap_colored = cv2.applyColorMap(
             (mask_heatmap_inverted * 255).astype(np.uint8), cv2.COLORMAP_JET
@@ -512,12 +520,22 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                             full_image_path = os.path.join(
                                 data_root, "images", rgb_image_filenames[i]
                             )
-                            point_pred_prob = torch.sigmoid(point_pred_logits)
+                            # Split arm (point_prediction_3d): no 2D point
+                            # head — skip the heatmap panel, keep the rest.
+                            point_pred_prob = (
+                                torch.sigmoid(point_pred_logits)
+                                if point_pred_logits is not None
+                                else None
+                            )
                             mask_pred_prob = torch.sigmoid(mask_pred_logits)
 
                             self._save_sf3d_test_debug_visualizations(
                                 full_image_path=full_image_path,
-                                point_pred_prob_tensor=point_pred_prob[i].detach().cpu(),
+                                point_pred_prob_tensor=(
+                                    point_pred_prob[i].detach().cpu()
+                                    if point_pred_prob is not None
+                                    else None
+                                ),
                                 mask_pred_prob_tensor=mask_pred_prob[i].detach().cpu(),
                                 motion_pred=(
                                     motion_pred[i] if motion_pred is not None

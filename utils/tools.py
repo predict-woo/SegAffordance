@@ -103,7 +103,7 @@ def create_composite_visualization(
     text_description: str,
     mask_pred_sigmoid: torch.Tensor,
     point_gt_norm: torch.Tensor,
-    point_pred_heatmap: torch.Tensor,
+    point_pred_heatmap: typing.Optional[torch.Tensor],
     motion_gt: torch.Tensor,
     motion_pred: torch.Tensor,
     motion_type_gt: typing.Optional[torch.Tensor],
@@ -268,12 +268,14 @@ def create_composite_visualization(
     gt_point_px = (int(point_gt_norm[0] * w), int(point_gt_norm[1] * h))
     cv2.circle(composite_img, gt_point_px, 5, (0, 255, 0), -1)  # Green dot
     
-    # Predicted interaction point (white dot, larger)
-    heatmap_np = point_pred_heatmap.cpu().numpy().squeeze()
-    map_h, map_w = heatmap_np.shape
-    pred_y_map, pred_x_map = np.unravel_index(np.argmax(heatmap_np), heatmap_np.shape)
-    pred_point_px = (int(pred_x_map * w / map_w), int(pred_y_map * h / map_h))
-    cv2.circle(composite_img, pred_point_px, 5, (255, 255, 255), -1)  # White dot
+    # Predicted interaction point (white dot, larger). Split arms
+    # (point_prediction_3d) have no 2D heatmap — skip just this marker.
+    if point_pred_heatmap is not None:
+        heatmap_np = point_pred_heatmap.cpu().numpy().squeeze()
+        map_h, map_w = heatmap_np.shape
+        pred_y_map, pred_x_map = np.unravel_index(np.argmax(heatmap_np), heatmap_np.shape)
+        pred_point_px = (int(pred_x_map * w / map_w), int(pred_y_map * h / map_h))
+        cv2.circle(composite_img, pred_point_px, 5, (255, 255, 255), -1)  # White dot
 
     # 6. Draw trajectory points if available (matching dataset visualization style)
     if (
