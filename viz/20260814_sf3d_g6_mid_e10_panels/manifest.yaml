@@ -1,0 +1,14 @@
+command: tools/sf3d_vis_predictions.py --model g6e10 config/sf3d_train_runpod_split.yaml
+  experiments/20260813_sf3d_split_g6/checkpoints/best-epoch10-valloss1.0214.ckpt --key-cache
+  /workspace/cache/sf3d_v2_keys_cutoff05_minrad010.pkl --min-revolute-radius 0.10
+  --out viz/20260814_sf3d_g6_mid_e10_panels --num 16 --seed 9030
+tool_commit: f422693
+generated: '2026-08-13T18:18:53+00:00'
+models:
+- name: g6e10
+  config: config/sf3d_train_runpod_split.yaml
+  ckpt: experiments/20260813_sf3d_split_g6/checkpoints/best-epoch10-valloss1.0214.ckpt
+num: 16
+seed: 9030
+data_root: /workspace/datasets/sf3d_processed_v2
+key_cache: /workspace/cache/sf3d_v2_keys_cutoff05_minrad010.pkl
