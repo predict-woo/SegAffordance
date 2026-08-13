@@ -134,7 +134,10 @@ depth-map unprojection: the model must not <i>need</i> a depth input to produce 
       (viz/20260803_sf3d_twist_traj_points), (2) absolute-3D-from-pooled-vector is the exact pattern that scored
       0.58 m in gen-6 (mitigated here by point_uv/origin_uv in the condition + dense trunk supervision, but
       unproven). Both old paths stay flag-gated; fallback is a config flip.</li>
-  <li><b>Origin depth supervision on prismatic:</b> fully masked (as drawn), or give $\hat{z}_q$ a weak prior task?</li>
+  <li><b>DECIDED (user): origin depth fully masked on prismatic</b> — $\hat{z}_q$ (and the whole origin stack:
+      heatmap BCE, $L_{origin\_3d}$) receives gradient from revolute rows only; prismatic rows contribute nothing,
+      no auxiliary prior task. Matches how the origin was handled in gen-6 and keeps "a translation has no axis
+      location" exact in the losses.</li>
 </ul>
 
 <h2>Full detailed structure — the complete picture, nothing omitted</h2>
