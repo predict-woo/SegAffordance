@@ -1,6 +1,6 @@
 # Gen-6: split articulation heads, classical per-branch losses
 
-**Status:** DESIGNED (not implemented)
+**Status:** IMPLEMENTED (2026-08-13)
 **Date:** 2026-08-13
 **Supersedes as the training arm:** the twist parameterization
 (2026-08-11 body-metric + WTA specs). Those code paths stay in the
