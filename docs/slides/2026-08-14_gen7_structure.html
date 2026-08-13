@@ -132,6 +132,97 @@ depth-map unprojection: the model must not <i>need</i> a depth input to produce 
   <li><b>Origin depth supervision on prismatic:</b> fully masked (as drawn), or give $\hat{z}_q$ a weak prior task?</li>
 </ul>
 
+<h2>Full detailed structure — the complete picture, nothing omitted</h2>
+<p class="sub">Dimensions for input 256&times;256, CLIP RN50, word_len 77. Loss weights are the classical 0.5 defaults, provisional until the spec. RED = loss, dashed BLUE = ground truth, GREEN = new in gen-7.</p>
+
+<pre class="mermaid">
+flowchart TB
+  classDef trunk fill:#f0f0f0,stroke:#999,color:#111
+  classDef newh  fill:#d9efd9,stroke:#1e6b1e,color:#111
+  classDef loss  fill:#fdecea,stroke:#c0392b,color:#7a231a
+  classDef gt    fill:#e8eef8,stroke:#23508e,color:#1d3f70,stroke-dasharray: 5 4
+
+  subgraph IN["Inputs"]
+    RGB["RGB 3&#215;256&#178;"]:::trunk
+    DEP["depth 1&#215;256&#178;"]:::trunk
+    TXT["text, 77 tokens"]:::trunk
+  end
+
+  RGB --> CLIPI["CLIP RN50 image encoder (FROZEN)<br/>v2: 512&#215;32&#178; &#183; v3: 1024&#215;16&#178; &#183; v4: 1024&#215;8&#178;"]:::trunk
+  TXT --> CLIPT["CLIP text encoder (FROZEN)<br/>word tokens 77&#215;512 + state 1024"]:::trunk
+  DEP --> DE["DepthEncoder<br/>128&#215;32&#178; + 256&#215;16&#178;"]:::trunk
+
+  CLIPI --> FUSE["concat depth features onto v2, v3"]:::trunk
+  DE --> FUSE
+  FUSE --> FPN["FPN (text-state conditioned)<br/>fq: 512&#215;16&#178;"]:::trunk
+  CLIPT --> FPN
+  FPN --> DEC["TransformerDecoder<br/>3 layers, 8 heads, ffn 1024<br/>cross-attn: visual queries &#215; word tokens"]:::trunk
+  CLIPT --> DEC
+
+  DEC --> PROJ["Projector_Mult &#8594; 3 channels @ 64&#178;"]:::newh
+  PROJ --> MCH["mask logits 1&#215;64&#178;"]:::trunk
+  PROJ --> PCH["point heatmap 1&#215;64&#178;"]:::trunk
+  PROJ --> OCH["origin heatmap 1&#215;64&#178; (NEW)"]:::newh
+
+  MCH --> LMASK["L_mask: DiceBCE &#183; 0.5"]:::loss
+  GTM["GT mask"]:::gt --> LMASK
+  PCH --> LPM["L_point_map: BCE vs Gaussian &#183; 0.5"]:::loss
+  GTPX["Gaussian @ projected GT element point<br/>(sigma 8 px)"]:::gt --> LPM
+  OCH --> LOM["L_origin_map: BCE vs Gaussian &#183; 0.5<br/>revolute rows only, ~0.3% out-of-frame masked"]:::loss
+  GTQX["Gaussian @ projected q*"]:::gt --> LOM
+
+  PCH --> PUV["soft-argmax &#8594; point_uv (2)"]:::trunk
+  OCH --> OUV["soft-argmax &#8594; origin_uv (2)"]:::newh
+
+  MCH --> POOL["mask-pool decoder features<br/>(sigmoid, policy: GT vs predicted-detached = OPEN)"]:::trunk
+  DEC --> POOL
+  CLIPI --> GVIS["global avg of v4 (1024)"]:::trunk
+
+  POOL --> COND["condition vector 2564<br/>= pooled fq 512 + global 1024 + text state 1024<br/>+ point_uv 2 + origin_uv 2"]:::newh
+  GVIS --> COND
+  CLIPT --> COND
+  PUV --> COND
+  OUV --> COND
+
+  COND --> ZP["depth head z&#770;_p<br/>MLP 2564&#8594;256&#8594;1, softplus"]:::newh
+  COND --> ZQ["depth head z&#770;_q<br/>MLP 2564&#8594;256&#8594;1, softplus"]:::newh
+  COND --> MM["MotionMLP 2564&#8594;256&#8594;256<br/>&#8594; direction d&#770; (3) + type logits (2)"]:::trunk
+  COND --> TRAJ["TrajectoryMLP 2564&#8594;256&#8594;256&#8594;60<br/>20 ABSOLUTE camera-frame 3D points"]:::newh
+
+  PUV --> LIFTP["p&#770; = unproject(point_uv, z&#770;_p, K)"]:::newh
+  ZP --> LIFTP
+  OUV --> LIFTQ["q&#770; = unproject(origin_uv, z&#770;_q, K)"]:::newh
+  ZQ --> LIFTQ
+
+  LIFTP --> LP3["L_point_3d: ||p&#770; &#8722; p_gt||&#178; &#183; 0.5"]:::loss
+  GTP3["GT element point traj_3d[0]"]:::gt --> LP3
+  LIFTQ --> LQ3["L_origin_3d: ||q&#770; &#8722; q*||&#178; &#183; 0.5<br/>revolute rows only"]:::loss
+  GTQ3["q* = o_gt + ((p&#8722;o_gt)&#183;d&#770;_gt)d&#770;_gt"]:::gt --> LQ3
+
+  MM --> LDIR["L_motion: 1 &#8722; cos &#183; 0.5 (sign-sensitive)"]:::loss
+  GTD["GT signed axis"]:::gt --> LDIR
+  MM --> LTYPE["L_type: CE, label smoothing 0.1 &#183; 0.5"]:::loss
+  GTT["GT type"]:::gt --> LTYPE
+
+  TRAJ --> LTR["L_trajectory: per-point MSE &#183; 0.5<br/>absolute camera coords, all 20 points<br/>(point 0 doubles as interaction-point supervision)"]:::loss
+  GTTR["GT trajectory traj_3d (20&#215;3)"]:::gt --> LTR
+
+  TRAJ --> LPP["L_pp: all-predicted consistency &#183; 0.5<br/>d_i = traj_i &#8722; traj_0 (in-loss)<br/>P(pris)&#183;mean||d_i &#215; d&#770;||&#178;<br/>+ P(rev)&#183;mean[(dist(d_i, axis) &#8722; r&#770;)&#178; + (d_i&#183;d&#770;)&#178;]<br/>NO ground truth &#183; degenerate curves masked"]:::loss
+  MM --> LPP
+  LIFTP --> LPP
+  LIFTQ --> LPP
+</pre>
+
+<div class="note">
+<b>Inference decode (all linear):</b> type = argmax of type logits &#183; axis line = $(\hat{q}, \hat{d}/\lVert\hat{d}\rVert)$ &#183;
+radius = dist($\hat{p}$, axis line) &#183; trajectory is already absolute &#183; free consistency readout:
+$\lVert \hat{p} - \text{traj}[0] \rVert$ (the deliberate double-prediction of the interaction point).
+<b>Eval metrics:</b> mIoU, point_err_3d_m, origin_err_m, origin_line_err_m, radius_err_m, axis angle err, type acc,
+traj MSE / traj_dir_acc.
+<b>Idle on 2D pretraining:</b> origin heatmap BCE, both depth heads, both 3D losses, L_trajectory, L_pp, L_motion, L_type
+— the mask, point heatmap, and 2D-track losses carry the pretraining.
+</div>
+
 <div class="note"><b>Measurements this design rests on:</b> origin/$q^*$ in-frame 99.6&ndash;100% on both filtered and
 unfiltered v2 splits (1,500 revolute samples each); $q^*$ border margin median ~19% of the long side — soft-argmax has
 room. Gen-6 evidence: direction/type strong, both regressed 3D points weak, grounding failures on random-draw panels.</div>
