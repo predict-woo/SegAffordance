@@ -288,9 +288,19 @@ class MotionMLP(nn.Module):
 
 class TrajectoryMLP(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: int = 256, num_points: int = 20,
-                 delta_cumsum: bool = False, num_hypotheses: int = 1):
+                 delta_cumsum: bool = False, num_hypotheses: int = 1,
+                 absolute: bool = False):
         super().__init__()
+        assert not (absolute and delta_cumsum), (
+            "trajectory_absolute and trajectory_delta_cumsum are mutually "
+            "exclusive: absolute mode is the direct (non-cumsum) readout"
+        )
         self.num_points = num_points
+        # absolute: the num_points outputs are ABSOLUTE camera-frame points
+        # (gen-7), not positions relative to the trajectory's own first point.
+        # Computationally this IS the direct non-cumsum readout below — only
+        # the semantics of the supervision target change.
+        self.absolute = absolute
         # num_hypotheses > 1: K trajectories, one per WTA articulation bundle
         # (selected jointly with the twist by TwistMLP's logits — see the
         # 2026-08-11 WTA spec). Forward returns (B, K, N, 3).
@@ -328,6 +338,10 @@ class TrajectoryMLP(nn.Module):
             rel = torch.cumsum(deltas, dim=2)
             zero = rel.new_zeros(rel.size(0), K, 1, 3)
             return torch.cat([zero, rel], dim=2)
+        # Direct readout — no cumsum, no zero-pin. In absolute mode this is
+        # the raw (B, K, num_points, 3) camera-frame prediction; in the
+        # classical relative mode it is the same computation read as
+        # relative-to-first-point positions.
         return trajectory_pred.view(-1, K, self.num_points, 3)
 
 

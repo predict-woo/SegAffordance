@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 
 from model.backbones import build_backbone
+from model.losses.geometric import backproject_points
 from model.outputs import ModelOutputs
 
 from .layers import (
@@ -119,13 +120,29 @@ class CRIS(nn.Module):
             model_params, "pool_with_predicted_mask", False
         )
 
+        # gen-7 (docs/superpowers/specs/2026-08-14-heatmap-depth-lift-gen7-
+        # design.md): third projector channel -> soft-argmax origin_uv ->
+        # condition-only depth z_q; grid_sample local feature -> point depth
+        # z_p; both lifted to 3D with the batch intrinsics when provided.
+        self.use_origin_heatmap = getattr(model_params, "use_origin_heatmap", False)
+        self.predict_point_depth = getattr(model_params, "predict_point_depth", False)
+        if self.use_origin_heatmap and self.point_prediction_3d:
+            raise ValueError("use_origin_heatmap needs the classical 2D point path")
+        if self.predict_point_depth and self.point_prediction_3d:
+            raise ValueError("predict_point_depth needs the classical 2D point path")
+
         ## Projector
-        # fq: (B, fpn_out[1], H/16, W/16), state: (B, fpn_in[2]) -> maps: (B, 2, H/4, W/4)
+        # fq: (B, fpn_out[1], H/16, W/16), state: (B, fpn_in[2]) -> maps: (B, C, H/4, W/4)
+        # channels: 1 (3D mode: mask only) | 2 (classical: mask, point) |
+        # 3 (gen-7: mask, point, origin heatmap)
         self.proj = Projector_Mult(
             state_dim,
             model_params.fpn_out[1] // 2,
             3,
-            out_channels=1 if self.point_prediction_3d else 2,
+            out_channels=(
+                1 if self.point_prediction_3d
+                else (3 if self.use_origin_heatmap else 2)
+            ),
             proj_dropout=model_params.proj_dropout,
         )
 
@@ -136,6 +153,10 @@ class CRIS(nn.Module):
         # condition instead (spec: "the same role point_uv played, in 3D").
         point_cond_dim = 3 if self.point_prediction_3d else 2
         vae_condition_dim = vae_feature_dim + point_cond_dim
+        # gen-7: origin_uv extends the condition LAST (after the classical
+        # [features, point_uv, type_emb] layout — see forward).
+        if self.use_origin_heatmap:
+            vae_condition_dim += 2
 
         # Optional auxiliary input: the articulation type, embedded and
         # concatenated into the condition vector every head consumes (LAST
@@ -198,6 +219,7 @@ class CRIS(nn.Module):
                 num_points=20,
                 delta_cumsum=getattr(model_params, "trajectory_delta_cumsum", False),
                 num_hypotheses=self.twist_num_hypotheses,
+                absolute=getattr(model_params, "trajectory_absolute", False),
             )
         else:
             self.trajectory_predictor = None
@@ -268,6 +290,29 @@ class CRIS(nn.Module):
         else:
             self.origin_depth_head = None
 
+        # gen-7 asymmetric depth heads (vae_condition_dim is FINAL here).
+        # z_p (interaction point): condition + a fpn_out[1]-dim grid_sample
+        # of the decoded fq at point_uv — depth needs local appearance.
+        # z_q (origin): condition only — the origin is often occluded or
+        # off-object, so no local sample. NOT the same module as the 2D
+        # arm's origin_depth_head (predict_origin_depth) above.
+        self.point_depth_head = (
+            OriginDepthHead(
+                input_dim=vae_condition_dim + model_params.fpn_out[1],
+                hidden_dim=model_params.vae_hidden_dim,
+            )
+            if self.predict_point_depth
+            else None
+        )
+        self.origin_depth_head_g7 = (
+            OriginDepthHead(
+                input_dim=vae_condition_dim,
+                hidden_dim=model_params.vae_hidden_dim,
+            )
+            if self.use_origin_heatmap
+            else None
+        )
+
         if self.channels_last:
             self.to(memory_format=torch.channels_last)
 
@@ -277,7 +322,7 @@ class CRIS(nn.Module):
 
     def forward(
         self, img, depth, word, mask, interaction_point, motion_gt=None,
-        motion_type_input=None,
+        motion_type_input=None, intrinsics_norm=None,
     ):
         """
         img: (B, 3, H, W)
@@ -289,6 +334,11 @@ class CRIS(nn.Module):
         motion_type_input: (B,) long in [0, num_motion_types] — the auxiliary
             type hint (num_motion_types = the NULL token). None means NULL
             for every sample. Ignored unless use_motion_type_input.
+        intrinsics_norm: (B, 3, 3) NORMALIZED camera intrinsics (pixels
+            divided by image size — model/losses/geometric.py
+            normalize_intrinsics). When provided, the gen-7 scalar depths
+            z_p/z_q are lifted with it into point_3d_pred/origin_pred; when
+            None those lifted fields stay None.
         """
         if img.dtype == torch.uint8:
             # Fast-pipeline input: normalize on device (see __init__).
@@ -339,6 +389,16 @@ class CRIS(nn.Module):
             _, _, H_map, W_map = point_pred.shape
             point_uv = point_px / torch.tensor(
                 [W_map, H_map], dtype=point_px.dtype, device=point_px.device
+            )
+
+        # gen-7: origin heatmap channel -> soft-argmax origin_uv in [0, 1].
+        origin_uv = None
+        if self.use_origin_heatmap:
+            origin_logits = maps[:, 2:3]
+            _, _, H_map, W_map = origin_logits.shape
+            origin_px = soft_argmax2d(origin_logits)
+            origin_uv = origin_px / torch.tensor(
+                [W_map, H_map], dtype=origin_px.dtype, device=origin_px.device
             )
 
         # --- Motion VAE part ---
@@ -404,6 +464,23 @@ class CRIS(nn.Module):
             vae_condition = torch.cat([vae_condition, point_uv], dim=1)
             if type_emb is not None:
                 vae_condition = torch.cat([vae_condition, type_emb], dim=1)
+        if self.use_origin_heatmap:
+            # gen-7: origin_uv extends the condition LAST, preserving the
+            # classical [features, point_uv, type_emb] column layout.
+            vae_condition = torch.cat([vae_condition, origin_uv], dim=1)
+
+        # gen-7 scalar depths, computed from the FINAL condition. z_p also
+        # sees a local sample of the decoded feature map at the predicted
+        # interaction point; z_q is condition-only (see __init__).
+        z_p = z_q = None
+        if self.point_depth_head is not None:
+            grid = point_uv.view(-1, 1, 1, 2) * 2.0 - 1.0        # [0,1] -> [-1,1]
+            local = F.grid_sample(
+                fq, grid, align_corners=False
+            ).flatten(1)                                          # (B, fpn_out[1])
+            z_p = self.point_depth_head(torch.cat([vae_condition, local], dim=1))
+        if self.origin_depth_head_g7 is not None:
+            z_q = self.origin_depth_head_g7(vae_condition)
 
         trajectory_all = (
             self.trajectory_predictor(vae_condition)          # (B, K, N, 3)
@@ -423,6 +500,20 @@ class CRIS(nn.Module):
         origin_pred = (
             self.origin_head(vae_condition) if self.origin_head is not None else None
         )
+        # gen-7 lifts: uv + scalar depth + intrinsics -> 3D, into the SAME
+        # output fields the gen-6 direct heads use (the modes are mutually
+        # exclusive — see the ValueErrors in __init__). No intrinsics in the
+        # batch means no lift: the fields stay None.
+        if intrinsics_norm is not None:
+            K = intrinsics_norm.to(vae_condition.dtype)
+            if z_p is not None:
+                point_3d_pred = backproject_points(
+                    K.float(), point_uv.float(), z_p.float()
+                )
+            if z_q is not None:
+                origin_pred = backproject_points(
+                    K.float(), origin_uv.float(), z_q.float()
+                )
         twist_pred = trajectory_pred = None
         twist_hyps = trajectory_hyps = twist_logits = None
         if self.twist_predictor is not None:
@@ -485,4 +576,5 @@ class CRIS(nn.Module):
             log_var=log_var,
             point_3d_pred=point_3d_pred,
             origin_pred=origin_pred,
+            origin_uv=origin_uv,
         )

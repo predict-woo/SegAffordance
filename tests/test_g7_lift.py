@@ -1,8 +1,14 @@
+import pytest
 import torch
 import torch.nn.functional as F
 
 from model.losses.split import perpendicular_foot, project_q_star
 from model.outputs import ModelOutputs
+
+# Reuses test_split_heads' stub-backbone CRIS builder (_make_cris patches
+# model.segmenter.build_backbone with _StubBackbone) plus its param/input
+# helpers — the same fixture pattern its split_model fixture uses.
+from tests.test_split_heads import _inputs, _make_cris, _params  # noqa: E402
 
 
 def _knorm(B):
@@ -54,3 +60,78 @@ def test_new_fields_and_flags_default_off():
     assert mf["trajectory_absolute"] is False
     lf = {f.name: f.default for f in dataclasses.fields(LossParams)}
     assert lf["origin_map_weight"] == 0.5
+
+
+# ---- segmenter: origin channel, depth heads, lifts (Task 2) ----------------
+
+
+def _g7_model():
+    # fpn_out[1] = 512 mirrors production: the z_p head's grid_sample local
+    # feature is a slice of the decoded fq, so this pins the 512-dim
+    # asymmetry contract literally (test_g7_depth_head_inputs_asymmetric).
+    return _make_cris(use_origin_heatmap=True, predict_point_depth=True,
+                      trajectory_absolute=True, trajectory_delta_cumsum=False,
+                      fpn_out=[32, 512, 128])
+
+
+@pytest.fixture(scope="module")
+def g7_model():
+    m = _g7_model()
+    m.eval()
+    return m
+
+
+def test_g7_forward_shapes_with_and_without_intrinsics(g7_model):
+    img, depth, word, mask = _inputs()
+    K = _knorm(2)
+    with torch.no_grad():
+        out = g7_model(img, depth, word, mask, None, None, None, K)
+        out_nok = g7_model(img, depth, word, mask, None, None, None, None)
+    assert out.point_uv.shape == (2, 2) and out.origin_uv.shape == (2, 2)
+    assert out.point_3d_pred.shape == (2, 3) and out.origin_pred.shape == (2, 3)
+    assert out.trajectory_pred.shape == (2, 20, 3)
+    assert out.mask_logits.shape[1] == 1 and out.point_logits is not None
+    # Lift only exists where K exists.
+    assert out_nok.point_3d_pred is None and out_nok.origin_pred is None
+    assert out_nok.origin_uv is not None
+
+
+def test_g7_lift_roundtrip(g7_model):
+    # project(point_3d_pred) must land exactly on point_uv (by construction).
+    img, depth, word, mask = _inputs()
+    K = _knorm(2)
+    with torch.no_grad():
+        out = g7_model(img, depth, word, mask, None, None, None, K)
+    from model.losses.geometric import project_points
+    assert torch.allclose(
+        project_points(K, out.point_3d_pred.unsqueeze(1)).squeeze(1),
+        out.point_uv, atol=1e-4)
+    assert (out.point_3d_pred[:, 2] > 0).all()   # softplus depth
+
+
+def test_g7_depth_head_inputs_asymmetric(g7_model):
+    d = g7_model.point_depth_head.mlp[0].in_features \
+        - g7_model.origin_depth_head_g7.mlp[0].in_features
+    assert d == 512    # z_p gets the 512-dim local sample, z_q does not
+
+
+def test_classical_and_gen6_modes_unchanged():
+    m2d = _make_cris()
+    m3d = _make_cris(point_prediction_3d=True, use_origin_head=True)
+    img, depth, word, mask = _inputs()
+    with torch.no_grad():
+        o2 = m2d.eval()(img, depth, word, mask, None, None)
+        o3 = m3d.eval()(img, depth, word, mask, None, None)
+    assert o2.origin_uv is None and o2.point_3d_pred is None
+    assert o3.origin_uv is None and o3.point_3d_pred.shape == (2, 3)
+
+
+def test_absolute_trajectory_head_no_zero_pin():
+    from model.layers import TrajectoryMLP
+    head = TrajectoryMLP(input_dim=8, hidden_dim=16, num_points=20,
+                         delta_cumsum=False, absolute=True)
+    out = head(torch.randn(3, 8))
+    assert out.shape == (3, 1, 20, 3)
+    assert not torch.allclose(out[:, :, 0], torch.zeros(3, 1, 3))
+    with pytest.raises(AssertionError):
+        TrajectoryMLP(input_dim=8, delta_cumsum=True, absolute=True)
