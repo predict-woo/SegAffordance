@@ -64,7 +64,7 @@ flowchart TB
   MASK --> LMASK["L_mask: DiceBCE - 0.5"]:::loss
   GTMASK["GT mask"]:::gt --> LMASK
 
-  DEC --> POOL["mask-pooled features<br/>(GT mask at train, pred at val)<br/>+ global visual + text state"]:::trunk
+  DEC --> POOL["mask-pooled features<br/>PREDICTED mask (detached), train AND val<br/>pool_with_predicted_mask: true - toggleable<br/>+ global visual + text state"]:::dev
   POOL --> COND["base condition<br/>(no coords_hat, no type hint)"]:::dev
 
   COND --> PT["3D point head (NEW)<br/>interaction point, absolute"]:::newh
@@ -173,7 +173,9 @@ flowchart TB
   Twist head &amp; se(3) parameterization · body metric · K=4 WTA bundles, annealing, selection logits, hyp-CE ·
   screw consistency losses (gt + self) · type-from-$\lVert\omega\rVert$ eval · GT type-hint input ·
   2D point heatmap + soft-argmax + coord L1 (SF3D arm; OPD arms keep the 2D path) · frozen CLIP ·
-  cross-GT geometric loss (teacher forcing) — replaced by the all-predicted $L_{pp}$
+  cross-GT geometric loss (teacher forcing) — replaced by the all-predicted $L_{pp}$ (toggleable via <code>geometric_loss</code>) ·
+  GT-mask pooling at train time — replaced by detached predicted-mask pooling (toggleable via <code>pool_with_predicted_mask</code>).
+  <b>No GT tensor enters the model's forward pass anywhere.</b>
 </p>
 
 <div class="note">
@@ -183,6 +185,8 @@ flowchart TB
   (3D head alongside the 2D machinery).
   (3) The all-predicted $L_{pp}$ is empirically untested (the July cross-GT-vs-pred-pred experiment
   pair never ran); mutually-consistent-but-wrong outputs are anchored only by each head's direct GT term.
+  (4) Predicted-mask pooling has a cold start: condition features are ~global averages until the mask
+  sharpens (historically ~1 epoch) — fallback is flipping <code>pool_with_predicted_mask</code> off.
 </div>
 
 <script>mermaid.initialize({ startOnLoad: true, theme: 'neutral', flowchart: { htmlLabels: true } });</script>

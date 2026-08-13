@@ -96,7 +96,23 @@ relative-MSE, DiceBCE mask loss and their 0.5 weights.
   crossgt-vs-predpred experiment pair never ran (the twist arm
   superseded it), so this coupling is empirically untested; each
   quantity keeps its own direct GT loss, which is what anchors the
-  mutually-consistent-but-wrong failure mode.
+  mutually-consistent-but-wrong failure mode. Toggleable by
+  construction: `geometric_loss` remains a config enum
+  (`pred_pred_art` | `cross_gt` | `pred_pred` | `screw` |
+  `projected` | `none`), so reverting to the teacher-forced variant
+  or disabling consistency entirely is a one-line YAML change.
+- **Mask-pooling teacher forcing removed, flag-gated** (user
+  decision): new `ModelParams.pool_with_predicted_mask` (bool,
+  default false = classical GT-mask pooling at train time). When
+  true, the condition-vector pooling uses the DETACHED sigmoid of
+  the predicted mask in training too — identical to what val/test
+  always did — so the articulation heads train on the same feature
+  distribution they deploy on. Detached, so articulation losses
+  cannot push the mask head around to make pooling convenient; the
+  mask keeps learning only from its dense DiceBCE term. Known
+  cold-start cost: pooled features are ~global averages until the
+  mask sharpens (historically within ~1 epoch). Gen-6 config sets
+  true.
 
 **Removed relative to gen-5 (and relative to classical where noted):**
 
@@ -179,7 +195,9 @@ in m^2 like the geometric and point terms). `L_point_3d` replaces the
 classical point-map BCE + coord L1 pair at the same total weight
 budget. New `LossParams` fields: `origin_weight` (0.5),
 `point_3d_weight` (0.5); new `ModelParams` fields: `use_origin_head`
-(bool, default false), `point_prediction_3d` (bool, default false).
+(bool, default false), `point_prediction_3d` (bool, default false),
+`pool_with_predicted_mask` (bool, default false). All defaults
+preserve classical behaviour; the gen-6 config turns them all on.
 The predicted origin feeds the consistency term's
 revolute branch (the axis line it constrains the trajectory against
 is the fully predicted one); no GT quantity appears anywhere in
@@ -205,7 +223,10 @@ per this spec. Experiment dir: `experiments/2026MMDD_sf3d_split_g6/`.
   no GT tensors (a perfect prediction set scores ~0 regardless of
   GT), soft gate selects the right branch at p in {0, 1}, q_hat
   shifted along d_hat leaves L_circle unchanged (gauge), degenerate
-  predicted trajectory masked out without NaN.
+  predicted trajectory masked out without NaN;
+  `pool_with_predicted_mask=true` in train mode pools with the
+  detached predicted mask (no grad reaches the mask logits through
+  pooling) and `=false` reproduces GT pooling bit-exactly.
 - Existing twist/WTA tests keep passing (nothing deleted).
 - Smoke on the dev pod before any training-pod launch, as always.
 
