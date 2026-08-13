@@ -124,13 +124,25 @@ relative-MSE, DiceBCE mask loss and their 0.5 weights.
   -> ReLU -> Linear(3)`, unconstrained absolute 3D point (user
   decision: absolute, not offset-from-element, not 2D+depth).
 - Origin loss, **revolute samples only** (prismatic rows contribute
-  zero and no gradient): squared distance from the predicted origin
-  to the GT axis LINE,
-  `L_origin = || (q_hat - o_gt) x d_gt ||^2` with `d_gt` normalized.
-  Gauge-invariant: the GT origin's position along the axis is
-  annotation noise, only the line is physical. Batch-masked mean over
-  revolute rows; zero-valued term logged when a batch has none (same
-  semantics as the screw losses' degenerate handling).
+  zero and no gradient): plain MSE against a CANONICAL point on the
+  GT axis — the foot of the perpendicular from the GT element point
+  `p = trajectory_3d[0]` onto the GT axis line:
+
+  ```
+  q_star   = o_gt + ((p - o_gt) . d_gt) d_gt     # d_gt normalized
+  L_origin = || q_hat - q_star ||^2
+  ```
+
+  (user decision, replacing an earlier distance-to-line form). The
+  gauge is fixed by canonicalization rather than invariance: `q_star`
+  is the unique axis point where the segment to the interaction point
+  is perpendicular to the axis, so all 3 output dimensions are
+  constrained (distance-to-line left the along-axis component free to
+  drift) and the target sits near the element — bounded and local.
+  `q_star` is unchanged if the annotated origin slides along the axis
+  (same robustness to annotation gauge as before). Batch-masked mean
+  over revolute rows; zero-valued term logged when a batch has none
+  (same semantics as the screw losses' degenerate handling).
 - **3D interaction-point head**: same MLP shape as `OriginMLP`,
   absolute camera-frame 3D point. Loss: plain MSE against the GT
   element point `trajectory_3d[0]` (present in every SF3D record).
@@ -143,9 +155,11 @@ relative-MSE, DiceBCE mask loss and their 0.5 weights.
   the predicted 3D point — no depth-map lookup, no intrinsics.
   Viz projects the predicted 3D point with intrinsics for drawing.
 - Eval additions: `point_err_3d_m` (metric error of the predicted
-  interaction point), `origin_line_err_m` (the loss quantity,
-  unsquared) and `radius_err` = | dist(element, pred axis line) -
-  GT radius | on revolute rows. Axis direction error/type accuracy
+  interaction point), `origin_err_m` (distance to `q_star`,
+  unsquared), `origin_line_err_m` (distance to the GT axis line —
+  the axis-position error the paper cares about, insensitive to
+  along-axis slack) and `radius_err` = | dist(element, pred axis
+  line) - GT radius | on revolute rows. Axis direction error/type accuracy
   come from their heads directly; `twist_*` and the 2D
   `mean_point_error` metrics disappear.
 
@@ -181,9 +195,10 @@ per this spec. Experiment dir: `experiments/2026MMDD_sf3d_split_g6/`.
 
 ## Testing
 
-- Unit: origin loss gauge invariance (translate GT origin along the
-  axis -> loss unchanged); revolute-only masking (prismatic-only batch
-  -> zero term, no NaN); sign sensitivity of the axis loss
+- Unit: `q_star` canonicalization (translate the annotated GT origin
+  along the axis -> `q_star` and the loss unchanged; `(q_star - p)`
+  perpendicular to `d_gt`); revolute-only masking (prismatic-only
+  batch -> zero term, no NaN); sign sensitivity of the axis loss
   (antiparallel prediction scores ~2, not 0); OriginMLP / point-head
   shapes; `point_prediction_3d=false` reproduces the classical 2D
   outputs exactly (OPD-arm regression guard); `pred_pred_art` uses

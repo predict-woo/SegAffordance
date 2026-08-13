@@ -83,8 +83,8 @@ flowchart TB
   GTTYPE["GT type"]:::gt --> LTYPE
 
   XCOND --> OR["OriginMLP (NEW)<br/>joint origin q&#770;, absolute"]:::newh
-  OR --> LOR["L_origin: dist to GT axis LINE - 0.5<br/>revolute rows only"]:::loss
-  GTLINE["GT axis line<br/>(origin_3d, direction)"]:::gt --> LOR
+  OR --> LOR["L_origin: MSE vs canonical q* - 0.5<br/>q* = perpendicular foot of element point on GT axis<br/>revolute rows only"]:::loss
+  GTLINE["GT axis line + GT element point<br/>&#8594; q* (unique)"]:::gt --> LOR
 
   XCOND --> TR["TrajectoryMLP, K=1<br/>delta-cumsum, 20 relative points"]:::trunk
   TR --> LTR["L_trajectory: relative MSE - 0.5"]:::loss
@@ -108,7 +108,7 @@ flowchart TB
   <tr><th>Output</th><th>Prismatic (drawer)</th><th>Revolute (door)</th></tr>
   <tr><td>$\hat{p}$ — interaction point</td><td colspan="2" style="text-align:center;">the graspable <b>element centroid</b> (the handle) — same meaning for both types, never on the axis</td></tr>
   <tr><td>$\hat{d}$ — direction</td><td>translation direction (signed: drawer slides toward $+\hat{d}$)</td><td>rotation axis direction (sign = right-hand rotation sense)</td></tr>
-  <tr><td>$\hat{q}$ — origin</td><td><span class="gone">meaningless &mdash; translation has no axis location; head gets zero loss / zero gradient</span></td><td>a point <b>on the hinge line</b> &mdash; the axis in 3D space is $\hat{q} + t\hat{d}$; radius $= \mathrm{dist}(\hat{p}, \text{axis line})$</td></tr>
+  <tr><td>$\hat{q}$ — origin</td><td><span class="gone">meaningless &mdash; translation has no axis location; head gets zero loss / zero gradient</span></td><td>the <b>canonical hinge point</b> $q^*$: the axis point closest to the interaction point &mdash; the axis in 3D space is $\hat{q} + t\hat{d}$; radius $= \mathrm{dist}(\hat{p}, \text{axis line})$, and at a perfect prediction simply $\lVert\hat{p}-\hat{q}\rVert$</td></tr>
 </table>
 
 <h2>Loss inventory</h2>
@@ -140,8 +140,8 @@ flowchart TB
   </tr>
   <tr class="new">
     <td><code>L_origin</code></td>
-    <td>$\lVert (\hat{q} - o_{gt}) \times d_{gt} \rVert^2$</td>
-    <td>predicted origin vs GT axis <b>line</b> &mdash; gauge-invariant (position along the hinge is annotation noise). Revolute rows only; prismatic sends no gradient.</td><td>0.5</td>
+    <td>$\lVert \hat{q} - q^* \rVert^2$, &nbsp; $q^* = o_{gt} + \big((p - o_{gt})\cdot d_{gt}\big)\, d_{gt}$</td>
+    <td>predicted origin vs the <b>canonical axis point</b> $q^*$: the foot of the perpendicular from the element point $p$ onto the GT axis line — unique, near the element, all 3 dims constrained; invariant to where the annotator clicked along the hinge. Revolute rows only; prismatic sends no gradient.</td><td>0.5</td>
     <td><span class="tag n">NEW</span> no classical counterpart existed</td>
   </tr>
   <tr>
