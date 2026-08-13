@@ -151,3 +151,59 @@ def test_classical_2d_mode_unchanged():
         out = m(img, depth, word, mask, None, None)
     assert out.point_logits is not None and out.coords_hat.shape == (2, 2)
     assert out.point_3d_pred is None and out.origin_pred is None
+
+
+# ---- split losses (Task 3) -------------------------------------------------
+
+from model.losses.split import (
+    axis_direction_loss,
+    origin_canonical_loss,
+    perpendicular_foot,
+)
+
+
+def test_q_star_is_perpendicular_foot_and_annotation_gauge_invariant():
+    torch.manual_seed(0)
+    o = torch.randn(8, 3)
+    d = torch.nn.functional.normalize(torch.randn(8, 3), dim=1)
+    p = torch.randn(8, 3)
+    q_star = perpendicular_foot(o, d, p)
+    # (q* - p) is perpendicular to the axis.
+    assert torch.allclose(((q_star - p) * d).sum(-1), torch.zeros(8), atol=1e-5)
+    # Sliding the annotated origin along the axis does not move q*.
+    q_star_slid = perpendicular_foot(o + 3.7 * d, d, p)
+    assert torch.allclose(q_star, q_star_slid, atol=1e-5)
+
+
+def test_origin_loss_gauge_invariant_and_zero_at_target():
+    torch.manual_seed(1)
+    o = torch.randn(4, 3)
+    d = torch.nn.functional.normalize(torch.randn(4, 3), dim=1)
+    p = torch.randn(4, 3)
+    ty = torch.ones(4, dtype=torch.long)
+    q_star = perpendicular_foot(o, d, p)
+    assert origin_canonical_loss(q_star, o, d, p, ty).item() < 1e-10
+    pred = torch.randn(4, 3, requires_grad=True)
+    l1 = origin_canonical_loss(pred, o, d, p, ty)
+    l2 = origin_canonical_loss(pred, o - 2.2 * d, d, p, ty)
+    assert torch.allclose(l1, l2, atol=1e-5)
+    l1.backward()  # gradient flows
+
+
+def test_origin_loss_prismatic_only_batch_is_zero_no_nan():
+    pred = torch.randn(3, 3, requires_grad=True)
+    ty = torch.zeros(3, dtype=torch.long)
+    loss = origin_canonical_loss(
+        pred, torch.randn(3, 3), torch.randn(3, 3), torch.randn(3, 3), ty
+    )
+    assert loss.item() == 0.0
+    loss.backward()
+    assert torch.isfinite(pred.grad).all()
+
+
+def test_axis_loss_sign_sensitivity():
+    a = torch.nn.functional.normalize(torch.randn(5, 3), dim=1)
+    # Antiparallel: perfect under the classical 1-cos^2, ~2 under 1-cos.
+    assert axis_direction_loss(-a, a, sign_agnostic=True).item() < 1e-6
+    assert abs(axis_direction_loss(-a, a, sign_agnostic=False).item() - 2.0) < 1e-5
+    assert axis_direction_loss(a, a, sign_agnostic=False).item() < 1e-6

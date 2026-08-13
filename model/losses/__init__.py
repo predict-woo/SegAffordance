@@ -8,6 +8,11 @@ from .geometric import (
     ScrewConsistencyLoss,
     build_geometric_loss,
 )
+from .split import (
+    axis_direction_loss,
+    origin_canonical_loss,
+    perpendicular_foot,
+)
 from .twist import (
     TwistLoss,
     decode_twist,
@@ -28,4 +33,7 @@ __all__ = [
     "decode_twist",
     "point_to_line_distance",
     "screw_orbit",
+    "perpendicular_foot",
+    "origin_canonical_loss",
+    "axis_direction_loss",
 ]
