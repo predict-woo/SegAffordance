@@ -62,8 +62,9 @@ flowchart TB
   PH --> CH["soft-argmax &#8594; coords_hat (u,v)"]:::rest
   OH --> CO["soft-argmax &#8594; origin_uv"]:::newh
 
-  TRUNK --> COND["condition vector<br/>pooled features + coords_hat"]:::trunk
+  TRUNK --> COND["condition vector<br/>pooled features + coords_hat + origin_uv"]:::newh
   CH --> COND
+  CO --> COND
 
   COND --> ZP["depth head z&#770;_p (scalar)"]:::newh
   COND --> ZQ["depth head z&#770;_q (scalar)"]:::newh
@@ -115,8 +116,11 @@ depth-map unprojection: the model must not <i>need</i> a depth input to produce 
 <ul>
   <li><b>Pooling policy:</b> gen-6 pooled under the detached <i>predicted</i> mask; patchy masks meant diluted features
       for every head. Revert to GT-mask pooling, scheduled handoff, or keep? Decide with gen-6's final mIoU in hand.</li>
-  <li><b>Does origin_uv join the condition vector</b> (like coords_hat does), giving direction/trajectory heads an
-      explicit hinge location — or stay a pure readout?</li>
+  <li><b>DECIDED (user): origin_uv joins the condition vector</b> alongside coords_hat — direction head sees the
+      hinge&ndash;handle geometry (axis &#8869; the p&ndash;q image vector, radius &#8776; its length), trajectory head
+      sees its pivot, depth heads see both anchors. Gradient flows through soft-argmax (classical convention).
+      Watch item: on prismatic rows the origin channel is unsupervised, so downstream heads must learn to ignore
+      its readout there — if pathological, feed it detached (one line).</li>
   <li><b>Depth head input:</b> condition vector only, or also a feature sample at the heatmap peak (grid_sample at
       coords_hat) for a more local depth estimate?</li>
   <li><b>Origin depth supervision on prismatic:</b> fully masked (as drawn), or give $\hat{z}_q$ a weak prior task?</li>
