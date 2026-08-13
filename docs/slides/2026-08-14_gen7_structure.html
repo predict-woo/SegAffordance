@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gen-7 Proposal: Heatmap + Depth Lifts</title>
+<script>
+MathJax = {tex: {inlineMath: [['$', '$']]}};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  body { background: #ffffff; color: #111; font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+         max-width: 1200px; margin: 0 auto; padding: 24px 32px 80px; line-height: 1.45; }
+  h1 { font-size: 1.6em; margin-bottom: 0; }
+  h2 { font-size: 1.15em; margin-top: 2em; border-bottom: 2px solid #e0e0e0; padding-bottom: 4px; }
+  .sub { color: #666; margin-top: 4px; }
+  .banner { background: #fdeec7; border: 2px solid #8a6100; color: #6b4c00; padding: 10px 16px;
+            border-radius: 8px; margin: 16px 0; font-weight: 600; }
+  .mermaid { background: #fff; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.92em; }
+  th, td { border: 1px solid #d8d8d8; padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: #f4f4f4; }
+  .tag { font-size: 0.78em; font-weight: 600; padding: 1px 7px; border-radius: 9px; white-space: nowrap; }
+  .tag.r { background: #e8eef8; color: #23508e; }   /* restored from classical */
+  .tag.n { background: #d9efd9; color: #1e6b1e; }   /* new in gen-7 */
+  .tag.k { background: #efefef; color: #555; }      /* kept from gen-6 */
+  code { background: #f3f3f3; padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+  .note { background: #f7f7f7; border-left: 4px solid #bbb; padding: 10px 14px; margin: 14px 0; font-size: 0.93em; }
+  .gone { color: #999; }
+</style>
+</head>
+<body>
+
+<h1>Gen-7 proposal: heatmap + depth lifts</h1>
+<p class="sub">Everything spatial reads out of the image; everything metric is one scalar away. All 3D in camera frame, meters.</p>
+
+<div class="banner">PROPOSAL — discussed 2026-08-14, not yet a spec. Waiting on gen-6 final eval numbers before committing.</div>
+
+<h2>The gen-6 diagnosis this fixes</h2>
+<p>Gen-6's articulation heads work (direction 5&ndash;19&deg; on grounded panels, type CE near floor) — but both 3D
+<i>points</i> (interaction $\hat{p}$, origin $\hat{q}$) were bare MLP regressions from one pooled vector: no pixel grid,
+no structural tie to the mask, no dense localization supervision on the trunk. Result: regression-to-the-mean 3D points,
+grounding failures, origin ~0.9 m RMS. Gen-7 gives <b>both points</b> the spatial machinery the mask always had — and the
+measured excuse for not doing so is gone: on v2 data the projected origin target $q^*$ is in frame
+<b>99.6&ndash;99.7%</b> of the time (filtered and unfiltered alike; <code>tools/diag_origin_inframe.py</code>).</p>
+
+<h2>Dataflow</h2>
+<pre class="mermaid">
+flowchart TB
+  classDef trunk fill:#f0f0f0,stroke:#999,color:#111
+  classDef newh  fill:#d9efd9,stroke:#1e6b1e,color:#111
+  classDef rest  fill:#e8eef8,stroke:#23508e,color:#111
+  classDef loss  fill:#fdecea,stroke:#c0392b,color:#7a231a
+  classDef gt    fill:#e8eef8,stroke:#23508e,color:#1d3f70,stroke-dasharray: 5 4
+
+  RGB["RGB + depth + text"]:::trunk --> TRUNK["CLIP (unfrozen) + depth-fused FPN<br/>+ transformer decoder"]:::trunk
+  TRUNK --> PROJ["Projector — THREE channels<br/>(shared, language-conditioned)"]:::newh
+  PROJ --> MASK["mask logits"]:::trunk
+  PROJ --> PH["point heatmap"]:::rest
+  PROJ --> OH["origin heatmap (NEW)"]:::newh
+
+  PH --> CH["soft-argmax &#8594; coords_hat (u,v)"]:::rest
+  OH --> CO["soft-argmax &#8594; origin_uv"]:::newh
+
+  TRUNK --> COND["condition vector<br/>pooled features + coords_hat"]:::trunk
+  CH --> COND
+
+  COND --> ZP["depth head z&#770;_p (scalar)"]:::newh
+  COND --> ZQ["depth head z&#770;_q (scalar)"]:::newh
+  COND --> MM["MotionMLP: direction d&#770; + type logits"]:::trunk
+  COND --> TR["TrajectoryMLP K=1<br/>delta-cumsum, relative"]:::trunk
+
+  CH --> LIFTP["p&#770; = unproject(coords_hat, z&#770;_p, K)"]:::newh
+  ZP --> LIFTP
+  CO --> LIFTQ["q&#770; = unproject(origin_uv, z&#770;_q, K)"]:::newh
+  ZQ --> LIFTQ
+
+  LIFTP --> OUT["axis line (q&#770;, d&#770;) &#183; radius = dist(p&#770;, line)<br/>absolute trajectory = p&#770; + relative curve<br/>L_pp fed the lifted points"]:::trunk
+  LIFTQ --> OUT
+  MM --> OUT
+  TR --> OUT
+</pre>
+
+<div class="note">
+<b>The structural constraint is back, twice:</b> mask, point heatmap, and origin heatmap come from the SAME projector,
+so "the point lies on the object the mask found" is architecture, not a learned hope — and now the hinge gets the same
+treatment. And because each 3D point is <i>constructed</i> by unprojecting through its own predicted pixel, "the
+projected 3D point lands on its heatmap peak" holds <b>by construction</b> — no consistency loss needed.
+</div>
+
+<h2>Losses (vs gen-6)</h2>
+<table>
+  <tr><th>Term</th><th>What</th><th>Status</th></tr>
+  <tr><td><code>L_mask</code></td><td>DiceBCE</td><td><span class="tag k">KEPT</span></td></tr>
+  <tr><td><code>L_point_map</code> + <code>L_coord</code></td><td>dense BCE on the point heatmap + L1 on coords_hat — the dense localization pressure gen-6 deleted</td><td><span class="tag r">RESTORED</span></td></tr>
+  <tr><td><code>L_origin_map</code> + <code>L_origin_coord</code></td><td>same pair for the origin channel, target = <b>projected $q^*$</b>; revolute rows only, loss-masked on the ~0.3% out-of-frame rows (no dataset filter, eval split unchanged)</td><td><span class="tag n">NEW</span></td></tr>
+  <tr><td><code>L_depth_p</code>, <code>L_depth_q</code></td><td>scalar regression: $\hat{z}_p$ vs GT element-point z, $\hat{z}_q$ vs $q^*_z$ (revolute only)</td><td><span class="tag n">NEW</span> replaces both 3D-point MSEs</td></tr>
+  <tr><td><code>L_motion</code> (1&minus;cos), <code>L_type</code> (CE), <code>L_trajectory</code></td><td>unchanged</td><td><span class="tag k">KEPT</span></td></tr>
+  <tr><td><code>L_pp</code></td><td>all-predicted consistency incl. along-axis drift term — fed the LIFTED $\hat{p}$, $\hat{q}$</td><td><span class="tag k">KEPT</span></td></tr>
+</table>
+<p class="gone">Gone from gen-6: <code>Point3DHead</code> as direct 3D regression (both uses), <code>L_point_3d</code>, <code>L_origin</code> (3D MSE form — its $q^*$ target and gauge logic survive in 2D+depth form).</p>
+
+<h2>Why this shape survives 2D-only pretraining</h2>
+<table>
+  <tr><th>Module</th><th>3D training (SF3D)</th><th>2D pretraining (video)</th></tr>
+  <tr><td>mask + point heatmap + coords</td><td>trains</td><td>trains (2D tracks, masks)</td></tr>
+  <tr><td>origin heatmap</td><td>trains (projected $q^*$)</td><td>idles — no gradient, like the trajectory head</td></tr>
+  <tr><td>depth heads $\hat{z}_p$, $\hat{z}_q$</td><td>train (GT z)</td><td>idle — no depth GT needed, no depth-map lookup anywhere</td></tr>
+  <tr><td>direction / type / trajectory / $L_{pp}$</td><td>train</td><td>idle or 2D variants, as today</td></tr>
+</table>
+<p>No branch in the architecture — the 3D lift only exists where K and 3D GT exist. This is the property that ruled out
+depth-map unprojection: the model must not <i>need</i> a depth input to produce its point.</p>
+
+<h2>Open questions (deliberately not decided yet)</h2>
+<ul>
+  <li><b>Pooling policy:</b> gen-6 pooled under the detached <i>predicted</i> mask; patchy masks meant diluted features
+      for every head. Revert to GT-mask pooling, scheduled handoff, or keep? Decide with gen-6's final mIoU in hand.</li>
+  <li><b>Does origin_uv join the condition vector</b> (like coords_hat does), giving direction/trajectory heads an
+      explicit hinge location — or stay a pure readout?</li>
+  <li><b>Depth head input:</b> condition vector only, or also a feature sample at the heatmap peak (grid_sample at
+      coords_hat) for a more local depth estimate?</li>
+  <li><b>Origin depth supervision on prismatic:</b> fully masked (as drawn), or give $\hat{z}_q$ a weak prior task?</li>
+</ul>
+
+<div class="note"><b>Measurements this design rests on:</b> origin/$q^*$ in-frame 99.6&ndash;100% on both filtered and
+unfiltered v2 splits (1,500 revolute samples each); $q^*$ border margin median ~19% of the long side — soft-argmax has
+room. Gen-6 evidence: direction/type strong, both regressed 3D points weak, grounding failures on random-draw panels.</div>
+
+<script>mermaid.initialize({ startOnLoad: true, theme: 'neutral', flowchart: { htmlLabels: true } });</script>
+</body>
+</html>
