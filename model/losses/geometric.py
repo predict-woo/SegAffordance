@@ -944,8 +944,12 @@ class TrajectoryProjectionLoss(nn.Module):
             or targets.camera_intrinsic is None
             or targets.img_size is None
             or depth is None
+            # This loss lifts coords_hat to 3D, so the 3D point mode
+            # (coords_hat None) cannot run it — no-op there as well.
+            or outputs.coords_hat is None
         ):
-            return self._zero(outputs.coords_hat), {}
+            # mask_logits, not coords_hat: always present in every mode.
+            return self._zero(outputs.mask_logits), {}
         device = outputs.trajectory_pred.device
         device_type = "cuda" if outputs.trajectory_pred.is_cuda else "cpu"
         with torch.autocast(device_type=device_type, enabled=False):

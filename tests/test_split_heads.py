@@ -62,6 +62,11 @@ class _StubBackbone(BackboneBase):
         state = self.state_proj(word.float().mean(dim=1))
         return word, state
 
+    def tokenize(self, texts, context_length):
+        # _common_step calls model.tokenize(); integer ids within the
+        # stub embedding's range are all it needs.
+        return torch.randint(1, 100, (len(texts), context_length))
+
 
 def _params(**over):
     base = dict(
@@ -304,3 +309,72 @@ def test_pp_art_missing_heads_noop_and_factory():
         geometric_loss = "pred_pred_art"
         pred_pred_art_weight = 0.5
     assert isinstance(build_geometric_loss(LP()), PredPredArticulationLoss)
+
+
+# ---- trainer wiring (Task 5) -------------------------------------------------
+
+from config.opd_train import Config, LossParams, OptimizerParams
+from train_SF3D_better import SF3DTrainingModule
+
+
+def _split_module():
+    lp = LossParams(
+        bce_weight=0.5, dice_weight=0.5, mask_weight=0.5,
+        point_map_weight=0.0, coord_weight=0.0, vae_weight=0.5,
+        motion_type_weight=0.5, point_sigma=8.0, vae_beta=0.01,
+        trajectory_weight=0.5, geometric_loss="pred_pred_art",
+        pred_pred_art_weight=0.5, axis_sign_agnostic=False,
+        origin_weight=0.5, point_3d_weight=0.5,
+    )
+    op = OptimizerParams(lr=1e-5, weight_decay=0.0,
+                         scheduler_milestones=[10], scheduler_gamma=0.1)
+    cfg = Config(log_image_interval_steps=0, input_size=[64, 64],
+                 enable_wandb=False, val_vis_samples=0, manual_seed=0)
+    # Same stub-backbone patch as _make_cris: the module constructor builds a
+    # real CRIS, and clip_pretrain="" cannot load.
+    with mock.patch(
+        "model.segmenter.build_backbone",
+        lambda mp, fpn_in: _StubBackbone(fpn_in, word_len=mp.word_len),
+    ):
+        return SF3DTrainingModule(
+            _params(point_prediction_3d=True, use_origin_head=True,
+                    pool_with_predicted_mask=True),
+            lp, op, cfg,
+        )
+
+
+def _sf3d_batch(B=2, N=20, size=64):
+    traj = torch.randn(B, N, 3).cumsum(dim=1) * 0.01 + torch.tensor([0., 0., 1.5])
+    return (
+        torch.randint(0, 255, (B, 3, size, size), dtype=torch.uint8),
+        torch.rand(B, 1, size, size),
+        ["open the door"] * B,
+        (torch.rand(B, 1, size, size) > 0.5).float(),
+        torch.zeros(B, 4),                                  # bbox (unused)
+        torch.rand(B, 2),                                   # point_norm
+        torch.nn.functional.normalize(torch.randn(B, 3), dim=1),
+        torch.tensor([1, 0][:B] if B <= 2 else [1] * B),    # types: rot, trans
+        torch.tensor([[64, 64]] * B),
+        ["f.png"] * B,
+        torch.randn(B, 3) + torch.tensor([0., 0., 1.5]),    # origin_3d
+        torch.eye(3).expand(B, 3, 3),
+        traj,
+    )
+
+
+def test_common_step_split_arm_finite_and_logs_new_terms():
+    m = _split_module()
+    logged = {}
+    m.log = lambda name, value, **kw: logged.__setitem__(
+        name, float(value) if torch.is_tensor(value) else value
+    )
+    loss = m._common_step(_sf3d_batch(), 0, "train")
+    assert torch.isfinite(loss)
+    loss.backward()
+    for key in ("train/L_point_3d", "train/L_origin",
+                "train/L_geo_pred_pred_art", "train/L_motion_type"):
+        assert key in logged, key
+    assert logged["train/L_point_3d"] > 0.0
+    # 2D point losses are zero-valued on the 3D path (stable CSV columns).
+    assert logged["train/L_point_map"] == 0.0
+    assert logged["train/L_coord"] == 0.0

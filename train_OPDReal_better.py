@@ -17,6 +17,7 @@ from config.opd_train import Config, LossParams, ModelParams, OptimizerParams
 from datasets.opdreal_datamodule import OPDRealDataModule
 from model.losses import TwistLoss, build_geometric_loss
 from model.losses.geometric import ScrewConsistencyLoss, TrajectoryProjectionLoss
+from model.losses.split import axis_direction_loss, origin_canonical_loss
 from model.segmenter import CRIS
 from model.targets import StepTargets, unpack_batch
 from utils.tools import DiceBCELoss, MotionVAELoss, create_composite_visualization, make_gaussian_map
@@ -170,30 +171,37 @@ class OPDRealTrainingModule(pl.LightningModule):
 
         L_mask = self.mask_loss_fn(mask_pred_logits, mask_gt_downsampled)
 
-        point_gt_heatmap = make_gaussian_map(
-            point_gt_norm,
-            H_map,
-            W_map,
-            sigma=self.loss_params.point_sigma,
-            device=point_pred_logits.device,
-        )
-        L_point_map = self.point_map_loss_fn(point_pred_logits, point_gt_heatmap)
-        L_coord = self.coord_loss_fn(coords_hat, point_gt_norm.to(coords_hat.device))
+        zero = torch.zeros((), device=mask_pred_logits.device)
+        if point_pred_logits is not None:
+            point_gt_heatmap = make_gaussian_map(
+                point_gt_norm, H_map, W_map,
+                sigma=self.loss_params.point_sigma,
+                device=point_pred_logits.device,
+            )
+            L_point_map = self.point_map_loss_fn(point_pred_logits, point_gt_heatmap)
+            L_coord = self.coord_loss_fn(
+                coords_hat, point_gt_norm.to(coords_hat.device)
+            )
+        else:
+            # 3D point mode: the heatmap channel does not exist; the direct
+            # 3D term below replaces both. Zero-valued (not absent) so the
+            # CSV logger keeps stable columns.
+            L_point_map, L_coord = zero, zero
 
         if motion_pred is None:
             # Axis head off (use_motion_head: false, twist arms): the twist
             # head carries the axis; no axis loss.
-            zero = torch.zeros((), device=coords_hat.device)
             L_vae, L_recon, L_kld = zero, zero, zero
         elif getattr(self.model, "use_cvae", True):
             L_vae, L_recon, L_kld = self.vae_loss_fn(
                 motion_pred, motion_gt.to(motion_pred.device), mu, log_var
             )
         else:
-            # Use 1 - cos^2 for axis direction (antiparallel is OK). Normalize target to avoid zero norms.
-            cos_sim = F.cosine_similarity(motion_pred, motion_gt.to(motion_pred.device), dim=1, eps=1e-4)
-            L_motion = (1.0 - cos_sim.pow(2)).mean()
-            L_vae, L_recon, L_kld = L_motion, L_motion, torch.zeros((), device=motion_pred.device)
+            L_motion = axis_direction_loss(
+                motion_pred, motion_gt.to(motion_pred.device),
+                sign_agnostic=getattr(self.loss_params, "axis_sign_agnostic", True),
+            )
+            L_vae, L_recon, L_kld = L_motion, L_motion, zero
 
         if motion_type_logits is not None:
             L_motion_type = self.motion_type_loss_fn(
@@ -201,7 +209,7 @@ class OPDRealTrainingModule(pl.LightningModule):
             )
         else:
             # Type head off (use_motion_type_head: false)
-            L_motion_type = torch.zeros((), device=coords_hat.device)
+            L_motion_type = zero
 
         total_loss = (
             (self.loss_params.mask_weight * L_mask)
@@ -217,6 +225,52 @@ class OPDRealTrainingModule(pl.LightningModule):
             "point_map": self.loss_params.point_map_weight * L_point_map,
             "coord": self.loss_params.coord_weight * L_coord,
         }
+
+        # gen-6 split arm: direct 3D interaction point (replaces the 2D
+        # point_map+coord pair, gated above) and the canonical q* origin
+        # target (revolute rows only). Both log a stable zero when the
+        # heads/GT are absent, so CSV columns never change shape.
+        L_point_3d = zero
+        if outputs.point_3d_pred is not None and targets.trajectory is not None:
+            anchor_gt = targets.trajectory.to(outputs.point_3d_pred.device)[:, 0]
+            L_point_3d = F.mse_loss(outputs.point_3d_pred, anchor_gt)
+        L_origin = zero
+        if (
+            outputs.origin_pred is not None
+            and targets.motion_origin_3d is not None
+            and targets.trajectory is not None
+        ):
+            dev = outputs.origin_pred.device
+            L_origin = origin_canonical_loss(
+                outputs.origin_pred,
+                targets.motion_origin_3d.to(dev).float(),
+                motion_gt.to(dev).float(),
+                targets.trajectory.to(dev)[:, 0].float(),
+                motion_type_gt,
+            )
+        total_loss = (
+            total_loss
+            + self.loss_params.point_3d_weight * L_point_3d
+            + self.loss_params.origin_weight * L_origin
+        )
+        grad_terms["point_3d"] = self.loss_params.point_3d_weight * L_point_3d
+        grad_terms["origin"] = self.loss_params.origin_weight * L_origin
+        self.log(
+            f"{step_type}/L_point_3d",
+            L_point_3d,
+            on_step=(step_type == "train"),
+            on_epoch=True,
+            logger=True,
+            sync_dist=True,
+        )
+        self.log(
+            f"{step_type}/L_origin",
+            L_origin,
+            on_step=(step_type == "train"),
+            on_epoch=True,
+            logger=True,
+            sync_dist=True,
+        )
 
         # 2D hand/contact track (2D pretraining). Made relative to its own
         # first point, matching how the head predicts and how the 3D

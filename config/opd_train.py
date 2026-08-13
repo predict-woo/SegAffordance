@@ -140,6 +140,17 @@ class LossParams:
     # Read only by the "pred_pred_art" variant (gen-6): all-predicted
     # trajectory <-> axis-line <-> type consistency, soft type gate.
     pred_pred_art_weight: float = 0.5
+    # gen-6 split arm. axis_sign_agnostic True = classical 1 - cos^2
+    # (antiparallel OK — OPD annotates only the axis LINE); False = 1 - cos,
+    # for SF3D where the stored sign is canonical.
+    axis_sign_agnostic: bool = True
+    # MSE toward q* (the GT-axis point perpendicular to the interaction
+    # point), revolute rows only. Consumed when the model has an origin head.
+    origin_weight: float = 0.5
+    # MSE of the direct 3D interaction point vs GT trajectory_3d[0].
+    # Replaces point_map+coord (both zero on the 3D path) at the same
+    # total weight budget.
+    point_3d_weight: float = 0.5
     # Read only by the "projected" variant (2D pretraining).
     projected_weight: float = 1.0
     # Penalty on articulation radius above projected_radius_ref metres. A line
