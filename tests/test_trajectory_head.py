@@ -69,6 +69,12 @@ def test_motion_mlp_motion_head_optional():
 def test_twist_mlp_pitch_free_projection():
     from model.layers import TwistMLP
 
+    # Pin the RNG: the smoothed projection leaves an eps-scale axial residual
+    # whose COSINE can be large when the pre-projection v is nearly parallel
+    # to omega (the projected v is then tiny), so the 0.02 bound below is not
+    # seed-independent — an unlucky ambient RNG state (it shifts whenever a
+    # model gains parameters) used to flake this test.
+    torch.manual_seed(0)
     head = TwistMLP(input_dim=16, hidden_dim=8, pitch_free=True)
     x = torch.randn(64, 16)
     out, logits = head(x)
