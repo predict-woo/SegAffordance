@@ -25,6 +25,12 @@ IMAGE=runpod/pytorch:1.0.3-cu1281-torch291-ubuntu2404
 GPUS=(
   "NVIDIA RTX PRO 6000 Blackwell Server Edition"
   "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
+  "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition"
+  # Fallback: the gen-5 workhorse (~490 samples/s SF3D). PRO 6000 stock in
+  # EU-RO-1 is unreliable ("Low" listings routinely fail actual creates).
+  # NOTE 4500-class hosts cap /dev/shm at 29G — launch stages LMDBs on
+  # container NVMe (/root/lmdb) and runs 24 workers (see launch).
+  "NVIDIA RTX PRO 4500 Blackwell"
 )
 
 pod_id() {
