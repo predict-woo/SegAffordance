@@ -1,7 +1,9 @@
 """Geometric consistency losses between the motion/twist and trajectory heads.
 
 Selected by ``LossParams.geometric_loss``: ``cross_gt`` | ``pred_pred`` |
-``projected`` | ``screw`` | ``none``. The first two are described below;
+``pred_pred_art`` | ``projected`` | ``screw`` | ``none``. The first two are
+described below; ``pred_pred_art`` (gen-6 all-predicted trajectory/axis-line/
+type consistency),
 ``projected`` (2D-track alignment) and ``screw`` (twist-native, no motion-type
 branching) document themselves on their classes.
 
@@ -130,6 +132,84 @@ class PredPredGeometricLoss(GeometricConsistencyLoss):
         # The key is emitted whenever the dataset has trajectories at all, so
         # the CSV logger sees a stable set of columns across steps.
         return self.weight * term, {"L_geo_pred_pred": term}
+
+
+class PredPredArticulationLoss(GeometricConsistencyLoss):
+    """Gen-6 all-predicted consistency: trajectory <-> axis line <-> type.
+
+    The classical line/circle residual forms with every input a prediction —
+    possible only now that the origin is predicted (the cross-GT scheme had
+    to teacher-force it). No field of ``targets`` is read: GT reaches each
+    head only through its own direct loss, which is also what anchors the
+    mutually-consistent-but-wrong failure mode.
+
+    Everything lives in the trajectory's relative frame (first point = 0 =
+    the predicted interaction point), so the predicted axis point is
+    ``origin_pred - point_3d_pred``. The type gate is the SOFT predicted
+    P(revolute) — coupling strengthens as the type head sharpens (same
+    self-switching as PredPredGeometricLoss). Degenerate predicted curves
+    (no displacement energy) are dropped from the batch mean: a zero curve
+    satisfies any axis and would otherwise push the gate around.
+    """
+
+    def __init__(self, weight: float, degenerate_threshold: float = 1e-6):
+        super().__init__()
+        self.weight = weight
+        self.degenerate_threshold = degenerate_threshold
+
+    def forward(self, outputs, targets, depth=None) -> LossTerms:
+        required = (
+            outputs.trajectory_pred, outputs.motion_pred,
+            outputs.motion_type_logits, outputs.origin_pred,
+            outputs.point_3d_pred,
+        )
+        if any(r is None for r in required):
+            return self._zero(outputs.mask_logits), {}
+
+        # fp32 throughout (precision-16 runs; ratios/norms under autocast).
+        d = outputs.trajectory_pred.float()                       # (B, N, 3)
+        dhat = F.normalize(outputs.motion_pred.float(), p=2, dim=1, eps=1e-8)
+        dhat_n = dhat[:, None, :]
+
+        # Prismatic: displacement energy perpendicular to the axis.
+        l_line = torch.cross(d, dhat_n.expand_as(d), dim=-1).pow(2).sum(-1).mean(-1)
+
+        # Revolute: squared distance to the predicted CIRCLE — the orbit of
+        # the anchor (first point, 0 by construction) about the predicted
+        # axis line. Two components: radial (distance to the axis line stays
+        # at r_hat, the anchor's own distance) and axial (no drift along the
+        # axis from the anchor's own plane — the element's plane, NOT the
+        # hinge pin's, so this is not the plane-term bug corrected in
+        # CrossGTGeometricLoss). The axial term is what separates a line
+        # parallel to the axis (constant line-distance, yet not an orbit)
+        # from a true circle; it never reads c, so origin gauge freedom
+        # along the axis is preserved.
+        c = (outputs.origin_pred - outputs.point_3d_pred).float()[:, None, :]
+
+        def _line_dist(x):
+            rel = x - c
+            along = (rel * dhat_n).sum(-1, keepdim=True)
+            return (rel - along * dhat_n).norm(dim=-1)
+
+        r_hat = _line_dist(torch.zeros_like(d[:, :1]))            # (B, 1)
+        axial_drift = (d * dhat_n).sum(-1)                        # (B, N)
+        l_circle = (
+            (_line_dist(d) - r_hat).pow(2) + axial_drift.pow(2)
+        ).mean(-1)                                                # (B,)
+
+        p_rev = outputs.motion_type_logits.float().softmax(dim=-1)[:, 1]
+        per_sample = (1.0 - p_rev) * l_line + p_rev * l_circle
+
+        energy = d.pow(2).sum(dim=(-1, -2))
+        valid = energy > self.degenerate_threshold
+        if bool(valid.any()):
+            term = per_sample[valid].mean()
+        else:
+            # Graph-connected zero (not a fresh constant): callers backward
+            # through the total unconditionally, and the inputs must receive
+            # (zero) gradients rather than a "does not require grad" error.
+            term = per_sample.sum() * 0.0
+        return self.weight * term, {"L_geo_pred_pred_art": term}
 
 
 def normalized_intrinsics(K: torch.Tensor, img_size: torch.Tensor) -> torch.Tensor:
@@ -797,6 +877,10 @@ def build_geometric_loss(loss_params) -> GeometricConsistencyLoss:
         return PredPredGeometricLoss(
             weight=getattr(loss_params, "pred_pred_weight", 0.1)
         )
+    if name == "pred_pred_art":
+        return PredPredArticulationLoss(
+            weight=getattr(loss_params, "pred_pred_art_weight", 0.5)
+        )
     if name == "projected":
         return ProjectedGeometricLoss(
             weight=getattr(loss_params, "projected_weight", 1.0),
@@ -818,7 +902,7 @@ def build_geometric_loss(loss_params) -> GeometricConsistencyLoss:
 
     raise ValueError(
         f"unknown geometric_loss {name!r} — expected 'cross_gt', 'pred_pred', "
-        f"'projected', 'screw' or 'none'"
+        f"'pred_pred_art', 'projected', 'screw' or 'none'"
     )
 
 

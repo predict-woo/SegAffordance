@@ -137,6 +137,9 @@ class LossParams:
     # Read only by the "pred_pred" variant. Kept well under motion_type_weight
     # so the type head stays anchored by its own cross-entropy.
     pred_pred_weight: float = 0.1
+    # Read only by the "pred_pred_art" variant (gen-6): all-predicted
+    # trajectory <-> axis-line <-> type consistency, soft type gate.
+    pred_pred_art_weight: float = 0.5
     # Read only by the "projected" variant (2D pretraining).
     projected_weight: float = 1.0
     # Penalty on articulation radius above projected_radius_ref metres. A line

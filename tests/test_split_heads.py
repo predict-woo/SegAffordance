@@ -207,3 +207,100 @@ def test_axis_loss_sign_sensitivity():
     assert axis_direction_loss(-a, a, sign_agnostic=True).item() < 1e-6
     assert abs(axis_direction_loss(-a, a, sign_agnostic=False).item() - 2.0) < 1e-5
     assert axis_direction_loss(a, a, sign_agnostic=False).item() < 1e-6
+
+
+# ---- PredPredArticulationLoss (Task 4) --------------------------------------
+
+from model.losses.geometric import PredPredArticulationLoss, build_geometric_loss
+from model.outputs import ModelOutputs
+from model.targets import StepTargets
+
+
+def _pp_outputs(traj, dhat, p_rev_logit, origin, anchor):
+    B = traj.shape[0]
+    logits = torch.stack(
+        [torch.zeros(B), torch.full((B,), p_rev_logit)], dim=1
+    )
+    return ModelOutputs(
+        mask_logits=torch.zeros(B, 1, 4, 4),
+        motion_pred=dhat, motion_type_logits=logits,
+        trajectory_pred=traj, origin_pred=origin, point_3d_pred=anchor,
+    )
+
+
+def test_pp_art_reads_no_targets_and_perfect_prismatic_scores_zero():
+    B, N = 3, 20
+    dhat = torch.nn.functional.normalize(torch.randn(B, 3), dim=1)
+    t = torch.linspace(0, 0.4, N)[None, :, None]
+    traj = dhat[:, None, :] * t                       # relative, parallel to dhat
+    out = _pp_outputs(traj, dhat, p_rev_logit=-20.0,  # P(rev) ~ 0
+                      origin=torch.randn(B, 3), anchor=torch.randn(B, 3))
+    loss_fn = PredPredArticulationLoss(weight=0.5)
+    total, terms = loss_fn(out, StepTargets())        # EMPTY targets: GT-free
+    assert terms["L_geo_pred_pred_art"].item() < 1e-8
+
+
+def _circle_traj(center_rel, dhat, start_rel, thetas):
+    # Rotate start_rel about the axis (center_rel, dhat): relative curve.
+    r0 = start_rel - center_rel
+    axial = (r0 * dhat).sum() * dhat
+    x = r0 - axial
+    y = torch.cross(dhat, x, dim=-1)
+    pts = [center_rel + axial + torch.cos(th) * x + torch.sin(th) * y
+           for th in thetas]
+    curve = torch.stack(pts)                          # (N, 3), absolute-rel
+    return curve - curve[0:1]                         # first point pinned to 0
+
+
+def test_pp_art_perfect_revolute_scores_zero_and_gauge_along_axis():
+    dhat = torch.nn.functional.normalize(torch.tensor([[0.0, 1.0, 0.0]]), dim=1)
+    anchor = torch.tensor([[0.5, 0.2, 1.0]])
+    origin = torch.tensor([[0.1, 0.2, 1.0]])          # axis point near anchor
+    center_rel = (origin - anchor)[0]
+    traj = _circle_traj(center_rel, dhat[0], torch.zeros(3),
+                        torch.linspace(0, 1.2, 20))[None]
+    out = _pp_outputs(traj, dhat, p_rev_logit=20.0, origin=origin, anchor=anchor)
+    loss_fn = PredPredArticulationLoss(weight=0.5)
+    _, terms = loss_fn(out, StepTargets())
+    assert terms["L_geo_pred_pred_art"].item() < 1e-6
+    # Sliding the predicted origin ALONG the predicted axis changes nothing.
+    out2 = _pp_outputs(traj, dhat, 20.0, origin + 2.5 * dhat, anchor)
+    _, terms2 = loss_fn(out2, StepTargets())
+    assert abs(terms2["L_geo_pred_pred_art"].item()
+               - terms["L_geo_pred_pred_art"].item()) < 1e-6
+
+
+def test_pp_art_soft_gate_selects_branch():
+    # A straight-line trajectory: near-zero under P(rev)=0, positive under
+    # P(rev)=1 (a line is not a constant-radius orbit about a nearby axis).
+    dhat = torch.nn.functional.normalize(torch.tensor([[1.0, 0.0, 0.0]]), dim=1)
+    t = torch.linspace(0, 0.4, 20)[None, :, None]
+    traj = dhat[:, None, :] * t
+    origin = torch.tensor([[0.0, 0.1, 0.0]])
+    anchor = torch.zeros(1, 3)
+    loss_fn = PredPredArticulationLoss(weight=1.0)
+    _, pris = loss_fn(_pp_outputs(traj, dhat, -20.0, origin, anchor), StepTargets())
+    _, rev = loss_fn(_pp_outputs(traj, dhat, 20.0, origin, anchor), StepTargets())
+    assert pris["L_geo_pred_pred_art"].item() < 1e-8
+    assert rev["L_geo_pred_pred_art"].item() > 1e-3
+
+
+def test_pp_art_degenerate_trajectory_masked():
+    dhat = torch.nn.functional.normalize(torch.randn(2, 3), dim=1)
+    traj = torch.zeros(2, 20, 3, requires_grad=True)  # zero motion: no direction
+    out = _pp_outputs(traj, dhat, 0.0, torch.randn(2, 3), torch.randn(2, 3))
+    total, terms = PredPredArticulationLoss(weight=0.5)(out, StepTargets())
+    assert terms["L_geo_pred_pred_art"].item() == 0.0
+    total.backward()
+    assert torch.isfinite(traj.grad).all()
+
+
+def test_pp_art_missing_heads_noop_and_factory():
+    out = ModelOutputs(mask_logits=torch.zeros(1, 1, 4, 4))
+    total, terms = PredPredArticulationLoss(weight=0.5)(out, StepTargets())
+    assert total.item() == 0.0 and terms == {}
+
+    class LP:  # minimal LossParams stand-in
+        geometric_loss = "pred_pred_art"
+        pred_pred_art_weight = 0.5
+    assert isinstance(build_geometric_loss(LP()), PredPredArticulationLoss)
