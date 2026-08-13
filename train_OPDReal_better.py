@@ -16,8 +16,12 @@ from torch.utils.data import Dataset
 from config.opd_train import Config, LossParams, ModelParams, OptimizerParams
 from datasets.opdreal_datamodule import OPDRealDataModule
 from model.losses import TwistLoss, build_geometric_loss
-from model.losses.geometric import ScrewConsistencyLoss, TrajectoryProjectionLoss
-from model.losses.split import axis_direction_loss, origin_canonical_loss
+from model.losses.geometric import (
+    ScrewConsistencyLoss,
+    TrajectoryProjectionLoss,
+    normalized_intrinsics,
+)
+from model.losses.split import axis_direction_loss, origin_canonical_loss, project_q_star
 from model.segmenter import CRIS
 from model.targets import StepTargets, unpack_batch
 from utils.tools import DiceBCELoss, MotionVAELoss, create_composite_visualization, make_gaussian_map
@@ -69,8 +73,12 @@ class OPDRealTrainingModule(pl.LightningModule):
         self.trajectory_loss_fn = nn.MSELoss()
         # "cross_gt" (default, historical) | "pred_pred" | "none".
         # Each variant no-ops on batches lacking the targets it needs, so OPD
-        # runs are unaffected whichever is selected.
-        self.geometric_loss = build_geometric_loss(self.loss_params)
+        # runs are unaffected whichever is selected. gen-7's absolute
+        # trajectory head changes what frame the pred-pred variant works in.
+        self.geometric_loss = build_geometric_loss(
+            self.loss_params,
+            trajectory_is_absolute=getattr(model_params, "trajectory_absolute", False),
+        )
         # No-ops unless the model has a twist head AND the batch carries a 3D
         # origin (SF3D), same convention as the geometric losses.
         self.traj_projection_loss = TrajectoryProjectionLoss(
@@ -115,11 +123,11 @@ class OPDRealTrainingModule(pl.LightningModule):
 
     def forward(
         self, img, depth, tokenized_word, mask_condition, point_condition, motion_gt,
-        motion_type_input=None,
+        motion_type_input=None, intrinsics_norm=None,
     ):
         return self.model(
             img, depth, tokenized_word, mask_condition, point_condition, motion_gt,
-            motion_type_input,
+            motion_type_input, intrinsics_norm,
         )
 
     def _common_step(self, batch, batch_idx, step_type="train"):
@@ -152,9 +160,19 @@ class OPDRealTrainingModule(pl.LightningModule):
                 dropped, torch.full_like(types, null_index), types
             )
 
+        # gen-7: fold the batch intrinsics into the normalized [0, 1] form
+        # once; the model lifts its 2D heads to 3D with it. None (OPD
+        # batches) means no lift — the lifted fields stay None.
+        K_norm = None
+        if targets.camera_intrinsic is not None:
+            K_norm = normalized_intrinsics(
+                targets.camera_intrinsic.to(self.device).float(),
+                targets.img_size.to(self.device).float(),
+            )
+
         outputs = self(
             img, depth, tokenized_words, mask_gt, point_gt_norm, motion_gt,
-            motion_type_input,
+            motion_type_input, K_norm,
         )
         mask_pred_logits = outputs.mask_logits
         point_pred_logits = outputs.point_logits
@@ -234,6 +252,25 @@ class OPDRealTrainingModule(pl.LightningModule):
         if outputs.point_3d_pred is not None and targets.trajectory is not None:
             anchor_gt = targets.trajectory.to(outputs.point_3d_pred.device)[:, 0]
             L_point_3d = F.mse_loss(outputs.point_3d_pred, anchor_gt)
+        # gen-7 in-frame gate: project the canonical origin target q* with
+        # the batch intrinsics. valid_q marks rows whose q* is in front of
+        # the camera AND inside the frame; uv_q is its normalized [0, 1]
+        # projection (finite even where invalid — masking is the only
+        # consumer of validity).
+        uv_q = valid_q = None
+        if (
+            K_norm is not None
+            and targets.motion_origin_3d is not None
+            and targets.trajectory is not None
+        ):
+            dev = K_norm.device
+            uv_q, valid_q = project_q_star(
+                targets.motion_origin_3d.to(dev).float(),
+                motion_gt.to(dev).float(),
+                targets.trajectory.to(dev)[:, 0].float(),
+                K_norm,
+            )
+
         L_origin = zero
         if (
             outputs.origin_pred is not None
@@ -241,20 +278,52 @@ class OPDRealTrainingModule(pl.LightningModule):
             and targets.trajectory is not None
         ):
             dev = outputs.origin_pred.device
+            origin_type = motion_type_gt
+            if valid_q is not None:
+                # Out-of-frame q* rows excluded from all origin supervision —
+                # spec 2026-08-14. Zeroing the row's type drops it from
+                # origin_canonical_loss (prismatic rows contribute nothing).
+                origin_type = motion_type_gt.clone()
+                origin_type[~valid_q.to(origin_type.device)] = 0
             L_origin = origin_canonical_loss(
                 outputs.origin_pred,
                 targets.motion_origin_3d.to(dev).float(),
                 motion_gt.to(dev).float(),
                 targets.trajectory.to(dev)[:, 0].float(),
-                motion_type_gt,
+                origin_type,
             )
+
+        # gen-7: BCE the raw origin-heatmap channel toward a Gaussian at
+        # q*'s projection. Rows count only when revolute AND q* is in frame;
+        # a graph-connected zero keeps backward legal when none survive
+        # (same convention as L_origin).
+        L_origin_map = zero
+        if outputs.origin_logits is not None and valid_q is not None:
+            heat = make_gaussian_map(
+                uv_q, H_map, W_map, self.loss_params.point_sigma,
+                outputs.origin_logits.device,
+            )
+            per_sample = F.binary_cross_entropy_with_logits(
+                outputs.origin_logits, heat, reduction="none"
+            ).mean(dim=(1, 2, 3))
+            row_mask = valid_q.to(per_sample.device) & (
+                motion_type_gt.to(per_sample.device) == 1
+            )
+            if bool(row_mask.any()):
+                L_origin_map = per_sample[row_mask].mean()
+            else:
+                L_origin_map = per_sample.sum() * 0.0
+
+        origin_map_weight = getattr(self.loss_params, "origin_map_weight", 0.5)
         total_loss = (
             total_loss
             + self.loss_params.point_3d_weight * L_point_3d
             + self.loss_params.origin_weight * L_origin
+            + origin_map_weight * L_origin_map
         )
         grad_terms["point_3d"] = self.loss_params.point_3d_weight * L_point_3d
         grad_terms["origin"] = self.loss_params.origin_weight * L_origin
+        grad_terms["origin_map"] = origin_map_weight * L_origin_map
         self.log(
             f"{step_type}/L_point_3d",
             L_point_3d,
@@ -266,6 +335,14 @@ class OPDRealTrainingModule(pl.LightningModule):
         self.log(
             f"{step_type}/L_origin",
             L_origin,
+            on_step=(step_type == "train"),
+            on_epoch=True,
+            logger=True,
+            sync_dist=True,
+        )
+        self.log(
+            f"{step_type}/L_origin_map",
+            L_origin_map,
             on_step=(step_type == "train"),
             on_epoch=True,
             logger=True,
@@ -343,14 +420,22 @@ class OPDRealTrainingModule(pl.LightningModule):
             and outputs.trajectory_pred is not None
             and not twist_aux["handled_traj"]
         ):
-            # Convert GT trajectory to relative coordinates (first point at origin);
-            # the model predicts relative, so they compare directly.
             trajectory_gt_device = targets.trajectory.to(outputs.trajectory_pred.device)
-            trajectory_gt_relative = trajectory_gt_device - trajectory_gt_device[:, 0:1, :]
-
-            L_trajectory = self.trajectory_loss_fn(
-                outputs.trajectory_pred, trajectory_gt_relative
-            )
+            if getattr(self.model_params, "trajectory_absolute", False):
+                # gen-7: the head emits absolute camera-frame points — the
+                # GT compares directly, no relative subtraction.
+                L_trajectory = self.trajectory_loss_fn(
+                    outputs.trajectory_pred, trajectory_gt_device
+                )
+            else:
+                # Convert GT trajectory to relative coordinates (first point at
+                # origin); the model predicts relative, so they compare directly.
+                trajectory_gt_relative = (
+                    trajectory_gt_device - trajectory_gt_device[:, 0:1, :]
+                )
+                L_trajectory = self.trajectory_loss_fn(
+                    outputs.trajectory_pred, trajectory_gt_relative
+                )
             total_loss = total_loss + self.loss_params.trajectory_weight * L_trajectory
             grad_terms["trajectory"] = self.loss_params.trajectory_weight * L_trajectory
             self.log(

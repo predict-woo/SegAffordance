@@ -393,6 +393,7 @@ class CRIS(nn.Module):
 
         # gen-7: origin heatmap channel -> soft-argmax origin_uv in [0, 1].
         origin_uv = None
+        origin_logits = None
         if self.use_origin_heatmap:
             origin_logits = maps[:, 2:3]
             _, _, H_map, W_map = origin_logits.shape
@@ -577,4 +578,5 @@ class CRIS(nn.Module):
             point_3d_pred=point_3d_pred,
             origin_pred=origin_pred,
             origin_uv=origin_uv,
+            origin_logits=origin_logits,
         )

@@ -181,3 +181,74 @@ def test_pp_art_absolute_soft_gate_selects_branch():
                      StepTargets())
     assert pris["L_geo_pred_pred_art"].item() < 1e-8
     assert rev["L_geo_pred_pred_art"].item() > 1e-3
+
+
+# ---- trainer wiring (Task 4) -------------------------------------------------
+
+from unittest import mock
+
+from config.opd_train import Config, LossParams, OptimizerParams
+from tests.test_split_heads import _sf3d_batch, _StubBackbone  # noqa: E402
+from train_SF3D_better import SF3DTrainingModule
+
+
+def _g7_module():
+    # Mirrors test_split_heads._split_module, but with the gen-7 flags:
+    # classical 2D point path (point_prediction_3d/use_origin_head off) plus
+    # origin heatmap, point depth, and an absolute trajectory head.
+    lp = LossParams(
+        bce_weight=0.5, dice_weight=0.5, mask_weight=0.5,
+        point_map_weight=0.5, coord_weight=0.5, vae_weight=0.5,
+        motion_type_weight=0.5, point_sigma=8.0, vae_beta=0.01,
+        trajectory_weight=0.5, geometric_loss="pred_pred_art",
+        pred_pred_art_weight=0.5, axis_sign_agnostic=False,
+        origin_weight=0.5, point_3d_weight=0.5, origin_map_weight=0.5,
+    )
+    op = OptimizerParams(lr=1e-5, weight_decay=0.0,
+                         scheduler_milestones=[10], scheduler_gamma=0.1)
+    cfg = Config(log_image_interval_steps=0, input_size=[64, 64],
+                 enable_wandb=False, val_vis_samples=0, manual_seed=0)
+    with mock.patch(
+        "model.segmenter.build_backbone",
+        lambda mp, fpn_in: _StubBackbone(fpn_in, word_len=mp.word_len),
+    ):
+        return SF3DTrainingModule(
+            _params(use_origin_heatmap=True, predict_point_depth=True,
+                    trajectory_absolute=True, trajectory_delta_cumsum=False,
+                    pool_with_predicted_mask=True),
+            lp, op, cfg,
+        )
+
+
+def _g7_batch():
+    # _sf3d_batch's K is eye(3) at "original" 64x64 resolution, so the
+    # normalized fx/fy become 1/64 with cx = cy = 0 — a random q* then
+    # projects to u/v < 0 half the time (out of frame -> valid_q False).
+    # Pin the revolute row's axis to pass through [0.5, 0.5, 1.5] along +z:
+    # q* = [0.5, 0.5, p_z], whose projection lands inside [0, 1)^2 under
+    # that K, guaranteeing valid_q (per the brief: adjust the batch helper
+    # usage, never the production code).
+    b = list(_sf3d_batch())
+    b[6] = b[6].clone()
+    b[6][0] = torch.tensor([0.0, 0.0, 1.0])       # motion axis, revolute row
+    b[10] = b[10].clone()
+    b[10][0] = torch.tensor([0.5, 0.5, 1.5])      # motion_origin_3d
+    return tuple(b)
+
+
+def test_g7_common_step_finite_and_logs_lift_terms():
+    m = _g7_module()
+    logged = {}
+    m.log = lambda name, value, **kw: logged.__setitem__(
+        name, float(value) if torch.is_tensor(value) else value
+    )
+    loss = m._common_step(_g7_batch(), 0, "train")
+    assert torch.isfinite(loss)
+    loss.backward()
+    for key in ("train/L_origin_map", "train/L_point_3d", "train/L_origin",
+                "train/L_trajectory", "train/L_point_map", "train/L_coord"):
+        assert key in logged, key
+    # The lifted 3D point supervises against traj[:, 0], and the revolute
+    # row's in-frame q* activates the origin heatmap BCE.
+    assert logged["train/L_origin_map"] > 0.0
+    assert logged["train/L_point_3d"] > 0.0
