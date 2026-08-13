@@ -69,14 +69,14 @@ flowchart TB
   COND --> ZP["depth head z&#770;_p (scalar)"]:::newh
   COND --> ZQ["depth head z&#770;_q (scalar)"]:::newh
   COND --> MM["MotionMLP: direction d&#770; + type logits"]:::trunk
-  COND --> TR["TrajectoryMLP K=1<br/>delta-cumsum, relative"]:::trunk
+  COND --> TR["TrajectoryMLP K=1 (CHANGED)<br/>20 ABSOLUTE camera-frame 3D points<br/>direct readout - no delta-cumsum, no relative frame"]:::newh
 
   CH --> LIFTP["p&#770; = unproject(point_uv, z&#770;_p, K)"]:::newh
   ZP --> LIFTP
   CO --> LIFTQ["q&#770; = unproject(origin_uv, z&#770;_q, K)"]:::newh
   ZQ --> LIFTQ
 
-  LIFTP --> OUT["axis line (q&#770;, d&#770;) &#183; radius = dist(p&#770;, line)<br/>absolute trajectory = p&#770; + relative curve<br/>L_pp fed the lifted points"]:::trunk
+  LIFTP --> OUT["axis line (q&#770;, d&#770;) &#183; radius = dist(p&#770;, line)<br/>trajectory is ALREADY absolute (self-anchored)<br/>L_pp fed the lifted q&#770;, p&#770; + in-loss relative displacements"]:::trunk
   LIFTQ --> OUT
   MM --> OUT
   TR --> OUT
@@ -96,8 +96,9 @@ projected 3D point lands on its heatmap peak" holds <b>by construction</b> — n
   <tr><td><code>L_point_map</code>, <code>L_origin_map</code></td><td>the classical dense mechanism, used twice: render a Gaussian bump (<code>make_gaussian_map</code>, $\sigma$ = point_sigma) at the GT pixel, BCE against the predicted channel. Point channel: Gaussian at the projected GT <b>element point</b>. Origin channel: Gaussian at <b>projected $q^*$</b> — revolute rows only, loss-masked on the ~0.3% out-of-frame rows (no dataset filter, eval split unchanged). The spatial-shape supervision gen-6 deleted.</td><td><span class="tag r">RESTORED</span> / <span class="tag n">NEW</span></td></tr>
   <tr><td><code>L_point_3d</code></td><td>$\lVert \mathrm{unproject}(\text{point\_uv}, \hat{z}_p, K) - p_{gt} \rVert^2$ — <b>compose first, then one 3D loss</b>: pixel and depth errors priced jointly in meters at the object; gradients reach the heatmap through soft-argmax</td><td><span class="tag n">NEW</span> (user decision: composed, not split 2D+z)</td></tr>
   <tr><td><code>L_origin_3d</code></td><td>$\lVert \mathrm{unproject}(\text{origin\_uv}, \hat{z}_q, K) - q^* \rVert^2$ — same composed form, revolute rows only; $q^*$ canonicalization unchanged</td><td><span class="tag n">NEW</span> (user decision)</td></tr>
-  <tr><td><code>L_motion</code> (1&minus;cos), <code>L_type</code> (CE), <code>L_trajectory</code></td><td>unchanged</td><td><span class="tag k">KEPT</span></td></tr>
-  <tr><td><code>L_pp</code></td><td>all-predicted consistency incl. along-axis drift term — fed the LIFTED $\hat{p}$, $\hat{q}$</td><td><span class="tag k">KEPT</span></td></tr>
+  <tr><td><code>L_motion</code> (1&minus;cos), <code>L_type</code> (CE)</td><td>unchanged</td><td><span class="tag k">KEPT</span></td></tr>
+  <tr><td><code>L_trajectory</code></td><td>per-point MSE in <b>absolute camera coordinates</b>: predict 20 absolute 3D points directly, compare each to the GT point (no relative frame, no delta-cumsum). Point 0's target IS the element point, so this deliberately supervises the interaction point twice (redundancy accepted — the lifted $\hat{p}$ vs trajectory[0] gap becomes a free consistency readout at eval).</td><td><span class="tag n">CHANGED</span> (user decision)</td></tr>
+  <tr><td><code>L_pp</code></td><td>all-predicted consistency incl. along-axis drift term — fed the LIFTED $\hat{p}$, $\hat{q}$; relative displacements $d_i = \text{traj}_i - \text{traj}_0$ computed inside the loss</td><td><span class="tag k">KEPT</span></td></tr>
 </table>
 <p class="gone">Gone from gen-6: <code>Point3DHead</code> as direct 3D regression (both uses) and the pooled-vector 3D MSEs — the $q^*$ target and its gauge logic survive, now reached through the heatmap+depth lift. Also gone vs gen-6: the unfrozen backbone (CLIP FROZEN again, user decision — watch item: gen-5's frozen run regressed masks to mIoU 0.090, and gen-7 leans on the mask harder than any generation; if gen-7 masks come out weak, the backbone is the first suspect).</p>
 
@@ -123,6 +124,11 @@ depth-map unprojection: the model must not <i>need</i> a depth input to produce 
       its readout there — if pathological, feed it detached (one line).</li>
   <li><b>Depth head input:</b> condition vector only, or also a feature sample at the heatmap peak (grid_sample at
       point_uv) for a more local depth estimate?</li>
+  <li><b>Trajectory watch items (user decision accepted, risks on record):</b> direct absolute per-point readout
+      reverses two documented fixes — (1) the zigzag point-cloud failure that delta-cumsum solved
+      (viz/20260803_sf3d_twist_traj_points), (2) absolute-3D-from-pooled-vector is the exact pattern that scored
+      0.58 m in gen-6 (mitigated here by point_uv/origin_uv in the condition + dense trunk supervision, but
+      unproven). Both old paths stay flag-gated; fallback is a config flip.</li>
   <li><b>Origin depth supervision on prismatic:</b> fully masked (as drawn), or give $\hat{z}_q$ a weak prior task?</li>
 </ul>
 
