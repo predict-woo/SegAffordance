@@ -135,3 +135,49 @@ def test_absolute_trajectory_head_no_zero_pin():
     assert not torch.allclose(out[:, :, 0], torch.zeros(3, 1, 3))
     with pytest.raises(AssertionError):
         TrajectoryMLP(input_dim=8, delta_cumsum=True, absolute=True)
+
+
+# ---- PredPredArticulationLoss absolute-trajectory mode (Task 3) -------------
+
+from model.losses.geometric import PredPredArticulationLoss
+from model.targets import StepTargets
+from tests.test_split_heads import _circle_traj, _pp_outputs  # noqa: E402
+
+
+def test_pp_art_absolute_perfect_revolute_scores_zero_and_gauge_along_axis():
+    # Same perfect circle as the relative-mode test, but the trajectory is
+    # ABSOLUTE: every point offset by the (arbitrary) first-point position.
+    # point_3d_pred is None — absolute mode must not read it.
+    dhat = torch.nn.functional.normalize(torch.tensor([[0.0, 1.0, 0.0]]), dim=1)
+    first = torch.tensor([[0.5, 0.2, 1.0]])           # absolute first point
+    origin = torch.tensor([[0.1, 0.2, 1.0]])          # axis point near it
+    center_rel = (origin - first)[0]
+    rel = _circle_traj(center_rel, dhat[0], torch.zeros(3),
+                       torch.linspace(0, 1.2, 20))[None]
+    traj = rel + first[:, None, :]                    # absolute curve
+    out = _pp_outputs(traj, dhat, p_rev_logit=20.0, origin=origin, anchor=None)
+    loss_fn = PredPredArticulationLoss(weight=0.5, trajectory_is_absolute=True)
+    _, terms = loss_fn(out, StepTargets())
+    assert terms["L_geo_pred_pred_art"].item() < 1e-6
+    # Sliding the predicted origin ALONG the predicted axis changes nothing.
+    out2 = _pp_outputs(traj, dhat, 20.0, origin + 2.5 * dhat, anchor=None)
+    _, terms2 = loss_fn(out2, StepTargets())
+    assert abs(terms2["L_geo_pred_pred_art"].item()
+               - terms["L_geo_pred_pred_art"].item()) < 1e-6
+
+
+def test_pp_art_absolute_soft_gate_selects_branch():
+    # Straight absolute line: near-zero under P(rev)=0, positive under
+    # P(rev)=1 — identical to the relative test up to a constant offset.
+    dhat = torch.nn.functional.normalize(torch.tensor([[1.0, 0.0, 0.0]]), dim=1)
+    t = torch.linspace(0, 0.4, 20)[None, :, None]
+    offset = torch.tensor([[0.3, -0.7, 1.5]])         # arbitrary absolute start
+    traj = dhat[:, None, :] * t + offset[:, None, :]
+    origin = offset + torch.tensor([[0.0, 0.1, 0.0]])
+    loss_fn = PredPredArticulationLoss(weight=1.0, trajectory_is_absolute=True)
+    _, pris = loss_fn(_pp_outputs(traj, dhat, -20.0, origin, anchor=None),
+                      StepTargets())
+    _, rev = loss_fn(_pp_outputs(traj, dhat, 20.0, origin, anchor=None),
+                     StepTargets())
+    assert pris["L_geo_pred_pred_art"].item() < 1e-8
+    assert rev["L_geo_pred_pred_art"].item() > 1e-3

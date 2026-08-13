@@ -145,29 +145,41 @@ class PredPredArticulationLoss(GeometricConsistencyLoss):
 
     Everything lives in the trajectory's relative frame (first point = 0 =
     the predicted interaction point), so the predicted axis point is
-    ``origin_pred - point_3d_pred``. The type gate is the SOFT predicted
-    P(revolute) — coupling strengthens as the type head sharpens (same
-    self-switching as PredPredGeometricLoss). Degenerate predicted curves
-    (no displacement energy) are dropped from the batch mean: a zero curve
-    satisfies any axis and would otherwise push the gate around.
+    ``origin_pred - point_3d_pred``. With ``trajectory_is_absolute`` the
+    head emits camera-frame points instead: the relative curve is rebuilt
+    in-loss as ``traj - traj[:, :1]`` and the axis point becomes
+    ``origin_pred - traj[:, 0]`` — ``point_3d_pred`` is never read there.
+    The type gate is the SOFT predicted P(revolute) — coupling strengthens
+    as the type head sharpens (same self-switching as
+    PredPredGeometricLoss). Degenerate predicted curves (no displacement
+    energy) are dropped from the batch mean: a zero curve satisfies any
+    axis and would otherwise push the gate around.
     """
 
-    def __init__(self, weight: float, degenerate_threshold: float = 1e-6):
+    def __init__(
+        self,
+        weight: float,
+        degenerate_threshold: float = 1e-6,
+        trajectory_is_absolute: bool = False,
+    ):
         super().__init__()
         self.weight = weight
         self.degenerate_threshold = degenerate_threshold
+        self.trajectory_is_absolute = trajectory_is_absolute
 
     def forward(self, outputs, targets, depth=None) -> LossTerms:
         required = (
             outputs.trajectory_pred, outputs.motion_pred,
             outputs.motion_type_logits, outputs.origin_pred,
-            outputs.point_3d_pred,
         )
+        if not self.trajectory_is_absolute:
+            required = required + (outputs.point_3d_pred,)
         if any(r is None for r in required):
             return self._zero(outputs.mask_logits), {}
 
         # fp32 throughout (precision-16 runs; ratios/norms under autocast).
-        d = outputs.trajectory_pred.float()                       # (B, N, 3)
+        traj = outputs.trajectory_pred.float()                    # (B, N, 3)
+        d = traj - traj[:, :1] if self.trajectory_is_absolute else traj
         dhat = F.normalize(outputs.motion_pred.float(), p=2, dim=1, eps=1e-8)
         dhat_n = dhat[:, None, :]
 
@@ -184,7 +196,10 @@ class PredPredArticulationLoss(GeometricConsistencyLoss):
         # parallel to the axis (constant line-distance, yet not an orbit)
         # from a true circle; it never reads c, so origin gauge freedom
         # along the axis is preserved.
-        c = (outputs.origin_pred - outputs.point_3d_pred).float()[:, None, :]
+        if self.trajectory_is_absolute:
+            c = (outputs.origin_pred.float() - traj[:, 0])[:, None, :]
+        else:
+            c = (outputs.origin_pred - outputs.point_3d_pred).float()[:, None, :]
 
         def _line_dist(x):
             rel = x - c
@@ -858,11 +873,15 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
         return self._zero(twist)
 
 
-def build_geometric_loss(loss_params) -> GeometricConsistencyLoss:
+def build_geometric_loss(
+    loss_params, trajectory_is_absolute: bool = False
+) -> GeometricConsistencyLoss:
     """Select a variant from ``LossParams.geometric_loss``.
 
     Defaults to ``cross_gt`` so that configs written before this option
-    existed keep their exact behaviour.
+    existed keep their exact behaviour. ``trajectory_is_absolute`` is
+    forwarded to ``PredPredArticulationLoss`` (the only variant that
+    distinguishes absolute from relative curves); other variants ignore it.
     """
     name = getattr(loss_params, "geometric_loss", "cross_gt")
 
@@ -879,7 +898,8 @@ def build_geometric_loss(loss_params) -> GeometricConsistencyLoss:
         )
     if name == "pred_pred_art":
         return PredPredArticulationLoss(
-            weight=getattr(loss_params, "pred_pred_art_weight", 0.5)
+            weight=getattr(loss_params, "pred_pred_art_weight", 0.5),
+            trajectory_is_absolute=trajectory_is_absolute,
         )
     if name == "projected":
         return ProjectedGeometricLoss(
