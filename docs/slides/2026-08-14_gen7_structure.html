@@ -34,7 +34,7 @@ MathJax = {tex: {inlineMath: [['$', '$']]}};
 <h1>Gen-7 proposal: heatmap + depth lifts</h1>
 <p class="sub">Everything spatial reads out of the image; everything metric is one scalar away. All 3D in camera frame, meters.</p>
 
-<div class="banner">PROPOSAL — discussed 2026-08-14, not yet a spec. Waiting on gen-6 final eval numbers before committing.</div>
+<div class="banner">PROPOSAL — discussed 2026-08-14, not yet a spec. All design questions CLOSED (gen-6 eval in, every open item decided) — ready to spec on user go-ahead.</div>
 
 <h2>The gen-6 diagnosis this fixes</h2>
 <p>Gen-6's articulation heads work (direction 5&ndash;19&deg; on grounded panels, type CE near floor) — but both 3D
@@ -66,8 +66,8 @@ flowchart TB
   CH --> COND
   CO --> COND
 
-  COND --> ZP["depth head z&#770;_p (scalar)"]:::newh
-  COND --> ZQ["depth head z&#770;_q (scalar)"]:::newh
+  COND --> ZP["depth head z&#770;_p (scalar)<br/>+ local feature @ point_uv (grid_sample)"]:::newh
+  COND --> ZQ["depth head z&#770;_q (scalar)<br/>condition only - no local sample"]:::newh
   COND --> MM["MotionMLP: direction d&#770; + type logits"]:::trunk
   COND --> TR["TrajectoryMLP K=1 (CHANGED)<br/>20 ABSOLUTE camera-frame 3D points<br/>direct readout - no delta-cumsum, no relative frame"]:::newh
 
@@ -113,17 +113,22 @@ projected 3D point lands on its heatmap peak" holds <b>by construction</b> — n
 <p>No branch in the architecture — the 3D lift only exists where K and 3D GT exist. This is the property that ruled out
 depth-map unprojection: the model must not <i>need</i> a depth input to produce its point.</p>
 
-<h2>Open questions (deliberately not decided yet)</h2>
+<h2>Design decisions — all closed (+ watch items)</h2>
 <ul>
-  <li><b>Pooling policy:</b> gen-6 pooled under the detached <i>predicted</i> mask; patchy masks meant diluted features
-      for every head. Revert to GT-mask pooling, scheduled handoff, or keep? Decide with gen-6's final mIoU in hand.</li>
+  <li><b>DECIDED (user): mask-pooling teacher forcing returns</b> — GT mask at train, predicted at val/test
+      (the classical policy, `pool_with_predicted_mask: false`). Gen-6's evidence: predicted-mask pooling fed every
+      head diluted features while masks were patchy, and unfreezing CLIP didn't fix the masks — clean object features
+      during training matter more than the train/deploy pooling mismatch.</li>
   <li><b>DECIDED (user): origin_uv joins the condition vector</b> alongside point_uv — direction head sees the
       hinge&ndash;handle geometry (axis &#8869; the p&ndash;q image vector, radius &#8776; its length), trajectory head
       sees its pivot, depth heads see both anchors. Gradient flows through soft-argmax (classical convention).
       Watch item: on prismatic rows the origin channel is unsupervised, so downstream heads must learn to ignore
       its readout there — if pathological, feed it detached (one line).</li>
-  <li><b>Depth head input:</b> condition vector only, or also a feature sample at the heatmap peak (grid_sample at
-      point_uv) for a more local depth estimate?</li>
+  <li><b>DECIDED (user): local feature sampling for $\hat{z}_p$ only</b> — the point-depth head reads
+      [condition vector, grid_sample of decoder features at point_uv]: the element pixel shows a real surface whose
+      local appearance carries depth cues. $\hat{z}_q$ stays condition-only: the origin pixel has no reliable
+      semantics (the hinge line often crosses featureless wall/frame/background), so a local sample there would be
+      noise dressed as signal.</li>
   <li><b>Trajectory watch items (user decision accepted, risks on record):</b> direct absolute per-point readout
       reverses two documented fixes — (1) the zigzag point-cloud failure that delta-cumsum solved
       (viz/20260803_sf3d_twist_traj_points), (2) absolute-3D-from-pooled-vector is the exact pattern that scored
@@ -174,7 +179,8 @@ flowchart TB
   PCH --> PUV["soft-argmax &#8594; point_uv (2)"]:::trunk
   OCH --> OUV["soft-argmax &#8594; origin_uv (2)"]:::newh
 
-  MCH --> POOL["mask-pool decoder features<br/>(sigmoid, policy: GT vs predicted-detached = OPEN)"]:::trunk
+  MCH --> POOL["mask-pool decoder features<br/>TEACHER FORCED: GT mask at train (DECIDED)<br/>predicted sigmoid at val/test"]:::trunk
+  GTMP["GT mask (train pooling)"]:::gt --> POOL
   DEC --> POOL
   CLIPI --> GVIS["global avg of v4 (1024)"]:::trunk
 
@@ -184,8 +190,9 @@ flowchart TB
   PUV --> COND
   OUV --> COND
 
-  COND --> ZP["depth head z&#770;_p<br/>MLP 2564&#8594;256&#8594;1, softplus"]:::newh
-  COND --> ZQ["depth head z&#770;_q<br/>MLP 2564&#8594;256&#8594;1, softplus"]:::newh
+  COND --> ZP["depth head z&#770;_p<br/>[condition 2564 + grid_sample(fq_dec @ point_uv) 512]<br/>MLP 3076&#8594;256&#8594;1, softplus"]:::newh
+  DEC --> ZP
+  COND --> ZQ["depth head z&#770;_q<br/>condition only (origin pixel has no<br/>reliable surface semantics)<br/>MLP 2564&#8594;256&#8594;1, softplus"]:::newh
   COND --> MM["MotionMLP 2564&#8594;256&#8594;256<br/>&#8594; direction d&#770; (3) + type logits (2)"]:::trunk
   COND --> TRAJ["TrajectoryMLP 2564&#8594;256&#8594;256&#8594;60<br/>20 ABSOLUTE camera-frame 3D points"]:::newh
 
