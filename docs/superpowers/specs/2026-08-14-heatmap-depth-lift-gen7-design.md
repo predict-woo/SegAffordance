@@ -110,9 +110,12 @@ L = 0.5*L_mask                      # DiceBCE, unchanged
   along-axis drift circle residual, degenerate masking, no-GT
   property) unchanged.
 - Origin stack on prismatic: FULLY masked (heatmap BCE, L_origin_3d) —
-  no auxiliary task (user decision). z_q still runs in forward (its
-  output is only consumed by the lift; no loss reaches it on
-  prismatic rows).
+  no auxiliary task (user decision). z_q still runs in forward. NOTE
+  (final-review correction): "no gradient on prismatic rows" holds for
+  the origin LOSSES only — origin_uv conditions every head and L_pp's
+  soft gate reads origin_pred, so indirect gradient does reach the
+  origin channel on prismatic rows. That is the accepted origin_uv
+  conditioning trade-off, not a bug.
 
 ## Eval
 
