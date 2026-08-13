@@ -67,6 +67,21 @@ class ModelParams:
     # pretraining, where no type labels exist — type is then emergent from
     # the twist's |omega| (the eval decodes and scores it anyway).
     use_motion_type_head: bool = True
+    # gen-6 split arm (docs/superpowers/specs/2026-08-13-split-heads-gen6-design.md).
+    # Predict the interaction point DIRECTLY as an absolute 3D camera-frame
+    # point (GT trajectory_3d[0]) instead of the 2D heatmap + soft-argmax:
+    # the Projector emits the mask channel only, point_logits/coords_hat are
+    # None, and the articulation heads' condition is extended with the
+    # predicted 3D point instead of coords_hat. SF3D-only (needs 3D GT).
+    point_prediction_3d: bool = False
+    # Predict the revolute joint origin as an absolute 3D point, supervised
+    # toward q* — the GT-axis point perpendicular to the interaction point.
+    use_origin_head: bool = False
+    # Remove the mask-pooling teacher forcing: train-time condition pooling
+    # uses the DETACHED sigmoid of the predicted mask (what val/test always
+    # did) instead of the GT mask. Detached so articulation losses cannot
+    # steer the mask head through the pooling path.
+    pool_with_predicted_mask: bool = False
     motion_type_input_dropout: float = 0.5
     # K > 1: winner-takes-all articulation hypotheses — TwistMLP emits K
     # (twist, logit) pairs and TrajectoryMLP K matching trajectories; one

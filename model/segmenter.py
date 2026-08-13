@@ -18,6 +18,7 @@ from .layers import (
     Trajectory2DMLP,
     OriginDepthHead,
     TwistMLP,
+    Point3DHead,
 )
 
 
@@ -112,20 +113,29 @@ class CRIS(nn.Module):
             return_intermediate=model_params.intermediate,
         )
 
+        self.point_prediction_3d = getattr(model_params, "point_prediction_3d", False)
+        self.use_origin_head = getattr(model_params, "use_origin_head", False)
+        self.pool_with_predicted_mask = getattr(
+            model_params, "pool_with_predicted_mask", False
+        )
+
         ## Projector
         # fq: (B, fpn_out[1], H/16, W/16), state: (B, fpn_in[2]) -> maps: (B, 2, H/4, W/4)
         self.proj = Projector_Mult(
             state_dim,
             model_params.fpn_out[1] // 2,
             3,
-            out_channels=2,
+            out_channels=1 if self.point_prediction_3d else 2,
             proj_dropout=model_params.proj_dropout,
         )
 
         # motion_features + global_vis_features + global_text_features
         vae_feature_dim = model_params.fpn_out[1] + model_params.fpn_in[2] + state_dim
-        # the above + coordinates
-        vae_condition_dim = vae_feature_dim + 2
+        # 2D path: condition = features + coords_hat (2). 3D path: the point
+        # head consumes the base features and its 3-dim output extends the
+        # condition instead (spec: "the same role coords_hat played, in 3D").
+        point_cond_dim = 3 if self.point_prediction_3d else 2
+        vae_condition_dim = vae_feature_dim + point_cond_dim
 
         # Optional auxiliary input: the articulation type, embedded and
         # appended to the condition vector every head consumes. One extra
@@ -226,6 +236,26 @@ class CRIS(nn.Module):
                 "bundles selected by one set of logits."
             )
 
+        # gen-6 split arm: direct 3D interaction-point head and revolute
+        # joint-origin head. The point head consumes the BASE condition
+        # (vae_condition_dim - 3 strips its own 3-dim extension — it cannot
+        # consume its own output); the origin head consumes the EXTENDED
+        # condition.
+        self.point_3d_head = (
+            Point3DHead(
+                input_dim=vae_condition_dim - 3, hidden_dim=model_params.vae_hidden_dim
+            )
+            if self.point_prediction_3d
+            else None
+        )
+        self.origin_head = (
+            Point3DHead(
+                input_dim=vae_condition_dim, hidden_dim=model_params.vae_hidden_dim
+            )
+            if self.use_origin_head
+            else None
+        )
+
         # Metric depth of the joint origin, completing {type, axis, origin}.
         self.predict_origin_depth = getattr(model_params, "predict_origin_depth", False)
         if self.predict_origin_depth:
@@ -294,32 +324,36 @@ class CRIS(nn.Module):
         fq = self.decoder(fq, word, pad_mask)
         fq = fq.reshape(b, c, h, w)
 
-        maps = self.proj(fq, state)  # B×2×H_map×W_map (where H_map=h*4, W_map=w*4)
-
+        maps = self.proj(fq, state)  # B×C×H_map×W_map (where H_map=h*4, W_map=w*4)
         mask_pred = maps[:, 0:1]  # B×1×H_map×W_map
-        point_pred = maps[:, 1:2]  # B×1×H_map×W_map, logits, not sigmoided yet
-
-        # soft-argmax → differentiable coordinates in pixel space of the map
-        # coords_px will have x in [0, W_map-1] and y in [0, H_map-1]
-        coords_px = soft_argmax2d(point_pred)  # B×2
-
-        # Get the actual H_map, W_map from point_pred for normalization
-        _, _, H_map, W_map = point_pred.shape
-        coords_hat = coords_px / torch.tensor(
-            [W_map, H_map], dtype=coords_px.dtype, device=coords_px.device
-        )
+        if self.point_prediction_3d:
+            point_pred = None
+            coords_hat = None
+        else:
+            point_pred = maps[:, 1:2]  # B×1×H_map×W_map, logits, not sigmoided yet
+            # soft-argmax → differentiable coordinates in pixel space of the map
+            # coords_px will have x in [0, W_map-1] and y in [0, H_map-1]
+            coords_px = soft_argmax2d(point_pred)  # B×2
+            _, _, H_map, W_map = point_pred.shape
+            coords_hat = coords_px / torch.tensor(
+                [W_map, H_map], dtype=coords_px.dtype, device=coords_px.device
+            )
 
         # --- Motion VAE part ---
         fq_h, fq_w = fq.shape[-2:]
 
-        if self.training:
-            # Teacher forcing: use ground-truth mask for pooling during training
+        if self.training and not self.pool_with_predicted_mask:
+            # Classical teacher forcing: pool under the GT mask.
             mask_for_pooling = F.interpolate(
                 mask.float(), size=(fq_h, fq_w), mode="bilinear", align_corners=False
             )
         else:
-            # Use predicted mask for pooling during validation/inference
+            # Deployment-consistent pooling: the predicted mask, detached in
+            # train mode so articulation losses cannot steer the mask head
+            # through the pooling path (it learns only from DiceBCE).
             mask_prob = torch.sigmoid(mask_pred)
+            if self.training:
+                mask_prob = mask_prob.detach()
             mask_for_pooling = F.interpolate(
                 mask_prob, size=(fq_h, fq_w), mode="bilinear", align_corners=False
             )
@@ -337,9 +371,10 @@ class CRIS(nn.Module):
         vae_encoder_features = torch.cat(
             [motion_features, global_vis_feat, state], dim=1
         )
-        # The VAE is conditioned on object features, global features, and the interaction point.
-        vae_condition = torch.cat([vae_encoder_features, coords_hat], dim=1)
-
+        # The VAE is conditioned on object features, global features, and the
+        # interaction point. The type hint (if any) joins the BASE condition;
+        # the point extension (coords_hat or the predicted 3D point) comes last.
+        vae_condition = vae_encoder_features
         if self.use_motion_type_input:
             null_index = self.motion_type_embedding.num_embeddings - 1
             if motion_type_input is None:
@@ -350,6 +385,13 @@ class CRIS(nn.Module):
                 motion_type_input.to(vae_condition.device).long()
             )
             vae_condition = torch.cat([vae_condition, type_emb], dim=1)
+
+        point_3d_pred = None
+        if self.point_prediction_3d:
+            point_3d_pred = self.point_3d_head(vae_condition)
+            vae_condition = torch.cat([vae_condition, point_3d_pred], dim=1)
+        else:
+            vae_condition = torch.cat([vae_condition, coords_hat], dim=1)
 
         trajectory_all = (
             self.trajectory_predictor(vae_condition)          # (B, K, N, 3)
@@ -365,6 +407,9 @@ class CRIS(nn.Module):
             self.origin_depth_head(vae_condition)
             if self.origin_depth_head is not None
             else None
+        )
+        origin_pred = (
+            self.origin_head(vae_condition) if self.origin_head is not None else None
         )
         twist_pred = trajectory_pred = None
         twist_hyps = trajectory_hyps = twist_logits = None
@@ -426,4 +471,6 @@ class CRIS(nn.Module):
             twist_logits=twist_logits,
             mu=mu,
             log_var=log_var,
+            point_3d_pred=point_3d_pred,
+            origin_pred=origin_pred,
         )
