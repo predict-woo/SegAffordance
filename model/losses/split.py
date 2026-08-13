@@ -23,6 +23,24 @@ def perpendicular_foot(
     return origin + along * d
 
 
+def project_q_star(origin_gt, direction_gt, point_gt, K_norm,
+                   z_min: float = 0.05):
+    """Normalized [0,1] projection of q* + validity mask.
+
+    valid = q* in front of the camera AND inside the frame. Invalid rows
+    still return finite uv (clamped z) so downstream masking is the only
+    consumer of validity — no NaN can leak.
+    """
+    q_star = perpendicular_foot(origin_gt, direction_gt, point_gt)
+    z = q_star[..., 2]
+    z_safe = z.clamp(min=z_min)
+    u = K_norm[..., 0, 0] * q_star[..., 0] / z_safe + K_norm[..., 0, 2]
+    v = K_norm[..., 1, 1] * q_star[..., 1] / z_safe + K_norm[..., 1, 2]
+    uv = torch.stack([u, v], dim=-1)
+    valid = (z > z_min) & (u >= 0) & (u < 1) & (v >= 0) & (v < 1)
+    return uv, valid
+
+
 def origin_canonical_loss(
     origin_pred: torch.Tensor,
     origin_gt: torch.Tensor,

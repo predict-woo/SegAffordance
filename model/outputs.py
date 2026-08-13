@@ -57,6 +57,9 @@ class ModelOutputs:
     #: toward q*, the GT-axis point perpendicular to the interaction point
     #: (ModelParams.use_origin_head). Meaningful for revolute only.
     origin_pred: Optional[torch.Tensor] = None
+    #: (B, 2) soft-argmax of the origin heatmap channel, normalised to
+    #: [0, 1] (ModelParams.use_origin_heatmap). The 2D face of origin_pred.
+    origin_uv: Optional[torch.Tensor] = None
     #: (B, 6) se(3) twist (omega, v) in the camera frame — one construct for
     #: both motion types (revolute: |omega|=1 and v encodes the axis LINE;
     #: prismatic: omega=0 and v is the direction). See model/losses/twist.py.

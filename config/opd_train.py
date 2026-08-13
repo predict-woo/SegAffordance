@@ -82,6 +82,21 @@ class ModelParams:
     # did) instead of the GT mask. Detached so articulation losses cannot
     # steer the mask head through the pooling path.
     pool_with_predicted_mask: bool = False
+    # gen-7 (docs/superpowers/specs/2026-08-14-heatmap-depth-lift-gen7-design.md).
+    # Third projector channel: origin heatmap -> soft-argmax origin_uv ->
+    # scalar depth z_q -> q_hat lifted with intrinsics. Supervised at the
+    # projected q* (in-frame 99.6-100% on v2 — tools/diag_origin_inframe.py).
+    use_origin_heatmap: bool = False
+    # Scalar depth head z_p for the interaction point (input: condition +
+    # grid_sample of decoded features at point_uv); p_hat lifted with
+    # intrinsics. Requires the classical 2D point path (point_prediction_3d
+    # False).
+    predict_point_depth: bool = False
+    # TrajectoryMLP emits 20 ABSOLUTE camera-frame points — no delta-cumsum,
+    # no relative frame (gen-7 user decision; zigzag + absolute-regression
+    # risks on record in the spec). Mutually exclusive with
+    # trajectory_delta_cumsum.
+    trajectory_absolute: bool = False
     motion_type_input_dropout: float = 0.5
     # K > 1: winner-takes-all articulation hypotheses — TwistMLP emits K
     # (twist, logit) pairs and TrajectoryMLP K matching trajectories; one
@@ -147,6 +162,9 @@ class LossParams:
     # MSE toward q* (the GT-axis point perpendicular to the interaction
     # point), revolute rows only. Consumed when the model has an origin head.
     origin_weight: float = 0.5
+    # gen-7 origin-heatmap analogue of point_map_weight: BCE vs the Gaussian
+    # at the projected q*, revolute+in-frame rows only.
+    origin_map_weight: float = 0.5
     # MSE of the direct 3D interaction point vs GT trajectory_3d[0].
     # Replaces point_map+coord (both zero on the 3D path) at the same
     # total weight budget.

@@ -13,6 +13,7 @@ from .split import (
     axis_direction_loss,
     origin_canonical_loss,
     perpendicular_foot,
+    project_q_star,
 )
 from .twist import (
     TwistLoss,
@@ -36,6 +37,7 @@ __all__ = [
     "point_to_line_distance",
     "screw_orbit",
     "perpendicular_foot",
+    "project_q_star",
     "origin_canonical_loss",
     "axis_direction_loss",
 ]
