@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gen-6 Model Structure &amp; Losses</title>
+<script>
+MathJax = {tex: {inlineMath: [['$', '$']]}};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  body { background: #ffffff; color: #111; font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+         max-width: 1200px; margin: 0 auto; padding: 24px 32px 80px; line-height: 1.45; }
+  h1 { font-size: 1.6em; margin-bottom: 0; }
+  h2 { font-size: 1.15em; margin-top: 2em; border-bottom: 2px solid #e0e0e0; padding-bottom: 4px; }
+  .sub { color: #666; margin-top: 4px; }
+  .mermaid { background: #fff; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.92em; }
+  th, td { border: 1px solid #d8d8d8; padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: #f4f4f4; }
+  .new  { background: #e8f6e8; }
+  .dev  { background: #fff6e0; }
+  .gone { color: #999; }
+  .tag { font-size: 0.78em; font-weight: 600; padding: 1px 7px; border-radius: 9px; white-space: nowrap; }
+  .tag.k { background: #e8eef8; color: #23508e; }   /* kept classical */
+  .tag.n { background: #d9efd9; color: #1e6b1e; }   /* new */
+  .tag.d { background: #fdeec7; color: #8a6100; }   /* deviation */
+  code { background: #f3f3f3; padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+  .legend span { margin-right: 18px; }
+  .note { background: #f7f7f7; border-left: 4px solid #bbb; padding: 10px 14px; margin: 14px 0; font-size: 0.93em; }
+</style>
+</head>
+<body>
+
+<h1>Gen-6: split articulation heads, classical losses</h1>
+<p class="sub">Spec: <code>docs/superpowers/specs/2026-08-13-split-heads-gen6-design.md</code> &nbsp;·&nbsp; all 3D quantities in <b>camera frame, meters</b></p>
+
+<h2>Dataflow</h2>
+<p class="legend">
+  <span class="tag k">KEPT classical</span>
+  <span class="tag n">NEW in gen-6</span>
+  <span class="tag d">DEVIATION from classical</span>
+  <span style="color:#c0392b; font-weight:600;">red = loss</span>
+  <span style="color:#23508e; font-weight:600;">blue = ground truth</span>
+</p>
+
+<pre class="mermaid">
+flowchart TB
+  classDef trunk fill:#f0f0f0,stroke:#999,color:#111
+  classDef newh  fill:#d9efd9,stroke:#1e6b1e,color:#111
+  classDef dev   fill:#fdeec7,stroke:#8a6100,color:#111
+  classDef loss  fill:#fdecea,stroke:#c0392b,color:#7a231a
+  classDef gt    fill:#e8eef8,stroke:#23508e,color:#1d3f70,stroke-dasharray: 5 4
+
+  RGB["RGB 256&#178;"]:::trunk --> CLIP["CLIP RN50 (UNFROZEN)<br/>image + text encoders"]:::trunk
+  TXT["text prompt"]:::trunk --> CLIP
+  DEP["depth map"]:::trunk --> DE["DepthEncoder"]:::trunk
+  CLIP --> FPN["FPN (text-conditioned)<br/>depth fused at v2, v3"]:::trunk
+  DE --> FPN
+  FPN --> DEC["TransformerDecoder<br/>3 layers, cross-attn on words"]:::trunk
+
+  DEC --> PROJ["Projector_Mult, out_channels = 1<br/>(mask ONLY - point channel removed)"]:::dev
+  PROJ --> MASK["mask logits"]:::trunk
+  MASK --> LMASK["L_mask: DiceBCE - 0.5"]:::loss
+  GTMASK["GT mask"]:::gt --> LMASK
+
+  DEC --> POOL["mask-pooled features<br/>(GT mask at train, pred at val)<br/>+ global visual + text state"]:::trunk
+  POOL --> COND["base condition<br/>(no coords_hat, no type hint)"]:::dev
+
+  COND --> PT["3D point head (NEW)<br/>interaction point, absolute"]:::newh
+  PT --> LPT["L_point_3d: MSE - 0.5"]:::loss
+  GTPT["GT element point<br/>trajectory_3d[0]"]:::gt --> LPT
+
+  COND --> XCOND["extended condition<br/>[base, predicted point_3d]"]:::newh
+  PT --> XCOND
+
+  XCOND --> MM["MotionMLP (re-enabled)"]:::trunk
+  MM --> DIR["axis direction d&#770;"]:::trunk
+  MM --> TYPE["type logits"]:::trunk
+  DIR --> LDIR["L_motion: 1 - cos - 0.5<br/>(sign-SENSITIVE)"]:::loss
+  GTDIR["GT axis (signed)"]:::gt --> LDIR
+  TYPE --> LTYPE["L_type: CE, ls=0.1 - 0.5"]:::loss
+  GTTYPE["GT type"]:::gt --> LTYPE
+
+  XCOND --> OR["OriginMLP (NEW)<br/>joint origin q&#770;, absolute"]:::newh
+  OR --> LOR["L_origin: dist to GT axis LINE - 0.5<br/>revolute rows only"]:::loss
+  GTLINE["GT axis line<br/>(origin_3d, direction)"]:::gt --> LOR
+
+  XCOND --> TR["TrajectoryMLP, K=1<br/>delta-cumsum, 20 relative points"]:::trunk
+  TR --> LTR["L_trajectory: relative MSE - 0.5"]:::loss
+  GTTR["GT trajectory (relative)"]:::gt --> LTR
+
+  DIR --> GEO1["L_geo: pred axis vs GT trajectory - 0.5<br/>(circle / line residual)"]:::loss
+  GTTR2["GT trajectory + GT origin"]:::gt --> GEO1
+  TR --> GEO2["L_geo: pred trajectory vs GT axis - 0.5"]:::loss
+  GTAX2["GT axis + GT origin"]:::gt --> GEO2
+</pre>
+
+<div class="note">
+  <b>Sequencing:</b> the 3D point head reads the <i>base</i> condition; every articulation head reads
+  <code>[base condition, predicted point_3d]</code> with gradient flowing &mdash; the same role
+  <code>coords_hat</code> played classically, now in metric 3D.
+</div>
+
+<h2>Loss inventory</h2>
+<table>
+  <tr><th>Term</th><th>Formula</th><th>Compares</th><th>Weight</th><th>Status</th></tr>
+  <tr>
+    <td><code>L_mask</code></td>
+    <td>DiceBCE (BCE 0.5 + Dice 0.5)</td>
+    <td>mask logits vs GT mask</td><td>0.5</td>
+    <td><span class="tag k">KEPT</span></td>
+  </tr>
+  <tr class="new">
+    <td><code>L_point_3d</code></td>
+    <td>$\lVert \hat{p} - p_{gt} \rVert^2$</td>
+    <td>predicted 3D interaction point vs GT element point $p_{gt} = \text{traj}_{3d}[0]$</td><td>0.5</td>
+    <td><span class="tag n">NEW</span> replaces point-map BCE + coord L1 (same total budget)</td>
+  </tr>
+  <tr class="dev">
+    <td><code>L_motion</code></td>
+    <td>$1 - \cos(\hat{d}, d_{gt})$</td>
+    <td>axis direction vs signed GT axis</td><td>0.5</td>
+    <td><span class="tag d">DEVIATION</span> classical was $1-\cos^2$ (sign-agnostic); SF3D sign is canonical</td>
+  </tr>
+  <tr>
+    <td><code>L_type</code></td>
+    <td>CE, label smoothing 0.1</td>
+    <td>type logits vs GT type</td><td>0.5</td>
+    <td><span class="tag k">KEPT</span> type commitment is structural now</td>
+  </tr>
+  <tr class="new">
+    <td><code>L_origin</code></td>
+    <td>$\lVert (\hat{q} - o_{gt}) \times d_{gt} \rVert^2$</td>
+    <td>predicted origin vs GT axis <b>line</b> &mdash; gauge-invariant (position along the hinge is annotation noise). Revolute rows only; prismatic sends no gradient.</td><td>0.5</td>
+    <td><span class="tag n">NEW</span> no classical counterpart existed</td>
+  </tr>
+  <tr>
+    <td><code>L_trajectory</code></td>
+    <td>MSE on relative positions</td>
+    <td>20 predicted relative points vs $\text{traj}_{3d} - \text{traj}_{3d}[0]$</td><td>0.5</td>
+    <td><span class="tag k">KEPT</span> + delta-cumsum head (fix era)</td>
+  </tr>
+  <tr>
+    <td><code>L_geo</code> (&times;2)</td>
+    <td>circle residual (rot) / line residual (trans)</td>
+    <td>cross-GT: pred axis &harr; GT trajectory, and pred trajectory &harr; GT axis; GT origin teacher-forced in both</td><td>0.5 + 0.5</td>
+    <td><span class="tag k">KEPT</span> incl. 2026-07-28 plane-term fix</td>
+  </tr>
+</table>
+
+<h2>Inference composition (all linear, no decode that can blow up)</h2>
+<table>
+  <tr><th>Quantity</th><th>How</th></tr>
+  <tr><td>Motion type</td><td>$\arg\max$ of type logits (no more type-from-$\lVert\omega\rVert$)</td></tr>
+  <tr><td>Axis line</td><td>point $\hat{q}$ + direction $\hat{d}/\lVert\hat{d}\rVert$</td></tr>
+  <tr><td>Absolute trajectory</td><td>$\hat{p} + \text{relative trajectory}$ &mdash; no depth-map lookup, no intrinsics</td></tr>
+  <tr><td>Radius (revolute)</td><td>$\text{dist}(\hat{p}, \text{axis line})$ &mdash; computed linearly from explicit outputs</td></tr>
+  <tr><td>Metrics</td><td><code>point_err_3d_m</code>, <code>origin_line_err_m</code>, <code>radius_err</code>, axis angle err, type acc, traj MSE/dir</td></tr>
+</table>
+
+<h2>Removed vs gen-5 (config-gated, code kept)</h2>
+<p class="gone">
+  Twist head &amp; se(3) parameterization · body metric · K=4 WTA bundles, annealing, selection logits, hyp-CE ·
+  screw consistency losses (gt + self) · type-from-$\lVert\omega\rVert$ eval · GT type-hint input ·
+  2D point heatmap + soft-argmax + coord L1 (SF3D arm; OPD arms keep the 2D path) · frozen CLIP
+</p>
+
+<div class="note">
+  <b>Accepted risks on record:</b> (1) single-hypothesis trajectory may re-hedge to the zero-motion
+  baseline (the 0.018 signature) under opening-direction ambiguity &mdash; fallback: trajectory-only WTA.
+  (2) Dropping the dense point heatmap removes localization supervision &mdash; fallback: Option A
+  (3D head alongside the 2D machinery).
+</div>
+
+<script>mermaid.initialize({ startOnLoad: true, theme: 'neutral', flowchart: { htmlLabels: true } });</script>
+</body>
+</html>
