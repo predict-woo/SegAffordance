@@ -72,12 +72,12 @@ model:
     mask_weight: 0.5
     point_map_weight: 0.5          # classical heatmap BCE, back on for gen-7
     coord_weight: 0.5              # soft-argmax coord loss, back on for gen-7
-    origin_map_weight: 0.0         # NEW: BCE vs Gaussian at projected q*
+    origin_map_weight: 0.0         # arm C: articulation removed
     point_3d_weight: 0.5           # now supervises the LIFTED point (uv + z_p)
-    vae_weight: 0.0                # the 1-cos axis loss (MotionMLP path)
+    vae_weight: 0.0                # arm C: articulation removed (axis loss)
     axis_sign_agnostic: false      # SF3D sign is canonical
     motion_type_weight: 0.0
-    origin_weight: 0.0             # now supervises the LIFTED origin (uv + z_q)
+    origin_weight: 0.0             # arm C: articulation removed
     trajectory_weight: 0.5         # classical value (gen-4's 4.0 was WTA-internal)
     geometric_loss: "none"
     pred_pred_art_weight: 0.0

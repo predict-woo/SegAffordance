@@ -1,7 +1,7 @@
 # Supervision Ablation: Joint vs Trajectory-only vs Articulation-only (gen-9 arms)
 
 **Date:** 2026-08-15
-**Status:** DRAFT — awaiting user review
+**Status:** IMPLEMENTED (commits cab5b18, 81e9ba7; user approved 2026-08-15)
 **Question:** Does jointly training on trajectory and articulation supervision
 improve performance over either supervision alone?
 
@@ -153,6 +153,22 @@ log instead.
    per-metric table (shared metrics across all arms; articulation metrics
    A vs B; trajectory metrics A vs C), with the L_pp attribution caveat
    stated.
+
+## Implementation notes (2026-08-15, post-review)
+
+- Spec item 4 (viz-tool guards) required NO code change: every consumer of
+  the six optional head fields in `tools/sf3d_vis_predictions.py` was
+  already None-guarded (verified by the final review, not assumed).
+- `test/mean_origin_error_m` is the LEGACY pseudo-origin metric (point_uv +
+  depth-patch unprojection) — it is computed identically in all arms and
+  still appears in arm C's CSV. It is NOT an origin-head metric; the
+  comparison table must not present it as arm C "origin" performance.
+- Absent CSV column now means "no data", not only "head absent":
+  `test/point_traj0_gap_m` is absent on relative-trajectory arms and
+  `test/mean_origin_error_m` is absent when the test split has zero
+  rotational samples.
+- `val/loss_total` sums different term sets per arm — checkpoint selection
+  is within-arm only; never compare loss values across arms.
 
 ## Out of scope
 

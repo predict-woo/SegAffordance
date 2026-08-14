@@ -79,7 +79,7 @@ model:
     axis_sign_agnostic: false      # SF3D sign is canonical
     motion_type_weight: 0.5
     origin_weight: 0.5             # now supervises the LIFTED origin (uv + z_q)
-    trajectory_weight: 0.0         # classical value (gen-4's 4.0 was WTA-internal)
+    trajectory_weight: 0.0         # arm B: trajectory supervision removed
     geometric_loss: "none"
     pred_pred_art_weight: 0.0
     twist_weight: 0.0              # twist machinery off
