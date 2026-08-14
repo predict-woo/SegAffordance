@@ -1,0 +1,4 @@
+cdb234dea3cc336982ef51ec9e9b3673  best-epoch17-valloss0.4104.ckpt
+ad7534aa3bc1ba26a6fb899c40e6c22d  best-epoch22-valloss0.4090.ckpt  (BEST — used for test eval)
+1e36a354d87f7d1e0ae661198e1f5bf8  best-epoch26-valloss0.4117.ckpt
+1e36a354d87f7d1e0ae661198e1f5bf8  last.ckpt  (== best-epoch26)
