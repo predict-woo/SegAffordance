@@ -234,7 +234,8 @@ def main():
             if not gt_valid.any():
                 gt_lines.append("(GT track: no point visible in frame)")
         elif gt_valid.any():
-            gt = draw_polyline_norm(gt, traj_uv, gt_valid, (255, 220, 0))
+            # DOTS only (matches the predicted-trajectory rendering).
+            gt = draw_points_norm(gt, traj_uv, gt_valid, (255, 220, 0), radius=3)
             # end-of-sweep marker so the motion direction is readable
             end = np.flatnonzero(gt_valid)[-1]
             ep = (int(traj_uv[end, 0] * W), int(traj_uv[end, 1] * H))
@@ -308,6 +309,11 @@ def main():
             # way the losses anchor them; gen-7 ABSOLUTE heads predict camera-
             # frame points directly — project them with no anchor translation.
             traj_is_absolute = bool(getattr(mp, "trajectory_absolute", False))
+            # GT track on the MODEL panel too (thin, under the prediction),
+            # so pred-vs-GT trajectory comparison happens within one panel.
+            if not args.traj_only and gt_valid.any():
+                p = draw_points_norm(p, traj_uv, gt_valid, (255, 220, 0),
+                                     radius=2)
             if out.trajectory_pred is not None and (anchor_ok or traj_is_absolute):
                 if traj_is_absolute:
                     traj_abs = out.trajectory_pred[0:1].cpu().float()
@@ -315,10 +321,12 @@ def main():
                     traj_abs = anchor.unsqueeze(1) + out.trajectory_pred[0:1].cpu().float()
                 tv = (traj_abs[0, :, 2] > 0.05).numpy()
                 tuv = project_points(K_norm, traj_abs)[0].clamp(-2, 3).numpy()
-                if args.traj_only:
-                    p = draw_points_norm(p, tuv, tv, (255, 0, 255))
-                else:
-                    p = draw_polyline_norm(p, tuv, tv, (255, 0, 255))
+                # DOTS only, start ringed white (user decision 2026-08-15):
+                # discrete points keep sequence spacing and ordering honest —
+                # line rendering visually smooths disordered sequences (the
+                # 2026-08-03 zigzag lesson).
+                p = draw_points_norm(p, tuv, tv, (255, 0, 255),
+                                     radius=4 if args.traj_only else 3)
 
             # 2D track head (relative to its own first point, anchored at
             # point_uv — the same element point the track starts from).
@@ -424,7 +432,7 @@ def main():
                 lines.append(f"cls={cls_type}  ax={ang:.0f}deg")
             else:
                 lines.append(f"cls={cls_type}")
-            legend = "mag=traj3d orn=trk2d yel=orbit grn=GTaxis red=predaxis"
+            legend = "mag=traj3d cyn=GTtraj orn=trk2d yel=orbit grn=GTaxis red=predaxis"
             if getattr(out, "origin_uv", None) is not None:
                 # gen-7 arm: the origin heatmap's 2D readout, drawn as a red
                 # ring (meaningful on revolute rows only — unsupervised on

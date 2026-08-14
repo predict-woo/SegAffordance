@@ -3,7 +3,9 @@
 Second random draw (seed 18827) from the gen-8 close-up best checkpoint
 (best-epoch59-valloss1.0173.ckpt), 16 samples, close-up split
 (minrad010 + maskfrac00025 cache). Same reading guide as
-`20260814_sf3d_g8_closeup_panels`.
+`20260814_sf3d_g8_closeup_panels`, plus (re-rendered same day): trajectories
+are now DOTS-only (start ringed white — no line smoothing), and the GT track
+is overlaid on the model panels as small cyan dots (`cyn=GTtraj`).
 
 Checked highlights:
 
