@@ -402,8 +402,13 @@ def main():
                 lines.append(f"cls={cls_type}  ax={ang:.0f}deg")
             else:
                 lines.append(f"cls={cls_type}")
-            lines.append("mag=traj3d pts" if args.traj_only
-                         else "mag=traj3d orn=trk2d yel=orbit grn=GTaxis red=predaxis")
+            legend = "mag=traj3d orn=trk2d yel=orbit grn=GTaxis red=predaxis"
+            if getattr(out, "origin_uv", None) is not None:
+                # gen-7 arm: the origin heatmap's 2D readout, drawn as a red
+                # ring (meaningful on revolute rows only — unsupervised on
+                # prismatic by design).
+                legend += " redring=origin_uv"
+            lines.append("mag=traj3d pts" if args.traj_only else legend)
             p = put_lines(p, lines)
             panels.append(p)
 
