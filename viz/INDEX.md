@@ -7,8 +7,8 @@ themselves are gitignored but live on both sides of the mutagen mirror.
 Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
-| [20260815_sf3d_g9_ablation_panels](20260815_sf3d_g9_ablation_panels/README.md) | supervision ablation 3-arm panels (joint vs art-only vs traj-only) — head guards render correctly, armC trajectories wander | `tools/sf3d_vis_predictions.py` |
 |---|---|---|
+| [20260815_sf3d_g9_ablation_panels](20260815_sf3d_g9_ablation_panels/README.md) | supervision ablation 3-arm panels (joint vs art-only vs traj-only) — head guards render correctly, armC trajectories wander | `tools/sf3d_vis_predictions.py` |
 | [20260805_sf3d_g3_clip_vs_dinov3](20260805_sf3d_g3_clip_vs_dinov3/README.md) | gen-3 head-to-head — dinov3 wins geometry, clip wins masks | `tools/sf3d_vis_predictions.py` |
 | [20260804_sf3d_clip_g3_panels](20260804_sf3d_clip_g3_panels/README.md) | clip gen-3 full panels — smooth trajectories, planar pitch-free orbits, visible masks | `tools/sf3d_vis_predictions.py` |
 | [20260804_sf3d_clip_g3_traj_points](20260804_sf3d_clip_g3_traj_points/README.md) | clip gen-3 trajectory points — 1-cos killed the fold-back zigzag AND the under-extension | `tools/sf3d_vis_predictions.py --traj-only` |
