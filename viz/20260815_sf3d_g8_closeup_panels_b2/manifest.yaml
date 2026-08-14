@@ -1,0 +1,15 @@
+command: tools/sf3d_vis_predictions.py --model g8e59 config/sf3d_train_runpod_g8_closeup.yaml
+  experiments/20260814_sf3d_g8_closeup/checkpoints/best-epoch59-valloss1.0173.ckpt
+  --key-cache /workspace/cache/sf3d_v2_keys_cutoff05_minrad010_maskfrac00025.pkl --min-revolute-radius
+  0.10 --min-mask-area-frac 0.0025 --out viz/20260815_sf3d_g8_closeup_panels_b2 --num
+  16 --seed 18827
+tool_commit: 76d2f32
+generated: '2026-08-14T15:26:40+00:00'
+models:
+- name: g8e59
+  config: config/sf3d_train_runpod_g8_closeup.yaml
+  ckpt: experiments/20260814_sf3d_g8_closeup/checkpoints/best-epoch59-valloss1.0173.ckpt
+num: 16
+seed: 18827
+data_root: /workspace/datasets/sf3d_processed_v2
+key_cache: /workspace/cache/sf3d_v2_keys_cutoff05_minrad010_maskfrac00025.pkl
