@@ -10,9 +10,11 @@
 # test_step must SKIP absent-head metrics instead of scoring a zeros
 # placeholder, and the wandb viz path must not index a None trajectory.
 
+import os
 from unittest import mock
 
 import torch
+import yaml
 
 from config.opd_train import Config, LossParams, OptimizerParams
 from tests.test_g7_lift import _g7_batch, _knorm
@@ -153,3 +155,60 @@ def test_armB_wandb_viz_guard():
     tp = None
     fallback = tp[0] if tp is not None else torch.zeros(20, 3)
     assert fallback.shape == (20, 3)
+
+
+_CFG = os.path.join(os.path.dirname(__file__), "..", "config")
+
+
+def _load(name):
+    with open(os.path.join(_CFG, name)) as f:
+        return yaml.safe_load(f)
+
+
+def test_ablation_configs_match_spec():
+    base = _load("sf3d_train_runpod_g9_closeup010.yaml")
+    art = _load("sf3d_train_runpod_g9abl_artonly.yaml")
+    trj = _load("sf3d_train_runpod_g9abl_trajonly.yaml")
+
+    bm, am, tm = (c["model"]["model_params"] for c in (base, art, trj))
+    bl, al, tl = (c["model"]["loss_params"] for c in (base, art, trj))
+    bd, ad, td = (c["data"] for c in (base, art, trj))
+
+    # Arm B: only the trajectory path is removed.
+    assert am["use_trajectory_head"] is False
+    assert al["geometric_loss"] == "none"
+    assert al["trajectory_weight"] == 0.0
+    assert al["pred_pred_art_weight"] == 0.0
+    assert am["use_motion_head"] and am["use_motion_type_head"]
+    assert am["use_origin_heatmap"] and am["predict_point_depth"]
+
+    # Arm C: only the articulation paths are removed.
+    assert tm["use_motion_head"] is False
+    assert tm["use_motion_type_head"] is False
+    assert tm["use_origin_heatmap"] is False
+    assert tm["predict_point_depth"] is True
+    assert tm.get("use_trajectory_head", True) is True
+    assert tl["geometric_loss"] == "none"
+    for k in ("vae_weight", "motion_type_weight", "origin_weight",
+              "origin_map_weight", "pred_pred_art_weight"):
+        assert tl[k] == 0.0, k
+
+    # Constants identical across all three arms.
+    for m, l, d in ((am, al, ad), (tm, tl, td)):
+        assert d["key_cache_path"] == bd["key_cache_path"]
+        assert d["min_mask_area_frac"] == bd["min_mask_area_frac"]
+        assert d["edge_margin_frac"] == bd["edge_margin_frac"]
+        assert d["batch_size_train"] == bd["batch_size_train"]
+        assert m["clip_pretrain"] == bm["clip_pretrain"]
+        assert l["mask_weight"] == bl["mask_weight"]
+        assert l["point_3d_weight"] == bl["point_3d_weight"]
+    for c in (base, art, trj):
+        assert c["trainer"]["max_epochs"] == 30
+        assert c["model"]["optimizer_params"]["scheduler_milestones"] == [24, 28]
+        assert c["seed_everything"] == 42
+
+    # Each arm writes to its own experiment dir.
+    for c, tag in ((art, "g9abl_artonly"), (trj, "g9abl_trajonly")):
+        ckpt = c["trainer"]["callbacks"][0]["init_args"]["dirpath"]
+        logd = c["trainer"]["logger"]["init_args"]["save_dir"]
+        assert tag in ckpt and tag in logd
