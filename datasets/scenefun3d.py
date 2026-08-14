@@ -54,6 +54,7 @@ class SF3DDataset(Dataset):
         sensor_max_occluded_frac: Optional[float] = 0.5,
         min_revolute_radius: float = 0.0,
         min_mask_area_frac: float = 0.0,
+        edge_margin_frac: float = 0.0,
         key_cache_path: Optional[str] = None,
         return_trajectory_2d: bool = False,
         point_source: str = "motion_origin",
@@ -115,6 +116,12 @@ class SF3DDataset(Dataset):
         # ELEMENT (handle/knob), median area 0.028% — 0.0025 (0.25%) keeps
         # only the ~5% largest close-up elements (measured 2026-08-14).
         self.min_mask_area_frac = min_mask_area_frac
+        # Both supervision points must sit INSIDE the central region of the
+        # frame: the GT interaction point (all rows) and the projected q*
+        # (revolute rows) at least this fraction of W/H away from every
+        # edge. 0.1 = exclude the 10% border bands. Guards the soft-argmax
+        # readouts against edge-clamped targets.
+        self.edge_margin_frac = edge_margin_frac
         self.key_cache_path = Path(key_cache_path) if key_cache_path else None
 
         # OFF by default: the extra columns cost decode time and only the 2D
@@ -220,6 +227,7 @@ class SF3DDataset(Dataset):
         cutoff = self.sensor_max_occluded_frac
         min_rad = self.min_revolute_radius
         min_mask = self.min_mask_area_frac
+        margin = self.edge_margin_frac
 
         # Cache validity is keyed on the record COUNT, not the path, so a cache
         # built from a /dev/shm copy stays valid for the same database on the
@@ -234,11 +242,12 @@ class SF3DDataset(Dataset):
                 and cached.get("entries") == entry_count
                 and cached.get("min_revolute_radius", 0.0) == min_rad
                 and cached.get("min_mask_area_frac", 0.0) == min_mask
+                and cached.get("edge_margin_frac", 0.0) == margin
             ):
                 print(
                     f"Loaded {len(cached['keys'])} keys from cache "
                     f"{self.key_cache_path} (cutoff={cutoff}, min_rev_radius={min_rad}, "
-                    f"min_mask_frac={min_mask})"
+                    f"min_mask_frac={min_mask}, edge_margin={margin})"
                 )
                 return cached["keys"]
 
@@ -246,8 +255,10 @@ class SF3DDataset(Dataset):
         dropped = 0
         dropped_radius = 0
         dropped_mask = 0
+        dropped_edge = 0
         unverified = 0
-        scan = cutoff is not None or min_rad > 0.0 or min_mask > 0.0
+        scan = (cutoff is not None or min_rad > 0.0 or min_mask > 0.0
+                or margin > 0.0)
         with self.env.begin(write=False) as txn:
             cursor = txn.cursor()
             if not scan:
@@ -272,10 +283,14 @@ class SF3DDataset(Dataset):
                     if min_mask > 0.0 and self._mask_area_below(record, min_mask):
                         dropped_mask += 1
                         continue
+                    if margin > 0.0 and self._points_near_edge(record, margin):
+                        dropped_edge += 1
+                        continue
                     keys.append(key)
 
         if scan:
-            total = len(keys) + dropped + dropped_radius + dropped_mask
+            total = (len(keys) + dropped + dropped_radius + dropped_mask
+                     + dropped_edge)
             print(
                 f"Sensor filter (occluded_frac > {cutoff}): dropped {dropped} of "
                 f"{total} records ({100.0 * dropped / max(1, total):.2f}%); "
@@ -291,6 +306,12 @@ class SF3DDataset(Dataset):
                     f"Mask-area filter (splat frac < {min_mask}): dropped "
                     f"{dropped_mask} ({100.0 * dropped_mask / max(1, total):.2f}%)"
                 )
+            if margin > 0.0:
+                print(
+                    f"Edge-margin filter (point/q* within {margin} of a "
+                    f"border): dropped {dropped_edge} "
+                    f"({100.0 * dropped_edge / max(1, total):.2f}%)"
+                )
 
         if self.key_cache_path:
             self.key_cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -301,6 +322,7 @@ class SF3DDataset(Dataset):
                         "entries": entry_count,
                         "min_revolute_radius": min_rad,
                         "min_mask_area_frac": min_mask,
+                        "edge_margin_frac": margin,
                         "keys": keys,
                     }
                 )
@@ -308,6 +330,60 @@ class SF3DDataset(Dataset):
             print(f"Cached key list -> {self.key_cache_path}")
 
         return keys
+
+    @staticmethod
+    def _points_near_edge(record: dict, margin: float) -> bool:
+        """True iff the GT interaction point (all rows) or the projected
+        q* (revolute rows) lies within ``margin`` * W/H of an image border
+        (or behind the camera). Records missing needed fields are KEPT.
+
+        The interaction point uses the preprocessor's own projection
+        (trajectory_2d_image_coords[0]); q* is computed from the annotated
+        axis exactly as the losses compute it (perpendicular foot of the
+        element point) and projected with the record's intrinsics.
+        """
+        wh = record.get("image_dimensions_wh")
+        if not wh:
+            return False
+        w, h = float(wh[0]), float(wh[1])
+        if w <= 0 or h <= 0:
+            return False
+
+        def outside(u, v):
+            return not (margin * w <= u <= (1.0 - margin) * w
+                        and margin * h <= v <= (1.0 - margin) * h)
+
+        t2d = record.get("trajectory_2d_image_coords")
+        if t2d:
+            u, v = float(t2d[0][0]), float(t2d[0][1])
+            if outside(u, v):
+                return True
+
+        motion_info = record.get("motion_info") or {}
+        original = motion_info.get("original_motion_data") or {}
+        if original.get("motion_type", "trans") not in ("rot", "rotation"):
+            return False
+        frame = motion_info.get("frame_specific_motion_data") or {}
+        axis_dir = frame.get("motion_dir_3d_camera_coords")
+        origin = frame.get("motion_origin_3d_camera_coords")
+        traj = record.get("trajectory_3d_camera_coords")
+        K = record.get("camera_intrinsics")
+        if not axis_dir or not origin or not traj or K is None:
+            return False
+        d = np.asarray(axis_dir, dtype=np.float64)
+        n = np.linalg.norm(d)
+        if n < 1e-8:
+            return False
+        d /= n
+        o = np.asarray(origin, dtype=np.float64)
+        p = np.asarray(traj[0], dtype=np.float64)
+        q_star = o + np.dot(p - o, d) * d
+        if q_star[2] <= 0.05:
+            return True
+        K = np.asarray(K, dtype=np.float64)
+        u = K[0, 0] * q_star[0] / q_star[2] + K[0, 2]
+        v = K[1, 1] * q_star[1] / q_star[2] + K[1, 2]
+        return outside(u, v)
 
     @staticmethod
     def _mask_area_below(record: dict, min_frac: float) -> bool:

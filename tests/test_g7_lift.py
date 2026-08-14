@@ -287,3 +287,45 @@ def test_mask_area_filter_predicate():
     assert below({"image_dimensions_wh": (1000, 1000),
                   "mask_coordinates_yx": []}, 0.0025)   # empty mask -> dropped
     assert not below({"mask_coordinates_yx": []}, 0.0025)  # no size -> kept
+
+
+def test_edge_margin_filter_predicate():
+    from datasets.scenefun3d import SF3DDataset
+    near = SF3DDataset._points_near_edge
+    K = [[1000.0, 0, 500.0], [0, 1000.0, 500.0], [0, 0, 1.0]]
+    base = {
+        "image_dimensions_wh": (1000, 1000),
+        "trajectory_2d_image_coords": [(500.0, 500.0)],
+        "camera_intrinsics": K,
+        "motion_info": {
+            "original_motion_data": {"motion_type": "trans"},
+            "frame_specific_motion_data": {},
+        },
+    }
+    assert not near(base, 0.10)                       # centred point, trans
+    edge = dict(base, trajectory_2d_image_coords=[(50.0, 500.0)])
+    assert near(edge, 0.10)                           # point in the 10% band
+    # Revolute: q* projection checked too. Axis through the element point
+    # itself -> q* == element point (centred) -> kept.
+    rot = dict(base)
+    rot["motion_info"] = {
+        "original_motion_data": {"motion_type": "rot"},
+        "frame_specific_motion_data": {
+            "motion_dir_3d_camera_coords": [0.0, 1.0, 0.0],
+            "motion_origin_3d_camera_coords": [0.0, 0.0, 2.0],
+        },
+    }
+    rot["trajectory_3d_camera_coords"] = [[0.0, 0.0, 2.0]]
+    assert not near(rot, 0.10)
+    # Origin far to the side -> q* projects into the border band -> dropped.
+    rot2 = dict(rot)
+    rot2["motion_info"] = {
+        "original_motion_data": {"motion_type": "rot"},
+        "frame_specific_motion_data": {
+            "motion_dir_3d_camera_coords": [0.0, 1.0, 0.0],
+            "motion_origin_3d_camera_coords": [-1.5, 0.0, 2.0],
+        },
+    }
+    assert near(rot2, 0.10)
+    # Missing fields -> kept.
+    assert not near({"image_dimensions_wh": (1000, 1000)}, 0.10)

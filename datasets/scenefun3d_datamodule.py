@@ -27,6 +27,7 @@ class SF3DDataModule(pl.LightningDataModule):
         fast_pipeline: bool = False,
         min_revolute_radius: float = 0.0,
         min_mask_area_frac: float = 0.0,
+        edge_margin_frac: float = 0.0,
     ) -> None:
         super().__init__()
         self.train_data_dir = train_data_dir
@@ -57,6 +58,9 @@ class SF3DDataModule(pl.LightningDataModule):
         # GT mask must cover at least this fraction of the image
         # (splat pixels / W*H). See SF3DDataset.min_mask_area_frac.
         self.min_mask_area_frac = min_mask_area_frac
+        # Interaction point + projected q* inside the central region
+        # (this fraction of W/H from every edge). See SF3DDataset.
+        self.edge_margin_frac = edge_margin_frac
 
         self.train_dataset: Optional[Dataset] = None
         self.val_dataset: Optional[Dataset] = None
@@ -85,6 +89,7 @@ class SF3DDataModule(pl.LightningDataModule):
                     fast_pipeline=self.fast_pipeline,
                     min_revolute_radius=self.min_revolute_radius,
                     min_mask_area_frac=self.min_mask_area_frac,
+                    edge_margin_frac=self.edge_margin_frac,
                 )
 
                 self.train_dataset, self.val_dataset = split_dataset_by_scene(

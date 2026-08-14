@@ -40,6 +40,8 @@ def main():
     ap.add_argument("--num", type=int, default=1500)
     ap.add_argument("--min-mask-area-frac", type=float, default=0.0,
                     help="must match the key cache / training config")
+    ap.add_argument("--edge-margin-frac", type=float, default=0.0,
+                    help="must match the key cache / training config")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
@@ -52,6 +54,7 @@ def main():
         point_source="element", return_trajectory_2d=True,
         min_revolute_radius=args.min_revolute_radius,
         min_mask_area_frac=args.min_mask_area_frac,
+        edge_margin_frac=args.edge_margin_frac,
     )
     _, val = split_dataset_by_scene(ds, val_split_ratio=0.1, manual_seed=42)
     rng = np.random.default_rng(args.seed)
