@@ -118,6 +118,10 @@ class OPDRealTrainingModule(pl.LightningModule):
         self._test_origin_errors_matched: typing.List[float] = []
         self._test_correct_origin_predictions: int = 0
         self._test_num_rotational_matched: int = 0
+        # Ablation arms (2026-08-15 spec): whether the axis/type heads
+        # produced predictions during test (set in the SF3D test_step).
+        self._test_has_axis_head: bool = False
+        self._test_has_type_head: bool = False
         self._test_debug_print_count: int = 0
         self.indices_to_visualize: typing.Optional[set] = None
 
@@ -731,7 +735,10 @@ class OPDRealTrainingModule(pl.LightningModule):
                         else torch.zeros(2, device=img.device)
                     ),
                     trajectory_gt=trajectory_gt_list[i],
-                    trajectory_pred=trajectory_pred[i],
+                    trajectory_pred=(
+                        trajectory_pred[i] if trajectory_pred is not None
+                        else torch.zeros(20, 3, device=img.device)
+                    ),
                     camera_intrinsic=camera_intrinsic_list[i],
                     original_image_size=original_image_size_list[i],
                     depth_tensor=depth[i],

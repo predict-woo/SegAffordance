@@ -38,6 +38,10 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         self._test_type_correct_all = 0
         self._test_ma_correct_all = 0
         self._test_origin_errors_rotational_all = []
+        # Ablation arms (2026-08-15 spec): set during test_step when the
+        # axis/type heads actually produced predictions.
+        self._test_has_axis_head = False
+        self._test_has_type_head = False
 
         # Twist-head metrics (empty/zero when use_twist_head is off).
         # Axis-LINE distance replaces the origin-point error: the twist cannot
@@ -457,23 +461,28 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                 )
 
             # --- Motion and Axis evaluation (for all samples) ---
-            if motion_pred is not None:
-                axis_src = motion_pred[i]
-            elif twist_decoded is not None:
-                # Axis head off: the twist direction IS the axis prediction.
-                axis_src = twist_decoded[1][i]
-            else:
-                axis_src = torch.zeros(3, device=motion_gt.device)
-            axis_err = self._axis_error_deg(axis_src, motion_gt[i]).item()
-            # print(f"Axis error: {axis_err}")
-            self._test_axis_errors_all.append(axis_err)
-
-            is_axis_correct = axis_err <= self.config.test_motion_threshold_deg
-            is_type_correct = pred_types[i] == motion_type_gt[i]
-
-            if is_type_correct:
-                self._test_type_correct_all += 1
-
+            # Ablation arms (2026-08-15 spec) may lack the axis and/or type
+            # heads entirely: skip collection rather than scoring a zeros
+            # placeholder, so absent-head metrics stay absent instead of
+            # polluting the means.
+            has_axis = motion_pred is not None or twist_decoded is not None
+            has_type = motion_type_logits is not None or twist_decoded is not None
+            self._test_has_axis_head |= has_axis
+            self._test_has_type_head |= has_type
+            axis_err = None
+            is_axis_correct = is_type_correct = False
+            if has_axis:
+                axis_src = (
+                    motion_pred[i] if motion_pred is not None
+                    else twist_decoded[1][i]
+                )
+                axis_err = self._axis_error_deg(axis_src, motion_gt[i]).item()
+                self._test_axis_errors_all.append(axis_err)
+                is_axis_correct = axis_err <= self.config.test_motion_threshold_deg
+            if has_type:
+                is_type_correct = bool(pred_types[i] == motion_type_gt[i])
+                if is_type_correct:
+                    self._test_type_correct_all += 1
             if is_axis_correct and is_type_correct:
                 self._test_ma_correct_all += 1
 
@@ -529,7 +538,8 @@ class SF3DTrainingModule(OPDRealTrainingModule):
             if iou_val > self.config.test_iou_threshold:
                 self._test_num_matched += 1
 
-                self._test_axis_errors_matched.append(axis_err)
+                if axis_err is not None:
+                    self._test_axis_errors_matched.append(axis_err)
 
                 if is_axis_correct:
                     self._test_correct_axis_predictions += 1
@@ -646,34 +656,21 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         mean_point_error = (
             float(all_point_errors.mean().item()) if all_point_errors.numel() > 0 else 0.0
         )
-        err_adir_matched = (
-            float(all_axis_errors_matched.mean().item())
-            if all_axis_errors_matched.numel() > 0
-            else 0.0
-        )
-        err_adir_all = (
-            float(all_axis_errors_all.mean().item())
-            if all_axis_errors_all.numel() > 0
-            else 0.0
-        )
-        mean_origin_error_m = (
-            float(all_origin_errors_rotational.mean().item())
-            if all_origin_errors_rotational.numel() > 0
-            else 0.0
-        )
+        # Ablation arms (2026-08-15 spec): heads that are absent in this arm
+        # produce no metrics at all — skip their logs and prints entirely
+        # (never a 0.0 placeholder), so absent-head metric columns stay
+        # absent in the CSV. Head presence is config-determined, hence
+        # identical on every rank.
+        has_axis = self._test_has_axis_head
+        has_type = self._test_has_type_head
 
-        if total_predictions > 0:
-            p_det = 100.0 * total_num_matched / total_predictions
-            pass_rate_m = 100.0 * total_type_correct_all / total_predictions
-            pass_rate_ma = 100.0 * total_ma_correct_all / total_predictions
-        else:
-            p_det, pass_rate_m, pass_rate_ma = 0.0, 0.0, 0.0
+        p_det = (
+            100.0 * total_num_matched / total_predictions
+            if total_predictions > 0
+            else 0.0
+        )
 
         self.log("test/p_det", p_det, prog_bar=True, logger=True, sync_dist=True)
-        self.log("test/pass_rate_m", pass_rate_m, prog_bar=True, logger=True, sync_dist=True)
-        self.log(
-            "test/pass_rate_ma", pass_rate_ma, prog_bar=True, logger=True, sync_dist=True
-        )
         self.log("test/mean_iou", mean_iou, prog_bar=False, logger=True, sync_dist=True)
         self.log(
             "test/mean_point_error",
@@ -682,27 +679,61 @@ class SF3DTrainingModule(OPDRealTrainingModule):
             logger=True,
             sync_dist=True,
         )
-        self.log(
-            "test/err_adir_matched_deg",
-            err_adir_matched,
-            prog_bar=False,
-            logger=True,
-            sync_dist=True,
-        )
-        self.log(
-            "test/err_adir_all_deg",
-            err_adir_all,
-            prog_bar=False,
-            logger=True,
-            sync_dist=True,
-        )
-        self.log(
-            "test/mean_origin_error_m",
-            mean_origin_error_m,
-            prog_bar=False,
-            logger=True,
-            sync_dist=True,
-        )
+
+        if has_type:
+            pass_rate_m = (
+                100.0 * total_type_correct_all / total_predictions
+                if total_predictions > 0
+                else 0.0
+            )
+            self.log(
+                "test/pass_rate_m", pass_rate_m, prog_bar=True, logger=True,
+                sync_dist=True,
+            )
+        if has_axis and has_type:
+            pass_rate_ma = (
+                100.0 * total_ma_correct_all / total_predictions
+                if total_predictions > 0
+                else 0.0
+            )
+            self.log(
+                "test/pass_rate_ma", pass_rate_ma, prog_bar=True, logger=True,
+                sync_dist=True,
+            )
+        if has_axis:
+            err_adir_matched = (
+                float(all_axis_errors_matched.mean().item())
+                if all_axis_errors_matched.numel() > 0
+                else 0.0
+            )
+            err_adir_all = (
+                float(all_axis_errors_all.mean().item())
+                if all_axis_errors_all.numel() > 0
+                else 0.0
+            )
+            self.log(
+                "test/err_adir_matched_deg",
+                err_adir_matched,
+                prog_bar=False,
+                logger=True,
+                sync_dist=True,
+            )
+            self.log(
+                "test/err_adir_all_deg",
+                err_adir_all,
+                prog_bar=False,
+                logger=True,
+                sync_dist=True,
+            )
+        if all_origin_errors_rotational.numel() > 0:
+            mean_origin_error_m = float(all_origin_errors_rotational.mean().item())
+            self.log(
+                "test/mean_origin_error_m",
+                mean_origin_error_m,
+                prog_bar=False,
+                logger=True,
+                sync_dist=True,
+            )
 
         # --- Twist-head metrics (only when the head ran) ---
         twist_ran = all_twist_axis_errors.numel() > 0
@@ -753,7 +784,8 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         ):
             gathered = self.all_gather(torch.tensor(values, device=self.device))
             mean = float(gathered.mean().item()) if gathered.numel() > 0 else 0.0
-            self.log(name, mean, on_epoch=True, logger=True, sync_dist=False)
+            if gathered.numel() > 0:
+                self.log(name, mean, on_epoch=True, logger=True, sync_dist=False)
             split_stats[name] = (mean, gathered.numel())
 
         if self.trainer.is_global_zero:
@@ -761,12 +793,15 @@ class SF3DTrainingModule(OPDRealTrainingModule):
             print(f"Total Samples: {total_predictions}")
             print(f"Mean IoU: {mean_iou:.4f}")
             print(f"PDet (IoU > {self.config.test_iou_threshold:.2f}): {p_det:.2f}%")
-            print(f"M Pass Rate (Motion Type): {pass_rate_m:.2f}%")
-            print(f"MA Pass Rate (Motion Type + Axis): {pass_rate_ma:.2f}%")
+            if has_type:
+                print(f"M Pass Rate (Motion Type): {pass_rate_m:.2f}%")
+            if has_axis and has_type:
+                print(f"MA Pass Rate (Motion Type + Axis): {pass_rate_ma:.2f}%")
             print(f"\n--- Detailed Stats ---")
             print(f"Mean Point Error (L2): {mean_point_error:.4f}")
-            print(f"Mean Axis Error (all): {err_adir_all:.2f} degrees")
-            print(f"Mean Axis Error (matched): {err_adir_matched:.2f} degrees")
+            if has_axis:
+                print(f"Mean Axis Error (all): {err_adir_all:.2f} degrees")
+                print(f"Mean Axis Error (matched): {err_adir_matched:.2f} degrees")
             if all_origin_errors_rotational.numel() > 0:
                 print(
                     f"Mean Origin Error (m, for rotational): {mean_origin_error_m:.4f}"
@@ -820,6 +855,8 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         self._test_axis_errors_all.clear()
         self._test_type_correct_all = 0
         self._test_ma_correct_all = 0
+        self._test_has_axis_head = False
+        self._test_has_type_head = False
         self._test_origin_errors_rotational_all.clear()
         self._test_twist_axis_errors_all.clear()
         self._test_twist_type_correct_all = 0
