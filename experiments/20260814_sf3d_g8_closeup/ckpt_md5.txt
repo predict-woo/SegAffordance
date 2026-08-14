@@ -1,0 +1,4 @@
+36d925f46dfffa552aad93aa5b018af2  checkpoints/best-epoch45-valloss1.0104.ckpt
+7e308301c3c9a2f286811605d956b73d  checkpoints/best-epoch53-valloss1.0164.ckpt
+8e02fcb49dbb6fd828b6e34fd07b992d  checkpoints/best-epoch59-valloss1.0173.ckpt
+8e02fcb49dbb6fd828b6e34fd07b992d  checkpoints/last.ckpt
