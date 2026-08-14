@@ -372,6 +372,25 @@ def main():
                 if not args.traj_only:
                     anchor3d = anchor[0].numpy() if anchor_ok else traj3d[0].float().numpy()
                     if cls_type == "rot" and out.origin_pred is not None:
+                        # 90-deg predicted orbit (yellow), the split-arm
+                        # counterpart of the twist orbit: sweep the lifted
+                        # point right-handed about the predicted axis —
+                        # same extent and sign convention as the GT arcs
+                        # (the preprocessor sweeps 90 deg right-handed).
+                        q3 = out.origin_pred[0].cpu().float().numpy()
+                        c3 = q3 + np.dot(anchor3d - q3, d) * d
+                        r_vec = anchor3d - c3
+                        if float(np.linalg.norm(r_vec)) > 1e-4:
+                            th = np.linspace(0.0, math.pi / 2.0, 48)
+                            arc = (c3[None]
+                                   + np.cos(th)[:, None] * r_vec[None]
+                                   + np.sin(th)[:, None] * np.cross(d, r_vec)[None])
+                            av = arc[:, 2] > 0.05
+                            auv = project_points(
+                                K_norm, torch.from_numpy(arc).float()[None]
+                            )[0].clamp(-2, 3).numpy()
+                            p = draw_polyline_norm(p, auv, av, (0, 230, 230),
+                                                   thickness=4)
                         p = draw_axis_3d(p, K_norm,
                                          out.origin_pred[0].cpu().float().numpy(),
                                          d, anchor3d, (0, 0, 255))

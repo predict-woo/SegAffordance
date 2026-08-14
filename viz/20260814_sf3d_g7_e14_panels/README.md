@@ -6,8 +6,11 @@ FILTERED split (min_revolute_radius 0.10). Rendered while the test eval
 was still running; metrics in experiments/20260814_sf3d_g7/notes.md.
 
 Gen-7 drawing semantics: point marker = projected lifted p_hat; RED
-circle = origin_uv (the origin heatmap's readout); red axis = lifted
-q_hat + direction; trajectory = the ABSOLUTE 20-point readout projected
+ring = origin_uv (the origin heatmap's readout); red axis = lifted
+q_hat + direction; YELLOW = the predicted 90-deg orbit (lifted point
+swept right-handed about the predicted axis — the split-arm
+counterpart of the twist orbit, added same day and re-rendered);
+trajectory (magenta) = the ABSOLUTE 20-point readout projected
 directly (no anchoring).
 
 Reading, checked against two panels:
@@ -15,7 +18,10 @@ Reading, checked against two panels:
 - **Origin/axis: the gen-7 win.** `15_rot_val34448` "Close the bedroom
   door": rot, ax=6 deg, red axis parallel AND adjacent to the GT hinge
   line, origin marker on the actual hinge edge — the heatmap origin
-  fixes the gen-6 floating-origin failure on grounded samples.
+  fixes the gen-6 floating-origin failure on grounded samples. The
+  yellow 90-deg orbit sweeps almost on top of the GT cyan arc — the
+  geometric decode (point + axis + sweep) now describes the motion
+  better than the trajectory head's own output on the same panel.
 - **Trajectory: the accepted zigzag risk MATERIALIZED.** The absolute
   direct 20-point readout renders as disordered mid-air scribbles
   (panel 15's magenta tangle) — the exact failure mode delta-cumsum
