@@ -53,6 +53,7 @@ class SF3DDataset(Dataset):
         lmdb_path: Optional[str] = None,
         sensor_max_occluded_frac: Optional[float] = 0.5,
         min_revolute_radius: float = 0.0,
+        min_mask_area_frac: float = 0.0,
         key_cache_path: Optional[str] = None,
         return_trajectory_2d: bool = False,
         point_source: str = "motion_origin",
@@ -108,6 +109,12 @@ class SF3DDataset(Dataset):
         # the gap: it removes exactly the knob mode. Prismatic records are
         # never dropped. 0.0 disables (legacy behaviour).
         self.min_revolute_radius = min_revolute_radius
+        # Minimum GT mask area as a fraction of the image (splat pixels /
+        # (W*H) at ORIGINAL resolution — the splat pixels ARE the mask).
+        # Context for choosing a value: SF3D masks annotate the functional
+        # ELEMENT (handle/knob), median area 0.028% — 0.0025 (0.25%) keeps
+        # only the ~5% largest close-up elements (measured 2026-08-14).
+        self.min_mask_area_frac = min_mask_area_frac
         self.key_cache_path = Path(key_cache_path) if key_cache_path else None
 
         # OFF by default: the extra columns cost decode time and only the 2D
@@ -212,6 +219,7 @@ class SF3DDataset(Dataset):
         """
         cutoff = self.sensor_max_occluded_frac
         min_rad = self.min_revolute_radius
+        min_mask = self.min_mask_area_frac
 
         # Cache validity is keyed on the record COUNT, not the path, so a cache
         # built from a /dev/shm copy stays valid for the same database on the
@@ -225,18 +233,21 @@ class SF3DDataset(Dataset):
                 cached.get("cutoff") == cutoff
                 and cached.get("entries") == entry_count
                 and cached.get("min_revolute_radius", 0.0) == min_rad
+                and cached.get("min_mask_area_frac", 0.0) == min_mask
             ):
                 print(
                     f"Loaded {len(cached['keys'])} keys from cache "
-                    f"{self.key_cache_path} (cutoff={cutoff}, min_rev_radius={min_rad})"
+                    f"{self.key_cache_path} (cutoff={cutoff}, min_rev_radius={min_rad}, "
+                    f"min_mask_frac={min_mask})"
                 )
                 return cached["keys"]
 
         keys: List[bytes] = []
         dropped = 0
         dropped_radius = 0
+        dropped_mask = 0
         unverified = 0
-        scan = cutoff is not None or min_rad > 0.0
+        scan = cutoff is not None or min_rad > 0.0 or min_mask > 0.0
         with self.env.begin(write=False) as txn:
             cursor = txn.cursor()
             if not scan:
@@ -258,10 +269,13 @@ class SF3DDataset(Dataset):
                     if min_rad > 0.0 and self._revolute_radius_below(record, min_rad):
                         dropped_radius += 1
                         continue
+                    if min_mask > 0.0 and self._mask_area_below(record, min_mask):
+                        dropped_mask += 1
+                        continue
                     keys.append(key)
 
         if scan:
-            total = len(keys) + dropped + dropped_radius
+            total = len(keys) + dropped + dropped_radius + dropped_mask
             print(
                 f"Sensor filter (occluded_frac > {cutoff}): dropped {dropped} of "
                 f"{total} records ({100.0 * dropped / max(1, total):.2f}%); "
@@ -272,6 +286,11 @@ class SF3DDataset(Dataset):
                     f"Radius filter (revolute radius < {min_rad} m): dropped "
                     f"{dropped_radius} ({100.0 * dropped_radius / max(1, total):.2f}%)"
                 )
+            if min_mask > 0.0:
+                print(
+                    f"Mask-area filter (splat frac < {min_mask}): dropped "
+                    f"{dropped_mask} ({100.0 * dropped_mask / max(1, total):.2f}%)"
+                )
 
         if self.key_cache_path:
             self.key_cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -281,6 +300,7 @@ class SF3DDataset(Dataset):
                         "cutoff": cutoff,
                         "entries": entry_count,
                         "min_revolute_radius": min_rad,
+                        "min_mask_area_frac": min_mask,
                         "keys": keys,
                     }
                 )
@@ -288,6 +308,24 @@ class SF3DDataset(Dataset):
             print(f"Cached key list -> {self.key_cache_path}")
 
         return keys
+
+    @staticmethod
+    def _mask_area_below(record: dict, min_frac: float) -> bool:
+        """True iff the GT mask covers less than ``min_frac`` of the image.
+
+        Area = splat pixel count / (W*H) at ORIGINAL resolution — the splat
+        coordinates are exactly the set pixels of the reconstructed mask.
+        Records missing the size field are KEPT (no evidence against them);
+        records with an empty mask are DROPPED (zero area).
+        """
+        wh = record.get("image_dimensions_wh")
+        if not wh:
+            return False
+        w, h = wh
+        if w <= 0 or h <= 0:
+            return False
+        n_px = len(record.get("mask_coordinates_yx") or [])
+        return (n_px / float(w * h)) < min_frac
 
     @staticmethod
     def _revolute_radius_below(record: dict, min_rad: float) -> bool:

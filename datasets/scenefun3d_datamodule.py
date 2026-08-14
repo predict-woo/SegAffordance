@@ -26,6 +26,7 @@ class SF3DDataModule(pl.LightningDataModule):
         frame_cache_path: Optional[str] = None,
         fast_pipeline: bool = False,
         min_revolute_radius: float = 0.0,
+        min_mask_area_frac: float = 0.0,
     ) -> None:
         super().__init__()
         self.train_data_dir = train_data_dir
@@ -53,6 +54,9 @@ class SF3DDataModule(pl.LightningDataModule):
         # Drop knob/dial-class revolute records (element-to-axis distance
         # below this, metres). See SF3DDataset.min_revolute_radius.
         self.min_revolute_radius = min_revolute_radius
+        # GT mask must cover at least this fraction of the image
+        # (splat pixels / W*H). See SF3DDataset.min_mask_area_frac.
+        self.min_mask_area_frac = min_mask_area_frac
 
         self.train_dataset: Optional[Dataset] = None
         self.val_dataset: Optional[Dataset] = None
@@ -80,6 +84,7 @@ class SF3DDataModule(pl.LightningDataModule):
                     frame_cache_path=self.frame_cache_path,
                     fast_pipeline=self.fast_pipeline,
                     min_revolute_radius=self.min_revolute_radius,
+                    min_mask_area_frac=self.min_mask_area_frac,
                 )
 
                 self.train_dataset, self.val_dataset = split_dataset_by_scene(

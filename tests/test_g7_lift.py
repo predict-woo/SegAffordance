@@ -274,3 +274,16 @@ def test_g7_common_step_finite_and_logs_lift_terms():
     # row's in-frame q* activates the origin heatmap BCE.
     assert logged["train/L_origin_map"] > 0.0
     assert logged["train/L_point_3d"] > 0.0
+
+
+def test_mask_area_filter_predicate():
+    from datasets.scenefun3d import SF3DDataset
+    below = SF3DDataset._mask_area_below
+    rec = {"image_dimensions_wh": (1000, 1000),
+           "mask_coordinates_yx": [(i, i) for i in range(3000)]}
+    assert not below(rec, 0.0025)          # 0.30% >= 0.25% -> kept
+    rec["mask_coordinates_yx"] = rec["mask_coordinates_yx"][:2000]
+    assert below(rec, 0.0025)              # 0.20% < 0.25% -> dropped
+    assert below({"image_dimensions_wh": (1000, 1000),
+                  "mask_coordinates_yx": []}, 0.0025)   # empty mask -> dropped
+    assert not below({"mask_coordinates_yx": []}, 0.0025)  # no size -> kept
