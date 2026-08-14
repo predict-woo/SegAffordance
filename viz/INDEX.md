@@ -19,6 +19,7 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 | [20260727_sf3d_reproc_debug](20260727_sf3d_reproc_debug/README.md) | One-off debug renders from the sf3d_processed_v2 rebuild (splat-mask A/B, arc-fix checks, per-frame inspections) | ad-hoc scripts, July 27–28 |
 | [20260727_sf3d_v1_dataset_audit](20260727_sf3d_v1_dataset_audit/README.md) | 100-sample audit of the v1 SF3D LMDB (frame/zoom/depth panels, contact sheet, geometry TSV) | `tools/sf3d_vis_samples.py` |
 | [20260720_opd_label_audits](20260720_opd_label_audits/README.md) | OPD sample renders + description-regeneration label audits | `tools/show_opd_samples.py`, `tools/label_render.py` |
+| 20260814_sf3d_g7_e14_panels | gen-7 FINAL best (ep14): heatmap origin lands ON the hinge (rot 6deg highlight); absolute-trajectory ZIGZAG risk materialized; relational grounding still misses |
 | 20260814_sf3d_g6_mid_e10_panels | gen-6 MID-TRAIN #2 (epoch 10/16), RANDOM draw seed 9030 — direction strong; failure modes: grounding (washer-for-oven) and drawer/door type calls; origin still coarse |
 | 20260814_sf3d_g6_mid_e5_panels | gen-6 split-heads MID-TRAIN (epoch 5/16), seed 3 filtered — first split-arm render: type+direction already strong (rot 19deg / trans 5deg), origin placement + point anchor still coarse |
 | 20260813_sf3d_g4_vs_g5_panels | g4 vs g5 best, seed 3, FILTERED val split (no knob-class): omega commitment visible — |w| headers up, first door-scale rot orbits |

@@ -1,0 +1,14 @@
+command: tools/sf3d_vis_predictions.py --model g7e14 config/sf3d_train_runpod_g7.yaml
+  experiments/20260814_sf3d_g7/checkpoints/best-epoch14-valloss1.3171.ckpt --key-cache
+  /workspace/cache/sf3d_v2_keys_cutoff05_minrad010.pkl --min-revolute-radius 0.10
+  --out viz/20260814_sf3d_g7_e14_panels --num 16 --seed 30662
+tool_commit: 755ed90
+generated: '2026-08-14T04:02:16+00:00'
+models:
+- name: g7e14
+  config: config/sf3d_train_runpod_g7.yaml
+  ckpt: experiments/20260814_sf3d_g7/checkpoints/best-epoch14-valloss1.3171.ckpt
+num: 16
+seed: 30662
+data_root: /workspace/datasets/sf3d_processed_v2
+key_cache: /workspace/cache/sf3d_v2_keys_cutoff05_minrad010.pkl
