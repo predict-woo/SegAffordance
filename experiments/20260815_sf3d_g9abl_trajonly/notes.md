@@ -38,3 +38,5 @@ pseudo-origin (point_uv + depth patch), not an origin-head output.
   decoder/projector. The effect is small next to the trajectory/type gains.
 - Point localization ≈ flat (3D point 0.30 vs 0.29) — the point pipeline is
   supervised identically in all arms.
+
+vis: viz/20260815_sf3d_g9_ablation_panels

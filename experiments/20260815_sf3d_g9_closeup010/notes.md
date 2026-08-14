@@ -54,3 +54,5 @@ best = epoch 23 (val 0.9191; top-3: ep23/24/26). Training exited cleanly
   columns = no data; `test/mean_origin_error_m` is the legacy pseudo-origin
   (computed identically in all arms, NOT an origin-head metric);
   val/loss_total is not comparable across arms.
+
+vis: viz/20260815_sf3d_g9_ablation_panels

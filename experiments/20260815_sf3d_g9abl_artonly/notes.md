@@ -43,3 +43,5 @@ better.
 - Masks/points: flat to trivially different — as expected for shared heads.
 - Attribution caveat: arm A also has L_pp; these deltas bundle co-training
   + consistency coupling (spec's accepted limitation).
+
+vis: viz/20260815_sf3d_g9_ablation_panels
