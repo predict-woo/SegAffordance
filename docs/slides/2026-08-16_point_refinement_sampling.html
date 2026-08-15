@@ -122,7 +122,107 @@ committing to the final point — so you must decide where to stop sampling.
 </p>
 </div>
 
-<h2>3 · Three places to cut the loop</h2>
+<h2>3 · The two paths as model structure</h2>
+<div class="row">
+  <div class="card">
+    <span class="tag rec">CURRENT (gen-7 → 10) — loop-free by construction</span>
+    <svg viewBox="0 0 520 330" width="100%">
+      <defs><marker id="mg" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#7a8ca0"/></marker></defs>
+      <!-- fq -->
+      <rect x="20" y="20" width="150" height="40" rx="7" fill="#eef1f5" stroke="#8fa3b8"/>
+      <text x="95" y="44" font-size="13" text-anchor="middle">decoded features fq</text>
+      <!-- heatmap -->
+      <rect x="20" y="95" width="150" height="40" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="95" y="113" font-size="13" text-anchor="middle">point heatmap</text>
+      <text x="95" y="128" font-size="11" text-anchor="middle" fill="#5b6b7d">(projector ch. 2)</text>
+      <line x1="95" y1="60" x2="95" y2="91" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#mg)"/>
+      <!-- softargmax -->
+      <rect x="20" y="170" width="150" height="40" rx="7" fill="#fde8d8" stroke="#c0392b"/>
+      <text x="95" y="188" font-size="13" text-anchor="middle" font-weight="600">point_uv</text>
+      <text x="95" y="203" font-size="11" text-anchor="middle" fill="#a33025">soft-argmax — FINAL</text>
+      <line x1="95" y1="135" x2="95" y2="166" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#mg)"/>
+      <!-- grid sample -->
+      <rect x="230" y="95" width="170" height="40" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="315" y="113" font-size="13" text-anchor="middle">grid_sample(fq, uv)</text>
+      <text x="315" y="128" font-size="11" text-anchor="middle" fill="#5b6b7d">512-d local feature</text>
+      <line x1="170" y1="40 " x2="240" y2="93" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#mg)"/>
+      <line x1="170" y1="185" x2="255" y2="137" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#mg)"/>
+      <!-- z_p -->
+      <rect x="230" y="170" width="170" height="40" rx="7" fill="#fff" stroke="#c9a13d"/>
+      <text x="315" y="188" font-size="13" text-anchor="middle">ẑ_p MLP</text>
+      <text x="315" y="203" font-size="11" text-anchor="middle" fill="#8a6100">[condition, local] → depth</text>
+      <line x1="315" y1="135" x2="315" y2="166" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#mg)"/>
+      <!-- backproject -->
+      <rect x="150" y="255" width="200" height="40" rx="7" fill="#e2f4e5" stroke="#1e6b2e"/>
+      <text x="250" y="273" font-size="13" text-anchor="middle" font-weight="600">backproject(K, point_uv, ẑ_p)</text>
+      <text x="250" y="288" font-size="11" text-anchor="middle" fill="#1e6b2e">p̂ = 3D interaction point</text>
+      <line x1="95" y1="210" x2="185" y2="251" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#mg)"/>
+      <line x1="315" y1="210" x2="290" y2="251" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#mg)"/>
+      <!-- annotation -->
+      <text x="418" y="120" font-size="11.5" fill="#1e6b2e">feature is consumed</text>
+      <text x="418" y="135" font-size="11.5" fill="#1e6b2e">only DOWNSTREAM of</text>
+      <text x="418" y="150" font-size="11.5" fill="#1e6b2e">the location — it</text>
+      <text x="418" y="165" font-size="11.5" fill="#1e6b2e">predicts a depth,</text>
+      <text x="418" y="180" font-size="11.5" fill="#1e6b2e">never a new uv.</text>
+      <text x="418" y="195" font-size="11.5" fill="#1e6b2e">Straight DAG →</text>
+      <text x="418" y="210" font-size="11.5" fill="#1e6b2e">sample once, done.</text>
+    </svg>
+  </div>
+  <div class="card">
+    <span class="tag meh">PROPOSED refinement (option A) — the loop, and where it's cut</span>
+    <svg viewBox="0 0 520 330" width="100%">
+      <defs><marker id="mg2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#7a8ca0"/></marker>
+      <marker id="mr2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#a33025"/></marker></defs>
+      <!-- heatmap -->
+      <rect x="20" y="20" width="140" height="40" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="90" y="38" font-size="13" text-anchor="middle">point heatmap</text>
+      <text x="90" y="53" font-size="11" text-anchor="middle" fill="#5b6b7d">→ soft-argmax</text>
+      <!-- x_c -->
+      <rect x="20" y="95" width="140" height="40" rx="7" fill="#fde8d8" stroke="#c0392b"/>
+      <text x="90" y="113" font-size="13" text-anchor="middle" font-weight="600">x_c (coarse uv)</text>
+      <text x="90" y="128" font-size="11" text-anchor="middle" fill="#a33025">no longer final!</text>
+      <line x1="90" y1="60" x2="90" y2="91" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#mg2)"/>
+      <!-- sample 1 -->
+      <rect x="220" y="20" width="160" height="40" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="300" y="38" font-size="13" text-anchor="middle">sample #1 @ x_c</text>
+      <text x="300" y="53" font-size="11" text-anchor="middle" fill="#5b6b7d">local feature</text>
+      <line x1="160" y1="105" x2="230" y2="62" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#mg2)"/>
+      <!-- offset head -->
+      <rect x="220" y="95" width="160" height="40" rx="7" fill="#fff" stroke="#a33025"/>
+      <text x="300" y="113" font-size="13" text-anchor="middle" fill="#a33025">offset head → Δ</text>
+      <text x="300" y="128" font-size="11" text-anchor="middle" fill="#a33025">FEATURE MOVES LOCATION</text>
+      <line x1="300" y1="60" x2="300" y2="91" stroke="#a33025" stroke-width="2" marker-end="url(#mr2)"/>
+      <!-- x_r -->
+      <rect x="20" y="170" width="140" height="40" rx="7" fill="#e2f4e5" stroke="#1e6b2e"/>
+      <text x="90" y="188" font-size="13" text-anchor="middle" font-weight="600">x_r = x_c + Δ</text>
+      <text x="90" y="203" font-size="11" text-anchor="middle" fill="#1e6b2e">the REAL point</text>
+      <line x1="220" y1="125" x2="163" y2="172" stroke="#a33025" stroke-width="2" marker-end="url(#mr2)"/>
+      <line x1="90" y1="135" x2="90" y2="166" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#mg2)"/>
+      <!-- sample 2 -->
+      <rect x="220" y="170" width="160" height="40" rx="7" fill="#fff" stroke="#c9a13d"/>
+      <text x="300" y="188" font-size="13" text-anchor="middle" fill="#8a6100">sample #2 @ x_r</text>
+      <text x="300" y="203" font-size="11" text-anchor="middle" fill="#8a6100">fresh feature for depth</text>
+      <line x1="160" y1="190" x2="216" y2="190" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#mg2)"/>
+      <!-- z_p + lift -->
+      <rect x="220" y="245" width="160" height="40" rx="7" fill="#fff" stroke="#c9a13d"/>
+      <text x="300" y="263" font-size="13" text-anchor="middle">ẑ_p → backproject</text>
+      <text x="300" y="278" font-size="11" text-anchor="middle" fill="#5b6b7d">p̂ = lift(K, x_r, ẑ_p)</text>
+      <line x1="300" y1="210" x2="300" y2="241" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#mg2)"/>
+      <line x1="90" y1="210" x2="90" y2="263 " stroke="#7a8ca0" stroke-width="1.6"/>
+      <line x1="90" y1="263" x2="216" y2="263" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#mg2)"/>
+      <!-- the forbidden edge -->
+      <path d="M 380 190 C 470 190, 470 115, 384 112" fill="none" stroke="#a33025" stroke-width="1.8" stroke-dasharray="6 4"/>
+      <text x="398" y="152" font-size="11.5" fill="#a33025">forbidden edge:</text>
+      <text x="398" y="167" font-size="11.5" fill="#a33025">sample #2 does NOT</text>
+      <text x="398" y="182" font-size="11.5" fill="#a33025">re-enter the offset</text>
+      <text x="398" y="197" font-size="11.5" fill="#a33025">head — loop cut here</text>
+      <text x="20" y="315" font-size="11.5" fill="#45566b">Red edges are the new feedback (feature → location) that creates the chicken-and-egg;</text>
+      <text x="20" y="329" font-size="11.5" fill="#45566b">the dashed edge is the one option A refuses to add.</text>
+    </svg>
+  </div>
+</div>
+
+<h2>4 · Three places to cut the loop</h2>
 <div class="row">
   <div class="card">
     <span class="tag rec">A · One pass + one re-sample — recommended</span>
