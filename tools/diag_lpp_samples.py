@@ -21,6 +21,7 @@ import sys
 
 import numpy as np
 import torch
+import yaml
 import torch.nn.functional as F
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -126,7 +127,22 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model, mp = load_model(args.config, args.ckpt, device)
     traj_abs = bool(getattr(mp, "trajectory_absolute", False))
-    loss_mod = PredPredArticulationLoss(weight=1.0, trajectory_is_absolute=traj_abs)
+    # Mirror the config's ACTUAL L_pp construction (gen-10 configs run the
+    # normalized branches at weight 0.1 — a hard-coded 0.5/raw print would
+    # misreport what the train logs show). weight=1.0 keeps the module
+    # returning the RAW term; the config weight is applied in the print.
+    with open(args.config) as f:
+        _lp = (yaml.safe_load(f).get("model", {}) or {}).get("loss_params", {}) or {}
+    cfg_weight = float(_lp.get("pred_pred_art_weight", 0.5))
+    loss_mod = PredPredArticulationLoss(
+        weight=1.0,
+        trajectory_is_absolute=traj_abs,
+        normalized=bool(_lp.get("pred_pred_art_normalized", False)),
+        radius_floor=float(_lp.get("pred_pred_art_radius_floor", 0.10)),
+    )
+    if loss_mod.normalized and abs(loss_mod.radius_floor - args.radius_floor) > 1e-9:
+        print(f"WARNING: --radius-floor {args.radius_floor} != config floor "
+              f"{loss_mod.radius_floor}; breakdown uses the CLI value")
 
     r, m, d = get_default_transforms((256, 256))
     ds = SF3DDataset(
@@ -162,8 +178,9 @@ def main():
         print(f"\n=== val{vi}  [GT {'rot' if type_gt else 'trans'}]  {desc[:60]}")
         for k, v in bd.items():
             print(f"  {k:22s} {v: .5f}")
-        print(f"  {'loss_module L_pp':22s} {float(total): .5f}   (x config weight "
-              f"0.5 -> {0.5 * float(total):.5f} in train logs)")
+        print(f"  {'loss_module L_pp':22s} {float(total): .5f}   "
+              f"({'normalized' if loss_mod.normalized else 'raw m^2'}; x config "
+              f"weight {cfg_weight} -> {cfg_weight * float(total):.5f} in train logs)")
         if args.dump_npz:
             os.makedirs(args.dump_npz, exist_ok=True)
             path = os.path.join(args.dump_npz, f"val{vi}.npz")
