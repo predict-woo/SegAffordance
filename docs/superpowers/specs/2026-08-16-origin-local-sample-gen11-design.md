@@ -1,7 +1,7 @@
 # Gen-11: Origin Local Sample + Meaningful Prismatic Sweep Length
 
 **Date:** 2026-08-16
-**Status:** DRAFT — awaiting user review
+**Status:** IMPLEMENTED (commits 481df0f, 7656374; user approved 2026-08-16)
 **Goal:** One model change on top of the gen-10 recipe — the origin depth
 head gets the same grid-sampled local feature the point depth head has
 (path symmetry) — trained on **sf3d_processed_v3** (whose prismatic sweeps
