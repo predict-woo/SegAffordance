@@ -8,6 +8,7 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
 |---|---|---|
+| [20260816_sf3d_g11_vs_g10_panels](20260816_sf3d_g11_vs_g10_panels/README.md) | gen-11 vs gen-10 on v3 GT — g11 trans sweeps at 0.7m scale, g10 still 0.1m stubs | `tools/sf3d_vis_predictions.py` |
 | [20260816_sf3d_g10_vs_g9_panels](20260816_sf3d_g10_vs_g9_panels/README.md) | normalized-L_pp before/after — g10 trajectories track their own orbits (val1684 fixed) | `tools/sf3d_vis_predictions.py` |
 | [20260816_sf3d_g10_lpp_val93_3d](20260816_sf3d_g10_lpp_val93_3d/README.md) | val93 3D re-plot with gen-10 — radial RMS 0.12->0.05m, sweep shortened | `tools/diag_lpp_samples.py` + local matplotlib |
 | [20260815_sf3d_g9_lpp_val93_3d](20260815_sf3d_g9_lpp_val93_3d/README.md) | 3D pred-trajectory vs pred-orbit for val93 — radius shrinks 0.29->0.12m inside the predicted circle (L_pp p97) | `tools/diag_lpp_samples.py` + local matplotlib |

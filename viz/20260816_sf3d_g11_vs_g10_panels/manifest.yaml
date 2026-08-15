@@ -1,0 +1,19 @@
+command: tools/sf3d_vis_predictions.py --model g10norm config/sf3d_train_runpod_g10_closeup010.yaml
+  experiments/20260815_sf3d_g10_closeup010/checkpoints/best-epoch24-valloss0.9471.ckpt
+  --model g11origin config/sf3d_train_runpod_g11_closeup010.yaml experiments/20260816_sf3d_g11_closeup010/checkpoints/best-epoch16-valloss0.9978.ckpt
+  --data-root /workspace/datasets/sf3d_processed_v3 --key-cache /workspace/cache/sf3d_v2_keys_cutoff05_minrad010_maskfrac0010_edge05.pkl
+  --min-revolute-radius 0.10 --min-mask-area-frac 0.001 --edge-margin-frac 0.05 --num
+  16 --seed 42421 --out viz/20260816_sf3d_g11_vs_g10_panels
+tool_commit: 5fe80ec
+generated: '2026-08-15T18:33:54+00:00'
+models:
+- name: g10norm
+  config: config/sf3d_train_runpod_g10_closeup010.yaml
+  ckpt: experiments/20260815_sf3d_g10_closeup010/checkpoints/best-epoch24-valloss0.9471.ckpt
+- name: g11origin
+  config: config/sf3d_train_runpod_g11_closeup010.yaml
+  ckpt: experiments/20260816_sf3d_g11_closeup010/checkpoints/best-epoch16-valloss0.9978.ckpt
+num: 16
+seed: 42421
+data_root: /workspace/datasets/sf3d_processed_v3
+key_cache: /workspace/cache/sf3d_v2_keys_cutoff05_minrad010_maskfrac0010_edge05.pkl
