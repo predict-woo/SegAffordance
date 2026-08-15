@@ -122,7 +122,97 @@ committing to the final point — so you must decide where to stop sampling.
 </p>
 </div>
 
-<h2>3 · The two paths as model structure</h2>
+<h2>3 · Interaction-point path vs origin path — why only one samples a local feature</h2>
+<div class="row">
+  <div class="card">
+    <span class="tag rec">INTERACTION POINT — local sample IN</span>
+    <svg viewBox="0 0 520 340" width="100%">
+      <defs><marker id="pg" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#7a8ca0"/></marker></defs>
+      <rect x="20" y="16" width="170" height="38" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="105" y="33" font-size="12.5" text-anchor="middle">point heatmap (proj ch 2)</text>
+      <text x="105" y="47" font-size="11" text-anchor="middle" fill="#5b6b7d">→ soft-argmax</text>
+      <rect x="20" y="86" width="170" height="38" rx="7" fill="#fde8d8" stroke="#c0392b"/>
+      <text x="105" y="103" font-size="12.5" text-anchor="middle" font-weight="600">point_uv</text>
+      <text x="105" y="117" font-size="11" text-anchor="middle" fill="#5b6b7d">→ condition vector too</text>
+      <line x1="105" y1="54" x2="105" y2="82" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#pg)"/>
+      <rect x="250" y="86" width="180" height="38" rx="7" fill="#e2f4e5" stroke="#1e6b2e"/>
+      <text x="340" y="103" font-size="12.5" text-anchor="middle" fill="#1e6b2e" font-weight="600">grid_sample(fq, point_uv)</text>
+      <text x="340" y="117" font-size="11" text-anchor="middle" fill="#1e6b2e">512-d LOCAL feature</text>
+      <line x1="190" y1="105" x2="246" y2="105" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#pg)"/>
+      <rect x="250" y="156" width="180" height="38" rx="7" fill="#fff" stroke="#c9a13d"/>
+      <text x="340" y="173" font-size="12.5" text-anchor="middle">ẑ_p = MLP([condition, local])</text>
+      <text x="340" y="187" font-size="11" text-anchor="middle" fill="#8a6100">depth reads the pixel's appearance</text>
+      <line x1="340" y1="124" x2="340" y2="152" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#pg)"/>
+      <rect x="130" y="226" width="230" height="38" rx="7" fill="#e2f4e5" stroke="#1e6b2e"/>
+      <text x="245" y="243" font-size="12.5" text-anchor="middle" font-weight="600">p̂ = backproject(K, point_uv, ẑ_p)</text>
+      <text x="245" y="257" font-size="11" text-anchor="middle" fill="#1e6b2e">supervised vs GT traj[0] (all samples)</text>
+      <line x1="105" y1="124" x2="180" y2="222" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#pg)"/>
+      <line x1="340" y1="194" x2="300" y2="222" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#pg)"/>
+      <!-- mini scene -->
+      <rect x="30" y="282" width="200" height="46" rx="5" fill="#dfe7ef" stroke="#b9c5d2"/>
+      <rect x="60" y="292" width="90" height="28" rx="3" fill="#efe9de" stroke="#b9c5d2"/>
+      <rect x="95" y="303" width="24" height="6" rx="3" fill="#5a4632"/>
+      <circle cx="107" cy="306" r="5" fill="none" stroke="#c0392b" stroke-width="2"/>
+      <text x="245" y="300" font-size="11.5" fill="#1e6b2e">the pixel IS the grasped surface —</text>
+      <text x="245" y="315" font-size="11.5" fill="#1e6b2e">a handle you can see. Its appearance</text>
+      <text x="245" y="330" font-size="11.5" fill="#1e6b2e">is direct evidence for its own depth.</text>
+    </svg>
+  </div>
+  <div class="card">
+    <span class="tag bad">ORIGIN — local sample deliberately OUT</span>
+    <svg viewBox="0 0 520 340" width="100%">
+      <defs><marker id="og" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#7a8ca0"/></marker></defs>
+      <rect x="20" y="16" width="170" height="38" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="105" y="33" font-size="12.5" text-anchor="middle">origin heatmap (proj ch 3)</text>
+      <text x="105" y="47" font-size="11" text-anchor="middle" fill="#5b6b7d">→ soft-argmax</text>
+      <rect x="20" y="86" width="170" height="38" rx="7" fill="#fde8d8" stroke="#c0392b"/>
+      <text x="105" y="103" font-size="12.5" text-anchor="middle" font-weight="600">origin_uv</text>
+      <text x="105" y="117" font-size="11" text-anchor="middle" fill="#5b6b7d">→ condition vector (appended last)</text>
+      <line x1="105" y1="54" x2="105" y2="82" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#og)"/>
+      <!-- crossed-out sampler -->
+      <rect x="250" y="86" width="180" height="38" rx="7" fill="#fbf3f2" stroke="#a33025" stroke-dasharray="6 4"/>
+      <text x="340" y="103" font-size="12.5" text-anchor="middle" fill="#a33025">grid_sample(fq, origin_uv)</text>
+      <text x="340" y="117" font-size="11" text-anchor="middle" fill="#a33025">NOT built (gen-7 decision)</text>
+      <line x1="258" y1="92" x2="422" y2="118" stroke="#a33025" stroke-width="2"/>
+      <line x1="258" y1="118" x2="422" y2="92" stroke="#a33025" stroke-width="2"/>
+      <rect x="250" y="156" width="180" height="38" rx="7" fill="#fff" stroke="#c9a13d"/>
+      <text x="340" y="173" font-size="12.5" text-anchor="middle">ẑ_q = MLP(condition ONLY)</text>
+      <text x="340" y="187" font-size="11" text-anchor="middle" fill="#8a6100">depth from scene-level context</text>
+      <line x1="190" y1="105" x2="270" y2="152" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#og)"/>
+      <rect x="130" y="226" width="230" height="38" rx="7" fill="#e2f4e5" stroke="#1e6b2e"/>
+      <text x="245" y="243" font-size="12.5" text-anchor="middle" font-weight="600">q̂ = backproject(K, origin_uv, ẑ_q)</text>
+      <text x="245" y="257" font-size="11" text-anchor="middle" fill="#1e6b2e">supervised vs q* — REVOLUTE rows only</text>
+      <line x1="105" y1="124" x2="180" y2="222" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#og)"/>
+      <line x1="340" y1="194" x2="300" y2="222" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#og)"/>
+      <!-- mini scene -->
+      <rect x="30" y="282" width="200" height="46" rx="5" fill="#dfe7ef" stroke="#b9c5d2"/>
+      <rect x="55" y="288" width="60" height="36" rx="2" fill="#efe9de" stroke="#b9c5d2"/>
+      <line x1="55" y1="288" x2="55" y2="324" stroke="#1e6b2e" stroke-width="3"/>
+      <circle cx="55" cy="306" r="5" fill="none" stroke="#c0392b" stroke-width="2"/>
+      <rect x="115" y="288" width="100" height="36" fill="#cfd8e2"/>
+      <text x="245" y="300" font-size="11.5" fill="#a33025">the pixel is whatever sits BEHIND a</text>
+      <text x="245" y="315" font-size="11.5" fill="#a33025">geometric locus — door edge, wall,</text>
+      <text x="245" y="330" font-size="11.5" fill="#a33025">occluder. Appearance ⊥ hinge depth.</text>
+    </svg>
+  </div>
+</div>
+<div class="card">
+<b>Why the asymmetry?</b>
+<p class="cap" style="font-size:14px; color:#2c4157">
+The interaction point is a <b>physical, visible surface point</b> — the model is told "you will touch this pixel".
+Whatever the camera sees there (handle, knob, drawer lip) is the very surface whose depth ẑ_p must produce, so the
+sampled 512-d feature is a direct depth cue and sharpens the estimate.
+The origin is a <b>geometric abstraction</b>: the perpendicular foot of the hinge line — frequently occluded by the
+door itself, inside the cabinet body, or projecting onto the wall behind. The pixel under origin_uv then shows some
+<i>other</i> surface at some <i>other</i> depth, so a sampled feature would feed the depth head systematically
+misleading evidence (it would learn the wall's depth, not the hinge's). Hence your gen-7 call: ẑ_q reads only the
+global condition vector — scene-level context, the same information that placed the heatmap — and the supervision
+asymmetry matches (origin 2D+depth supervised on revolute rows only; fully masked on prismatic, where no origin
+exists at all).
+</p>
+</div>
+
+<h2>3b · Current vs proposed refinement dataflow</h2>
 <div class="row">
   <div class="card">
     <span class="tag rec">CURRENT (gen-7 → 10) — loop-free by construction</span>
