@@ -89,3 +89,40 @@ def test_lossparams_defaults():
     defaults = {f.name: f.default for f in dataclasses.fields(LossParams)}
     assert defaults["pred_pred_art_normalized"] is False
     assert defaults["pred_pred_art_radius_floor"] == 0.10
+
+
+import os
+
+import yaml
+
+_CFG = os.path.join(os.path.dirname(__file__), "..", "config")
+
+
+def test_g10_config_matches_spec():
+    with open(os.path.join(_CFG, "sf3d_train_runpod_g9_closeup010.yaml")) as f:
+        base = yaml.safe_load(f)
+    with open(os.path.join(_CFG, "sf3d_train_runpod_g10_closeup010.yaml")) as f:
+        g10 = yaml.safe_load(f)
+
+    gl = g10["model"]["loss_params"]
+    assert gl["pred_pred_art_weight"] == 0.1
+    assert gl["pred_pred_art_normalized"] is True
+    assert gl["pred_pred_art_radius_floor"] == 0.10
+    assert gl["geometric_loss"] == "pred_pred_art"
+
+    # Everything else identical to gen-9.
+    bl = dict(base["model"]["loss_params"])
+    gl2 = dict(gl)
+    for k in ("pred_pred_art_weight", "pred_pred_art_normalized",
+              "pred_pred_art_radius_floor"):
+        bl.pop(k, None), gl2.pop(k, None)
+    assert gl2 == bl
+    assert g10["model"]["model_params"] == base["model"]["model_params"]
+    assert g10["data"] == base["data"]
+    assert g10["model"]["optimizer_params"] == base["model"]["optimizer_params"]
+    assert g10["seed_everything"] == 42
+    assert g10["trainer"]["max_epochs"] == 30
+    ckpt = g10["trainer"]["callbacks"][0]["init_args"]["dirpath"]
+    logd = g10["trainer"]["logger"]["init_args"]["save_dir"]
+    assert "20260815_sf3d_g10_closeup010" in ckpt
+    assert "20260815_sf3d_g10_closeup010" in logd

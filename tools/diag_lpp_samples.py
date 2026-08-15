@@ -37,7 +37,7 @@ from model.losses.geometric import (  # noqa: E402
 from tools.sf3d_vis_predictions import load_model  # noqa: E402
 
 
-def lpp_breakdown(out, trajectory_is_absolute):
+def lpp_breakdown(out, trajectory_is_absolute, radius_floor=0.10):
     """Replicates PredPredArticulationLoss.forward for ONE sample (B=1),
     returning every intermediate the batch-mean loss hides."""
     traj = out.trajectory_pred.float()                      # (1, N, 3)
@@ -69,10 +69,11 @@ def lpp_breakdown(out, trajectory_is_absolute):
     # Gen-10 candidate normalization (2026-08-16 spec): dimensionless
     # branches. Line: fraction of mean squared displacement perpendicular
     # to the axis (intrinsically <= 1). Circle: residual relative to the
-    # predicted orbit radius, r_hat floored at 0.05 m.
+    # predicted orbit radius, r_hat floored at `radius_floor` (keep it
+    # equal to the loss's radius_floor so probe and loss match).
     mean_sq_disp = d.pow(2).sum(-1).mean(-1)                # (1,)
     l_line_norm = l_line / mean_sq_disp.clamp(min=1e-8)
-    r2 = r_hat.squeeze(1).pow(2).clamp(min=0.05 ** 2)
+    r2 = r_hat.squeeze(1).clamp(min=radius_floor).pow(2)
     l_circle_norm = (radial + axial) / r2
     per_sample_norm = (1.0 - p_rev) * l_line_norm + p_rev * l_circle_norm
 
@@ -112,6 +113,9 @@ def main():
     ap.add_argument("--ref-samples", type=int, default=512,
                     help="random val subset for the reference distribution "
                          "(0 disables)")
+    ap.add_argument("--radius-floor", type=float, default=0.10,
+                    help="r_hat floor for the normalized circle branch "
+                         "(keep = the loss's radius_floor)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--dump-npz", default=None,
                     help="directory to write per-index npz dumps of the "
@@ -154,7 +158,7 @@ def main():
     for vi in args.indices:
         out, desc, type_gt, motion_gt, origin3d, t3d = forward_index(vi)
         total, _ = loss_mod(out, None)
-        bd = lpp_breakdown(out, traj_abs)
+        bd = lpp_breakdown(out, traj_abs, radius_floor=args.radius_floor)
         print(f"\n=== val{vi}  [GT {'rot' if type_gt else 'trans'}]  {desc[:60]}")
         for k, v in bd.items():
             print(f"  {k:22s} {v: .5f}")
@@ -188,7 +192,7 @@ def main():
         vals, p_revs, nvals = [], [], []
         for j, vi in enumerate(ref):
             out = forward_index(vi)[0]
-            bd = lpp_breakdown(out, traj_abs)
+            bd = lpp_breakdown(out, traj_abs, radius_floor=args.radius_floor)
             if bd["energy_m2"] > 1e-6:
                 vals.append(bd["L_pp"])
                 nvals.append(bd["L_pp_norm"])
