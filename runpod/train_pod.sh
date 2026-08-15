@@ -80,7 +80,17 @@ PY
     ;;
 
   launch)
-    name="$2"; exp="$3"; cfg="$4"; script="${5:-train_OPDReal_better.py}"; pp="${6:-}"
+    name="$2"; exp="$3"; cfg="$4"; script="${5:-}"; pp="${6:-}"
+    # Default trainer follows the config family: an sf3d config launched
+    # into train_OPDReal_better.py dies at argparse (SF3D-only data args)
+    # — bit the gen-10 launch on 2026-08-15.
+    if [ -z "$script" ]; then
+      case "$cfg" in
+        *sf3d*) script=train_SF3D_better.py ;;
+        *opdmulti*) script=train_OPDMulti_better.py ;;
+        *) script=train_OPDReal_better.py ;;
+      esac
+    fi
     host="segaff-${name}"
     # Warm RN50 into the page cache (a cold read stalls model construction
     # for minutes), and stage the SF3D LMDBs into /dev/shm: even warm, FUSE
