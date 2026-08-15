@@ -100,6 +100,10 @@ def main():
                     help="random val subset for the reference distribution "
                          "(0 disables)")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--dump-npz", default=None,
+                    help="directory to write per-index npz dumps of the "
+                         "predicted/GT geometry (for offline 3D plotting; "
+                         "matplotlib is not on the pod venv)")
     args = ap.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -125,17 +129,17 @@ def main():
     def forward_index(vi):
         s = val[int(vi)]
         (img_t, depth_t, desc, _mask, _bbox, _pt, motion_gt, type_gt,
-         img_size, _name, _origin3d, K, _t3d, _t2d, _t2dv) = s
+         img_size, _name, origin3d, K, t3d, _t2d, _t2dv) = s
         K_norm = normalized_intrinsics(K[None].float(), img_size[None].float())
         with torch.no_grad():
             word = model.tokenize([desc], 77).to(device)
             out = model(img_t[None].to(device), depth_t[None].to(device),
                         word, None, None, None, None,
                         K_norm.to(device).float())
-        return out, desc, int(type_gt)
+        return out, desc, int(type_gt), motion_gt, origin3d, t3d
 
     for vi in args.indices:
-        out, desc, type_gt = forward_index(vi)
+        out, desc, type_gt, motion_gt, origin3d, t3d = forward_index(vi)
         total, _ = loss_mod(out, None)
         bd = lpp_breakdown(out, traj_abs)
         print(f"\n=== val{vi}  [GT {'rot' if type_gt else 'trans'}]  {desc[:60]}")
@@ -143,6 +147,26 @@ def main():
             print(f"  {k:22s} {v: .5f}")
         print(f"  {'loss_module L_pp':22s} {float(total): .5f}   (x config weight "
               f"0.5 -> {0.5 * float(total):.5f} in train logs)")
+        if args.dump_npz:
+            os.makedirs(args.dump_npz, exist_ok=True)
+            path = os.path.join(args.dump_npz, f"val{vi}.npz")
+            np.savez(
+                path,
+                desc=np.asarray(desc),
+                type_gt=np.asarray(type_gt),
+                trajectory_pred=out.trajectory_pred[0].float().cpu().numpy(),
+                trajectory_absolute=np.asarray(traj_abs),
+                point_3d_pred=out.point_3d_pred[0].float().cpu().numpy(),
+                origin_pred=out.origin_pred[0].float().cpu().numpy(),
+                motion_pred=out.motion_pred[0].float().cpu().numpy(),
+                p_rev=np.asarray(bd["p_rev"]),
+                r_hat=np.asarray(bd["r_hat_m"]),
+                L_pp=np.asarray(bd["L_pp"]),
+                traj_gt=t3d.float().numpy(),
+                origin_gt=origin3d.float().numpy(),
+                motion_gt=motion_gt.float().numpy(),
+            )
+            print(f"  dumped -> {path}")
 
     if args.ref_samples > 0:
         rng = np.random.default_rng(args.seed)
