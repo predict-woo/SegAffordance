@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Point refinement: the sample-order question</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 0; background: #f6f7f9; color: #1c2733; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 28px 32px 60px; }
+  h1 { font-size: 26px; margin: 8px 0 4px; }
+  h2 { font-size: 19px; margin: 34px 0 10px; border-bottom: 2px solid #d7dde5; padding-bottom: 6px; }
+  p.lead { color: #45566b; margin: 4px 0 18px; max-width: 900px; }
+  .card { background: #fff; border: 1px solid #e1e6ec; border-radius: 10px; padding: 18px 20px; margin: 14px 0; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .row .card { flex: 1 1 340px; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 10px; margin-bottom: 8px; }
+  .rec { background: #e2f4e5; color: #1e6b2e; }
+  .meh { background: #fdf3d7; color: #8a6100; }
+  .bad { background: #fde3e0; color: #a33025; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .cap { font-size: 13px; color: #5b6b7d; margin-top: 8px; line-height: 1.45; }
+  code { background: #eef1f5; border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+  .note { background: #eef4fb; border-left: 4px solid #3d7cc9; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px; color: #2c4157; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Point refinement: which pixel do you sample?</h1>
+<p class="lead">
+The plan: keep the heatmap's soft-argmax as the coarse point
+<b>x<sub>c</sub></b>, sample the decoded feature map there, and let a small
+head predict an offset to a refined point <b>x<sub>r</sub></b>. The
+question: the feature you sampled describes <i>where you started</i>, not
+<i>where you ended</i> — and the depth head ẑ<sub>p</sub> wants appearance
+at the <i>final</i> point. Where do you cut this loop?
+</p>
+
+<h2>1 · The refinement idea (no issue yet)</h2>
+<div class="card">
+<svg viewBox="0 0 1080 240" width="100%">
+  <!-- image frame -->
+  <rect x="20" y="20" width="300" height="200" rx="6" fill="#dfe7ef" stroke="#b9c5d2"/>
+  <!-- heatmap blob (broad, mass off the handle) -->
+  <ellipse cx="150" cy="120" rx="70" ry="45" fill="#f2b3a0" opacity="0.55"/>
+  <ellipse cx="165" cy="115" rx="42" ry="27" fill="#ec8a6e" opacity="0.6"/>
+  <ellipse cx="180" cy="110" rx="20" ry="13" fill="#e2603c" opacity="0.7"/>
+  <!-- true handle -->
+  <rect x="212" y="102" width="26" height="9" rx="4" fill="#5a4632"/>
+  <text x="245" y="97" font-size="12" fill="#5a4632">true handle</text>
+  <!-- coarse point: soft-argmax pulled to mass center -->
+  <circle cx="150" cy="120" r="6" fill="#c0392b"/>
+  <text x="70" y="146" font-size="13" fill="#c0392b" font-weight="600">x_c (soft-argmax)</text>
+  <!-- refined -->
+  <circle cx="218" cy="107" r="6" fill="#1e6b2e"/>
+  <line x1="156" y1="118" x2="211" y2="109" stroke="#1e6b2e" stroke-width="2.5" marker-end="url(#ar)"/>
+  <text x="196" y="132" font-size="13" fill="#1e6b2e" font-weight="600">x_r = x_c + Δ</text>
+  <!-- pipeline right -->
+  <rect x="380" y="45" width="180" height="44" rx="8" fill="#fff" stroke="#8fa3b8"/>
+  <text x="470" y="63" font-size="13" text-anchor="middle">grid_sample(fq, x_c)</text>
+  <text x="470" y="80" font-size="12" text-anchor="middle" fill="#5b6b7d">512-d local feature</text>
+  <rect x="620" y="45" width="200" height="44" rx="8" fill="#fff" stroke="#8fa3b8"/>
+  <text x="720" y="63" font-size="13" text-anchor="middle">offset head MLP</text>
+  <text x="720" y="80" font-size="12" text-anchor="middle" fill="#5b6b7d">[condition, local] → Δ (≤ ~13 px)</text>
+  <rect x="880" y="45" width="170" height="44" rx="8" fill="#e2f4e5" stroke="#1e6b2e"/>
+  <text x="965" y="63" font-size="13" text-anchor="middle">x_r = x_c + Δ</text>
+  <text x="965" y="80" font-size="12" text-anchor="middle" fill="#1e6b2e">refined 2D point</text>
+  <line x1="322" y1="120" x2="376" y2="70" stroke="#8fa3b8" stroke-width="1.6" marker-end="url(#ag)"/>
+  <line x1="560" y1="67" x2="616" y2="67" stroke="#8fa3b8" stroke-width="1.6" marker-end="url(#ag)"/>
+  <line x1="820" y1="67" x2="876" y2="67" stroke="#8fa3b8" stroke-width="1.6" marker-end="url(#ag)"/>
+  <!-- consumers -->
+  <rect x="620" y="150" width="200" height="52" rx="8" fill="#fff" stroke="#c9a13d"/>
+  <text x="720" y="171" font-size="13" text-anchor="middle">ẑ_p depth head</text>
+  <text x="720" y="189" font-size="12" text-anchor="middle" fill="#8a6100">wants appearance at the FINAL point</text>
+  <rect x="880" y="150" width="170" height="52" rx="8" fill="#fff" stroke="#8fa3b8"/>
+  <text x="965" y="171" font-size="13" text-anchor="middle">lift + condition</text>
+  <text x="965" y="189" font-size="12" text-anchor="middle" fill="#5b6b7d">backproject(x_r, ẑ_p)</text>
+  <line x1="965" y1="93" x2="965" y2="146" stroke="#8fa3b8" stroke-width="1.6" marker-end="url(#ag)"/>
+  <line x1="900" y1="93" x2="760" y2="146" stroke="#c9a13d" stroke-width="1.6" stroke-dasharray="5 3" marker-end="url(#ay)"/>
+  <defs>
+    <marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#1e6b2e"/></marker>
+    <marker id="ag" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#8fa3b8"/></marker>
+    <marker id="ay" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#c9a13d"/></marker>
+  </defs>
+</svg>
+<p class="cap">
+Soft-argmax over a broad heatmap lands at the blob's <i>mass center</i>
+(x<sub>c</sub>), not the sharp handle. The offset head reads the appearance
+at x<sub>c</sub> and nudges the point to x<sub>r</sub>. So far so good —
+until you ask which pixel the <b>depth head</b> should look at.
+</p>
+</div>
+
+<h2>2 · The chicken-and-egg</h2>
+<div class="card">
+<svg viewBox="0 0 1080 210" width="100%">
+  <rect x="30" y="35" width="215" height="46" rx="8" fill="#fff" stroke="#c0392b"/>
+  <text x="137" y="55" font-size="13" text-anchor="middle" fill="#c0392b">feature sampled at x_c</text>
+  <text x="137" y="72" font-size="12" text-anchor="middle" fill="#5b6b7d">describes the WRONG place…</text>
+  <rect x="305" y="35" width="190" height="46" rx="8" fill="#fff" stroke="#8fa3b8"/>
+  <text x="400" y="55" font-size="13" text-anchor="middle">…moves the point to x_r</text>
+  <text x="400" y="72" font-size="12" text-anchor="middle" fill="#5b6b7d">now x_r is the real point</text>
+  <rect x="555" y="35" width="230" height="46" rx="8" fill="#fff" stroke="#c9a13d"/>
+  <text x="670" y="55" font-size="13" text-anchor="middle" fill="#8a6100">so sample again at x_r?</text>
+  <text x="670" y="72" font-size="12" text-anchor="middle" fill="#5b6b7d">(ẑ_p wants the pixel at x_r)</text>
+  <rect x="845" y="35" width="205" height="46" rx="8" fill="#fde3e0" stroke="#a33025"/>
+  <text x="947" y="55" font-size="13" text-anchor="middle" fill="#a33025">but then the offset head</text>
+  <text x="947" y="72" font-size="13" text-anchor="middle" fill="#a33025">could also re-run at x_r…</text>
+  <line x1="245" y1="58" x2="301" y2="58" stroke="#8fa3b8" stroke-width="1.6" marker-end="url(#ag2)"/>
+  <line x1="495" y1="58" x2="551" y2="58" stroke="#8fa3b8" stroke-width="1.6" marker-end="url(#ag2)"/>
+  <line x1="785" y1="58" x2="841" y2="58" stroke="#8fa3b8" stroke-width="1.6" marker-end="url(#ag2)"/>
+  <path d="M 947 84 C 947 150, 400 165, 395 90" fill="none" stroke="#a33025" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#ar2)"/>
+  <text x="660" y="150" font-size="13" fill="#a33025">…giving a new x_r′, which wants a new sample, which… (a fixed-point loop)</text>
+  <defs>
+    <marker id="ag2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#8fa3b8"/></marker>
+    <marker id="ar2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#a33025"/></marker>
+  </defs>
+</svg>
+<p class="cap">
+The feature that justifies the move is always one step behind the move
+itself. You can never hold "the feature at the final point" <i>before</i>
+committing to the final point — so you must decide where to stop sampling.
+</p>
+</div>
+
+<h2>3 · Three places to cut the loop</h2>
+<div class="row">
+  <div class="card">
+    <span class="tag rec">A · One pass + one re-sample — recommended</span>
+    <svg viewBox="0 0 340 150" width="100%">
+      <circle cx="60" cy="60" r="6" fill="#c0392b"/><text x="40" y="45" font-size="12" fill="#c0392b">x_c</text>
+      <rect x="42" y="42" width="36" height="36" fill="none" stroke="#c0392b" stroke-dasharray="4 3"/>
+      <line x1="66" y1="58" x2="154" y2="47" stroke="#1e6b2e" stroke-width="2.4" marker-end="url(#a3)"/>
+      <circle cx="160" cy="46" r="6" fill="#1e6b2e"/><text x="172" y="42" font-size="12" fill="#1e6b2e">x_r</text>
+      <rect x="142" y="28" width="36" height="36" fill="none" stroke="#c9a13d" stroke-dasharray="4 3"/>
+      <text x="30" y="105" font-size="12" fill="#45566b">offset Δ ← feature@x_c (red box)</text>
+      <text x="30" y="124" font-size="12" fill="#45566b">depth ẑ_p ← fresh feature@x_r (gold box)</text>
+      <text x="30" y="143" font-size="12" fill="#45566b">cost: ONE extra grid_sample. no loop.</text>
+      <defs><marker id="a3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#1e6b2e"/></marker></defs>
+    </svg>
+    <p class="cap">Each head reads the best feature available at the moment
+    it runs. The only location/feature mismatch left is inside the offset
+    head itself — bounded by the ≤ ~13 px offset cap, and that head's whole
+    job is "look here, say which way to shift".</p>
+  </div>
+  <div class="card">
+    <span class="tag meh">B · Iterate K times</span>
+    <svg viewBox="0 0 340 150" width="100%">
+      <circle cx="45" cy="60" r="5" fill="#c0392b"/>
+      <circle cx="110" cy="48" r="5" fill="#b8742c"/>
+      <circle cx="170" cy="42" r="5" fill="#98862c"/>
+      <circle cx="225" cy="40" r="6" fill="#1e6b2e"/>
+      <line x1="51" y1="58" x2="103" y2="50" stroke="#8fa3b8" stroke-width="2" marker-end="url(#a4)"/>
+      <line x1="116" y1="47" x2="163" y2="43" stroke="#8fa3b8" stroke-width="2" marker-end="url(#a4)"/>
+      <line x1="176" y1="42" x2="218" y2="41" stroke="#8fa3b8" stroke-width="2" marker-end="url(#a4)"/>
+      <text x="240" y="44" font-size="12" fill="#1e6b2e">x_r</text>
+      <text x="30" y="105" font-size="12" fill="#45566b">sample → offset → sample → offset → …</text>
+      <text x="30" y="124" font-size="12" fill="#45566b">K grid_samples + K MLP passes, deeper graph,</text>
+      <text x="30" y="143" font-size="12" fill="#45566b">can oscillate; classic IEF, overkill for ≤13 px.</text>
+      <defs><marker id="a4" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#8fa3b8"/></marker></defs>
+    </svg>
+    <p class="cap">Legitimate technique (iterative error feedback in pose
+    estimation) when corrections are large. Our correction budget is a
+    dozen pixels — the second iteration would be refining noise.</p>
+  </div>
+  <div class="card">
+    <span class="tag bad">C · Single sample for both heads</span>
+    <svg viewBox="0 0 340 150" width="100%">
+      <circle cx="60" cy="60" r="6" fill="#c0392b"/><text x="40" y="45" font-size="12" fill="#c0392b">x_c</text>
+      <rect x="42" y="42" width="36" height="36" fill="none" stroke="#c0392b" stroke-dasharray="4 3"/>
+      <line x1="66" y1="58" x2="154" y2="47" stroke="#1e6b2e" stroke-width="2.4" marker-end="url(#a5)"/>
+      <circle cx="160" cy="46" r="6" fill="#1e6b2e"/><text x="172" y="42" font-size="12" fill="#1e6b2e">x_r</text>
+      <text x="196" y="64" font-size="12" fill="#a33025">ẑ_p reads the red box —</text>
+      <text x="196" y="80" font-size="12" fill="#a33025">the pixel you moved AWAY from</text>
+      <text x="30" y="115" font-size="12" fill="#45566b">cheapest (zero extra samples), but the depth is</text>
+      <text x="30" y="134" font-size="12" fill="#45566b">read at x_c while the lift happens at x_r.</text>
+      <defs><marker id="a5" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#1e6b2e"/></marker></defs>
+    </svg>
+    <p class="cap">Depth boundaries are sharp exactly where refinement
+    matters (a handle against a dark oven interior — centimeters in uv, a
+    meter in depth). Reading depth appearance at the pre-move pixel throws
+    away the refinement's benefit for ẑ_p.</p>
+  </div>
+</div>
+
+<div class="note" style="margin-top:22px">
+<b>Recommendation:</b> option A. The forward becomes: heatmap → x<sub>c</sub>
+→ sample@x<sub>c</sub> → Δ → x<sub>r</sub> → sample@x<sub>r</sub> → ẑ<sub>p</sub>
+→ lift. Both grid_samples are differentiable, so <code>L_coord</code> /
+<code>L_point_3d</code> train the offset head end-to-end; <code>L_point_map</code>
+keeps supervising the raw heatmap so the coarse localizer never degrades.
+</div>
+
+</div>
+</body>
+</html>
