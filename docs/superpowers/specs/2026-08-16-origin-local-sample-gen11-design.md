@@ -2,11 +2,11 @@
 
 **Date:** 2026-08-16
 **Status:** DRAFT — awaiting user review
-**Goal:** Two user-decided changes on top of the gen-10 recipe:
-(A) the origin depth head gets the same grid-sampled local feature the
-point depth head has (path symmetry), and (B) the synthetic prismatic
-trajectory length changes from the arbitrary 0.1 m to **0.7 m** — the
-measured median 90° revolute arc length — via a reader-side rescale.
+**Goal:** One model change on top of the gen-10 recipe — the origin depth
+head gets the same grid-sampled local feature the point depth head has
+(path symmetry) — trained on **sf3d_processed_v3** (whose prismatic sweeps
+are 0.7 m; the length change is a DATASET version, built and verified
+2026-08-16, not part of this spec).
 
 ## A · Origin local sample (`use_origin_local_feature`)
 
@@ -45,51 +45,24 @@ No loss changes: ẑ_q keeps training only through the composed 3D origin
 loss (revolute rows; prismatic fully masked, as today). The remaining
 point/origin asymmetry is supervision-side only.
 
-## B · Prismatic sweep length 0.7 m (`trans_traj_length_m`)
+## B · (moved) Prismatic sweep length is dataset v3
 
-**Measured basis (2026-08-16, gen-9 split, 13,297 rot rows):** 90° arc
-length mean 0.731 m, **median 0.699 m**, p10–p90 0.392–1.115 m. The current
-trans sweep (0.1 m) is ~7× shorter, so with 20 points the per-point
-supervision energy on trans rows is ~50× smaller than on rot rows even
-though 77.5% of rows are trans. User decision: set trans length to
-**0.7 m** ≈ the revolute median — per-point spacing then matches the median
-arc exactly.
+Originally specced here as a reader-side rescale; user decision 2026-08-16:
+it is a dataset version instead. `sf3d_processed_v3` was derived from v2 by
+`tools/sf3d_build_v3.py` (trans trajectories recomputed as 0.7 m rays from
+the stored per-frame origin/direction, 2D tracks reprojected, rot rows
+byte-identical, frames/images/depth shared by symlink) and verified by
+`tools/diag_verify_v3.py`: 458,265/458,265 entries, 200/200 rot
+byte-identity and 200/200 trans checks sampled, reader smoke with the gen-9
+key cache passing (caches remain valid — no filter input changed). 0.7 m =
+the measured median 90° revolute arc length (mean 0.731, median 0.699 over
+the gen-9 split, `tools/diag_arc_length.py`). No `trans_traj_length_m`
+reader option exists or is planned.
 
-**Mechanism — reader-side rescale, NO LMDB rewrite.** The stored trans
-trajectory is a straight ray from the annotated motion origin
-(`traj[0] == origin` by construction, `tools/sf3d_process.py:585`). New
-`SF3DDataset` param `trans_traj_length_m: float = 0.0` (0 = off, exact
-current behavior). When > 0, for trans rows only, applied after the
-20-point subsample:
-
-1. `L_cur` = polyline length of the subsampled trajectory.
-2. **Only rescale the standard synthesis:** if `0.05 < L_cur < 0.15`
-   (the 0.1 m rays; degenerate 0.01 m fallback segments and any legacy
-   oddities are left untouched), set `s = trans_traj_length_m / L_cur`
-   and `traj = traj[0] + s · (traj − traj[0])`.
-3. `traj[0]` is the pivot → the 3D interaction-point target and the 2D
-   point target (`trajectory_2d[0]`, its projection) are unchanged.
-4. **Reproject the 2D track:** the stored `trajectory_2d_image_coords` is
-   the projection of the OLD ray; when the record has
-   `camera_intrinsics` + `image_dimensions_wh`, recompute the 20-point 2D
-   track and its valid flags from the rescaled 3D points with the same
-   convention as the preprocessor's `project_trajectory_to_2d` (z > eps,
-   in-bounds check). Records without intrinsics keep the stored track
-   (2D-head training is off in all current arms; the track is viz/aux).
-5. Key-cache neutral: the option filters nothing, so cache files and
-   their validation dicts are untouched. The edge filter reads
-   `trajectory_2d[0]`, which the pivot preserves.
-
-Passthrough: `SF3DDataModule`, and `--trans-traj-length` on
-`tools/sf3d_vis_predictions.py` and `tools/diag_lpp_samples.py` (viz and
-probe must see the same GT the trainer sees).
-
-**Metric consequences (accepted):** trajectory-MSE and per-point-error
-values on trans rows change scale — gen-11 trajectory losses/metrics are a
-FRESH baseline vs gens 8–10 on trans rows. Direction metrics (traj_dir)
-remain comparable. L_pp is unaffected in kind (its line branch is
-normalized by trajectory energy since gen-10; the energy rises, which is
-the point — trans rows stop being near-degenerate).
+Gen-11 (and any future SF3D run) points `data.train_data_dir` at
+`/workspace/datasets/sf3d_processed_v3`. Metric consequences unchanged from
+the original analysis: trajectory-magnitude losses/metrics on trans rows
+are a FRESH baseline vs gens 8–10; direction metrics stay comparable.
 
 ## Gen-11 run
 
@@ -99,7 +72,7 @@ the point — trans rows stop being near-degenerate).
 model_params:
   use_origin_local_feature: true
 data:
-  trans_traj_length_m: 0.7
+  train_data_dir: "/workspace/datasets/sf3d_processed_v3"
 ```
 
 and experiment paths → `experiments/20260816_sf3d_g11_closeup010`. Same
@@ -123,18 +96,11 @@ launched with `train_pod.sh launch train-g11 … train_SF3D_better.py`.
 1. `model/segmenter.py`: flag + dim change + gated grid_sample (above),
    plus the `use_origin_heatmap` requirement check in `__init__`.
 2. `config/opd_train.py`: `use_origin_local_feature: bool = False`.
-3. `datasets/scenefun3d.py`: `trans_traj_length_m` param, rescale +
-   reproject in `__getitem__` after the subsample; passthrough in
-   `datasets/scenefun3d_datamodule.py`.
-4. `tools/sf3d_vis_predictions.py`, `tools/diag_lpp_samples.py`:
-   `--trans-traj-length` flag → dataset kwarg.
-5. Config as above.
-6. Tests: arm construction (origin head input dim, ValueError without
+3. Config as above (v3 data root; viz/probe runs pass the v3 root via
+   their existing --data-root flags).
+4. Tests: arm construction (origin head input dim, ValueError without
    heatmap); forward parity (flag off → ẑ_q identical to gen-10 path);
-   rescale unit tests (length becomes 0.7, traj[0] fixed, degenerate
-   0.01 m segment untouched, rot rows untouched, 2D reprojection matches
-   manual projection); config test (only the two new knobs + paths differ
-   from gen-10).
+   config test (only the flag + data root + paths differ from gen-10).
 
 ## Out of scope
 
