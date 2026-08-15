@@ -314,7 +314,11 @@ def main():
             traj_is_absolute = bool(getattr(mp, "trajectory_absolute", False))
             # GT track on the MODEL panel too (thin, under the prediction),
             # so pred-vs-GT trajectory comparison happens within one panel.
-            if not args.traj_only and gt_valid.any():
+            # Only when the model HAS a trajectory to compare — on
+            # trajectory-less arms the GT overlay is just confusing
+            # (user decision 2026-08-15).
+            if (not args.traj_only and gt_valid.any()
+                    and out.trajectory_pred is not None):
                 p = draw_points_norm(p, traj_uv, gt_valid, (255, 220, 0),
                                      radius=2)
             if out.trajectory_pred is not None and (anchor_ok or traj_is_absolute):
@@ -436,6 +440,9 @@ def main():
             else:
                 lines.append(f"cls={cls_type}")
             legend = "mag=traj3d cyn=GTtraj orn=trk2d yel=orbit grn=GTaxis red=predaxis"
+            if out.trajectory_pred is None:
+                # Trajectory-less arm: neither curve is drawn on this panel.
+                legend = "orn=trk2d yel=orbit grn=GTaxis red=predaxis"
             if getattr(out, "origin_uv", None) is not None:
                 # gen-7 arm: the origin heatmap's 2D readout, drawn as a red
                 # ring (meaningful on revolute rows only — unsupervised on
