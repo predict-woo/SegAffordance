@@ -98,8 +98,15 @@ PY
     # the 12.7 ms/sample) — from tmpfs it's a plain memcpy. Sequential cp
     # runs at ~155 MB/s, ~2.5 min for 26 GB, once per pod.
     extra=""
+    droot=""
     case "$cfg" in *sf3d*)
       extra="--data.lmdb_path /dev/shm/data.lmdb --data.frame_cache_path /dev/shm/frames.lmdb"
+      # Stage the LMDBs the CONFIG points at, not a hardcoded version —
+      # hardcoded v2 would have silently trained gen-11 on the wrong
+      # dataset after the v3 bump (caught 2026-08-16). frames.lmdb may be
+      # a symlink (v3 -> v2's); the path traversal resolves it.
+      droot=$(grep -E '^\s*train_data_dir:' "$cfg" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+      [ -z "$droot" ] && { echo "cannot read train_data_dir from $cfg" >&2; exit 1; }
     ;; esac
     ssh -o BatchMode=yes "$host" "bash /workspace/SegAffordance/runpod/ensure_env.sh
       cat /workspace/models/RN50.pt > /dev/null 2>&1 || true
@@ -108,8 +115,8 @@ PY
       ;; esac
       case '${cfg}' in *sf3d*)
         mkdir -p /dev/shm/data.lmdb /dev/shm/frames.lmdb
-        [ -f /dev/shm/data.lmdb/data.mdb ] || time cp /workspace/datasets/sf3d_processed_v2/data.lmdb/data.mdb /dev/shm/data.lmdb/
-        [ -f /dev/shm/frames.lmdb/data.mdb ] || time cp /workspace/datasets/sf3d_processed_v2/frames.lmdb/data.mdb /dev/shm/frames.lmdb/
+        [ -f /dev/shm/data.lmdb/data.mdb ] || time cp ${droot}/data.lmdb/data.mdb /dev/shm/data.lmdb/
+        [ -f /dev/shm/frames.lmdb/data.mdb ] || time cp ${droot}/frames.lmdb/data.mdb /dev/shm/frames.lmdb/
       ;; esac"
     # Detached: nohup inside a subshell, in its OWN ssh invocation. Plain
     # `& disown` in the same ssh call can hang the session.
