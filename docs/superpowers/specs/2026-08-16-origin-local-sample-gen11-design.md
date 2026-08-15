@@ -104,6 +104,7 @@ launched with `train_pod.sh launch train-g11 … train_SF3D_better.py`.
 
 ## Out of scope
 
-- Any preprocessor/LMDB change (the rescale is reader-side).
+- Any further dataset change (v3 is built and verified; this spec only
+  consumes it).
 - Trajectory-length prediction or per-object real travel ranges.
 - The removed "point refinement" concept — never part of any plan.
