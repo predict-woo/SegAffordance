@@ -66,6 +66,16 @@ def lpp_breakdown(out, trajectory_is_absolute):
     per_sample = (1.0 - p_rev) * l_line + p_rev * l_circle
     energy = d.pow(2).sum(dim=(-1, -2))
 
+    # Gen-10 candidate normalization (2026-08-16 spec): dimensionless
+    # branches. Line: fraction of mean squared displacement perpendicular
+    # to the axis (intrinsically <= 1). Circle: residual relative to the
+    # predicted orbit radius, r_hat floored at 0.05 m.
+    mean_sq_disp = d.pow(2).sum(-1).mean(-1)                # (1,)
+    l_line_norm = l_line / mean_sq_disp.clamp(min=1e-8)
+    r2 = r_hat.squeeze(1).pow(2).clamp(min=0.05 ** 2)
+    l_circle_norm = (radial + axial) / r2
+    per_sample_norm = (1.0 - p_rev) * l_line_norm + p_rev * l_circle_norm
+
     net = d[0, -1]
     net_n = net.norm().clamp(min=1e-8)
     cos_axis = float((net / net_n * dhat[0]).sum())
@@ -79,6 +89,9 @@ def lpp_breakdown(out, trajectory_is_absolute):
         "axial_rms_m": math.sqrt(max(float(axial), 0.0)),
         "r_hat_m": float(r_hat),
         "L_pp": float(per_sample),
+        "L_pp_norm": float(per_sample_norm),
+        "l_line_norm": float(l_line_norm),
+        "l_circle_norm": float(l_circle_norm),
         "energy_m2": float(energy),
         "net_extent_m": float(net_n),
         "cos(net_disp, axis)": cos_axis,
@@ -172,12 +185,13 @@ def main():
         rng = np.random.default_rng(args.seed)
         ref = rng.choice(len(val), size=min(args.ref_samples, len(val)),
                          replace=False)
-        vals, p_revs = [], []
+        vals, p_revs, nvals = [], [], []
         for j, vi in enumerate(ref):
-            out, _, _ = forward_index(vi)
+            out = forward_index(vi)[0]
             bd = lpp_breakdown(out, traj_abs)
             if bd["energy_m2"] > 1e-6:
                 vals.append(bd["L_pp"])
+                nvals.append(bd["L_pp_norm"])
                 p_revs.append(bd["p_rev"])
             if (j + 1) % 128 == 0:
                 print(f"ref {j + 1}/{len(ref)}", flush=True)
@@ -187,6 +201,10 @@ def main():
               f"p90 {np.percentile(v, 90):.5f}   p99 {np.percentile(v, 99):.5f}   "
               f"max {v.max():.5f}")
         print(f"  mean p_rev {np.mean(p_revs):.3f}")
+        n = np.asarray(nvals)
+        print(f"  L_pp_NORM  mean {n.mean():.5f}   p50 {np.percentile(n, 50):.5f}   "
+              f"p90 {np.percentile(n, 90):.5f}   p99 {np.percentile(n, 99):.5f}   "
+              f"max {n.max():.5f}")
 
 
 if __name__ == "__main__":
