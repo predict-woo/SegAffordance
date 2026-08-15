@@ -92,6 +92,11 @@ class ModelParams:
     # intrinsics. Requires the classical 2D point path (point_prediction_3d
     # False).
     predict_point_depth: bool = False
+    # Gen-11: ẑ_q consumes a grid-sampled local feature at origin_uv —
+    # the mirror of ẑ_p's sample at point_uv (the hinge-seam pixel IS
+    # depth evidence; reverses the gen-7 condition-only choice). Requires
+    # use_origin_heatmap.
+    use_origin_local_feature: bool = False
     # TrajectoryMLP emits 20 ABSOLUTE camera-frame points — no delta-cumsum,
     # no relative frame (gen-7 user decision; zigzag + absolute-regression
     # risks on record in the spec). Mutually exclusive with

@@ -130,6 +130,14 @@ class CRIS(nn.Module):
             raise ValueError("use_origin_heatmap needs the classical 2D point path")
         if self.predict_point_depth and self.point_prediction_3d:
             raise ValueError("predict_point_depth needs the classical 2D point path")
+        self.use_origin_local_feature = getattr(
+            model_params, "use_origin_local_feature", False
+        )
+        if self.use_origin_local_feature and not self.use_origin_heatmap:
+            raise ValueError(
+                "use_origin_local_feature needs use_origin_heatmap: the "
+                "sample location IS the origin heatmap's soft-argmax"
+            )
 
         ## Projector
         # fq: (B, fpn_out[1], H/16, W/16), state: (B, fpn_in[2]) -> maps: (B, C, H/4, W/4)
@@ -293,9 +301,11 @@ class CRIS(nn.Module):
         # gen-7 asymmetric depth heads (vae_condition_dim is FINAL here).
         # z_p (interaction point): condition + a fpn_out[1]-dim grid_sample
         # of the decoded fq at point_uv — depth needs local appearance.
-        # z_q (origin): condition only — the origin is often occluded or
-        # off-object, so no local sample. NOT the same module as the 2D
-        # arm's origin_depth_head (predict_origin_depth) above.
+        # z_q (origin): condition only by default — the origin is often
+        # occluded or off-object, so no local sample. Gen-11
+        # (use_origin_local_feature) adds the mirror grid_sample at
+        # origin_uv. NOT the same module as the 2D arm's origin_depth_head
+        # (predict_origin_depth) above.
         self.point_depth_head = (
             OriginDepthHead(
                 input_dim=vae_condition_dim + model_params.fpn_out[1],
@@ -306,7 +316,8 @@ class CRIS(nn.Module):
         )
         self.origin_depth_head_g7 = (
             OriginDepthHead(
-                input_dim=vae_condition_dim,
+                input_dim=vae_condition_dim
+                + (model_params.fpn_out[1] if self.use_origin_local_feature else 0),
                 hidden_dim=model_params.vae_hidden_dim,
             )
             if self.use_origin_heatmap
@@ -481,7 +492,17 @@ class CRIS(nn.Module):
             ).flatten(1)                                          # (B, fpn_out[1])
             z_p = self.point_depth_head(torch.cat([vae_condition, local], dim=1))
         if self.origin_depth_head_g7 is not None:
-            z_q = self.origin_depth_head_g7(vae_condition)
+            zq_in = vae_condition
+            if self.use_origin_local_feature:
+                # Gen-11: mirror of the point path's local sample — the
+                # origin heatmap's argmax pixel is typically the visible
+                # hinge seam, whose appearance is depth evidence.
+                ogrid = origin_uv.view(-1, 1, 1, 2) * 2.0 - 1.0
+                olocal = F.grid_sample(
+                    fq, ogrid, align_corners=False
+                ).flatten(1)                                  # (B, fpn_out[1])
+                zq_in = torch.cat([vae_condition, olocal], dim=1)
+            z_q = self.origin_depth_head_g7(zq_in)
 
         trajectory_all = (
             self.trajectory_predictor(vae_condition)          # (B, K, N, 3)
