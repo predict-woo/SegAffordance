@@ -1,0 +1,23 @@
+command: tools/sf3d_vis_predictions.py --model g9joint config/sf3d_train_runpod_g9_closeup010.yaml
+  experiments/20260815_sf3d_g9_closeup010/checkpoints/best-epoch23-valloss0.9191.ckpt
+  --model armB config/sf3d_train_runpod_g9abl_artonly.yaml experiments/20260815_sf3d_g9abl_artonly/checkpoints/best-epoch21-valloss0.9491.ckpt
+  --model armC config/sf3d_train_runpod_g9abl_trajonly.yaml experiments/20260815_sf3d_g9abl_trajonly/checkpoints/best-epoch22-valloss0.4090.ckpt
+  --key-cache /workspace/cache/sf3d_v2_keys_cutoff05_minrad010_maskfrac0010_edge05.pkl
+  --min-revolute-radius 0.10 --min-mask-area-frac 0.001 --edge-margin-frac 0.05 --num
+  16 --seed 42421 --out viz/20260815_sf3d_g9_ablation_panels_b2
+tool_commit: 65a9e1a
+generated: '2026-08-15T09:40:41+00:00'
+models:
+- name: g9joint
+  config: config/sf3d_train_runpod_g9_closeup010.yaml
+  ckpt: experiments/20260815_sf3d_g9_closeup010/checkpoints/best-epoch23-valloss0.9191.ckpt
+- name: armB
+  config: config/sf3d_train_runpod_g9abl_artonly.yaml
+  ckpt: experiments/20260815_sf3d_g9abl_artonly/checkpoints/best-epoch21-valloss0.9491.ckpt
+- name: armC
+  config: config/sf3d_train_runpod_g9abl_trajonly.yaml
+  ckpt: experiments/20260815_sf3d_g9abl_trajonly/checkpoints/best-epoch22-valloss0.4090.ckpt
+num: 16
+seed: 42421
+data_root: /workspace/datasets/sf3d_processed_v2
+key_cache: /workspace/cache/sf3d_v2_keys_cutoff05_minrad010_maskfrac0010_edge05.pkl
