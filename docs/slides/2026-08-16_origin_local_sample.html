@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Origin local sample: making the two point paths symmetric</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 0; background: #f6f7f9; color: #1c2733; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 28px 32px 60px; }
+  h1 { font-size: 26px; margin: 8px 0 4px; }
+  h2 { font-size: 19px; margin: 34px 0 10px; border-bottom: 2px solid #d7dde5; padding-bottom: 6px; }
+  p.lead { color: #45566b; margin: 4px 0 18px; max-width: 900px; }
+  .card { background: #fff; border: 1px solid #e1e6ec; border-radius: 10px; padding: 18px 20px; margin: 14px 0; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .row .card { flex: 1 1 340px; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 10px; margin-bottom: 8px; }
+  .rec { background: #e2f4e5; color: #1e6b2e; }
+  .old { background: #fde3e0; color: #a33025; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .cap { font-size: 13px; color: #5b6b7d; margin-top: 8px; line-height: 1.45; }
+  .note { background: #eef4fb; border-left: 4px solid #3d7cc9; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px; color: #2c4157; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Origin local sample — make the origin path mirror the point path</h1>
+<p class="lead">
+Decision (2026-08-16): the origin depth head ẑ<sub>q</sub> gets the same
+<code>grid_sample</code> local feature the interaction-point depth head
+ẑ<sub>p</sub> already has — sampled at <code>origin_uv</code>. This
+reverses the gen-7 call to keep ẑ<sub>q</sub> condition-only, because the
+pixel under a well-localized origin is typically the <b>visible hinge
+seam</b> itself (the gen-7 viz batch showed the origin heatmap firing on
+hinges, and 99.6–100% of q* projections are in-frame), so its appearance
+IS depth evidence — same as the handle pixel is for ẑ<sub>p</sub>.
+</p>
+
+<h2>The two paths, before and after</h2>
+<div class="row">
+  <div class="card">
+    <span class="tag rec">INTERACTION POINT (unchanged, gen-7 → now)</span>
+    <svg viewBox="0 0 520 260" width="100%">
+      <defs><marker id="pg" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#7a8ca0"/></marker></defs>
+      <rect x="20" y="16" width="170" height="38" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="105" y="33" font-size="12.5" text-anchor="middle">point heatmap (proj ch 2)</text>
+      <text x="105" y="47" font-size="11" text-anchor="middle" fill="#5b6b7d">→ soft-argmax</text>
+      <rect x="20" y="86" width="170" height="38" rx="7" fill="#fde8d8" stroke="#c0392b"/>
+      <text x="105" y="103" font-size="12.5" text-anchor="middle" font-weight="600">point_uv</text>
+      <text x="105" y="117" font-size="11" text-anchor="middle" fill="#5b6b7d">→ condition vector too</text>
+      <line x1="105" y1="54" x2="105" y2="82" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#pg)"/>
+      <rect x="250" y="86" width="180" height="38" rx="7" fill="#e2f4e5" stroke="#1e6b2e"/>
+      <text x="340" y="103" font-size="12.5" text-anchor="middle" fill="#1e6b2e" font-weight="600">grid_sample(fq, point_uv)</text>
+      <text x="340" y="117" font-size="11" text-anchor="middle" fill="#1e6b2e">512-d local feature</text>
+      <line x1="190" y1="105" x2="246" y2="105" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#pg)"/>
+      <rect x="250" y="156" width="180" height="38" rx="7" fill="#fff" stroke="#c9a13d"/>
+      <text x="340" y="173" font-size="12.5" text-anchor="middle">ẑ_p = MLP([condition, local])</text>
+      <line x1="340" y1="124" x2="340" y2="152" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#pg)"/>
+      <rect x="130" y="216" width="230" height="38" rx="7" fill="#e2f4e5" stroke="#1e6b2e"/>
+      <text x="245" y="233" font-size="12.5" text-anchor="middle" font-weight="600">p̂ = backproject(K, point_uv, ẑ_p)</text>
+      <text x="245" y="247" font-size="11" text-anchor="middle" fill="#1e6b2e">L_point_3d vs GT traj[0], all samples</text>
+      <line x1="105" y1="124" x2="180" y2="212" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#pg)"/>
+      <line x1="340" y1="194" x2="300" y2="212" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#pg)"/>
+    </svg>
+  </div>
+  <div class="card">
+    <span class="tag rec">ORIGIN (gen-11: now identical in structure)</span>
+    <svg viewBox="0 0 520 260" width="100%">
+      <defs><marker id="og" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#7a8ca0"/></marker></defs>
+      <rect x="20" y="16" width="170" height="38" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="105" y="33" font-size="12.5" text-anchor="middle">origin heatmap (proj ch 3)</text>
+      <text x="105" y="47" font-size="11" text-anchor="middle" fill="#5b6b7d">→ soft-argmax</text>
+      <rect x="20" y="86" width="170" height="38" rx="7" fill="#fde8d8" stroke="#c0392b"/>
+      <text x="105" y="103" font-size="12.5" text-anchor="middle" font-weight="600">origin_uv</text>
+      <text x="105" y="117" font-size="11" text-anchor="middle" fill="#5b6b7d">→ condition vector (appended last)</text>
+      <line x1="105" y1="54" x2="105" y2="82" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#og)"/>
+      <rect x="250" y="86" width="180" height="38" rx="7" fill="#e2f4e5" stroke="#1e6b2e"/>
+      <text x="340" y="103" font-size="12.5" text-anchor="middle" fill="#1e6b2e" font-weight="600">grid_sample(fq, origin_uv)</text>
+      <text x="340" y="117" font-size="11" text-anchor="middle" fill="#1e6b2e">NEW — the symmetric sample</text>
+      <line x1="190" y1="105" x2="246" y2="105" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#og)"/>
+      <rect x="250" y="156" width="180" height="38" rx="7" fill="#fff" stroke="#c9a13d"/>
+      <text x="340" y="173" font-size="12.5" text-anchor="middle">ẑ_q = MLP([condition, local])</text>
+      <line x1="340" y1="124" x2="340" y2="152" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#og)"/>
+      <rect x="130" y="216" width="230" height="38" rx="7" fill="#e2f4e5" stroke="#1e6b2e"/>
+      <text x="245" y="233" font-size="12.5" text-anchor="middle" font-weight="600">q̂ = backproject(K, origin_uv, ẑ_q)</text>
+      <text x="245" y="247" font-size="11" text-anchor="middle" fill="#1e6b2e">L_origin vs q* — revolute rows only</text>
+      <line x1="105" y1="124" x2="180" y2="212" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#og)"/>
+      <line x1="340" y1="194" x2="300" y2="212" stroke="#7a8ca0" stroke-width="1.6" marker-end="url(#og)"/>
+    </svg>
+  </div>
+</div>
+
+<div class="note">
+<b>History of the asymmetry:</b> gen-7 kept ẑ<sub>q</sub> condition-only on
+the assumption that the pixel under the origin is often occluded or
+off-object ("no real semantic meaning"). Evidence since then points the
+other way for the typical case: q* is the perpendicular foot from the
+interaction point, which for door-class objects lands on the door/frame
+seam at handle height — a visible surface whose depth ≈ the hinge's depth —
+and the gen-7 viz batch showed the origin heatmap localizing exactly those
+seams. The occluded minority still exists; the head keeps the full
+condition vector so it can learn to discount the local feature there.
+The remaining (intentional) asymmetries are supervision-side: origin losses
+run on revolute rows only and the whole origin path is unsupervised on
+prismatic, where no origin exists.
+</div>
+
+<h2>Implementation sketch (gen-11 candidate, flag-gated)</h2>
+<div class="card">
+<p class="cap" style="font-size:14px; color:#2c4157">
+<code>use_origin_local_feature: false</code> (new ModelParams flag). When
+true: <code>origin_depth_head_g7</code> input dim becomes
+<code>vae_condition_dim + fpn_out[1]</code>; forward adds one
+<code>grid_sample(fq, origin_uv)</code> (same expression as the point
+path's) and concatenates. No loss changes — ẑ<sub>q</sub> keeps training
+purely through the composed 3D origin loss. Loop-free: the sampled feature
+produces a depth, never a location.
+</p>
+</div>
+
+</div>
+</body>
+</html>
