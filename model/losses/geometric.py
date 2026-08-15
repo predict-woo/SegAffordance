@@ -154,6 +154,14 @@ class PredPredArticulationLoss(GeometricConsistencyLoss):
     PredPredGeometricLoss). Degenerate predicted curves (no displacement
     energy) are dropped from the batch mean: a zero curve satisfies any
     axis and would otherwise push the gate around.
+
+    With ``normalized=True`` (gen-10) both branches become dimensionless
+    relative errors: the line term is the fraction of displacement energy
+    perpendicular to the axis (<= 1 by construction) and the circle term
+    is the orbit residual divided by the squared predicted radius, floored
+    at ``radius_floor``. This keeps the soft type gate blending
+    like-scaled quantities and stops large-radius elements from dominating
+    the batch mean.
     """
 
     def __init__(
@@ -161,11 +169,15 @@ class PredPredArticulationLoss(GeometricConsistencyLoss):
         weight: float,
         degenerate_threshold: float = 1e-6,
         trajectory_is_absolute: bool = False,
+        normalized: bool = False,
+        radius_floor: float = 0.10,
     ):
         super().__init__()
         self.weight = weight
         self.degenerate_threshold = degenerate_threshold
         self.trajectory_is_absolute = trajectory_is_absolute
+        self.normalized = normalized
+        self.radius_floor = radius_floor
 
     def forward(self, outputs, targets, depth=None) -> LossTerms:
         required = (
@@ -211,6 +223,21 @@ class PredPredArticulationLoss(GeometricConsistencyLoss):
         l_circle = (
             (_line_dist(d) - r_hat).pow(2) + axial_drift.pow(2)
         ).mean(-1)                                                # (B,)
+
+        if self.normalized:
+            # Gen-10 (2026-08-15 spec): dimensionless relative errors, so
+            # the soft gate blends consistent units and big-radius doors
+            # don't dominate small ones. Line: fraction of the displacement
+            # energy perpendicular to the axis (intrinsically <= 1).
+            # Circle: orbit residual relative to the predicted radius,
+            # floored at radius_floor (= the dataset's min_revolute_radius)
+            # so an implausibly small r_hat is measured against that scale
+            # instead of exploding the ratio.
+            mean_sq_disp = d.pow(2).sum(-1).mean(-1)              # (B,)
+            l_line = l_line / mean_sq_disp.clamp(min=1e-8)
+            l_circle = l_circle / (
+                r_hat.squeeze(1).clamp(min=self.radius_floor).pow(2)
+            )
 
         p_rev = outputs.motion_type_logits.float().softmax(dim=-1)[:, 1]
         per_sample = (1.0 - p_rev) * l_line + p_rev * l_circle
@@ -900,6 +927,8 @@ def build_geometric_loss(
         return PredPredArticulationLoss(
             weight=getattr(loss_params, "pred_pred_art_weight", 0.5),
             trajectory_is_absolute=trajectory_is_absolute,
+            normalized=getattr(loss_params, "pred_pred_art_normalized", False),
+            radius_floor=getattr(loss_params, "pred_pred_art_radius_floor", 0.10),
         )
     if name == "projected":
         return ProjectedGeometricLoss(

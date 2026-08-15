@@ -155,6 +155,10 @@ class LossParams:
     # Read only by the "pred_pred_art" variant (gen-6): all-predicted
     # trajectory <-> axis-line <-> type consistency, soft type gate.
     pred_pred_art_weight: float = 0.5
+    # Gen-10: dimensionless L_pp branches (relative orbit error / off-axis
+    # energy fraction) and the r_hat floor, = min_revolute_radius.
+    pred_pred_art_normalized: bool = False
+    pred_pred_art_radius_floor: float = 0.10
     # gen-6 split arm. axis_sign_agnostic True = classical 1 - cos^2
     # (antiparallel OK — OPD annotates only the axis LINE); False = 1 - cos,
     # for SF3D where the stored sign is canonical.
