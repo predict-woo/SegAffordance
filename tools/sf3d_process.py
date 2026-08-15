@@ -462,7 +462,12 @@ def rasterize_mask(points_2d_yx, points_3d_cam, fx, h, w, method="splat"):
 
 # --- Constants for GT trajectory generation (trajectory_3d_camera_coords) ---
 TRAJECTORY_NUM_POINTS = 100  # reader subsamples 20 uniformly (datasets/scenefun3d.py)
-TRAJECTORY_TRANS_LENGTH_M = ARROW_LENGTH_3D_TRANS  # 0.1 m straight travel for "trans"
+# 0.7 m straight travel for "trans" — the measured MEDIAN 90-deg revolute
+# arc length (0.699 m over the gen-9 split, tools/diag_arc_length.py,
+# 2026-08-16), replacing the arbitrary 0.1 m so per-point supervision
+# energy is comparable across motion types. sf3d_processed_v3 was derived
+# from v2 at this value by tools/sf3d_build_v3.py; keep the two in sync.
+TRAJECTORY_TRANS_LENGTH_M = 0.7
 TRAJECTORY_ROT_ARC_RAD = np.pi / 2.0  # 90 deg sweep for "rot"
 TRAJECTORY_MIN_ROT_RADIUS_M = 0.01  # below this the arc is considered degenerate
 TRAJECTORY_DEGENERATE_SEGMENT_M = 0.01  # tiny straight fallback so traj is never empty
