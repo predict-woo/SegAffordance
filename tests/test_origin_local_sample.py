@@ -6,11 +6,13 @@ consumes — sampled at origin_uv instead of point_uv. Default-off keeps the
 gen-7 condition-only z_q bit-identical.
 """
 
+import os
 from unittest import mock
 
 import pytest
 import torch
 import torch.nn as nn
+import yaml
 
 from config.opd_train import Config, LossParams, OptimizerParams
 from tests.test_g7_lift import _g7_batch, _knorm  # noqa: E402
@@ -102,3 +104,36 @@ def test_flag_off_path_unchanged():
     outputs = _forward_with_K(module)
     assert outputs.origin_pred is not None
     assert torch.isfinite(_training_step(module))
+
+
+_CFG = os.path.join(os.path.dirname(__file__), "..", "config")
+
+
+def _load_cfg(name):
+    with open(os.path.join(_CFG, name)) as f:
+        return yaml.safe_load(f)
+
+
+def test_g11_config_matches_spec():
+    base = _load_cfg("sf3d_train_runpod_g10_closeup010.yaml")
+    g11 = _load_cfg("sf3d_train_runpod_g11_closeup010.yaml")
+
+    gm = dict(g11["model"]["model_params"])
+    bm = dict(base["model"]["model_params"])
+    assert gm.pop("use_origin_local_feature") is True
+    assert gm == bm  # nothing else in model_params changed
+
+    gd = dict(g11["data"])
+    bd = dict(base["data"])
+    assert gd.pop("train_data_dir") == "/workspace/datasets/sf3d_processed_v3"
+    bd.pop("train_data_dir")
+    assert gd == bd  # incl. same key_cache_path (validated against v3)
+
+    assert g11["model"]["loss_params"] == base["model"]["loss_params"]
+    assert g11["model"]["optimizer_params"] == base["model"]["optimizer_params"]
+    assert g11["seed_everything"] == 42
+    assert g11["trainer"]["max_epochs"] == 30
+    ckpt = g11["trainer"]["callbacks"][0]["init_args"]["dirpath"]
+    logd = g11["trainer"]["logger"]["init_args"]["save_dir"]
+    assert "20260816_sf3d_g11_closeup010" in ckpt
+    assert "20260816_sf3d_g11_closeup010" in logd
