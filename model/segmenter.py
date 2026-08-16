@@ -420,6 +420,11 @@ class CRIS(nn.Module):
             cost_g = torch.einsum("bchw,bc->bhw", aligned, t_glob)[:, None]
             cost_l = torch.einsum("bchw,bc->bhw", aligned, t_loc)[:, None]
             costs = torch.cat([cost_g, cost_l], dim=1).to(vis_fused[0].dtype)
+            if self.channels_last:
+                # Mixed memory formats in torch.cat fall back to contiguous
+                # output — keep the cost channels NHWC so the downstream FPN
+                # convs stay on the tuned channels_last path.
+                costs = costs.contiguous(memory_format=torch.channels_last)
             vis_fused = tuple(
                 torch.cat(
                     [v, F.interpolate(costs, size=v.shape[-2:], mode="bilinear",
