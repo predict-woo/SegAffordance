@@ -170,6 +170,11 @@ def main():
     ap.add_argument("--edge-margin-frac", type=float, default=0.0,
                     help="must match the key cache / training config")
     ap.add_argument("--num", type=int, default=16)
+    ap.add_argument("--input-size", type=int, default=256,
+                    help="model input size; must match --frame-cache-path's "
+                         "build size (512 for the gen-13+ stack)")
+    ap.add_argument("--frame-cache-path", default=None,
+                    help="frames LMDB (default: <data-root>/frames.lmdb)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--traj-only", action="store_true",
                     help="trajectory-focused panels: GT track and predicted 3D "
@@ -184,13 +189,15 @@ def main():
         model, mp = load_model(cfg, ckpt, device)
         models.append((name, model, mp))
 
-    r, m, d = get_default_transforms((256, 256))
+    _sz = (args.input_size, args.input_size)
+    r, m, d = get_default_transforms(_sz)
     ds = SF3DDataset(
         lmdb_data_root=args.data_root,
         key_cache_path=args.key_cache,
-        frame_cache_path=os.path.join(args.data_root, "frames.lmdb"),
+        frame_cache_path=(args.frame_cache_path
+                          or os.path.join(args.data_root, "frames.lmdb")),
         rgb_transform=r, mask_transform=m, depth_transform=d,
-        image_size_for_mask_reconstruction=(256, 256),
+        image_size_for_mask_reconstruction=_sz,
         point_source="element", return_trajectory_2d=True,
         min_revolute_radius=args.min_revolute_radius,
         min_mask_area_frac=args.min_mask_area_frac,
