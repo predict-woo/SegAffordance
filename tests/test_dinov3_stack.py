@@ -1,3 +1,4 @@
+import os
 from unittest import mock
 
 import pytest
@@ -133,3 +134,53 @@ def test_flag_off_fpn_dims_unchanged():
     module = _build_module_flags()                # all flags off, stub clip-style
     neck = module.model.neck
     assert neck.txt_proj[0].in_features == module.model.backbone.state_dim
+
+
+# ---- Task 3: staged g13/g14/g15 config chain ------------------------------
+
+
+def _load_yaml(name):
+    import yaml
+    with open(os.path.join(os.path.dirname(__file__), "..", "config", name)) as f:
+        return yaml.safe_load(f)
+
+
+def test_g13_g14_g15_config_chain():
+    g12 = _load_yaml("sf3d_train_runpod_g12_dinov3.yaml")
+    g13 = _load_yaml("sf3d_train_runpod_g13_res512.yaml")
+    g14 = _load_yaml("sf3d_train_runpod_g14_taps.yaml")
+    g15 = _load_yaml("sf3d_train_runpod_g15_costmap.yaml")
+
+    # g13 = g12 + resolution block
+    m13, m12 = dict(g13["model"]["model_params"]), dict(g12["model"]["model_params"])
+    assert m13.pop("backbone_image_size") == 512 and m12.pop("backbone_image_size") == 256
+    assert m13 == m12
+    assert g13["model"]["config"]["input_size"] == [512, 512]
+    assert g13["model"]["loss_params"]["point_sigma"] == 16.0
+    assert g13["data"]["frame_cache_path"] == "/workspace/datasets/sf3d_frames_512.lmdb"
+    assert g13["data"]["batch_size_train"] == 64 and g13["data"]["batch_size_val"] == 64
+    d13, d12 = dict(g13["data"]), dict(g12["data"])
+    for k in ("frame_cache_path", "batch_size_train", "batch_size_val"):
+        d13.pop(k), d12.pop(k)
+    assert d13 == d12
+
+    # g14 = g13 + taps flag
+    m14, m13b = dict(g14["model"]["model_params"]), dict(g13["model"]["model_params"])
+    assert m14.pop("dinov3_multilayer_taps") is True
+    assert m14 == m13b
+    assert g14["data"] == g13["data"]
+    assert g14["model"]["loss_params"] == g13["model"]["loss_params"]
+
+    # g15 = g14 + cost-map flag
+    m15, m14b = dict(g15["model"]["model_params"]), dict(g14["model"]["model_params"])
+    assert m15.pop("text_cost_map") is True
+    assert m15 == m14b
+    assert g15["data"] == g14["data"]
+
+    for cfg, tag in ((g13, "20260817_sf3d_g13_res512"),
+                     (g14, "20260817_sf3d_g14_taps"),
+                     (g15, "20260817_sf3d_g15_costmap")):
+        assert tag in cfg["trainer"]["callbacks"][0]["init_args"]["dirpath"]
+        assert tag in cfg["trainer"]["logger"]["init_args"]["save_dir"]
+        assert cfg["trainer"]["max_epochs"] == 30
+        assert cfg["seed_everything"] == 42
