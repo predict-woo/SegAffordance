@@ -135,6 +135,11 @@ class ModelParams:
     # 4 intermediate-layer taps (ViT-L blocks 4/11/17 by hook + the final
     # tokens) instead of the final layer only. dinotxt path only.
     dinov3_multilayer_taps: bool = False
+    # Gen-15 (stage C): explicit patch-text similarity maps (local + global
+    # halves of the dino.txt embedding vs the aligned /16 tokens) injected
+    # as 2 extra FPN input channels per level, and the FPN text gate reads
+    # only the patch-aligned LOCAL half of the state. dinotxt only.
+    text_cost_map: bool = False
 
 
 @dataclass

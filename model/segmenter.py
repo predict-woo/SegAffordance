@@ -57,6 +57,16 @@ class CRIS(nn.Module):
         # NHWC for the conv stack (see ModelParams.channels_last). Parameters
         # are converted here; forward converts the img/depth inputs to match.
         self.channels_last = getattr(model_params, "channels_last", False)
+        # Gen-15 (stage C): patch-text cost channels + local-half FPN gate.
+        self.text_cost_map = getattr(model_params, "text_cost_map", False)
+        if self.text_cost_map and not (
+            getattr(model_params, "backbone", "clip_rn50") == "dinov3"
+            and getattr(model_params, "text_source", "dinotxt") == "dinotxt"
+        ):
+            raise ValueError(
+                "text_cost_map needs the dinov3 backbone with dino.txt text "
+                "(the cost map is cosine vs the dino.txt-aligned patch tokens)"
+            )
         ## Vision & Text Encoder
         # encode_image (B, 3, H, W) -> v2: (B, fpn_in[0], H/8, W/8), v3: (B, fpn_in[1], H/16, W/16), v4: (B, fpn_in[2], H/32, W/32)
         # encode_text (B, L: word_len) -> word_features: (B, L, backbone.word_dim), state: (B, backbone.state_dim)
@@ -87,10 +97,18 @@ class CRIS(nn.Module):
                 model_params.fpn_in[2],
             ]
         # forward: v2, v3, v4 -> fq: (B, fpn_out[1], H/16, W/16)
+        if self.text_cost_map:
+            # Two cost channels appended per level; the gate reads only the
+            # patch-aligned LOCAL half of the state (the global CLS half is
+            # not what the aligned patch tokens live in).
+            fpn_in_channels = [c + 2 for c in fpn_in_channels]
+            fpn_text_dim = state_dim // 2
+        else:
+            fpn_text_dim = state_dim
         self.neck = FPN(
             in_channels=fpn_in_channels,
             out_channels=model_params.fpn_out,
-            text_dim=state_dim,
+            text_dim=fpn_text_dim,
         )
 
         ## Text token projection
@@ -366,7 +384,10 @@ class CRIS(nn.Module):
         # vis: x2, x3, x4
         # word: b, length, word_dim
         # state: b, state_dim
-        vis = self.backbone.encode_image(img)  # v2, v3, v4
+        if self.text_cost_map:
+            vis, _bb_extras = self.backbone.encode_image_full(img)  # v2, v3, v4
+        else:
+            vis = self.backbone.encode_image(img)  # v2, v3, v4
         word, state = self.backbone.encode_text(word)
         if self.word_proj is not None:
             word = self.word_proj(word)
@@ -381,8 +402,38 @@ class CRIS(nn.Module):
         else:
             vis_fused = vis
 
+        # --- Patch-text cost map (gen-15, optional) ---
+        if self.text_cost_map:
+            aligned_raw = _bb_extras["aligned_map"]
+            half = state.shape[1] // 2
+            if aligned_raw.shape[1] != half:
+                # A mis-paired backbone/text checkpoint should fail loudly,
+                # not silently miscompute the cosine.
+                raise RuntimeError(
+                    f"aligned_map has {aligned_raw.shape[1]} channels but the "
+                    f"text state half is {half} — dino.txt pairs the patch "
+                    "tokens with the state's local half"
+                )
+            aligned = F.normalize(aligned_raw.float(), dim=1)
+            t_glob = F.normalize(state[:, :half].float(), dim=1)
+            t_loc = F.normalize(state[:, half:].float(), dim=1)
+            cost_g = torch.einsum("bchw,bc->bhw", aligned, t_glob)[:, None]
+            cost_l = torch.einsum("bchw,bc->bhw", aligned, t_loc)[:, None]
+            costs = torch.cat([cost_g, cost_l], dim=1).to(vis_fused[0].dtype)
+            vis_fused = tuple(
+                torch.cat(
+                    [v, F.interpolate(costs, size=v.shape[-2:], mode="bilinear",
+                                      align_corners=False)],
+                    dim=1,
+                )
+                for v in vis_fused
+            )
+            state_for_gate = state[:, half:]
+        else:
+            state_for_gate = state
+
         # b, 512, 26, 26 (C4)
-        fq = self.neck(vis_fused, state)  # fq: (B, fpn_out[1], H/16, W/16)
+        fq = self.neck(vis_fused, state_for_gate)  # fq: (B, fpn_out[1], H/16, W/16)
         b, c, h, w = fq.size()
         fq = self.decoder(fq, word, pad_mask)
         fq = fq.reshape(b, c, h, w)

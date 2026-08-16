@@ -55,6 +55,12 @@ class BackboneBase(nn.Module):
         """(B, L) -> word (B, L, word_dim), state (B, state_dim)."""
         raise NotImplementedError
 
+    def encode_image_full(self, img):
+        """(maps, extras). Extras are backbone-specific side outputs —
+        dinotxt returns its text-aligned /16 patch map for the cost-map
+        path (gen-15). Default: no extras."""
+        return self.encode_image(img), {}
+
     # --- image normalisation -------------------------------------------------
     # The dataloader hands us ImageNet-normalised tensors. A backbone trained
     # under different statistics re-normalises here rather than in the data

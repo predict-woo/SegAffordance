@@ -164,6 +164,16 @@ class DINOv3Backbone(BackboneBase):
         return word, state
 
     def encode_image(self, img: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        return self._encode(img)[0]
+
+    def encode_image_full(self, img: torch.Tensor):
+        return self._encode(img)
+
+    def _encode(self, img: torch.Tensor):
+        """(v2, v3, v4) plus extras. On the dinotxt path the extras carry
+        the RAW psi patch tokens as a map (before deep_proj) — their channel
+        width is the text-embedding HALF (dino.txt: text = [CLS-half;
+        patch-half]), which is what the gen-15 cost map compares against."""
         h, w = img.shape[-2:]
         grid_h, grid_w = h // self.patch_size, w // self.patch_size
 
@@ -172,11 +182,13 @@ class DINOv3Backbone(BackboneBase):
             # Strip CLS + register tokens by taking the trailing patch grid,
             # which is robust to however many prefix tokens the variant carries.
             tokens = out.last_hidden_state[:, -(grid_h * grid_w):, :]
-            return self.adapter(tokens_to_map(tokens, grid_h, grid_w))
+            return self.adapter(tokens_to_map(tokens, grid_h, grid_w)), {}
 
         _feats, aligned_tokens, backbone_tokens = self.dinotxt.encode_image_with_patch_tokens(img)
         raw_map = tokens_to_map(backbone_tokens, grid_h, grid_w)
-        aligned_map = self.deep_proj(tokens_to_map(aligned_tokens, grid_h, grid_w))
+        aligned_raw = tokens_to_map(aligned_tokens, grid_h, grid_w)
+        aligned_map = self.deep_proj(aligned_raw)
+        extras = {"aligned_map": aligned_raw}
         if self.multilayer_taps:
             # Applying the backbone's final LayerNorm to each tap mirrors
             # get_intermediate_layers(norm=True) — the DINOv2/DPT convention.
@@ -189,5 +201,5 @@ class DINOv3Backbone(BackboneBase):
                 t = norm(t)[:, -(grid_h * grid_w):, :]      # final LN + strip prefix
                 taps.append(tokens_to_map(t, grid_h, grid_w))
             taps.append(raw_map)                             # block-23 tokens, already normed
-            return self.adapter(taps, x_deep=aligned_map)
-        return self.adapter(raw_map, x_deep=aligned_map)
+            return self.adapter(taps, x_deep=aligned_map), extras
+        return self.adapter(raw_map, x_deep=aligned_map), extras
