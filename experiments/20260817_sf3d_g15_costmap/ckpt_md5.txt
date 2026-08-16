@@ -1,0 +1,4 @@
+dda3f4e838b61749d16454f0af00db78  best-epoch27-valloss0.8146.ckpt
+eea2c859fcd671533fb57cc1fec3a439  best-epoch28-valloss0.8145.ckpt  (BEST — used for test eval + probe)
+5123f5a3b97c035663951f72c3ca5b11  best-epoch29-valloss0.8152.ckpt
+5123f5a3b97c035663951f72c3ca5b11  last.ckpt  (== best-epoch29)
