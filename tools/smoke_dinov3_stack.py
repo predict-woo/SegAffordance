@@ -47,8 +47,10 @@ for tag, path in CONFIGS:
                           mp.word_len).to(device)
     K = torch.tensor([[[1.1, 0.0, 0.5], [0.0, 1.5, 0.5], [0.0, 0.0, 1.0]]],
                      device=device).repeat(2, 1, 1)
+    # Train-mode pooling teacher-forces the GT mask — forward needs one.
+    mask = (torch.rand(2, 1, size, size, device=device) > 0.7).float()
 
-    out = model(img, depth, word, None, None, None, None, K)
+    out = model(img, depth, word, mask, None, None, None, K)
 
     checks = {
         "mask_logits": out.mask_logits,
