@@ -1,7 +1,7 @@
 # DINOv3 Research-Standard Stack (gens 13–15)
 
 **Date:** 2026-08-16
-**Status:** DRAFT — awaiting user review
+**Status:** IMPLEMENTED, NOT LAUNCHED (commits 25f51a6..17695d7 + launcher fix; smoke-validated with real weights 2026-08-16)
 **Basis:** `knowledge/dinov3-dense-adapter-survey.md` (two-agent literature
 sweep). User decisions: one spec, three independent flag-gated stages run
 as SEQUENTIAL experiments for clean attribution; resolution target **512**;
