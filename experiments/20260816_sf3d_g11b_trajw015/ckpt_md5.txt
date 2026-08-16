@@ -1,0 +1,4 @@
+e741d765f5daa54b22562a3309bcb0b4  best-epoch22-valloss0.9979.ckpt  (BEST available — used for test eval; pre-crash top-k was reset by the resume)
+7a542bcfaec70015dc89879522a77947  best-epoch23-valloss1.0098.ckpt
+1780386df64cd054b29d93f5cad3ad9d  best-epoch24-valloss1.0194.ckpt
+1780386df64cd054b29d93f5cad3ad9d  last.ckpt  (== best-epoch24)
