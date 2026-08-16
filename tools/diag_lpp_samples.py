@@ -118,6 +118,12 @@ def main():
                     help="r_hat floor for the normalized circle branch "
                          "(keep = the loss's radius_floor)")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--input-size", type=int, default=256,
+                    help="model input size (512 for the gen-13+ stack); must "
+                         "match --frame-cache-path's build size")
+    ap.add_argument("--frame-cache-path", default=None,
+                    help="frames LMDB (default: <data-root>/frames.lmdb; the "
+                         "512 stack uses /workspace/datasets/sf3d_frames_512.lmdb)")
     ap.add_argument("--dump-npz", default=None,
                     help="directory to write per-index npz dumps of the "
                          "predicted/GT geometry (for offline 3D plotting; "
@@ -144,13 +150,15 @@ def main():
         print(f"WARNING: --radius-floor {args.radius_floor} != config floor "
               f"{loss_mod.radius_floor}; breakdown uses the CLI value")
 
-    r, m, d = get_default_transforms((256, 256))
+    sz = (args.input_size, args.input_size)
+    fcache = args.frame_cache_path or os.path.join(args.data_root, "frames.lmdb")
+    r, m, d = get_default_transforms(sz)
     ds = SF3DDataset(
         lmdb_data_root=args.data_root,
         key_cache_path=args.key_cache,
-        frame_cache_path=os.path.join(args.data_root, "frames.lmdb"),
+        frame_cache_path=fcache,
         rgb_transform=r, mask_transform=m, depth_transform=d,
-        image_size_for_mask_reconstruction=(256, 256),
+        image_size_for_mask_reconstruction=sz,
         point_source="element", return_trajectory_2d=True,
         min_revolute_radius=args.min_revolute_radius,
         min_mask_area_frac=args.min_mask_area_frac,
