@@ -183,7 +183,10 @@ data:
   # readouts against edge-clamped supervision targets.
   edge_margin_frac: 0.05
   val_split_ratio: 0.1
-  input_size: [256, 256]
+  # g13: the datamodule transforms and the frame-cache size validation
+  # key off THIS field — must match the model's 512 input and the 512-px
+  # frame cache.
+  input_size: [512, 512]
   # g13: 4× activations at 512; revisit toward 128 after the first
   # epoch's memory high-water.
   batch_size_train: 64

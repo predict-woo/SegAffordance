@@ -159,8 +159,9 @@ def test_g13_g14_g15_config_chain():
     assert g13["model"]["loss_params"]["point_sigma"] == 16.0
     assert g13["data"]["frame_cache_path"] == "/workspace/datasets/sf3d_frames_512.lmdb"
     assert g13["data"]["batch_size_train"] == 64 and g13["data"]["batch_size_val"] == 64
+    assert g13["data"]["input_size"] == [512, 512]
     d13, d12 = dict(g13["data"]), dict(g12["data"])
-    for k in ("frame_cache_path", "batch_size_train", "batch_size_val"):
+    for k in ("frame_cache_path", "batch_size_train", "batch_size_val", "input_size"):
         d13.pop(k), d12.pop(k)
     assert d13 == d12
 
