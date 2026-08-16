@@ -32,7 +32,8 @@ field_names = {f.name for f in dataclasses.fields(ModelParams)}
 for tag, path in CONFIGS:
     raw = yaml.safe_load(open(path))["model"]["model_params"]
     raw = {k: v for k, v in raw.items() if k in field_names}
-    raw["compile_model"] = False          # smoke tests eager correctness
+    import os
+    raw["compile_model"] = os.environ.get("SMOKE_COMPILE", "") == "1"
     raw["channels_last"] = True           # the real runs' layout
     mp = ModelParams(**raw)
     size = int(getattr(mp, "backbone_image_size", 256))
