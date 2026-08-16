@@ -131,6 +131,10 @@ class ModelParams:
     dinotxt_weights: str = ""
     dinov3_backbone_weights: str = ""
     dinov3_repo_dir: str = ""
+    # Gen-14 (dinov3 standard stack, stage T): build the pyramid from
+    # 4 intermediate-layer taps (ViT-L blocks 4/11/17 by hook + the final
+    # tokens) instead of the final layer only. dinotxt path only.
+    dinov3_multilayer_taps: bool = False
 
 
 @dataclass

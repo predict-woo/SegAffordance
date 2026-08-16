@@ -20,7 +20,7 @@ from typing import List, Sequence, Tuple
 import torch
 
 from .base import BackboneBase
-from .pyramid import SimpleFeaturePyramid, tokens_to_map
+from .pyramid import MultiTapPyramid, SimpleFeaturePyramid, tokens_to_map
 
 
 class DINOv3Backbone(BackboneBase):
@@ -35,10 +35,12 @@ class DINOv3Backbone(BackboneBase):
         dinov3_backbone_weights: str = "",
         dinov3_repo_dir: str = "",
         dinotxt_hub_entry: str = "dinov3_vitl16_dinotxt_tet1280d20h24l",
+        multilayer_taps: bool = False,
     ):
         super().__init__()
         self.text_source = text_source
         self.fpn_in = list(fpn_in)
+        self.multilayer_taps = multilayer_taps
 
         if text_source == "dinotxt":
             self._init_dinotxt(
@@ -80,7 +82,10 @@ class DINOv3Backbone(BackboneBase):
         aligned_dim = int(proj.out_features) if isinstance(proj, torch.nn.Linear) else backbone_dim
 
         # /8 and /16 from raw backbone tokens; /32 from the aligned head tokens.
-        self.adapter = SimpleFeaturePyramid(backbone_dim, self.fpn_in)
+        if self.multilayer_taps:
+            self.adapter = MultiTapPyramid(backbone_dim, self.fpn_in)
+        else:
+            self.adapter = SimpleFeaturePyramid(backbone_dim, self.fpn_in)
         self.deep_proj = torch.nn.Conv2d(aligned_dim, backbone_dim, kernel_size=1, bias=False)
 
         self.word_dim = embed_dim
@@ -88,9 +93,32 @@ class DINOv3Backbone(BackboneBase):
         self.pad_token_id = 0
         self.max_context_length = 77
 
+        if self.multilayer_taps:
+            self._install_tap_hooks(vis.backbone.blocks)
+
+    def _install_tap_hooks(self, blocks):
+        # Blocks 4/11/17 of ViT-L (the "lin-4" spread minus the final
+        # layer, which the existing pass already returns). Hook outputs are
+        # the post-block hidden states incl. prefix tokens.
+        self._tap_cache = {}
+        for i in (4, 11, 17):
+            def _mk(idx):
+                def hook(_m, _inp, out):
+                    self._tap_cache[idx] = out
+                return hook
+            blocks[i].register_forward_hook(_mk(i))
+
     # --- HF vision tower (used with the CLIP text ablation) ----------------
 
     def _init_hf_vision(self, model_id: str):
+        if self.multilayer_taps:
+            # The clip-text ablation runs the HF vision tower, whose
+            # encode_image path never assembles taps — half-wiring hooks
+            # there would fail confusingly at forward time instead.
+            raise ValueError(
+                "dinov3_multilayer_taps is dinotxt-only for now "
+                "(text_source='clip' uses the single-layer pyramid)"
+            )
         from transformers import AutoModel
 
         self.vision_model = AutoModel.from_pretrained(model_id)
@@ -149,4 +177,17 @@ class DINOv3Backbone(BackboneBase):
         _feats, aligned_tokens, backbone_tokens = self.dinotxt.encode_image_with_patch_tokens(img)
         raw_map = tokens_to_map(backbone_tokens, grid_h, grid_w)
         aligned_map = self.deep_proj(tokens_to_map(aligned_tokens, grid_h, grid_w))
+        if self.multilayer_taps:
+            # Applying the backbone's final LayerNorm to each tap mirrors
+            # get_intermediate_layers(norm=True) — the DINOv2/DPT convention.
+            norm = self.dinotxt.visual_model.backbone.norm
+            taps = []
+            for i in (4, 11, 17):
+                t = self._tap_cache.pop(i)
+                if isinstance(t, tuple):
+                    t = t[0]
+                t = norm(t)[:, -(grid_h * grid_w):, :]      # final LN + strip prefix
+                taps.append(tokens_to_map(t, grid_h, grid_w))
+            taps.append(raw_map)                             # block-23 tokens, already normed
+            return self.adapter(taps, x_deep=aligned_map)
         return self.adapter(raw_map, x_deep=aligned_map)

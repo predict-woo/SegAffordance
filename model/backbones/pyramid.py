@@ -57,6 +57,53 @@ class SimpleFeaturePyramid(nn.Module):
         return self.up(x), self.same(x), self.down(deep)
 
 
+class MultiTapPyramid(nn.Module):
+    """4 intermediate-layer taps -> strides 8/16/32 (frozen-DINO standard).
+
+    DPT-style reassembly (DINOv2 "lin-4" / Depth Anything / SegDINO): the
+    fine level comes from an EARLY layer, which still holds the high-
+    frequency spatial detail the final layer has abstracted away —
+    SimpleFeaturePyramid's deconv-from-final-layer cannot recover it (its
+    ViTDet evidence base is fine-tuned MAE, a different regime; see
+    knowledge/dinov3-dense-adapter-survey.md).
+
+    forward(taps, x_deep=None): taps are 4 maps (B, in_dim, h, w) ordered
+    shallow->deep (ViT-L blocks 4/11/17/23). x_deep, if given, replaces
+    the deep tap as the /32 source (the dino.txt-aligned map — the same
+    contract as SimpleFeaturePyramid).
+    """
+
+    def __init__(self, in_dim: int, out_channels: List[int]):
+        super().__init__()
+        if len(out_channels) != 3:
+            raise ValueError(f"expected 3 output channel counts, got {out_channels}")
+        self.up = nn.Sequential(                       # tap[0] -> /8
+            nn.ConvTranspose2d(in_dim, in_dim // 2, kernel_size=2, stride=2),
+            nn.BatchNorm2d(in_dim // 2),
+            nn.GELU(),
+            nn.Conv2d(in_dim // 2, out_channels[0], kernel_size=1, bias=False),
+            nn.BatchNorm2d(out_channels[0]),
+        )
+        self.mid = nn.Sequential(                      # cat(tap[1], tap[2]) -> /16
+            nn.Conv2d(2 * in_dim, out_channels[1], kernel_size=1, bias=False),
+            nn.BatchNorm2d(out_channels[1]),
+        )
+        self.down = nn.Sequential(                     # tap[3] (or x_deep) -> /32
+            nn.Conv2d(in_dim, out_channels[2], kernel_size=3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels[2]),
+        )
+
+    def forward(self, taps, x_deep=None):
+        if len(taps) != 4:
+            raise ValueError(f"expected 4 taps, got {len(taps)}")
+        deep = taps[3] if x_deep is None else x_deep
+        return (
+            self.up(taps[0]),
+            self.mid(torch.cat([taps[1], taps[2]], dim=1)),
+            self.down(deep),
+        )
+
+
 def tokens_to_map(tokens: torch.Tensor, grid_h: int, grid_w: int) -> torch.Tensor:
     """(B, N, C) patch tokens -> (B, C, grid_h, grid_w)."""
     b, n, c = tokens.shape

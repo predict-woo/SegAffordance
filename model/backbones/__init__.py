@@ -47,6 +47,7 @@ def build_backbone(model_params, fpn_in: List[int]) -> BackboneBase:
             dinotxt_weights=getattr(model_params, "dinotxt_weights", ""),
             dinov3_backbone_weights=getattr(model_params, "dinov3_backbone_weights", ""),
             dinov3_repo_dir=getattr(model_params, "dinov3_repo_dir", ""),
+            multilayer_taps=getattr(model_params, "dinov3_multilayer_taps", False),
         )
 
     raise ValueError(f"unknown backbone {name!r}")
