@@ -107,6 +107,11 @@ PY
       # a symlink (v3 -> v2's); the path traversal resolves it.
       droot=$(grep -E '^\s*train_data_dir:' "$cfg" | head -1 | sed 's/.*"\(.*\)".*/\1/')
       [ -z "$droot" ] && { echo "cannot read train_data_dir from $cfg" >&2; exit 1; }
+      # Frame cache may live OUTSIDE train_data_dir (g13's 512-px cache is
+      # /workspace/datasets/sf3d_frames_512.lmdb) — stage what the config
+      # names, falling back to the data root's frames.lmdb.
+      fcache=$(grep -E '^\s*frame_cache_path:' "$cfg" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+      [ -z "$fcache" ] && fcache="${droot}/frames.lmdb"
     ;; esac
     ssh -o BatchMode=yes "$host" "bash /workspace/SegAffordance/runpod/ensure_env.sh
       cat /workspace/models/RN50.pt > /dev/null 2>&1 || true
@@ -116,7 +121,7 @@ PY
       case '${cfg}' in *sf3d*)
         mkdir -p /dev/shm/data.lmdb /dev/shm/frames.lmdb
         [ -f /dev/shm/data.lmdb/data.mdb ] || time cp ${droot}/data.lmdb/data.mdb /dev/shm/data.lmdb/
-        [ -f /dev/shm/frames.lmdb/data.mdb ] || time cp ${droot}/frames.lmdb/data.mdb /dev/shm/frames.lmdb/
+        [ -f /dev/shm/frames.lmdb/data.mdb ] || time cp ${fcache}/data.mdb /dev/shm/frames.lmdb/
       ;; esac"
     # Detached: nohup inside a subshell, in its OWN ssh invocation. Plain
     # `& disown` in the same ssh call can hang the session.
