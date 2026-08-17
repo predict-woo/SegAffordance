@@ -260,8 +260,15 @@ class MotionVAE(nn.Module):
 
 class MotionMLP(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: int = 256, num_motion_types: int = 2,
-                 with_type_head: bool = True, with_motion_head: bool = True):
+                 with_type_head: bool = True, with_motion_head: bool = True,
+                 split_axis_heads: bool = False):
         super().__init__()
+        if split_axis_heads and not with_motion_head:
+            raise ValueError(
+                "split_axis_heads needs with_motion_head: there is no axis "
+                "readout to split"
+            )
+        self.split_axis_heads = split_axis_heads
         self.backbone = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(True),
@@ -273,10 +280,21 @@ class MotionMLP(nn.Module):
         # this output with (x - 0.5) * 2 to (-1, 1) before it becomes
         # outputs.motion_pred, so every axis direction is representable
         # (verified empirically 2026-08-18, tools/diag_axis_sign.py).
-        self.motion_head = nn.Sequential(
-            nn.Linear(hidden_dim, 3),
-            nn.Sigmoid(),
-        ) if with_motion_head else None
+        def _axis_readout():
+            return nn.Sequential(nn.Linear(hidden_dim, 3), nn.Sigmoid())
+
+        if split_axis_heads:
+            # Gen-17: per-type readouts on the shared trunk. The hinge axis
+            # (⊥ to the motion) and the slide direction (= the motion) are
+            # different physical quantities; a single readout blends them
+            # under type ambiguity (2026-08-18 spec).
+            self.motion_head = None
+            self.motion_head_rot = _axis_readout()
+            self.motion_head_trans = _axis_readout()
+        else:
+            self.motion_head = _axis_readout() if with_motion_head else None
+            self.motion_head_rot = None
+            self.motion_head_trans = None
         # Optional: no parameters at all when off (2D-only pretraining has
         # no type labels; type is emergent from the twist's |omega|).
         self.type_head = (
@@ -284,9 +302,13 @@ class MotionMLP(nn.Module):
         )
 
     def forward(self, condition: torch.Tensor):
+        """Split mode -> (motion_rot, motion_trans, type_logits); legacy ->
+        (motion_pred, type_logits)."""
         h = self.backbone(condition)
-        motion_pred = self.motion_head(h) if self.motion_head is not None else None
         motion_type_logits = self.type_head(h) if self.type_head is not None else None
+        if self.split_axis_heads:
+            return self.motion_head_rot(h), self.motion_head_trans(h), motion_type_logits
+        motion_pred = self.motion_head(h) if self.motion_head is not None else None
         return motion_pred, motion_type_logits
 
 

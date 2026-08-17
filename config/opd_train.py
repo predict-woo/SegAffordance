@@ -54,6 +54,12 @@ class ModelParams:
     # twist arms: the twist head carries the axis, and eval falls back to
     # the twist's decoded direction for axis metrics.
     use_motion_head: bool = True
+    # Gen-17 (2026-08-18 spec): per-type axis readouts (motion_head_rot /
+    # motion_head_trans) on the shared MotionMLP trunk. Loss is routed by
+    # GT type; inference selects by predicted type. Requires
+    # use_motion_head + use_motion_type_head; incompatible with
+    # use_cvae / use_twist_head.
+    split_axis_heads: bool = False
     # Head-structural pitch removal: TwistMLP's output map ends in a
     # smoothed orthogonal projection v <- v - (v.omega)omega/(|omega|^2+eps^2),
     # so the head's output space IS the pitch-free variety {omega.v = 0}:

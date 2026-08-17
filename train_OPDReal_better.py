@@ -225,6 +225,24 @@ class OPDRealTrainingModule(pl.LightningModule):
             L_vae, L_recon, L_kld = self.vae_loss_fn(
                 motion_pred, motion_gt.to(motion_pred.device), mu, log_var
             )
+        elif outputs.motion_pred_rot is not None:
+            # Gen-17 split axis heads: route each row's supervision to its
+            # GT-type readout (index 1 = rotation, motion_type_gt's
+            # convention). The gather sends gradient ONLY into the matching
+            # head per row — trans rows never touch motion_head_rot and
+            # vice versa — while the shared trunk still learns from all.
+            _stack = torch.stack(
+                [outputs.motion_pred_trans, outputs.motion_pred_rot], dim=1
+            )
+            _type_idx = motion_type_gt.to(_stack.device).long()
+            _routed = _stack[
+                torch.arange(_stack.shape[0], device=_stack.device), _type_idx
+            ]
+            L_motion = axis_direction_loss(
+                _routed, motion_gt.to(_routed.device),
+                sign_agnostic=getattr(self.loss_params, "axis_sign_agnostic", True),
+            )
+            L_vae, L_recon, L_kld = L_motion, L_motion, zero
         else:
             L_motion = axis_direction_loss(
                 motion_pred, motion_gt.to(motion_pred.device),

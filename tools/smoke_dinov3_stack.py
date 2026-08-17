@@ -9,6 +9,7 @@ shapes. Run on a pod with the gated weights (~2 min):
   /opt/venv/bin/python -u tools/smoke_dinov3_stack.py
 """
 import dataclasses
+import os
 import sys
 
 import torch
@@ -24,7 +25,12 @@ CONFIGS = [
     ("g13", "config/sf3d_train_runpod_g13_res512.yaml"),
     ("g14", "config/sf3d_train_runpod_g14_taps.yaml"),
     ("g15", "config/sf3d_train_runpod_g15_costmap.yaml"),
+    ("g17", "config/sf3d_train_runpod_g17_splitax.yaml"),
 ]
+# SMOKE_ONLY=g17: run a single stage — five consecutive ViT-L constructions
+# in one process OOM the 24GB dev card even with del + empty_cache.
+if os.environ.get("SMOKE_ONLY"):
+    CONFIGS = [c for c in CONFIGS if c[0] == os.environ["SMOKE_ONLY"]]
 
 device = torch.device("cuda")
 field_names = {f.name for f in dataclasses.fields(ModelParams)}
@@ -63,6 +69,16 @@ for tag, path in CONFIGS:
         "motion_pred": out.motion_pred,
         "motion_type_logits": out.motion_type_logits,
     }
+    if getattr(mp, "split_axis_heads", False):
+        # Gen-17: both candidates present and motion_pred is the row-wise
+        # predicted-type selection over them.
+        checks["motion_pred_rot"] = out.motion_pred_rot
+        checks["motion_pred_trans"] = out.motion_pred_trans
+        sel = out.motion_type_logits.argmax(dim=-1)
+        stack = torch.stack([out.motion_pred_trans, out.motion_pred_rot], dim=1)
+        picked = stack[torch.arange(stack.shape[0], device=device), sel]
+        assert torch.equal(picked, out.motion_pred), f"{tag}: selection mismatch"
+
     for name, t in checks.items():
         assert t is not None, f"{tag}: {name} is None"
         assert torch.isfinite(t.float()).all(), f"{tag}: {name} not finite"

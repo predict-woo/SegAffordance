@@ -32,6 +32,13 @@ class ModelOutputs:
     #: axis head is off (`use_motion_head: false`, twist arms) — consumers
     #: fall back to the twist's decoded direction.
     motion_pred: Optional[torch.Tensor] = None
+    # Gen-17 split axis heads: per-type candidates, populated only when
+    # split_axis_heads is on. motion_pred then holds the row-wise selection
+    # by PREDICTED type (so legacy consumers keep working); the trainer
+    # routes the axis loss by GT type over these two, and L_pp pairs its
+    # line branch with _trans and circle branch with _rot.
+    motion_pred_rot: Optional[torch.Tensor] = None
+    motion_pred_trans: Optional[torch.Tensor] = None
     #: (B, num_motion_types) — class 1 is rotation/revolute. None when the
     #: type head is off (`use_motion_type_head: false`); consumers fall back
     #: to the twist's |omega| where a type is needed.

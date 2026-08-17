@@ -192,11 +192,19 @@ class PredPredArticulationLoss(GeometricConsistencyLoss):
         # fp32 throughout (precision-16 runs; ratios/norms under autocast).
         traj = outputs.trajectory_pred.float()                    # (B, N, 3)
         d = traj - traj[:, :1] if self.trajectory_is_absolute else traj
-        dhat = F.normalize(outputs.motion_pred.float(), p=2, dim=1, eps=1e-8)
-        dhat_n = dhat[:, None, :]
+        # Gen-17 split axis heads: pair each branch with the axis that means
+        # the right thing — the LINE residual reads the trans candidate
+        # (slide direction), the CIRCLE residual the rot candidate (hinge
+        # axis). Legacy arms feed the single motion_pred to both.
+        if getattr(outputs, "motion_pred_rot", None) is not None:
+            axis_line, axis_circ = outputs.motion_pred_trans, outputs.motion_pred_rot
+        else:
+            axis_line = axis_circ = outputs.motion_pred
+        dhat_line = F.normalize(axis_line.float(), p=2, dim=1, eps=1e-8)[:, None, :]
+        dhat_n = F.normalize(axis_circ.float(), p=2, dim=1, eps=1e-8)[:, None, :]
 
         # Prismatic: displacement energy perpendicular to the axis.
-        l_line = torch.cross(d, dhat_n.expand_as(d), dim=-1).pow(2).sum(-1).mean(-1)
+        l_line = torch.cross(d, dhat_line.expand_as(d), dim=-1).pow(2).sum(-1).mean(-1)
 
         # Revolute: squared distance to the predicted CIRCLE — the orbit of
         # the anchor (first point, 0 by construction) about the predicted

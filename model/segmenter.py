@@ -204,6 +204,25 @@ class CRIS(nn.Module):
 
         self.use_cvae = getattr(model_params, "use_cvae", True)
         self.use_motion_type_head = getattr(model_params, "use_motion_type_head", True)
+        # Gen-17: per-type axis readouts (2026-08-18 spec). Selection at
+        # inference reads the type logits, so the type head is mandatory;
+        # the CVAE and twist parameterisations carry their own axis and
+        # never took part in the split design.
+        self.split_axis_heads = getattr(model_params, "split_axis_heads", False)
+        if self.split_axis_heads:
+            if self.use_cvae:
+                raise ValueError("split_axis_heads is incompatible with use_cvae")
+            if getattr(model_params, "use_twist_head", False):
+                raise ValueError(
+                    "split_axis_heads is incompatible with use_twist_head"
+                )
+            if not getattr(model_params, "use_motion_head", True):
+                raise ValueError("split_axis_heads requires use_motion_head")
+            if not self.use_motion_type_head:
+                raise ValueError(
+                    "split_axis_heads requires use_motion_type_head: row-wise "
+                    "selection at inference reads the predicted type"
+                )
         if self.use_cvae:
             self.motion_vae = MotionVAE(
                 feature_dim=vae_feature_dim,
@@ -227,6 +246,7 @@ class CRIS(nn.Module):
                 num_motion_types=model_params.num_motion_types,
                 with_type_head=_with_type,
                 with_motion_head=_with_motion,
+                split_axis_heads=self.split_axis_heads,
             ) if (_with_type or _with_motion) else None
 
         # 3D element-sweep head. Off during 2D pretraining: video data has no
@@ -619,6 +639,8 @@ class CRIS(nn.Module):
         mu = None
         log_var = None
         motion_pred = None
+        motion_pred_rot = None
+        motion_pred_trans = None
         motion_type_logits = None
         if self.use_cvae:
             if motion_gt is not None:
@@ -629,6 +651,24 @@ class CRIS(nn.Module):
                 # During pure inference (e.g. in a test script), sample z from prior.
                 # mu/log_var do not exist in this case and stay None.
                 motion_pred, motion_type_logits = self.motion_vae.inference(vae_condition)  # type: ignore[operator]
+        elif self.motion_mlp is not None and self.split_axis_heads:
+            # Gen-17: both per-type candidates every forward (no data-
+            # dependent branching — compile-safe), rescaled like the legacy
+            # head; motion_pred = row-wise selection by PREDICTED type so
+            # every legacy consumer (metrics, viz, probes) reads the axis
+            # that matches the type call. The trainer routes the LOSS by GT
+            # type over the two candidates instead.
+            motion_pred_rot, motion_pred_trans, motion_type_logits = self.motion_mlp(  # type: ignore[operator]
+                vae_condition
+            )
+            motion_pred_rot = (motion_pred_rot - 0.5) * 2.0
+            motion_pred_trans = (motion_pred_trans - 0.5) * 2.0
+            # Index 1 = rotation, matching motion_type_gt's convention.
+            pred_stack = torch.stack([motion_pred_trans, motion_pred_rot], dim=1)
+            sel = motion_type_logits.argmax(dim=-1)
+            motion_pred = pred_stack[
+                torch.arange(pred_stack.shape[0], device=pred_stack.device), sel
+            ]
         elif self.motion_mlp is not None:
             motion_pred, motion_type_logits = self.motion_mlp(vae_condition)  # type: ignore[operator]
             if motion_pred is not None:
@@ -642,6 +682,8 @@ class CRIS(nn.Module):
             point_logits=point_pred,
             point_uv=point_uv,
             motion_pred=motion_pred,
+            motion_pred_rot=motion_pred_rot,
+            motion_pred_trans=motion_pred_trans,
             motion_type_logits=motion_type_logits,
             trajectory_pred=trajectory_pred,
             trajectory_2d_pred=trajectory_2d_pred,
