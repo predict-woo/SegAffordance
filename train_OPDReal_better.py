@@ -1089,13 +1089,20 @@ class OPDRealTrainingModule(pl.LightningModule):
         return (intersection.float() + 1e-7) / (union.float() + 1e-7)
 
     @staticmethod
-    def _axis_error_deg(pred_axis: torch.Tensor, gt_axis: torch.Tensor) -> torch.Tensor:
+    def _axis_error_deg(
+        pred_axis: torch.Tensor, gt_axis: torch.Tensor, signed: bool = False
+    ) -> torch.Tensor:
+        # signed=False (legacy/OPD): |cos| — the axis LINE only, blind to a
+        # flipped opening direction. signed=True: the true angle, meaningful
+        # where the GT sign is canonical (SF3D — the GT trajectory is
+        # derived from it); a flip scores ~180 deg instead of ~0.
         pred_axis = pred_axis.squeeze()
         gt_axis = gt_axis.squeeze()
         gt_axis_norm = F.normalize(gt_axis, p=2, dim=-1)
         pred_axis_norm = F.normalize(pred_axis, p=2, dim=-1)
         cos_sim = torch.dot(gt_axis_norm, pred_axis_norm)
-        cos_sim = torch.abs(cos_sim)
+        if not signed:
+            cos_sim = torch.abs(cos_sim)
         cos_sim = torch.clamp(cos_sim, -1.0, 1.0)
         axis_error_rad = torch.acos(cos_sim)
         return axis_error_rad * 180.0 / torch.tensor(3.141592653589793, device=pred_axis.device)

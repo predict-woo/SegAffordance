@@ -37,6 +37,17 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         self._test_axis_errors_all = []
         self._test_type_correct_all = 0
         self._test_ma_correct_all = 0
+        # Sign-aware axis metrics (2026-08-18): SF3D's stored axis sign is
+        # canonical and training is sign-sensitive, but the legacy metric
+        # takes |cos| and cannot see a flipped opening direction — the g16
+        # probe (tools/diag_axis_sign.py) found ~10% of rot rows predicting
+        # near the ANTIPODE of the GT axis while scoring ~0 unsigned. The
+        # unsigned columns stay untouched for cross-generation tables;
+        # everything below is additive.
+        self._test_axis_errors_signed_all = []   # true angle, all axis rows
+        self._test_axis_errors_signed_rot = []   # rot rows only (flips there
+                                                 # reverse the swing direction)
+        self._test_ma_signed_correct_all = 0     # type ok AND signed <= thr
         self._test_origin_errors_rotational_all = []
         # Ablation arms (2026-08-15 spec): set during test_step when the
         # axis/type heads actually produced predictions.
@@ -470,21 +481,32 @@ class SF3DTrainingModule(OPDRealTrainingModule):
             self._test_has_axis_head |= has_axis
             self._test_has_type_head |= has_type
             axis_err = None
-            is_axis_correct = is_type_correct = False
+            is_axis_correct = is_type_correct = is_axis_correct_signed = False
             if has_axis:
                 axis_src = (
                     motion_pred[i] if motion_pred is not None
                     else twist_decoded[1][i]
                 )
                 axis_err = self._axis_error_deg(axis_src, motion_gt[i]).item()
+                axis_err_signed = self._axis_error_deg(
+                    axis_src, motion_gt[i], signed=True
+                ).item()
                 self._test_axis_errors_all.append(axis_err)
+                self._test_axis_errors_signed_all.append(axis_err_signed)
+                if motion_type_gt[i] == 1:
+                    self._test_axis_errors_signed_rot.append(axis_err_signed)
                 is_axis_correct = axis_err <= self.config.test_motion_threshold_deg
+                is_axis_correct_signed = (
+                    axis_err_signed <= self.config.test_motion_threshold_deg
+                )
             if has_type:
                 is_type_correct = bool(pred_types[i] == motion_type_gt[i])
                 if is_type_correct:
                     self._test_type_correct_all += 1
             if is_axis_correct and is_type_correct:
                 self._test_ma_correct_all += 1
+            if is_axis_correct_signed and is_type_correct:
+                self._test_ma_signed_correct_all += 1
 
             # --- Twist-head evaluation (unified screw parameterisation) ---
             if twist_decoded is not None:
@@ -612,6 +634,18 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         all_axis_errors_all = self.all_gather(
             torch.tensor(self._test_axis_errors_all, device=self.device)
         )
+        all_axis_errors_signed_all = self.all_gather(
+            torch.tensor(self._test_axis_errors_signed_all, device=self.device)
+        )
+        all_axis_errors_signed_rot = self.all_gather(
+            torch.tensor(self._test_axis_errors_signed_rot, device=self.device)
+        )
+        total_ma_signed_correct_all = self.all_gather(
+            torch.tensor(
+                self._test_ma_signed_correct_all, dtype=torch.long,
+                device=self.device,
+            )
+        ).sum()
         all_origin_errors_rotational = self.all_gather(
             torch.tensor(self._test_origin_errors_rotational_all, device=self.device)
         )
@@ -725,6 +759,51 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                 logger=True,
                 sync_dist=True,
             )
+            # Sign-aware axis columns (2026-08-18). A "flip" is a signed
+            # error > 90 deg: the predicted axis points into the wrong
+            # hemisphere, i.e. the opening direction is reversed even when
+            # the unsigned line error is tiny.
+            err_adir_signed_all = (
+                float(all_axis_errors_signed_all.mean().item())
+                if all_axis_errors_signed_all.numel() > 0
+                else 0.0
+            )
+            flip_rate = (
+                100.0 * float(
+                    (all_axis_errors_signed_all > 90.0).float().mean().item()
+                )
+                if all_axis_errors_signed_all.numel() > 0
+                else 0.0
+            )
+            flip_rate_rot = (
+                100.0 * float(
+                    (all_axis_errors_signed_rot > 90.0).float().mean().item()
+                )
+                if all_axis_errors_signed_rot.numel() > 0
+                else 0.0
+            )
+            self.log(
+                "test/err_adir_signed_all_deg", err_adir_signed_all,
+                prog_bar=False, logger=True, sync_dist=True,
+            )
+            self.log(
+                "test/axis_flip_rate", flip_rate,
+                prog_bar=False, logger=True, sync_dist=True,
+            )
+            self.log(
+                "test/axis_flip_rate_rot", flip_rate_rot,
+                prog_bar=False, logger=True, sync_dist=True,
+            )
+            if has_type:
+                pass_rate_ma_signed = (
+                    100.0 * total_ma_signed_correct_all / total_predictions
+                    if total_predictions > 0
+                    else 0.0
+                )
+                self.log(
+                    "test/pass_rate_ma_signed", pass_rate_ma_signed,
+                    prog_bar=False, logger=True, sync_dist=True,
+                )
         if all_origin_errors_rotational.numel() > 0:
             mean_origin_error_m = float(all_origin_errors_rotational.mean().item())
             self.log(
@@ -802,6 +881,19 @@ class SF3DTrainingModule(OPDRealTrainingModule):
             if has_axis:
                 print(f"Mean Axis Error (all): {err_adir_all:.2f} degrees")
                 print(f"Mean Axis Error (matched): {err_adir_matched:.2f} degrees")
+                print(
+                    f"Mean SIGNED Axis Error (all): {err_adir_signed_all:.2f} "
+                    "degrees"
+                )
+                print(
+                    f"Axis Flip Rate (signed > 90 deg): {flip_rate:.2f}% all, "
+                    f"{flip_rate_rot:.2f}% rotational"
+                )
+                if has_type:
+                    print(
+                        "MA Pass Rate (Type + SIGNED Axis): "
+                        f"{pass_rate_ma_signed:.2f}%"
+                    )
             if all_origin_errors_rotational.numel() > 0:
                 print(
                     f"Mean Origin Error (m, for rotational): {mean_origin_error_m:.4f}"
@@ -853,8 +945,11 @@ class SF3DTrainingModule(OPDRealTrainingModule):
 
         # Reset new accumulators
         self._test_axis_errors_all.clear()
+        self._test_axis_errors_signed_all.clear()
+        self._test_axis_errors_signed_rot.clear()
         self._test_type_correct_all = 0
         self._test_ma_correct_all = 0
+        self._test_ma_signed_correct_all = 0
         self._test_has_axis_head = False
         self._test_has_type_head = False
         self._test_origin_errors_rotational_all.clear()
