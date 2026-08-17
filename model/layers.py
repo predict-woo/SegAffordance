@@ -269,6 +269,10 @@ class MotionMLP(nn.Module):
             nn.ReLU(True),
         )
         # Optional (twist arms: the twist head carries the axis).
+        # NOTE: the Sigmoid is NOT a sign constraint — CRIS.forward rescales
+        # this output with (x - 0.5) * 2 to (-1, 1) before it becomes
+        # outputs.motion_pred, so every axis direction is representable
+        # (verified empirically 2026-08-18, tools/diag_axis_sign.py).
         self.motion_head = nn.Sequential(
             nn.Linear(hidden_dim, 3),
             nn.Sigmoid(),
