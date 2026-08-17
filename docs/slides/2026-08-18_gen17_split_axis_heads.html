@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gen-17: Split Articulation Heads</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 0; background: #f6f7f9; color: #1c2733; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 28px 32px 60px; }
+  h1 { font-size: 26px; margin: 8px 0 4px; }
+  h2 { font-size: 19px; margin: 34px 0 10px; border-bottom: 2px solid #d7dde5; padding-bottom: 6px; }
+  p.lead { color: #45566b; margin: 4px 0 18px; max-width: 950px; }
+  .card { background: #fff; border: 1px solid #e1e6ec; border-radius: 10px; padding: 18px 20px; margin: 14px 0; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .row .card { flex: 1 1 480px; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 10px; margin-bottom: 8px; }
+  .old { background: #e3ecf9; color: #23508e; }
+  .new { background: #e0f3e6; color: #1e7a3c; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .cap { font-size: 13px; color: #5b6b7d; margin-top: 8px; line-height: 1.45; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { border: 1px solid #dde3ea; padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: #eef1f5; }
+  .note { background: #eef4fb; border-left: 4px solid #3d7cc9; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px; color: #2c4157; }
+  .warn { background: #fdf3e7; border-left: 4px solid #d68a2e; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px; color: #5a4327; }
+  code { background: #eef1f5; border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Gen-17: Split Articulation Heads (rot / trans axis readouts)</h1>
+<p class="lead">
+One change, confined to the articulation module: today ONE 3-vector readout
+serves as both the revolute <b>hinge axis</b> and the prismatic <b>slide
+direction</b>. Those are different physical quantities (the hinge axis is
+<i>perpendicular</i> to the motion; the slide direction <i>is</i> the
+motion), so on type-ambiguous samples the single head's optimum is a blend
+of the two answers — wrong for both. Gen-17 gives each type its own tiny
+readout on the same trunk. Trajectory head, origin path, point path, masks:
+all untouched.
+</p>
+
+<h2>1 · Side by side — the articulation module only</h2>
+<div class="row">
+  <div class="card">
+    <span class="tag old">Current (gen-6 … gen-16) — <code>MotionMLP</code></span>
+    <svg viewBox="0 0 560 420" width="100%">
+      <defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#7a8ca0"/></marker></defs>
+      <rect x="150" y="12" width="260" height="38" rx="7" fill="#eef1f5" stroke="#8fa3b8"/>
+      <text x="280" y="29" font-size="13" text-anchor="middle" font-weight="600">condition vector</text>
+      <text x="280" y="44" font-size="11" text-anchor="middle" fill="#5b6b7d">pooled features + text state (+hint dims)</text>
+      <line x1="280" y1="50" x2="280" y2="76" stroke="#7a8ca0" marker-end="url(#a)"/>
+      <rect x="150" y="78" width="260" height="52" rx="7" fill="#e3ecf9" stroke="#23508e"/>
+      <text x="280" y="99" font-size="13" text-anchor="middle" font-weight="600">shared trunk</text>
+      <text x="280" y="116" font-size="11" text-anchor="middle" fill="#45566b">Linear→ReLU→Linear→ReLU (256)</text>
+      <line x1="215" y1="130" x2="165" y2="168" stroke="#7a8ca0" marker-end="url(#a)"/>
+      <line x1="345" y1="130" x2="395" y2="168" stroke="#7a8ca0" marker-end="url(#a)"/>
+      <rect x="60" y="170" width="210" height="52" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="165" y="190" font-size="12.5" text-anchor="middle" font-weight="600">type_head</text>
+      <text x="165" y="207" font-size="11" text-anchor="middle" fill="#5b6b7d">Linear(256, 2) → rot / trans logits</text>
+      <rect x="290" y="170" width="210" height="52" rx="7" fill="#fde8d8" stroke="#c0392b"/>
+      <text x="395" y="190" font-size="12.5" text-anchor="middle" font-weight="600">motion_head — ONE for both</text>
+      <text x="395" y="207" font-size="11" text-anchor="middle" fill="#5b6b7d">Linear(256, 3) → Sigmoid</text>
+      <line x1="395" y1="222" x2="395" y2="248" stroke="#7a8ca0" marker-end="url(#a)"/>
+      <rect x="290" y="250" width="210" height="40" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="395" y="267" font-size="12" text-anchor="middle">(x − 0.5) × 2 → (−1, 1)</text>
+      <text x="395" y="283" font-size="11" text-anchor="middle" fill="#5b6b7d">segmenter rescale — full sphere reachable</text>
+      <line x1="395" y1="290" x2="395" y2="316" stroke="#7a8ca0" marker-end="url(#a)"/>
+      <rect x="250" y="318" width="290" height="56" rx="7" fill="#fde8d8" stroke="#c0392b"/>
+      <text x="395" y="338" font-size="12.5" text-anchor="middle" font-weight="600">motion_pred: hinge axis AND slide dir</text>
+      <text x="395" y="355" font-size="11" text-anchor="middle" fill="#7a3b2e">rot rows: axis ⊥ motion · trans rows: axis = motion</text>
+      <text x="395" y="369" font-size="11" text-anchor="middle" fill="#7a3b2e">1 − cos loss over ALL rows, no type conditioning</text>
+    </svg>
+    <p class="cap">The head never sees the type (the GT hint was removed in
+    gen-7), so it must infer it from the same features — and under
+    ambiguity its cos-optimal output is a probability-weighted blend of the
+    two type-conditional answers.</p>
+  </div>
+
+  <div class="card">
+    <span class="tag new">Gen-17 — split readouts, shared trunk</span>
+    <svg viewBox="0 0 560 420" width="100%">
+      <defs><marker id="b" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#7a8ca0"/></marker></defs>
+      <rect x="150" y="12" width="260" height="38" rx="7" fill="#eef1f5" stroke="#8fa3b8"/>
+      <text x="280" y="29" font-size="13" text-anchor="middle" font-weight="600">condition vector</text>
+      <text x="280" y="44" font-size="11" text-anchor="middle" fill="#5b6b7d">unchanged</text>
+      <line x1="280" y1="50" x2="280" y2="76" stroke="#7a8ca0" marker-end="url(#b)"/>
+      <rect x="150" y="78" width="260" height="52" rx="7" fill="#e3ecf9" stroke="#23508e"/>
+      <text x="280" y="99" font-size="13" text-anchor="middle" font-weight="600">shared trunk</text>
+      <text x="280" y="116" font-size="11" text-anchor="middle" fill="#45566b">unchanged — still trains on every row</text>
+      <line x1="200" y1="130" x2="115" y2="168" stroke="#7a8ca0" marker-end="url(#b)"/>
+      <line x1="280" y1="130" x2="280" y2="168" stroke="#7a8ca0" marker-end="url(#b)"/>
+      <line x1="360" y1="130" x2="445" y2="168" stroke="#7a8ca0" marker-end="url(#b)"/>
+      <rect x="20" y="170" width="190" height="52" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="115" y="190" font-size="12.5" text-anchor="middle" font-weight="600">type_head</text>
+      <text x="115" y="207" font-size="11" text-anchor="middle" fill="#5b6b7d">unchanged</text>
+      <rect x="225" y="170" width="150" height="52" rx="7" fill="#e0f3e6" stroke="#1e7a3c"/>
+      <text x="300" y="190" font-size="12.5" text-anchor="middle" font-weight="600">motion_head_rot</text>
+      <text x="300" y="207" font-size="11" text-anchor="middle" fill="#3c6e4c">hinge axis only</text>
+      <rect x="390" y="170" width="150" height="52" rx="7" fill="#e0f3e6" stroke="#1e7a3c"/>
+      <text x="465" y="190" font-size="12.5" text-anchor="middle" font-weight="600">motion_head_trans</text>
+      <text x="465" y="207" font-size="11" text-anchor="middle" fill="#3c6e4c">slide direction only</text>
+      <line x1="300" y1="222" x2="300" y2="248" stroke="#7a8ca0" marker-end="url(#b)"/>
+      <line x1="465" y1="222" x2="465" y2="248" stroke="#7a8ca0" marker-end="url(#b)"/>
+      <rect x="225" y="250" width="315" height="38" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="382" y="266" font-size="12" text-anchor="middle">Sigmoid + (x − 0.5) × 2, each — unchanged form</text>
+      <text x="382" y="281" font-size="11" text-anchor="middle" fill="#5b6b7d">both candidates computed every forward (compile-friendly)</text>
+      <line x1="382" y1="288" x2="382" y2="314" stroke="#7a8ca0" marker-end="url(#b)"/>
+      <rect x="225" y="316" width="315" height="58" rx="7" fill="#e0f3e6" stroke="#1e7a3c"/>
+      <text x="382" y="336" font-size="12.5" text-anchor="middle" font-weight="600">row-wise select → motion_pred</text>
+      <text x="382" y="352" font-size="11" text-anchor="middle" fill="#3c6e4c">train loss: routed by GT type (mask, no branching)</text>
+      <text x="382" y="366" font-size="11" text-anchor="middle" fill="#3c6e4c">test / L_pp / viz: selected by predicted type</text>
+    </svg>
+    <p class="cap">Each readout is Linear(256, 3): the split adds ~770
+    parameters. No gradient from trans rows ever reaches the rot readout
+    (and vice versa); the trunk still learns from every row.</p>
+  </div>
+</div>
+
+<h2>2 · Why the shared head averages — and what the split does about it</h2>
+<div class="card">
+  <svg viewBox="0 0 1160 250" width="100%">
+    <defs><marker id="d" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#7a8ca0"/></marker></defs>
+    <text x="290" y="24" font-size="14" text-anchor="middle" font-weight="600" fill="#23508e">Shared head, ambiguous sample (drawer? door?)</text>
+    <circle cx="180" cy="140" r="4" fill="#1c2733"/>
+    <line x1="180" y1="140" x2="180" y2="55" stroke="#1e7a3c" stroke-width="3" marker-end="url(#d)"/>
+    <text x="180" y="45" font-size="12" text-anchor="middle" fill="#1e7a3c">hinge axis (if door)</text>
+    <line x1="180" y1="140" x2="300" y2="140" stroke="#8e44ad" stroke-width="3" marker-end="url(#d)"/>
+    <text x="330" y="132" font-size="12" fill="#8e44ad">slide dir (if drawer)</text>
+    <line x1="180" y1="140" x2="270" y2="72" stroke="#c0392b" stroke-width="3.5" stroke-dasharray="7 4" marker-end="url(#d)"/>
+    <text x="298" y="66" font-size="12.5" fill="#c0392b" font-weight="600">shared head output: diagonal blend</text>
+    <text x="298" y="84" font-size="11.5" fill="#7a3b2e">~45° from BOTH correct answers —</text>
+    <text x="298" y="99" font-size="11.5" fill="#7a3b2e">and it drifts with p(type), sample to sample</text>
+    <line x1="580" y1="40" x2="580" y2="230" stroke="#d7dde5" stroke-width="2"/>
+    <text x="880" y="24" font-size="14" text-anchor="middle" font-weight="600" fill="#1e7a3c">Split heads, same sample</text>
+    <circle cx="740" cy="140" r="4" fill="#1c2733"/>
+    <line x1="740" y1="140" x2="740" y2="55" stroke="#1e7a3c" stroke-width="3.5" marker-end="url(#d)"/>
+    <text x="740" y="45" font-size="12" text-anchor="middle" fill="#1e7a3c">motion_head_rot candidate</text>
+    <line x1="740" y1="140" x2="860" y2="140" stroke="#8e44ad" stroke-width="3.5" marker-end="url(#d)"/>
+    <text x="890" y="132" font-size="12" fill="#8e44ad">motion_head_trans candidate</text>
+    <rect x="700" y="178" width="360" height="52" rx="7" fill="#eef4fb" stroke="#3d7cc9"/>
+    <text x="880" y="198" font-size="12.5" text-anchor="middle" font-weight="600">type head picks ONE decisive candidate</text>
+    <text x="880" y="215" font-size="11.5" text-anchor="middle" fill="#2c4157">if the type call is right → exact geometry; if wrong, the blend was useless anyway</text>
+  </svg>
+  <p class="cap">This is the documented drawer/door failure (g8 close-up
+  batches: "trans pull vs GT rot" conflicts). Beyond ambiguous samples, the
+  split also removes <b>gradient interference</b> on unambiguous ones: door
+  hinge-axis statistics (mostly vertical) and drawer slide statistics
+  (mostly horizontal, out of the cabinet face) no longer fight over the
+  same 771 readout weights — the same style of cross-type pressure that
+  drove the rot-sweep collapse in the trajectory loss.</p>
+</div>
+
+<h2>3 · Routing: who reads which head, when</h2>
+<div class="card">
+<table>
+  <tr><th>Consumer</th><th>Current (shared)</th><th>Gen-17 (split)</th></tr>
+  <tr>
+    <td>Axis loss (sign-sensitive 1−cos)</td>
+    <td>single output vs GT, all rows</td>
+    <td>both heads computed; per-row loss on the <b>GT-type</b> head only
+        (masked select, like the origin loss already does — no
+        data-dependent control flow, <code>torch.compile</code>-safe)</td>
+  </tr>
+  <tr>
+    <td>L_pp consistency (line / circle branches)</td>
+    <td>both branches read the same axis, weighted by p_rev</td>
+    <td>circle branch reads <code>motion_head_rot</code>, line branch reads
+        <code>motion_head_trans</code> — each residual finally paired with
+        the axis that means the right thing; p_rev weighting unchanged</td>
+  </tr>
+  <tr>
+    <td>Test metrics / viz / <code>outputs.motion_pred</code></td>
+    <td>single output</td>
+    <td>row-wise select by <b>predicted</b> type argmax (no GT at
+        inference); ablation guards unchanged</td>
+  </tr>
+  <tr>
+    <td>Origin path (heatmap + z_q)</td>
+    <td colspan="2">unchanged — already revolute-only by loss masking</td>
+  </tr>
+  <tr>
+    <td>Trajectory head</td>
+    <td colspan="2"><b>unchanged — stays shared by explicit decision</b></td>
+  </tr>
+</table>
+</div>
+
+<div class="note" style="margin-top:18px">
+<b>What this is NOT:</b> not a sigmoid change (the sigmoid + rescale was
+investigated 2026-08-18 and is fine — every direction is representable);
+not the old WTA hypotheses (selection here is supervised by the type label,
+not winner-takes-all); not a trajectory change. Checkpoint note: the state
+dict gains <code>motion_head_trans</code> and renames nothing if we keep
+<code>motion_head</code> as the rot readout — but a from-scratch run on the
+g16 recipe is the plan anyway, so the arms stay comparable.
+</div>
+
+<div class="warn" style="margin-top:12px">
+<b>Honest risk:</b> type errors become mode errors — a misclassified
+drawer now gets a decisive full hinge-axis instead of a mushy blend. Type
+accuracy is 92.3% on g16, so ~8% of rows take that trade. The new
+sign-aware metrics (flip rate, MA_signed) plus the legacy columns will show
+exactly which way it nets out.
+</div>
+
+<h2>4 · Expected read-outs</h2>
+<div class="card">
+<table>
+  <tr><th>Metric (g16 baseline)</th><th>Hoped-for movement</th><th>Why</th></tr>
+  <tr><td>axis matched 17.8° / MA 23.1</td><td>down / up</td>
+      <td>the blend tax disappears on correctly-typed rows (the majority)</td></tr>
+  <tr><td>axis flip rate 10.2% all / <b>12.7% rot</b>, signed err 33.9°
+      (measured on g16, full 5,088-sample test, 2026-08-18)</td>
+      <td>down, esp. rotational</td>
+      <td>the rot readout only ever learns hinge-sign statistics — no more
+          trans rows dragging its sign prior around</td></tr>
+  <tr><td>type 92.3%</td><td>flat</td><td>type head untouched (same trunk,
+      same loss); watch it anyway — trunk gradients change slightly</td></tr>
+  <tr><td>masks / points / trajectories</td><td>flat</td>
+      <td>nothing upstream of the articulation readouts changes; any drift
+          here means the trunk gradient mix mattered more than expected</td></tr>
+</table>
+</div>
+
+</div>
+</body>
+</html>

@@ -34,6 +34,18 @@ traj_dir 94.46/0.798 · L_pp_norm probe mean 0.1554 (g13: 0.104 — higher
 because full-scale sweeps EXPOSE axis/origin error the collapsed sweeps
 hid; the old number was flattered by the collapse).
 
+## Sign-aware axis re-test (2026-08-18, same ckpt/samples)
+
+The legacy axis metric takes |cos| and cannot see flipped opening
+directions; re-ran the test pass after adding signed columns (commit
+c53974a). Legacy numbers reproduced exactly. New: **signed axis error
+33.91°** (vs 28.25 unsigned) · **flip rate 10.18% all / 12.73%
+rotational** (signed > 90° — predicted axis in the wrong hemisphere, i.e.
+door swings the wrong way) · MA_signed 22.92 (vs 23.09 — flips almost
+never co-occur with a <10° unsigned match, so MA barely moves; the flips
+live in the already-unmatched tail). Baseline for the gen-17 split-head
+arm.
+
 ## Reading
 
 The normalization did exactly what it was built for: full-scale revolute
