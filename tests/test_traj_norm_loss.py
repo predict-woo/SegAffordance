@@ -4,6 +4,7 @@
 # relative-trajectory mode only). The pure-formula tests pin the reference
 # `_norm_loss`; the module tests pin the trainer against that reference
 # (flag on) and against plain F.mse_loss (flag off, bit-identical).
+import os
 from unittest import mock
 
 import pytest
@@ -148,3 +149,26 @@ def test_flag_off_bit_identical():
 def test_absolute_plus_normalized_raises():
     with pytest.raises(ValueError):
         _build_module(trajectory_absolute=True, trajectory_loss_normalized=True)
+
+
+# ---- gen-16 config ----------------------------------------------------------
+
+
+def _load_cfg(name):
+    import yaml
+    with open(os.path.join(os.path.dirname(__file__), "..", "config", name)) as f:
+        return yaml.safe_load(f)
+
+
+def test_g16_config_matches_spec():
+    base = _load_cfg("sf3d_train_runpod_g13_res512.yaml")
+    g16 = _load_cfg("sf3d_train_runpod_g16_trajnorm.yaml")
+    gl, bl = dict(g16["model"]["loss_params"]), dict(base["model"]["loss_params"])
+    assert gl.pop("trajectory_loss_normalized") is True
+    assert gl.pop("trajectory_weight") == 0.5 and bl.pop("trajectory_weight") == 0.15
+    assert gl == bl
+    assert g16["model"]["model_params"] == base["model"]["model_params"]
+    assert g16["data"] == base["data"]
+    assert "20260817_sf3d_g16_trajnorm" in g16["trainer"]["callbacks"][0]["init_args"]["dirpath"]
+    assert "20260817_sf3d_g16_trajnorm" in g16["trainer"]["logger"]["init_args"]["save_dir"]
+    assert g16["trainer"]["max_epochs"] == 30 and g16["seed_everything"] == 42
