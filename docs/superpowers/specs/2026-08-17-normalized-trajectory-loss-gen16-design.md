@@ -1,7 +1,7 @@
 # Gen-16: GT-Energy-Normalized Trajectory Loss (fix the rot-sweep collapse)
 
 **Date:** 2026-08-17
-**Status:** DRAFT — awaiting user review
+**Status:** IMPLEMENTED (commits ce41a7a, 939eddd; empirical collapse test pending)
 **Goal:** Stop revolute trajectory collapse (predicted rot sweeps are 4–8 cm
 against ~0.7 m GT arcs in every trajectory_weight=0.15 arm) by making the
 trajectory loss a per-row RELATIVE error — normalized by each row's GT
