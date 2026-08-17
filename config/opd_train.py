@@ -155,6 +155,11 @@ class LossParams:
     vae_beta: float
     # Optional trajectory-related weights
     trajectory_weight: float = 1.0
+    # Gen-16: per-row GT-energy-normalized trajectory loss (relative-error;
+    # a collapsed prediction scores exactly 1.0). Fixes the rot-sweep
+    # collapse of the trajectory_weight=0.15 arms — see the 2026-08-17
+    # spec. Relative-trajectory mode only.
+    trajectory_loss_normalized: bool = False
     # Which geometric consistency loss to use between the motion-axis and
     # trajectory heads: "cross_gt" | "pred_pred" | "none".
     # Default "cross_gt" reproduces the behaviour of configs written before

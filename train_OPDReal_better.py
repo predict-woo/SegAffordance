@@ -71,6 +71,13 @@ class OPDRealTrainingModule(pl.LightningModule):
         self.vae_loss_fn = MotionVAELoss(beta=self.loss_params.vae_beta)
         self.motion_type_loss_fn = nn.CrossEntropyLoss(label_smoothing=0.1)
         self.trajectory_loss_fn = nn.MSELoss()
+        if getattr(loss_params, "trajectory_loss_normalized", False) and getattr(
+            model_params, "trajectory_absolute", False
+        ):
+            raise ValueError(
+                "trajectory_loss_normalized supports the RELATIVE trajectory "
+                "head only (the normalization anchors on gt - gt[0])"
+            )
         # "cross_gt" (default, historical) | "pred_pred" | "none".
         # Each variant no-ops on batches lacking the targets it needs, so OPD
         # runs are unaffected whichever is selected. gen-7's absolute
@@ -437,9 +444,26 @@ class OPDRealTrainingModule(pl.LightningModule):
                 trajectory_gt_relative = (
                     trajectory_gt_device - trajectory_gt_device[:, 0:1, :]
                 )
-                L_trajectory = self.trajectory_loss_fn(
-                    outputs.trajectory_pred, trajectory_gt_relative
-                )
+                if getattr(self.loss_params, "trajectory_loss_normalized", False):
+                    # Gen-16: per-row RELATIVE error — each row's squared
+                    # error over its own GT sweep energy, so rot and trans
+                    # exert identical pressure regardless of sweep scale
+                    # and a collapsed prediction scores exactly 1.0 (the
+                    # rot-collapse fix; same philosophy as normalized
+                    # L_pp). eps = (1 cm)^2 damps degenerate GT stubs.
+                    _err = outputs.trajectory_pred - trajectory_gt_relative
+                    _per_row = _err.pow(2).sum(-1).mean(-1)
+                    _gt_energy = trajectory_gt_relative.pow(2).sum(-1).mean(-1)
+                    L_trajectory = (_per_row / _gt_energy.clamp(min=1e-4)).mean()
+                    self.log(
+                        f"{step_type}/L_trajectory_m2",
+                        _per_row.detach().mean(),
+                        on_step=False, on_epoch=True, logger=True, sync_dist=True,
+                    )
+                else:
+                    L_trajectory = self.trajectory_loss_fn(
+                        outputs.trajectory_pred, trajectory_gt_relative
+                    )
             total_loss = total_loss + self.loss_params.trajectory_weight * L_trajectory
             grad_terms["trajectory"] = self.loss_params.trajectory_weight * L_trajectory
             self.log(
