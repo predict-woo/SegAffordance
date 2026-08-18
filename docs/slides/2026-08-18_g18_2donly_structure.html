@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>2D-Only Training on Gen-17</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 0; background: #f6f7f9; color: #1c2733; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 28px 32px 60px; }
+  h1 { font-size: 26px; margin: 8px 0 4px; }
+  h2 { font-size: 19px; margin: 34px 0 10px; border-bottom: 2px solid #d7dde5; padding-bottom: 6px; }
+  p.lead { color: #45566b; margin: 4px 0 18px; max-width: 950px; }
+  .card { background: #fff; border: 1px solid #e1e6ec; border-radius: 10px; padding: 18px 20px; margin: 14px 0; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .row .card { flex: 1 1 480px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .cap { font-size: 13px; color: #5b6b7d; margin-top: 8px; line-height: 1.45; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { border: 1px solid #dde3ea; padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: #eef1f5; }
+  .note { background: #eef4fb; border-left: 4px solid #3d7cc9; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px; color: #2c4157; }
+  .warn { background: #fdf3e7; border-left: 4px solid #d68a2e; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px; color: #5a4327; }
+  code { background: #eef1f5; border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+  .k { display: inline-block; width: 13px; height: 13px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>2D-Only Training on the Gen-17 Stack</h1>
+<p class="lead">
+Train the exact gen-17 architecture (dinov3 @512, split axis heads, origin
+heatmap, shared trajectory) with <b>zero 3D ground truth</b>: 3D
+trajectories, axes, origins, and type labels are reserved for evaluation.
+Supervision is image-space only — the GT mask, the 2D interaction point,
+and the observed 2D motion track — plus the model's own internal
+consistency. The twist-era proof (20260804_sf3d_2donly: "mechanism works,
+signal weak") needed a twist head and an ω-prior; the split-head family
+replaces that whole chain with two things it already owns: the
+<b>projection loss</b> (data term) and the <b>normalized L_pp</b>
+(GT-free consistency term).
+</p>
+
+<p style="font-size:13.5px;color:#45566b">
+Legend:&nbsp;
+<span class="k" style="background:#2e9e4f"></span>2D-supervised (direct GT)&nbsp;&nbsp;
+<span class="k" style="background:#2f6fd0"></span>data term: projection chain&nbsp;&nbsp;
+<span class="k" style="background:#8e44ad"></span>GT-free consistency (L_pp)&nbsp;&nbsp;
+<span class="k" style="background:#9aa7b5"></span>indirect / untrained in 2D-only
+</p>
+
+<h2>1 · The model, colored by what trains it</h2>
+<div class="card">
+  <svg viewBox="0 0 1160 560" width="100%">
+    <defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#7a8ca0"/></marker>
+    <marker id="b" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#2f6fd0"/></marker>
+    <marker id="p" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#8e44ad"/></marker></defs>
+
+    <!-- backbone spine -->
+    <rect x="20" y="20" width="300" height="44" rx="7" fill="#eef1f5" stroke="#8fa3b8"/>
+    <text x="170" y="39" font-size="13" text-anchor="middle" font-weight="600">frozen DINOv3 + dino.txt · FPN · decoder</text>
+    <text x="170" y="55" font-size="11" text-anchor="middle" fill="#5b6b7d">unchanged gen-17 spine (RGB + depth INPUT + text)</text>
+    <line x1="170" y1="64" x2="170" y2="92" stroke="#7a8ca0" marker-end="url(#a)"/>
+
+    <!-- projector -->
+    <rect x="20" y="94" width="300" height="58" rx="7" fill="#fff" stroke="#8fa3b8"/>
+    <text x="170" y="113" font-size="12.5" text-anchor="middle" font-weight="600">3-channel projector</text>
+    <text x="170" y="129" font-size="11.5" text-anchor="middle"><tspan fill="#2e9e4f">mask ✓</tspan>  ·  <tspan fill="#2e9e4f">point heatmap ✓</tspan>  ·  <tspan fill="#9aa7b5">origin heatmap ✗</tspan></text>
+    <text x="170" y="144" font-size="11" text-anchor="middle" fill="#5b6b7d">mask BCE+Dice, point BCE+coord — pure 2D GT</text>
+
+    <!-- condition vector -->
+    <rect x="420" y="20" width="300" height="44" rx="7" fill="#eef1f5" stroke="#8fa3b8"/>
+    <text x="570" y="39" font-size="13" text-anchor="middle" font-weight="600">condition vector</text>
+    <text x="570" y="55" font-size="11" text-anchor="middle" fill="#5b6b7d">GT-mask pooling at train (2D GT — allowed)</text>
+
+    <!-- trajectory head -->
+    <line x1="570" y1="64" x2="570" y2="92" stroke="#7a8ca0" marker-end="url(#a)"/>
+    <rect x="420" y="94" width="300" height="52" rx="7" fill="#e7effc" stroke="#2f6fd0"/>
+    <text x="570" y="113" font-size="12.5" text-anchor="middle" font-weight="600">3D trajectory head (shared, relative)</text>
+    <text x="570" y="130" font-size="11" text-anchor="middle" fill="#2c4157">trained by the projection chain below</text>
+
+    <!-- MotionMLP -->
+    <line x1="640" y1="64" x2="820" y2="92" stroke="#7a8ca0" marker-end="url(#a)"/>
+    <rect x="760" y="94" width="380" height="86" rx="7" fill="#f4ecfa" stroke="#8e44ad"/>
+    <text x="950" y="112" font-size="12.5" text-anchor="middle" font-weight="600">MotionMLP trunk (shared)</text>
+    <text x="950" y="130" font-size="11.5" text-anchor="middle"><tspan fill="#8e44ad">type_head → p_rev (self-organizing)</tspan></text>
+    <text x="950" y="147" font-size="11.5" text-anchor="middle"><tspan fill="#8e44ad">motion_head_rot → circle branch</tspan> · <tspan fill="#8e44ad">motion_head_trans → line branch</tspan></text>
+    <text x="950" y="164" font-size="11" text-anchor="middle" fill="#7a5a8e">no axis GT, no type CE — L_pp is the only teacher</text>
+
+    <!-- projection chain -->
+    <rect x="20" y="210" width="1120" height="150" rx="10" fill="#f2f7fe" stroke="#2f6fd0"/>
+    <text x="40" y="234" font-size="14" font-weight="700" fill="#2f6fd0">DATA TERM — TrajectoryProjectionLoss (already implemented; weight was 0 in every 3D arm)</text>
+    <rect x="40" y="250" width="200" height="46" rx="6" fill="#fff" stroke="#2f6fd0"/>
+    <text x="140" y="269" font-size="12" text-anchor="middle">point_uv (predicted)</text>
+    <text x="140" y="285" font-size="11" text-anchor="middle" fill="#5b6b7d">soft-argmax of heatmap</text>
+    <line x1="240" y1="273" x2="290" y2="273" stroke="#2f6fd0" marker-end="url(#b)"/>
+    <rect x="292" y="250" width="215" height="46" rx="6" fill="#fff" stroke="#2f6fd0"/>
+    <text x="399" y="269" font-size="12" text-anchor="middle">lift with INPUT depth</text>
+    <text x="399" y="285" font-size="11" text-anchor="middle" fill="#5b6b7d">grid_sample(D, point_uv) — no GT</text>
+    <line x1="507" y1="273" x2="557" y2="273" stroke="#2f6fd0" marker-end="url(#b)"/>
+    <rect x="559" y="250" width="215" height="46" rx="6" fill="#fff" stroke="#2f6fd0"/>
+    <text x="666" y="269" font-size="12" text-anchor="middle">+ relative 3D trajectory</text>
+    <text x="666" y="285" font-size="11" text-anchor="middle" fill="#5b6b7d">absolute predicted 3D curve</text>
+    <line x1="774" y1="273" x2="824" y2="273" stroke="#2f6fd0" marker-end="url(#b)"/>
+    <rect x="826" y="250" width="140" height="46" rx="6" fill="#fff" stroke="#2f6fd0"/>
+    <text x="896" y="269" font-size="12" text-anchor="middle">project (K)</text>
+    <text x="896" y="285" font-size="11" text-anchor="middle" fill="#5b6b7d">fp32 island</text>
+    <line x1="966" y1="273" x2="1016" y2="273" stroke="#2f6fd0" marker-end="url(#b)"/>
+    <rect x="1018" y="245" width="112" height="56" rx="6" fill="#d9ead1" stroke="#2e9e4f"/>
+    <text x="1074" y="266" font-size="12" text-anchor="middle" font-weight="600">GT 2D track</text>
+    <text x="1074" y="282" font-size="10.5" text-anchor="middle" fill="#3c6e4c">index-matched MSE</text>
+    <text x="1074" y="294" font-size="10.5" text-anchor="middle" fill="#3c6e4c">ordered + signed</text>
+    <text x="40" y="330" font-size="12" fill="#2c4157">Because the compared positions are ABSOLUTE uv, this one term supervises the trajectory (shape, scale, direction)</text>
+    <text x="40" y="346" font-size="12" fill="#2c4157">AND refines point_uv placement. Proposed upgrade: gen-16-style per-row normalization by GT 2D track energy (see §3).</text>
+
+    <!-- Lpp block -->
+    <rect x="20" y="386" width="1120" height="120" rx="10" fill="#f7f1fb" stroke="#8e44ad"/>
+    <text x="40" y="410" font-size="14" font-weight="700" fill="#8e44ad">CONSISTENCY TERM — normalized L_pp (unchanged, already GT-free)</text>
+    <text x="40" y="434" font-size="12.5" fill="#3d2c4e">(1 − p_rev) · line(trajectory ⟂ <tspan font-weight="600">trans axis</tspan>)   +   p_rev · circle(trajectory orbits <tspan font-weight="600">rot axis</tspan> through lifted origin, radius = anchor distance)</text>
+    <text x="40" y="458" font-size="12" fill="#5a4370">Every input is a prediction. With the trajectory pinned to the observed 2D track by the data term, L_pp back-propagates that</text>
+    <text x="40" y="474" font-size="12" fill="#5a4370">evidence into the axis heads, the origin lift (z_q), the lifted point (z_p) — and into p_rev, which self-organizes: index 1 is</text>
+    <text x="40" y="490" font-size="12" fill="#5a4370">structurally tied to the CIRCLE residual, so "rot" keeps its meaning without a single type label (no label-permutation ambiguity).</text>
+
+    <line x1="570" y1="146" x2="570" y2="208" stroke="#2f6fd0" stroke-width="1.6" marker-end="url(#b)"/>
+    <line x1="950" y1="180" x2="950" y2="384" stroke="#8e44ad" stroke-width="1.6" marker-end="url(#p)"/>
+    <line x1="620" y1="360" x2="620" y2="384" stroke="#8e44ad" stroke-width="1.6" marker-end="url(#p)"/>
+  </svg>
+  <p class="cap">Zero architecture change: this is the g17 model verbatim.
+  "2D-only" is a <b>loss configuration</b> — all 3D-GT loss weights zeroed,
+  the projection weight turned on. That also means a 2D-pretrained
+  checkpoint loads directly into the 3D finetune with no surgery.</p>
+</div>
+
+<h2>2 · Loss configuration vs gen-17</h2>
+<div class="card">
+<table>
+  <tr><th>Term</th><th>g17 (3D)</th><th>g18 2D-only</th><th>Why</th></tr>
+  <tr><td>mask / point map / coord</td><td>0.5 each</td><td>0.5 each</td><td>image-space GT — allowed by the premise</td></tr>
+  <tr><td>L_traj_proj (projection)</td><td>0.0</td><td><b>0.5, normalized</b></td><td>THE data term; replaces the 3D trajectory MSE</td></tr>
+  <tr><td>L_pp (normalized)</td><td>0.1</td><td><b>0.1</b></td><td>GT-free; the only teacher of axis / origin / type</td></tr>
+  <tr><td>3D trajectory (norm. MSE)</td><td>0.5</td><td>0</td><td>3D GT</td></tr>
+  <tr><td>axis 1−cos (GT-routed)</td><td>0.5</td><td>0</td><td>3D GT (routing by GT type also gone)</td></tr>
+  <tr><td>type CE</td><td>0.5</td><td>0</td><td>labels reserved for eval</td></tr>
+  <tr><td>origin q* + origin map</td><td>0.5 each</td><td>0</td><td>q* is 3D GT; heatmap channel goes dark</td></tr>
+  <tr><td>lifted point (uv + z_p)</td><td>0.5</td><td>0 → <b>depth anchor</b></td><td>traj[0] is 3D GT; replace with z_p ≈ D(point_uv) (input depth, GT-free) so the lift stays calibrated for L_pp</td></tr>
+</table>
+</div>
+
+<h2>3 · The three design decisions (and the lessons they encode)</h2>
+<div class="row">
+  <div class="card">
+    <b>Normalize the projection residual per row.</b>
+    <p class="cap" style="margin-top:6px">The raw term is index-matched MSE
+    in uv² — big drawer pulls dwarf small door arcs exactly the way the 3D
+    MSE did before gen-16, and the calibration trap that caused the
+    rot-collapse would be rebuilt in 2D. Same fix, same shape:
+    <code>per_row_mse / gt_track_energy.clamp(min=eps)</code> over the
+    valid points, flag <code>trajectory_proj_normalized</code>. A collapsed
+    projected curve scores ~1.0 for every row, rot and trans alike.</p>
+  </div>
+  <div class="card">
+    <b>Let p_rev self-organize; add no ω-prior analog.</b>
+    <p class="cap" style="margin-top:6px">The twist-era 2D-only arm needed
+    an |ω| Occam prior and still collapsed type to trans. The split family
+    is structurally better off: p_rev's two branches are DIFFERENT
+    geometric models of the same track, and picking the better-fitting one
+    lowers the loss — type becomes model selection, grounded (index 1 =
+    circle = rot) rather than emergent-and-unanchored. Risk of collapse to
+    one branch remains; we log the batch-mean p_rev during training and
+    keep a <i>parked</i> batch-balance prior as the fallback knob rather
+    than adding it up front (YAGNI — the 2donly failure had no
+    branch-competition mechanism; this does).</p>
+  </div>
+  <div class="card">
+    <b>Anchor z_p to the input depth; leave z_q to L_pp.</b>
+    <p class="cap" style="margin-top:6px">L_pp's circle needs the lifted
+    point and origin (c = origin − point). The projection chain anchors
+    the CURVE with an input-depth lookup, but the z_p head itself would
+    drift with no 3D point loss — a cheap GT-free tether
+    (<code>depth_anchor_weight</code>: masked |z_p − D(point_uv)|²) keeps
+    the lift honest. z_q has no surface guarantee (hinge pixels sit on the
+    door plane only approximately), so it trains through L_pp alone —
+    accepted as the weakest link.</p>
+  </div>
+</div>
+
+<h2>4 · What emerges vs what stays dark (honest expectations)</h2>
+<div class="card">
+<table>
+  <tr><th>Quantity</th><th>2D-only outlook</th></tr>
+  <tr><td>Masks, 2D point, grounding</td><td>full strength — identical supervision to g17</td></tr>
+  <tr><td>3D trajectory (shape + direction)</td><td>strong up to the depth ambiguity: projection pins 2 of 3 DOF per point; the depth-lifted anchor and the smooth relative head carry the third. traj_dir should be well above chance (the ordered matching is sign-sensitive)</td></tr>
+  <tr><td>Type (p_rev)</td><td>the headline question — branch competition should separate doors from drawers; measured against the reserved labels at eval</td></tr>
+  <tr><td>Axis line (rot/trans heads)</td><td>learnable through L_pp only — coarse; the circle/line residuals constrain the line, not tightly</td></tr>
+  <tr><td><b>Axis sign</b></td><td><b>unobservable</b>: both L_pp branches are quadratic in the axis (a flipped axis gives the identical residual). Expect ~50% flip rate — the sign-aware metrics will show it, the sign-agnostic ones are the fair read. The 3D finetune supplies sign.</td></tr>
+  <tr><td>Origin heatmap channel, z_q</td><td>dark / indirect — origin metrics will be weak; the finetune re-lights them</td></tr>
+</table>
+<p class="cap">Eval runs the standard test pass (3D GT is exactly what
+SF3D reserves for this). Success is NOT g17 parity — it is (a) type
+separation and trajectory direction far above chance with zero 3D labels,
+and (b) the real payoff experiment: <b>finetune g17-recipe from the 2D
+checkpoint vs from scratch</b> — does 2D pretraining buy anything? That
+two-stage comparison is the reason this stage exists.</p>
+</div>
+
+<div class="note" style="margin-top:16px">
+<b>Scope honesty:</b> SF3D's 2D tracks are projections of its synthesized
+3D GT, so this is a supervision ablation (same framing as the 2026-08-04
+proof), not yet "learning from YouTube." The pieces that would NOT port to
+real video: GT-mask pooling (switch to <code>pool_with_predicted_mask</code>),
+sensor depth (needs monocular depth), and the clean per-frame intrinsics.
+Everything in the colored diagram above ports as-is.
+</div>
+
+<div class="warn" style="margin-top:12px">
+<b>Implementation footprint:</b> no model change. (1) config
+<code>sf3d_train_runpod_g18_2donly.yaml</code> = g17 model params + the §2
+weight table; (2) <code>trajectory_proj_normalized</code> flag in the
+projection loss; (3) <code>depth_anchor_weight</code> z_p tether in the
+trainer; (4) log batch-mean p_rev. Everything else already exists.
+</div>
+
+</div>
+</body>
+</html>
