@@ -93,6 +93,9 @@ class OPDRealTrainingModule(pl.LightningModule):
             normalized=getattr(
                 self.loss_params, "trajectory_proj_normalized", False
             ),
+            energy_floor=getattr(
+                self.loss_params, "trajectory_proj_energy_floor", 1e-4
+            ),
         )
         self.twist_loss = TwistLoss(
             weight=getattr(self.loss_params, "twist_weight", 0.5),
@@ -537,6 +540,26 @@ class OPDRealTrainingModule(pl.LightningModule):
             grad_terms["depth_anchor"] = _da_w * L_depth_anchor
             self.log(
                 f"{step_type}/L_depth_anchor", L_depth_anchor,
+                on_step=(step_type == "train"), on_epoch=True, logger=True,
+                sync_dist=True,
+            )
+
+        # Batch-balance prior on P(revolute) — the anti-collapse term for
+        # label-free arms (2026-08-18: the line residual is bounded <= 1,
+        # the circle residual is not, so an unconstrained gate collapses
+        # to trans within an epoch). Constrains only the BATCH MEAN: which
+        # samples are called revolute stays free for L_pp to decide.
+        _bal_w = getattr(self.loss_params, "p_rev_balance_weight", 0.0)
+        if _bal_w > 0.0 and outputs.motion_type_logits is not None:
+            _p_rev_mean = (
+                outputs.motion_type_logits.float().softmax(dim=-1)[:, 1].mean()
+            )
+            _bal_t = getattr(self.loss_params, "p_rev_balance_target", 0.225)
+            L_p_rev_balance = (_p_rev_mean - _bal_t).pow(2)
+            total_loss = total_loss + _bal_w * L_p_rev_balance
+            grad_terms["p_rev_balance"] = _bal_w * L_p_rev_balance
+            self.log(
+                f"{step_type}/L_p_rev_balance", L_p_rev_balance,
                 on_step=(step_type == "train"), on_epoch=True, logger=True,
                 sync_dist=True,
             )

@@ -986,11 +986,13 @@ class TrajectoryProjectionLoss(nn.Module):
     """
 
     def __init__(
-        self, weight: float, near_plane: float = 0.05, normalized: bool = False
+        self, weight: float, near_plane: float = 0.05, normalized: bool = False,
+        energy_floor: float = 1e-4,
     ):
         super().__init__()
         self.weight = weight
         self.near_plane = near_plane
+        self.energy_floor = energy_floor
         # Gen-18 (2026-08-18 spec): per-row relative error — each row's
         # masked MSE divided by its GT track's motion energy (track
         # relative to its first valid point). Same philosophy as the
@@ -1058,9 +1060,9 @@ class TrajectoryProjectionLoss(nn.Module):
                 first = track[torch.arange(track.shape[0], device=device), first_idx]
                 rel = track - first.unsqueeze(1)
                 row_energy = (rel.pow(2).sum(-1) * mask).sum(dim=1) / row_count.clamp(min=1.0)
-                # eps = (0.01 of the image)^2: degenerate GT stubs damped,
-                # not amplified (the gen-16 convention, in uv units).
-                ratio = row_mse / row_energy.clamp(min=1e-4)
+                # energy_floor damps degenerate GT stubs instead of
+                # amplifying them (the gen-16 convention, in uv units).
+                ratio = row_mse / row_energy.clamp(min=self.energy_floor)
                 term = ratio[row_ok].mean()
             else:
                 term = (sq * mask).sum() / count

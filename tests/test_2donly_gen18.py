@@ -118,6 +118,32 @@ def test_normalized_first_valid_point_defines_relative_frame():
     assert not torch.allclose(total, total_bad)
 
 
+def test_energy_floor_caps_degenerate_ratio():
+    # Same degenerate track: a higher floor must yield a smaller loss.
+    point_uv = torch.full((B, 2), 0.5)
+    track = point_uv.unsqueeze(1).repeat(1, N, 1)
+    traj = torch.randn(B, N, 3) * 0.01
+    lo, _ = TrajectoryProjectionLoss(weight=1.0, normalized=True,
+                                     energy_floor=1e-4)(
+        _outputs(point_uv, traj), _targets(track), _depth())
+    hi, _ = TrajectoryProjectionLoss(weight=1.0, normalized=True,
+                                     energy_floor=2.5e-3)(
+        _outputs(point_uv, traj), _targets(track), _depth())
+    assert float(hi) < float(lo)
+
+
+def test_p_rev_balance_gradient_restores_collapsed_gate():
+    # A collapsed gate (p_rev ~ 0): the balance term's gradient must push
+    # the rot logit UP (toward the target mean).
+    logits = torch.zeros(4, 2, requires_grad=True)
+    with torch.no_grad():
+        logits[:, 0] = 6.0   # p_rev ~ 0.0025 — collapsed to trans
+    p_rev_mean = logits.softmax(dim=-1)[:, 1].mean()
+    loss = (p_rev_mean - 0.225).pow(2)
+    loss.backward()
+    assert torch.all(logits.grad[:, 1] < 0)  # ascent direction raises rot
+
+
 # ----------------------------------------------------------- config chain
 
 def _load_cfg(name):
@@ -137,6 +163,9 @@ def test_g18_config_matches_spec():
     assert lp["trajectory_proj_weight"] == 0.5
     assert lp["trajectory_proj_normalized"] is True
     assert lp["depth_anchor_weight"] == 0.5
+    assert lp["trajectory_proj_energy_floor"] == 0.0025
+    assert lp["p_rev_balance_weight"] == 0.5
+    assert lp["p_rev_balance_target"] == 0.225
     for k in ("mask_weight", "point_map_weight", "coord_weight"):
         assert lp[k] == 0.5, k
     assert lp["pred_pred_art_weight"] == 0.1

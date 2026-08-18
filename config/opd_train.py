@@ -247,6 +247,20 @@ class LossParams:
     # residual by the GT track's motion energy — the gen-16 rot-collapse
     # lesson applied in uv-space.
     trajectory_proj_normalized: bool = False
+    # Floor for the per-row GT track energy in the normalized projection
+    # loss. 1e-4 = (1% of image)^2 proved too permissive in the first g18
+    # launch — near-degenerate tracks produced ratio spikes of 30-50x the
+    # baseline; 2.5e-3 = (5% of image)^2 measures shorter tracks against
+    # that scale instead.
+    trajectory_proj_energy_floor: float = 1e-4
+    # Batch-balance prior on P(revolute): weight * (mean(p_rev) - target)^2.
+    # The fallback knob the 2026-08-18 spec parked — needed immediately:
+    # the line residual is bounded <= 1 while the circle residual is
+    # unbounded early, so without this the label-free gate collapses to
+    # trans within one epoch (observed in the first g18 launch,
+    # p_rev_mean 0.44 -> 0.0015). Target = the key set's rot fraction.
+    p_rev_balance_weight: float = 0.0
+    p_rev_balance_target: float = 0.225
     # Gen-18: GT-free z_p tether — masked MSE between the lifted point's
     # depth and the INPUT depth sampled at a detached point_uv. Keeps the
     # lift calibrated when the 3D point loss is off (2D-only arms).

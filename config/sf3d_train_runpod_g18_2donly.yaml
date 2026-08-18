@@ -99,6 +99,9 @@ model:
     trajectory_proj_weight: 0.5    # THE data term (normalized, gen-16 lesson in uv-space)
     trajectory_proj_normalized: true
     depth_anchor_weight: 0.5       # GT-free z_p tether: z_p vs input depth at detached point_uv
+    trajectory_proj_energy_floor: 0.0025 # (5% of image)^2 — first-launch ratio spikes fix
+    p_rev_balance_weight: 0.5      # anti-collapse batch prior (first launch: gate died in 1 epoch)
+    p_rev_balance_target: 0.225    # rot fraction of the key set (13297/59174)
     twist_weight: 0.0              # twist machinery off
     # loss parameters
     point_sigma: 16.0              # 8 px at 256 = 16 px at 512 — same physical extent
