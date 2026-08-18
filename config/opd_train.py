@@ -243,6 +243,14 @@ class LossParams:
     # track, index-matched (ordered + direction-sensitive by construction).
     # THE data term of 2D-only pretraining; 0 disables (3D arms).
     trajectory_proj_weight: float = 0.0
+    # Gen-18 (2026-08-18 spec): per-row normalization of the projection
+    # residual by the GT track's motion energy — the gen-16 rot-collapse
+    # lesson applied in uv-space.
+    trajectory_proj_normalized: bool = False
+    # Gen-18: GT-free z_p tether — masked MSE between the lifted point's
+    # depth and the INPUT depth sampled at a detached point_uv. Keeps the
+    # lift calibrated when the 3D point loss is off (2D-only arms).
+    depth_anchor_weight: float = 0.0
     # Occam prior |omega| for settings where nothing else pins omega (video
     # pretraining and the 2D-only arm). Leave 0 where the direct twist L2
     # supervises it (3D arms).

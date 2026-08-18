@@ -985,10 +985,19 @@ class TrajectoryProjectionLoss(nn.Module):
     near-camera points overflow fp16 (see ScrewConsistencyLoss).
     """
 
-    def __init__(self, weight: float, near_plane: float = 0.05):
+    def __init__(
+        self, weight: float, near_plane: float = 0.05, normalized: bool = False
+    ):
         super().__init__()
         self.weight = weight
         self.near_plane = near_plane
+        # Gen-18 (2026-08-18 spec): per-row relative error — each row's
+        # masked MSE divided by its GT track's motion energy (track
+        # relative to its first valid point). Same philosophy as the
+        # gen-16 normalized trajectory loss: without it, big drawer pulls
+        # dwarf small door arcs in uv^2 and the rot-collapse calibration
+        # trap gets rebuilt in 2D.
+        self.normalized = normalized
 
     def _zero(self, ref: torch.Tensor) -> torch.Tensor:
         return torch.zeros((), device=ref.device, dtype=torch.float32)
@@ -1038,5 +1047,21 @@ class TrajectoryProjectionLoss(nn.Module):
             if count < 1.0:
                 return self._zero(outputs.point_uv), {}
             sq = (proj - track).pow(2).sum(-1)
-            term = (sq * mask).sum() / count
+            if self.normalized:
+                row_count = mask.sum(dim=1)                       # (B,)
+                row_ok = row_count > 0.5
+                row_mse = (sq * mask).sum(dim=1) / row_count.clamp(min=1.0)
+                # Motion energy of the GT track, relative to its FIRST
+                # VALID point (invalid rows carry [0,0] placeholders and
+                # must not define the origin of the relative frame).
+                first_idx = mask.argmax(dim=1)                    # (B,)
+                first = track[torch.arange(track.shape[0], device=device), first_idx]
+                rel = track - first.unsqueeze(1)
+                row_energy = (rel.pow(2).sum(-1) * mask).sum(dim=1) / row_count.clamp(min=1.0)
+                # eps = (0.01 of the image)^2: degenerate GT stubs damped,
+                # not amplified (the gen-16 convention, in uv units).
+                ratio = row_mse / row_energy.clamp(min=1e-4)
+                term = ratio[row_ok].mean()
+            else:
+                term = (sq * mask).sum() / count
         return self.weight * term, {"L_traj_proj": term}

@@ -89,7 +89,10 @@ class OPDRealTrainingModule(pl.LightningModule):
         # No-ops unless the model has a twist head AND the batch carries a 3D
         # origin (SF3D), same convention as the geometric losses.
         self.traj_projection_loss = TrajectoryProjectionLoss(
-            weight=getattr(self.loss_params, "trajectory_proj_weight", 0.0)
+            weight=getattr(self.loss_params, "trajectory_proj_weight", 0.0),
+            normalized=getattr(
+                self.loss_params, "trajectory_proj_normalized", False
+            ),
         )
         self.twist_loss = TwistLoss(
             weight=getattr(self.loss_params, "twist_weight", 0.5),
@@ -510,6 +513,41 @@ class OPDRealTrainingModule(pl.LightningModule):
         proj_total, proj_terms = self.traj_projection_loss(outputs, targets, depth)
         total_loss = total_loss + proj_total
         geometric_terms = {**geometric_terms, **proj_terms}
+
+        # Gen-18 z_p depth tether (2026-08-18 spec): GT-free — the lifted
+        # point's depth vs the INPUT depth at a DETACHED point_uv (the
+        # tether teaches the lift, not the heatmap; depth holes masked).
+        _da_w = getattr(self.loss_params, "depth_anchor_weight", 0.0)
+        if (
+            _da_w > 0.0
+            and outputs.point_3d_pred is not None
+            and outputs.point_uv is not None
+            and depth is not None
+        ):
+            _grid = (outputs.point_uv.detach().float() * 2.0 - 1.0).view(-1, 1, 1, 2)
+            _z_in = F.grid_sample(
+                depth.float(), _grid, align_corners=False
+            ).view(-1)
+            _z_ok = (_z_in > 1e-3).float()
+            _z_pred = outputs.point_3d_pred[..., 2].float()
+            L_depth_anchor = (
+                ((_z_pred - _z_in).pow(2) * _z_ok).sum() / _z_ok.sum().clamp(min=1.0)
+            )
+            total_loss = total_loss + _da_w * L_depth_anchor
+            grad_terms["depth_anchor"] = _da_w * L_depth_anchor
+            self.log(
+                f"{step_type}/L_depth_anchor", L_depth_anchor,
+                on_step=(step_type == "train"), on_epoch=True, logger=True,
+                sync_dist=True,
+            )
+
+        # Branch-collapse watch for label-free arms: batch-mean P(revolute).
+        if step_type == "train" and outputs.motion_type_logits is not None:
+            self.log(
+                "train/p_rev_mean",
+                outputs.motion_type_logits.detach().float().softmax(dim=-1)[:, 1].mean(),
+                on_step=False, on_epoch=True, logger=True, sync_dist=True,
+            )
         for term_name, term_value in geometric_terms.items():
             self.log(
                 f"{step_type}/{term_name}",
