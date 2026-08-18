@@ -51,4 +51,4 @@ around the 0.5 IoU gate rather than a mask regression.
 **GEN-17 IS THE NEW OVERALL BEST** (best-epoch18-valloss0.9272.ckpt):
 g16's trajectories + record type/MA/origin/radius/point metrics.
 
-vis: viz/20260818_sf3d_g17_vs_g16_panels (pending)
+vis: viz/20260818_sf3d_g17_vs_g16_panels
