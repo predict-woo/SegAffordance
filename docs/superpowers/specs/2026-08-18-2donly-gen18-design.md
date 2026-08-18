@@ -30,7 +30,14 @@ track, and the model's internal consistency.
   motion_type_weight, origin_weight, origin_map_weight, point_3d_weight.
 - **Kept (2D GT):** mask/point_map/coord @ 0.5, GT-mask pooling.
 - **Logging:** batch-mean p_rev (`train/p_rev_mean`) to watch for branch
-  collapse; parked fallback (NOT implemented): batch-balance prior.
+  collapse.
+- **Balance prior (UN-parked after launch 1, 2026-08-18):** the first
+  launch collapsed the gate within one epoch (p_rev_mean 0.44 → 0.0015) —
+  the line residual is bounded ≤ 1, the circle residual is not, so
+  trans-everywhere is the cheapest descent. `p_rev_balance_weight: 0.5` on
+  `(mean(p_rev) − 0.225)²` (target = key-set rot fraction) constrains only
+  the batch mean. Same launch also showed 30–50× outlier ratios from
+  near-degenerate tracks → `trajectory_proj_energy_floor: 0.0025`.
 
 ## Config
 
