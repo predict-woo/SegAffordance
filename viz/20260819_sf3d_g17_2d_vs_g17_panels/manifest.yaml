@@ -1,0 +1,20 @@
+command: tools/sf3d_vis_predictions.py --model g17splitax config/sf3d_train_runpod_g17_splitax.yaml
+  experiments/20260818_sf3d_g17_splitax/checkpoints/best-epoch18-valloss0.9272.ckpt
+  --model g17-2donly config/sf3d_train_runpod_g17_2donly.yaml experiments/20260818_sf3d_g17_2donly/checkpoints/best-epoch27-valloss2.3453.ckpt
+  --data-root /workspace/datasets/sf3d_processed_v3 --frame-cache-path /workspace/datasets/sf3d_frames_512.lmdb
+  --input-size 512 --key-cache /workspace/cache/sf3d_v2_keys_cutoff05_minrad010_maskfrac0010_edge05.pkl
+  --min-revolute-radius 0.10 --min-mask-area-frac 0.001 --edge-margin-frac 0.05 --num
+  16 --seed 42421 --out viz/20260819_sf3d_g17_2d_vs_g17_panels
+tool_commit: 0a917bb
+generated: '2026-08-19T05:47:37+00:00'
+models:
+- name: g17splitax
+  config: config/sf3d_train_runpod_g17_splitax.yaml
+  ckpt: experiments/20260818_sf3d_g17_splitax/checkpoints/best-epoch18-valloss0.9272.ckpt
+- name: g17-2donly
+  config: config/sf3d_train_runpod_g17_2donly.yaml
+  ckpt: experiments/20260818_sf3d_g17_2donly/checkpoints/best-epoch27-valloss2.3453.ckpt
+num: 16
+seed: 42421
+data_root: /workspace/datasets/sf3d_processed_v3
+key_cache: /workspace/cache/sf3d_v2_keys_cutoff05_minrad010_maskfrac0010_edge05.pkl

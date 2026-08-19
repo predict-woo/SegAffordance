@@ -54,4 +54,4 @@ direction and gate survival, but not a usable pretraining checkpoint as-is
 finetune-from-2D-vs-scratch payoff experiment is NOT worth running on this
 checkpoint; fix the interference first if 2D-only stays a priority.
 
-vis: (none — metrics tell the story; panels would show empty masks)
+vis: viz/20260819_sf3d_g17_2d_vs_g17_panels
