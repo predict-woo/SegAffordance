@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gen-17: The Final Structure</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 0; background: #f6f7f9; color: #1c2733; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 28px 32px 60px; }
+  h1 { font-size: 26px; margin: 8px 0 4px; }
+  h2 { font-size: 19px; margin: 34px 0 10px; border-bottom: 2px solid #d7dde5; padding-bottom: 6px; }
+  p.lead { color: #45566b; margin: 4px 0 18px; max-width: 950px; }
+  .card { background: #fff; border: 1px solid #e1e6ec; border-radius: 10px; padding: 18px 20px; margin: 14px 0; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .row .card { flex: 1 1 360px; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 10px; margin-bottom: 8px; }
+  .old { background: #e3ecf9; color: #23508e; }
+  .new { background: #e0f3e6; color: #1e7a3c; }
+  .bad { background: #fde8d8; color: #a03a25; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .cap { font-size: 13px; color: #5b6b7d; margin-top: 8px; line-height: 1.45; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { border: 1px solid #dde3ea; padding: 6px 9px; text-align: left; vertical-align: top; }
+  th { background: #eef1f5; }
+  td.good { background: #e9f6ee; font-weight: 600; }
+  td.poor { background: #fdeee6; }
+  td.na { color: #9aa7b4; background: #f4f6f8; }
+  .note { background: #eef4fb; border-left: 4px solid #3d7cc9; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px; color: #2c4157; }
+  .warn { background: #fdf3e7; border-left: 4px solid #d68a2e; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px; color: #5a4327; }
+  .kill { background: #eaf6ee; border-left: 4px solid #1e7a3c; padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 15px; color: #1d4a2c; }
+  code { background: #eef1f5; border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+  .big { font-size: 28px; font-weight: 700; line-height: 1.1; }
+  .stat { text-align: center; padding: 12px 8px; }
+  .stat .lbl { font-size: 12.5px; color: #5b6b7d; margin-top: 4px; line-height: 1.35; }
+  ul { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; line-height: 1.45; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Gen-17 (08-18): split axis heads — the week's final structure, and where it stands</h1>
+<p class="lead">
+The last structural change of the week, and the smallest: one 3-vector
+axis readout becomes two. It produced the <b>new overall-best
+checkpoint</b> — best-ever type, origin, radius, and point metrics on top
+of gen-16's restored trajectories — and it is the base gen-17-2D's 2D-only
+experiment now trains on.
+</p>
+
+<h2>1 &middot; The structure: why one axis head was wrong, and what replaced it</h2>
+<div class="row">
+  <div class="card">
+    <span class="tag bad">Before (gen-6 &hellip; gen-16): one readout, two physical quantities</span>
+    <svg viewBox="0 0 560 250" width="100%">
+      <defs><marker id="m1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#7a8ca0"/></marker></defs>
+      <rect x="170" y="12" width="220" height="44" rx="7" fill="#e3ecf9" stroke="#23508e"/>
+      <text x="280" y="31" font-size="13" text-anchor="middle" font-weight="600">shared trunk (MotionMLP)</text>
+      <text x="280" y="47" font-size="11" text-anchor="middle" fill="#45566b">condition vector &rarr; 256</text>
+      <line x1="280" y1="56" x2="280" y2="84" stroke="#7a8ca0" marker-end="url(#m1)"/>
+      <rect x="150" y="86" width="260" height="52" rx="7" fill="#fde8d8" stroke="#c0392b"/>
+      <text x="280" y="107" font-size="13" text-anchor="middle" font-weight="600">motion_head — ONE for both</text>
+      <text x="280" y="124" font-size="11" text-anchor="middle" fill="#7a3b2e">Linear(256, 3), 1&minus;cos over ALL rows</text>
+      <line x1="220" y1="138" x2="160" y2="172" stroke="#7a8ca0" marker-end="url(#m1)"/>
+      <line x1="340" y1="138" x2="400" y2="172" stroke="#7a8ca0" marker-end="url(#m1)"/>
+      <text x="140" y="192" font-size="12" text-anchor="middle" fill="#45566b">rot rows: hinge axis</text>
+      <text x="140" y="208" font-size="11.5" text-anchor="middle" fill="#a03a25">&perp; to the motion</text>
+      <text x="420" y="192" font-size="12" text-anchor="middle" fill="#45566b">trans rows: slide direction</text>
+      <text x="420" y="208" font-size="11.5" text-anchor="middle" fill="#a03a25">= the motion itself</text>
+      <text x="280" y="238" font-size="12" text-anchor="middle" fill="#c0392b" font-weight="600">type-ambiguous sample &rarr; cos-optimum = probability-weighted BLEND — wrong for both</text>
+    </svg>
+    <p class="cap">Two different physical quantities forced through one
+    output. (The rival explanation — the sigmoid-octant constraint — was
+    tested first and <b>refuted</b>: the segmenter rescales to
+    (&minus;1,&thinsp;1), full sphere reachable. The blend hypothesis
+    survived; g16's measured 12.7% rot flip rate set the baseline.)</p>
+  </div>
+  <div class="card">
+    <span class="tag new">Gen-17: per-type readouts, shared trunk (<code>split_axis_heads</code>)</span>
+    <svg viewBox="0 0 560 250" width="100%">
+      <defs><marker id="m2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#7a8ca0"/></marker></defs>
+      <rect x="170" y="12" width="220" height="44" rx="7" fill="#e3ecf9" stroke="#23508e"/>
+      <text x="280" y="31" font-size="13" text-anchor="middle" font-weight="600">shared trunk — unchanged</text>
+      <text x="280" y="47" font-size="11" text-anchor="middle" fill="#45566b">still trains on every row</text>
+      <line x1="210" y1="56" x2="130" y2="84" stroke="#7a8ca0" marker-end="url(#m2)"/>
+      <line x1="280" y1="56" x2="280" y2="84" stroke="#7a8ca0" marker-end="url(#m2)"/>
+      <line x1="350" y1="56" x2="430" y2="84" stroke="#7a8ca0" marker-end="url(#m2)"/>
+      <rect x="30" y="86" width="180" height="48" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="120" y="106" font-size="12.5" text-anchor="middle" font-weight="600">type_head</text>
+      <text x="120" y="122" font-size="11" text-anchor="middle" fill="#5b6b7d">unchanged</text>
+      <rect x="220" y="86" width="140" height="48" rx="7" fill="#e0f3e6" stroke="#1e7a3c"/>
+      <text x="290" y="106" font-size="12.5" text-anchor="middle" font-weight="600">motion_head_rot</text>
+      <text x="290" y="122" font-size="11" text-anchor="middle" fill="#3c6e4c">hinge axis only</text>
+      <rect x="370" y="86" width="150" height="48" rx="7" fill="#e0f3e6" stroke="#1e7a3c"/>
+      <text x="445" y="106" font-size="12.5" text-anchor="middle" font-weight="600">motion_head_trans</text>
+      <text x="445" y="122" font-size="11" text-anchor="middle" fill="#3c6e4c">slide direction only</text>
+      <text x="280" y="164" font-size="12" text-anchor="middle" fill="#2c4157"><tspan font-weight="600">train:</tspan> axis loss GT-routed per row — each head only ever sees its own quantity</text>
+      <text x="280" y="184" font-size="12" text-anchor="middle" fill="#2c4157"><tspan font-weight="600">test:</tspan> row-wise selection by the predicted type</text>
+      <text x="280" y="204" font-size="12" text-anchor="middle" fill="#2c4157"><tspan font-weight="600">L_pp:</tspan> line branch reads the trans candidate, circle branch the rot candidate</text>
+      <text x="280" y="232" font-size="12" text-anchor="middle" fill="#1e7a3c" font-weight="600">trajectory head shared, origin path untouched — one change, confined</text>
+    </svg>
+    <p class="cap">Full stack around it (finalized 08-16/17): frozen DINOv3
+    ViT-L/16 + dino.txt @512, v3 data, 59k split, origin local sample,
+    normalized L_pp @0.1, GT-energy-normalized trajectory loss @0.5.
+    RTX PRO 6000, 30 epochs, ~4 h, best = epoch 18 (val 0.9272 vs g16's
+    1.0123 — comparable composition, a real drop).</p>
+  </div>
+</div>
+
+<h2>2 &middot; Headline: five best-evers in one run</h2>
+<div class="row">
+  <div class="card stat"><div class="big" style="color:#1e7a3c">95.34</div><div class="lbl">type acc — <b>best ever</b> (+3.0 vs g16);<br>the trunk no longer smears type into<br>a compromise axis</div></div>
+  <div class="card stat"><div class="big" style="color:#1e7a3c">0.257 m</div><div class="lbl">origin vs q* — <b>best ever</b><br>(&minus;4.6 cm vs g16, beats g15's 0.279 record);<br>L_pp's circle branch finally reads a pure hinge axis</div></div>
+  <div class="card stat"><div class="big" style="color:#1e7a3c">0.1215 m</div><div class="lbl">radius error — <b>best ever</b> (&minus;13% vs g16)</div></div>
+  <div class="card stat"><div class="big" style="color:#1e7a3c">0.0952 / 0.2315</div><div class="lbl">2D / 3D point — <b>both best ever</b></div></div>
+  <div class="card stat"><div class="big" style="color:#1e7a3c">94.91 / 0.811</div><div class="lbl">traj_dir acc / cos — project bests,<br>on top of g16's full-scale sweeps</div></div>
+</div>
+
+<h2>3 &middot; Metrics vs the comparable arms (same 5,088-sample test split)</h2>
+<div class="card">
+<table>
+  <tr>
+    <th>metric</th>
+    <th>g11b<br><span style="font-weight:400">CLIP @256</span></th>
+    <th>g12<br><span style="font-weight:400">dinov3 @256</span></th>
+    <th>g13<br><span style="font-weight:400">+512</span></th>
+    <th>g16<br><span style="font-weight:400">+traj-norm</span></th>
+    <th>g17<br><span style="font-weight:400">+split heads</span></th>
+  </tr>
+  <tr><td>type acc (%)</td><td>91.25</td><td>91.45</td><td>93.04</td><td>92.32</td><td class="good">95.34&thinsp;&#9733;</td></tr>
+  <tr><td>axis&deg; all / matched</td><td>28.08 / 14.62</td><td class="poor">37.13 / 29.08</td><td>27.90 / 16.72</td><td>28.25 / 17.83</td><td class="good">25.83 / 16.93</td></tr>
+  <tr><td>MA pass (%)</td><td>22.56</td><td class="poor">12.11</td><td class="good">26.18</td><td>23.09</td><td class="good">25.86</td></tr>
+  <tr><td>origin vs q* / line (m)</td><td>0.362 / 0.318</td><td>0.326 / 0.296</td><td>0.294 / 0.266</td><td>0.303 / 0.274</td><td class="good">0.257 / 0.230&thinsp;&#9733;</td></tr>
+  <tr><td>radius err (m)</td><td>0.1732</td><td>0.1734</td><td>0.1332</td><td>0.1391</td><td class="good">0.1215&thinsp;&#9733;</td></tr>
+  <tr><td>2D point</td><td>0.1591</td><td>0.1138</td><td>0.0998</td><td>0.0988</td><td class="good">0.0952&thinsp;&#9733;</td></tr>
+  <tr><td>3D point (m)</td><td>0.3045</td><td>0.2529</td><td>0.2379</td><td>0.2488</td><td class="good">0.2315&thinsp;&#9733;</td></tr>
+  <tr><td>traj_dir acc / cos&thinsp;&dagger;</td><td class="poor">84.8 / 0.594</td><td class="poor">84.7 / 0.601</td><td class="poor">86.2 / 0.633</td><td>94.5 / 0.798</td><td class="good">94.9 / 0.811&thinsp;&#9733;</td></tr>
+  <tr><td>mIoU</td><td>0.1467</td><td>0.1599</td><td class="good">0.2655</td><td>0.2636</td><td>0.2654</td></tr>
+  <tr><td>PDet (%)</td><td>6.07</td><td>5.09</td><td class="good">21.38</td><td>21.44</td><td class="poor">20.56</td></tr>
+  <tr><td>signed axis&deg; all</td><td class="na">&mdash; (metric added 08-18)</td><td class="na">&mdash;</td><td class="na">&mdash;</td><td>33.91</td><td>33.08</td></tr>
+  <tr><td>flip rate rot (%)</td><td class="na">&mdash;</td><td class="na">&mdash;</td><td class="na">&mdash;</td><td>12.73</td><td class="poor">13.30</td></tr>
+</table>
+<p class="cap">&#9733; = best ever. &dagger; g11b/g12/g13 trained with the
+raw trajectory loss at w=0.15 and had silently collapsed rotational sweeps
+— their traj rows are not real motion. All five arms share the v3 data,
+59k split, and identical test set; g11b is the CLIP reference the DINOv3
+switch was judged against.</p>
+</div>
+
+<h2>4 &middot; Honest accounting</h2>
+<div class="row">
+  <div class="card">
+    <span class="tag bad">The goal it did NOT meet</span>
+    <p style="font-size:14px; line-height:1.5; margin:6px 0">The rot
+    sign-flip rate — the metric that motivated the change — did not
+    improve: <b>13.30% vs 12.73%</b>. Flips are evidently not caused by
+    cross-type interference; the model still cannot tell which way a
+    fridge or window opens from appearance alone. Recorded candidates:
+    sign-consistency with the predicted sweep, or handle-position cues.</p>
+  </div>
+  <div class="card">
+    <span class="tag old">The only cost</span>
+    <p style="font-size:14px; line-height:1.5; margin:6px 0">PDet
+    &minus;0.9 (21.44 &rarr; 20.56) with mIoU flat — reads as threshold
+    noise around the 0.5-IoU gate, not a mask regression. Everything else
+    improved or held.</p>
+  </div>
+</div>
+
+<div class="kill" style="margin-top:16px"><b>GEN-17 IS THE NEW OVERALL
+BEST</b> (<code>best-epoch18-valloss0.9272.ckpt</code>): gen-16's
+full-scale trajectories + record type / MA / origin / radius / point
+metrics. It closes the week's loop — the type-vs-geometry entanglement
+that the twist era paid for with |&omega;| hedging is now resolved
+structurally, one readout per physical quantity — and it is the base
+gen-17-2D's 2D-only supervision experiment trains on.</div>
+
+<p class="cap" style="margin-top:26px">Sources:
+<code>experiments/20260818_sf3d_g17_splitax/notes.md</code> &middot;
+<code>experiments/20260817_sf3d_g16_trajnorm/notes.md</code> (sign-aware baseline) &middot;
+<code>docs/superpowers/specs/2026-08-18-split-axis-heads-gen17-design.md</code> &middot;
+axis-sign probe: commit <code>fcdf16f</code> (octant hypothesis refuted) &middot;
+panels: <code>viz/20260818_sf3d_g17_vs_g16_panels</code></p>
+
+</div>
+</body>
+</html>

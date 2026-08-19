@@ -1,4 +1,4 @@
-# 20260818_sf3d_g18_2donly — 2D-only training on the g17 stack
+# 20260818_sf3d_g17_2donly — 2D-only training on the g17 stack
 
 **Recipe:** the g17 model VERBATIM trained with zero 3D GT (spec
 2026-08-18): data term = normalized TrajectoryProjectionLoss @0.5
@@ -16,7 +16,7 @@ launch 2's p_rev_mean held 0.15–0.17 throughout.
 
 ## Test (best-epoch27, 5,088 samples) vs g17 [3D-supervised]
 
-| metric | g17 | g18 2D-only | read |
+| metric | g17 | g17-2d 2D-only | read |
 |---|---|---|---|
 | traj_dir acc / cos | 94.9 / 0.811 | **80.96 / 0.379** | REAL signal — direction far above the 50% chance floor, from ordered 2D matching alone |
 | type acc | 95.3 | 75.2 | ≈ the 77.5% majority-trans baseline — gate stayed ALIVE (16% rot calls) but L_pp did not sort samples; weak/no separation |

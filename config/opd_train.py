@@ -243,12 +243,12 @@ class LossParams:
     # track, index-matched (ordered + direction-sensitive by construction).
     # THE data term of 2D-only pretraining; 0 disables (3D arms).
     trajectory_proj_weight: float = 0.0
-    # Gen-18 (2026-08-18 spec): per-row normalization of the projection
+    # Gen-17-2D (2026-08-18 spec): per-row normalization of the projection
     # residual by the GT track's motion energy — the gen-16 rot-collapse
     # lesson applied in uv-space.
     trajectory_proj_normalized: bool = False
     # Floor for the per-row GT track energy in the normalized projection
-    # loss. 1e-4 = (1% of image)^2 proved too permissive in the first g18
+    # loss. 1e-4 = (1% of image)^2 proved too permissive in the first g17-2d
     # launch — near-degenerate tracks produced ratio spikes of 30-50x the
     # baseline; 2.5e-3 = (5% of image)^2 measures shorter tracks against
     # that scale instead.
@@ -257,11 +257,11 @@ class LossParams:
     # The fallback knob the 2026-08-18 spec parked — needed immediately:
     # the line residual is bounded <= 1 while the circle residual is
     # unbounded early, so without this the label-free gate collapses to
-    # trans within one epoch (observed in the first g18 launch,
+    # trans within one epoch (observed in the first g17-2d launch,
     # p_rev_mean 0.44 -> 0.0015). Target = the key set's rot fraction.
     p_rev_balance_weight: float = 0.0
     p_rev_balance_target: float = 0.225
-    # Gen-18: GT-free z_p tether — masked MSE between the lifted point's
+    # Gen-17-2D: GT-free z_p tether — masked MSE between the lifted point's
     # depth and the INPUT depth sampled at a detached point_uv. Keeps the
     # lift calibrated when the 3D point loss is off (2D-only arms).
     depth_anchor_weight: float = 0.0

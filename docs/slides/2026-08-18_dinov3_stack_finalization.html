@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DINOv3 Stack Finalization</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 0; background: #f6f7f9; color: #1c2733; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 28px 32px 60px; }
+  h1 { font-size: 26px; margin: 8px 0 4px; }
+  h2 { font-size: 19px; margin: 34px 0 10px; border-bottom: 2px solid #d7dde5; padding-bottom: 6px; }
+  p.lead { color: #45566b; margin: 4px 0 18px; max-width: 950px; }
+  .card { background: #fff; border: 1px solid #e1e6ec; border-radius: 10px; padding: 18px 20px; margin: 14px 0; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .row .card { flex: 1 1 360px; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 10px; margin-bottom: 8px; }
+  .old { background: #e3ecf9; color: #23508e; }
+  .new { background: #e0f3e6; color: #1e7a3c; }
+  .bad { background: #fde8d8; color: #a03a25; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .cap { font-size: 13px; color: #5b6b7d; margin-top: 8px; line-height: 1.45; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { border: 1px solid #dde3ea; padding: 6px 9px; text-align: left; vertical-align: top; }
+  th { background: #eef1f5; }
+  td.good { background: #e9f6ee; font-weight: 600; }
+  td.poor { background: #fdeee6; }
+  td.na { color: #9aa7b4; background: #f4f6f8; }
+  .note { background: #eef4fb; border-left: 4px solid #3d7cc9; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px; color: #2c4157; }
+  .warn { background: #fdf3e7; border-left: 4px solid #d68a2e; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px; color: #5a4327; }
+  .kill { background: #eaf6ee; border-left: 4px solid #1e7a3c; padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 15px; color: #1d4a2c; }
+  code { background: #eef1f5; border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+  .big { font-size: 30px; font-weight: 700; line-height: 1.1; }
+  .stat { text-align: center; padding: 12px 8px; }
+  .stat .lbl { font-size: 12.5px; color: #5b6b7d; margin-top: 4px; line-height: 1.35; }
+  ul { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; line-height: 1.45; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>DINOv3 stack finalization (08-16 &rarr; 08-17): baseline, three staged bets, one fix</h1>
+<p class="lead">
+Method first: a two-agent literature sweep
+(<code>knowledge/dinov3-dense-adapter-survey.md</code>) produced ONE spec
+with three independent, flag-gated stages — <b>R</b>esolution 512, DPT-style
+<b>T</b>aps, text <b>C</b>ost map — run as <i>sequential single-flag
+experiments</i> for clean pairwise attribution on the gen-12 baseline. Two
+days later the finalized structure is <b>g12 + R + normalized trajectory
+loss</b>: one stage adopted, one rejected, one deferred, and the recipe's
+one latent defect (rot-sweep collapse) fixed. All arms: frozen DINOv3
+ViT-L/16 + dino.txt, v3 data, 59k split, 5,088 test samples.
+</p>
+
+<h2>1 &middot; Gen-12 (08-16) — the baseline: dino.txt wins "where", loses "which way"</h2>
+<div class="row">
+  <div class="card">
+    <span class="tag new">Every localization metric: family best (vs g11b CLIP)</span>
+    <ul>
+      <li>2D point <b>0.1138</b> (&minus;28%), 3D point <b>0.2529 m</b> (&minus;17%)</li>
+      <li>origin vs q* / line <b>0.3259 / 0.2964 m</b> (&minus;3.6 / &minus;2.2 cm)</li>
+      <li>mIoU <b>0.1599</b> (+1.3 pts), radius 0.1734 (tied)</li>
+    </ul>
+  </div>
+  <div class="card">
+    <span class="tag bad">The axis head is the casualty</span>
+    <ul>
+      <li>axis&deg; all / matched <b>37.1 / 29.1</b> (CLIP: 28.1 / 14.6) — matched error <b>doubled</b>, MA pass halved (12.1 vs 22.6)</li>
+      <li>normalized L_pp probe <b>0.199</b> (CLIP family ~0.054) — the triad is far less mutually consistent, dominated by axis error</li>
+      <li>Suspect: the single-final-layer pyramid starves the direction readout — exactly what stage T was designed to test</li>
+    </ul>
+  </div>
+</div>
+
+<h2>2 &middot; The staged chain and what survived</h2>
+<div class="card">
+<svg viewBox="0 0 1160 260" width="100%">
+  <defs><marker id="s" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#7a8ca0"/></marker></defs>
+  <rect x="10" y="70" width="170" height="90" rx="8" fill="#e3ecf9" stroke="#23508e"/>
+  <text x="95" y="98" font-size="13" text-anchor="middle" font-weight="700">g12 baseline</text>
+  <text x="95" y="116" font-size="11" text-anchor="middle" fill="#45566b">dinov3 + dino.txt @256</text>
+  <text x="95" y="132" font-size="11" text-anchor="middle" fill="#45566b">single-final-layer pyramid</text>
+  <line x1="180" y1="115" x2="225" y2="115" stroke="#7a8ca0" stroke-width="1.5" marker-end="url(#s)"/>
+
+  <rect x="230" y="70" width="190" height="90" rx="8" fill="#e0f3e6" stroke="#1e7a3c" stroke-width="2"/>
+  <text x="325" y="93" font-size="13" text-anchor="middle" font-weight="700">g13 &middot; stage R: 512 px</text>
+  <text x="325" y="111" font-size="11" text-anchor="middle" fill="#3c6e4c">mIoU +66%, PDet 4.2&times;</text>
+  <text x="325" y="127" font-size="11" text-anchor="middle" fill="#3c6e4c">axis repaired (&minus;12.4&deg; matched)</text>
+  <text x="325" y="148" font-size="12" text-anchor="middle" fill="#1e7a3c" font-weight="700">ADOPTED</text>
+  <line x1="420" y1="115" x2="465" y2="115" stroke="#7a8ca0" stroke-width="1.5" marker-end="url(#s)"/>
+
+  <rect x="470" y="70" width="190" height="90" rx="8" fill="#fde8d8" stroke="#c0392b"/>
+  <text x="565" y="93" font-size="13" text-anchor="middle" font-weight="700">g14 &middot; stage T: DPT taps</text>
+  <text x="565" y="111" font-size="11" text-anchor="middle" fill="#7a3b2e">type &minus;2.3, matched axis +3.1&deg;</text>
+  <text x="565" y="127" font-size="11" text-anchor="middle" fill="#7a3b2e">MA &minus;4.8, consistency worse</text>
+  <text x="565" y="148" font-size="12" text-anchor="middle" fill="#c0392b" font-weight="700">REJECTED (flag kept)</text>
+  <line x1="660" y1="115" x2="705" y2="115" stroke="#7a8ca0" stroke-width="1.5" marker-end="url(#s)"/>
+
+  <rect x="710" y="70" width="200" height="90" rx="8" fill="#fdf3e7" stroke="#d68a2e"/>
+  <text x="810" y="93" font-size="13" text-anchor="middle" font-weight="700">g15 &middot; stage C: cost map</text>
+  <text x="810" y="111" font-size="11" text-anchor="middle" fill="#5a4327">family-best origin/radius,</text>
+  <text x="810" y="127" font-size="11" text-anchor="middle" fill="#5a4327">+2.7 traj_dir — but rides on taps</text>
+  <text x="810" y="148" font-size="12" text-anchor="middle" fill="#d68a2e" font-weight="700">DEFERRED (retest w/o taps)</text>
+
+  <line x1="325" y1="160" x2="325" y2="200" stroke="#1e7a3c" stroke-width="1.5" marker-end="url(#s)"/>
+  <rect x="230" y="202" width="360" height="50" rx="8" fill="#e0f3e6" stroke="#1e7a3c" stroke-width="2"/>
+  <text x="410" y="223" font-size="13" text-anchor="middle" font-weight="700">g16 &middot; + normalized trajectory loss @0.5</text>
+  <text x="410" y="241" font-size="11.5" text-anchor="middle" fill="#3c6e4c">= NEW OVERALL BEST &rarr; the base for gen-17/18</text>
+  <text x="700" y="228" font-size="12" fill="#5b6b7d">chain attribution is pairwise: g13&minus;g12 = resolution,</text>
+  <text x="700" y="244" font-size="12" fill="#5b6b7d">g14&minus;g13 = taps, g15&minus;g14 = cost map (cost map alone: never run)</text>
+</svg>
+</div>
+
+<h2>3 &middot; Stage results in one table</h2>
+<div class="card">
+<table>
+  <tr>
+    <th>metric</th>
+    <th>g12<br><span style="font-weight:400">@256</span></th>
+    <th>g13<br><span style="font-weight:400">+512</span></th>
+    <th>g14<br><span style="font-weight:400">+taps</span></th>
+    <th>g15<br><span style="font-weight:400">+cost map</span></th>
+    <th>g16<br><span style="font-weight:400">g13 + traj-norm</span></th>
+  </tr>
+  <tr><td>mIoU</td><td class="poor">0.1599</td><td class="good">0.2655&thinsp;&#9733;</td><td>0.2681</td><td>0.2585</td><td>0.2636</td></tr>
+  <tr><td>PDet (%)</td><td class="poor">5.09</td><td class="good">21.38&thinsp;&#9733;</td><td>23.05</td><td>21.97</td><td>21.44</td></tr>
+  <tr><td>2D point</td><td>0.1138</td><td>0.0998</td><td>0.1040</td><td>0.1015</td><td class="good">0.0988&thinsp;&#9733;</td></tr>
+  <tr><td>3D point (m)</td><td>0.2529</td><td>0.2379</td><td class="good">0.2230</td><td>0.2258</td><td>0.2488</td></tr>
+  <tr><td>origin q* / line (m)</td><td>0.326 / 0.296</td><td>0.294 / 0.266</td><td>0.293 / 0.262</td><td class="good">0.279 / 0.252</td><td>0.303 / 0.274</td></tr>
+  <tr><td>radius err (m)</td><td>0.1734</td><td>0.1332</td><td>0.1380</td><td class="good">0.1285</td><td>0.1391</td></tr>
+  <tr><td>axis&deg; all / matched</td><td class="poor">37.1 / 29.1</td><td class="good">27.9 / 16.7</td><td>27.1 / 19.8</td><td>&mdash; / 18.1</td><td>28.3 / 17.8</td></tr>
+  <tr><td>MA pass (%)</td><td class="poor">12.11</td><td class="good">26.18</td><td>21.42</td><td>&mdash;</td><td>23.05</td></tr>
+  <tr><td>type acc (%)</td><td>91.45</td><td class="good">93.04</td><td class="poor">90.72</td><td>90.23</td><td>92.32</td></tr>
+  <tr><td>traj_dir acc / cos&thinsp;&dagger;</td><td class="poor">84.7 / 0.601</td><td class="poor">86.2 / 0.633</td><td class="poor">86.5 / 0.623</td><td class="poor">89.2 / 0.684</td><td class="good">94.5 / 0.798&thinsp;&#9733;</td></tr>
+  <tr><td>L_pp_norm (probe)</td><td class="poor">0.199</td><td>0.104</td><td>0.143</td><td>0.129</td><td>0.155&thinsp;&Dagger;</td></tr>
+</table>
+<p class="cap">&#9733; = project record at the time. &dagger; every
+trajectory_weight = 0.15 arm (g12&ndash;g15) had silently <b>collapsed
+rotational sweeps</b> (see &sect;4) — their traj rows are not trustworthy
+motion. &Dagger; g16's higher probe value is honest, not worse: full-scale
+sweeps EXPOSE axis/origin inconsistency the collapsed sweeps hid.
+g13-class runs cost ~$8 each (~3.7 h on RTX PRO 6000, 2&ndash;3&times; the
+256-px compute); g13/g14/g15 ran in parallel since attribution is pairwise.</p>
+</div>
+
+<h2>4 &middot; Gen-16 (08-17): the collapse fix that completed the structure</h2>
+<div class="row">
+  <div class="card">
+    <span class="tag bad">The defect</span>
+    <p style="font-size:14px; line-height:1.5; margin:6px 0">Every w=0.15 arm
+    predicted near-zero rotational sweeps: g13's mean rot sweep
+    <b>0.067 m</b> on val93 and <b>0.041 m</b> on val1684 — flat arcs
+    masquerading as trajectories, while flat-looking traj losses hid it.
+    Cause: the raw MSE trajectory loss prices a full-scale wrong-direction
+    arc higher than a collapsed one; at w=0.15 collapse is the cheap
+    minimum.</p>
+  </div>
+  <div class="card">
+    <span class="tag old">Pre-launch validation (cheap, decisive)</span>
+    <p style="font-size:14px; line-height:1.5; margin:6px 0">A 300-step
+    fine-tune probe on g13's collapsed checkpoint
+    (<code>tools/diag_traj_collapse_test.py</code>): with the normalized
+    loss, rot sweeps grew <b>0.083 &rarr; 0.192 m</b> (22/26 samples
+    &gt;1.5&times;); the old-recipe control shrank them further
+    <b>0.083 &rarr; 0.022 m</b> (0/26). Hypothesis confirmed before
+    spending a full run.</p>
+  </div>
+  <div class="card">
+    <span class="tag new">The fix &amp; result — all spec gates passed</span>
+    <ul>
+      <li>Per-row GT-energy-normalized trajectory loss, weight restored to <b>0.5</b></li>
+      <li>Rot sweeps restored: val93 <b>0.436 m</b>, val1684 <b>0.791 m</b> (gate: &gt;0.2)</li>
+      <li>traj_dir <b>94.46% / cos 0.798</b> — project-best direction</li>
+      <li>g13 records held (mIoU 0.2636, 2D point 0.0988 best-ever); price: MA &minus;3.1, matched axis +1.1&deg;</li>
+    </ul>
+  </div>
+</div>
+
+<h2>5 &middot; The finalized structure</h2>
+<div class="kill">
+<b>Adopted stack (the gen-17/18 base):</b> frozen DINOv3 ViT-L/16 +
+dino.txt &middot; input <b>512</b> (stage R) &middot; single-final-layer
+pyramid (<b>no taps</b> — stage T rejected: at 512 the final layer keeps
+enough spatial detail, early taps dilute the semantically-aligned
+features) &middot; <b>no cost map</b> (stage C deferred — its
+origin/radius/traj_dir gains are real but confounded with the taps;
+"g13 + cost map without taps" is a recorded candidate) &middot; v3 data,
+59k split &middot; origin local sample &middot; normalized L_pp @0.1
+&middot; <b>GT-energy-normalized trajectory loss @0.5</b> (gen-16).
+Gen-16 best-epoch21 = the new overall-best checkpoint: g13-class masks +
+real full-scale trajectories.
+</div>
+<div class="note" style="margin-top:12px"><b>Also banked from g16's
+checkpoint (08-18):</b> the sign-aware axis re-test — signed axis error
+33.9&deg; vs 28.3&deg; unsigned, flip rate <b>12.7%</b> on rotational
+samples (door swings predicted in the wrong hemisphere) — the measured
+baseline that motivated gen-17's split axis heads.</div>
+
+<p class="cap" style="margin-top:26px">Sources:
+<code>experiments/20260816_sf3d_g12_dinov3/notes.md</code> &middot;
+<code>experiments/20260817_sf3d_g13_res512/notes.md</code> &middot;
+<code>experiments/20260817_sf3d_g14_taps/notes.md</code> &middot;
+<code>experiments/20260817_sf3d_g15_costmap/notes.md</code> &middot;
+<code>experiments/20260817_sf3d_g16_trajnorm/notes.md</code> &middot;
+<code>docs/superpowers/specs/2026-08-16-dinov3-standard-stack-design.md</code> &middot;
+<code>docs/superpowers/specs/2026-08-17-normalized-trajectory-loss-gen16-design.md</code> &middot;
+<code>knowledge/dinov3-dense-adapter-survey.md</code> &middot;
+panels: <code>viz/20260817_sf3d_g16_vs_g13_panels</code></p>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gen-9 Baseline &amp; Supervision Ablation</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 0; background: #f6f7f9; color: #1c2733; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 28px 32px 60px; }
+  h1 { font-size: 26px; margin: 8px 0 4px; }
+  h2 { font-size: 19px; margin: 34px 0 10px; border-bottom: 2px solid #d7dde5; padding-bottom: 6px; }
+  p.lead { color: #45566b; margin: 4px 0 18px; max-width: 950px; }
+  .card { background: #fff; border: 1px solid #e1e6ec; border-radius: 10px; padding: 18px 20px; margin: 14px 0; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .row .card { flex: 1 1 360px; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 10px; margin-bottom: 8px; }
+  .old { background: #e3ecf9; color: #23508e; }
+  .new { background: #e0f3e6; color: #1e7a3c; }
+  .bad { background: #fde8d8; color: #a03a25; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .cap { font-size: 13px; color: #5b6b7d; margin-top: 8px; line-height: 1.45; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { border: 1px solid #dde3ea; padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: #eef1f5; }
+  td.good { background: #e9f6ee; font-weight: 600; }
+  td.poor { background: #fdeee6; }
+  td.na { color: #9aa7b4; background: #f4f6f8; }
+  .note { background: #eef4fb; border-left: 4px solid #3d7cc9; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px; color: #2c4157; }
+  .warn { background: #fdf3e7; border-left: 4px solid #d68a2e; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px; color: #5a4327; }
+  .kill { background: #eaf6ee; border-left: 4px solid #1e7a3c; padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 15px; color: #1d4a2c; }
+  code { background: #eef1f5; border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+  .big { font-size: 30px; font-weight: 700; line-height: 1.1; }
+  .stat { text-align: center; padding: 12px 8px; }
+  .stat .lbl { font-size: 12.5px; color: #5b6b7d; margin-top: 4px; line-height: 1.35; }
+  ul { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; line-height: 1.45; }
+  .check { color: #1e7a3c; font-weight: 700; }
+  .cross { color: #c0392b; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Gen-9: the new baseline &middot; the supervision ablation (08-15)</h1>
+<p class="lead">
+Two things happened on one split. First, gen-9 established the
+<b>standing 59k close-up split</b> (mask &ge; 0.1% + 5% edge margin) as
+the project's reference denominator — every generation since trains on
+it. Second, three arms trained on that identical split answered a design
+question the architecture had assumed since gen-6: <b>does jointly
+supervising trajectory and articulation actually help either one?</b>
+Answer: yes, in both directions.
+</p>
+
+<h2>1 &middot; Gen-9: the fresh baseline (arm A)</h2>
+<div class="row">
+  <div class="card stat"><div class="big">59,174</div><div class="lbl">records — 3.1&times; gen-8's data,<br>on a strictly harder split<br>(masks down to 0.1% vs 0.25%)</div></div>
+  <div class="card stat"><div class="big">5,088</div><div class="lbl">val/test samples — the denominator<br>every later arm evaluates on</div></div>
+  <div class="card stat"><div class="big">30 ep</div><div class="lbl">schedule halved from g8's 60<br>(curves flat by ~30 on 3&times; less data);<br>milestones [24, 28], seed 42</div></div>
+  <div class="card stat"><div class="big">~$1.1</div><div class="lbl">RTX PRO 4500, ~1 h train,<br>best = epoch 23, clean exit</div></div>
+</div>
+<div class="card">
+<table>
+  <tr><th>metric</th><th>gen-9 (0.1% split)</th><th>gen-8 (0.25% split)</th><th>read</th></tr>
+  <tr><td>type acc (%)</td><td class="good">94.97</td><td>92.0</td><td rowspan="2">semantics <b>improve on 3&times; data</b> despite the harder split — volume feeds the classifier/axis heads</td></tr>
+  <tr><td>axis&deg; all / matched</td><td class="good">27.56 / 15.81</td><td>32.8 / 17.2</td></tr>
+  <tr><td>mIoU / PDet</td><td class="poor">0.1463 / 5.39</td><td>0.178 / 9.4</td><td>the 0.1&ndash;0.25% mask band is still hard at 256&sup2; — sits between g8 and full-split, a different denominator, not a regression</td></tr>
+  <tr><td>3D point / origin q* (m)</td><td>0.292 / 0.361</td><td>0.300 / 0.347</td><td>3D localization &asymp; flat — the grounding tail dominates the means</td></tr>
+  <tr><td>traj_dir acc / cos</td><td>93.10 / 0.736</td><td>94.8 / 0.783</td><td>relative direct readout confirmed at 3&times; scale</td></tr>
+</table>
+<p class="cap">Fresh baseline — comparable to NEITHER gen-8 nor the
+full-split arms (different filters on train AND eval). Cache:
+<code>sf3d_v2_keys_cutoff05_minrad010_maskfrac0010_edge05.pkl</code>.</p>
+</div>
+
+<h2>2 &middot; The ablation design: three arms, one variable</h2>
+<div class="card">
+<table>
+  <tr><th>supervision / head</th><th>A &mdash; joint (= gen-9)</th><th>B &mdash; articulation-only</th><th>C &mdash; trajectory-only</th></tr>
+  <tr><td>mask (DiceBCE)</td><td class="good">&#10003;</td><td class="good">&#10003;</td><td class="good">&#10003;</td></tr>
+  <tr><td>interaction point (heatmap + coord + z_p lift + 3D loss)</td><td class="good">&#10003;</td><td class="good">&#10003;</td><td class="good">&#10003;</td></tr>
+  <tr><td>origin (heatmap + z_q lift + canonical-q* loss)</td><td class="good">&#10003;</td><td class="good">&#10003;</td><td class="na">&mdash; removed</td></tr>
+  <tr><td>type CE + axis direction (1&minus;cos)</td><td class="good">&#10003;</td><td class="good">&#10003;</td><td class="na">&mdash; removed</td></tr>
+  <tr><td>trajectory head + per-point loss</td><td class="good">&#10003;</td><td class="na">&mdash; removed</td><td class="good">&#10003;</td></tr>
+  <tr><td>L_pp consistency (pred&ndash;pred)</td><td class="good">&#10003;</td><td class="na">&mdash; (dies with trajectory)</td><td class="na">&mdash;</td></tr>
+</table>
+<p class="cap">Everything else identical across arms: same 59,174-record
+split, same cache, 30 epochs, milestones [24, 28], seed 42, frozen CLIP,
+RTX PRO 4500 (~1 h, &asymp; $0.9 per arm). Heads are removed from the
+<i>architecture</i>, not merely unsupervised — arm C even drops
+<code>origin_uv</code> from the condition vector. Locked decision: the
+interaction point counts as <b>static grounding</b>, so its full pipeline
+stays in every arm; only the 20-point motion trajectory counts as
+trajectory supervision.</p>
+</div>
+
+<h2>3 &middot; Headline result: joint supervision wins both directions</h2>
+<div class="row">
+  <div class="card">
+    <span class="tag bad">A vs C — remove articulation, trajectory breaks</span>
+    <div class="stat" style="padding:6px"><div class="big" style="color:#c0392b">&minus;5.5 pts</div>
+    <div class="lbl">traj_dir 93.10 &rarr; 87.58%, cos 0.736 &rarr; 0.631<br><b>the largest single effect in the ablation</b></div></div>
+    <p class="cap">Knowing the motion type and axis constrains which curve
+    to sweep — articulation supervision is a trajectory prior.</p>
+  </div>
+  <div class="card">
+    <span class="tag bad">A vs B — remove trajectory, semantics break</span>
+    <div class="stat" style="padding:6px"><div class="big" style="color:#c0392b">&minus;3.0 / +4.6&deg;</div>
+    <div class="lbl">type 94.97 &rarr; 92.00% &middot; matched axis 15.81 &rarr; 20.39&deg;<br>origin / radius: flat (&le; 1 cm)</div></div>
+    <p class="cap">A swept curve implies both the type and the axis
+    direction — trajectory supervision regularizes the semantic heads.
+    Origin estimation gains nothing from it.</p>
+  </div>
+  <div class="card">
+    <span class="tag old">Side finding — mild task competition on masks</span>
+    <div class="stat" style="padding:6px"><div class="big">0.157</div>
+    <div class="lbl">arm C mIoU (PDet 7.11) — best of the three arms<br>(A: 0.146 / 5.39, B: 0.148 / 6.03)</div></div>
+    <p class="cap">Fewer tasks &rarr; slightly better masks on the shared
+    decoder/projector. Real but small next to the &minus;5.5-pt trajectory
+    and &minus;3-pt type effects.</p>
+  </div>
+</div>
+
+<h2>4 &middot; Full three-arm table (same 5,088 test samples)</h2>
+<div class="card">
+<table>
+  <tr><th>metric</th><th>A &mdash; joint (gen-9)</th><th>B &mdash; art-only</th><th>C &mdash; traj-only</th></tr>
+  <tr><td>type acc (%)</td><td class="good">94.97</td><td class="poor">92.00</td><td class="na">head absent</td></tr>
+  <tr><td>axis&deg; matched</td><td class="good">15.81</td><td class="poor">20.39</td><td class="na">head absent</td></tr>
+  <tr><td>axis&deg; all</td><td>27.56</td><td>27.42</td><td class="na">head absent</td></tr>
+  <tr><td>MA pass (%)</td><td>21.91</td><td>21.74</td><td class="na">head absent</td></tr>
+  <tr><td>origin vs q* / line (m)</td><td>0.3614 / 0.3220</td><td>0.3532 / 0.3176</td><td class="na">head absent</td></tr>
+  <tr><td>radius err (m)</td><td>0.1914</td><td>0.1947</td><td class="na">head absent</td></tr>
+  <tr><td>traj_dir acc / cos</td><td class="good">93.10 / 0.736</td><td class="na">head absent</td><td class="poor">87.58 / 0.631</td></tr>
+  <tr><td>mIoU</td><td>0.1463</td><td>0.1479</td><td class="good">0.1566</td></tr>
+  <tr><td>PDet (%)</td><td>5.39</td><td>6.03</td><td class="good">7.11</td></tr>
+  <tr><td>2D point err</td><td class="good">0.1525</td><td>0.1619</td><td>0.1590</td></tr>
+  <tr><td>3D point err (m)</td><td class="good">0.2920</td><td>0.3082</td><td>0.3029</td></tr>
+  <tr><td>best epoch / cost</td><td>23 / $1.1</td><td>21 / $0.9</td><td>22 / $0.9</td></tr>
+</table>
+<p class="cap">Absent cells are structural (heads removed), with
+skip-guards verified in production. Val losses are NOT comparable across
+arms (different term sets: A 0.9191, B 0.9491, C 0.4090). Arm C's
+<code>mean_origin_error_m</code> exists in the CSV but is the legacy
+pseudo-origin, not an origin-head output — excluded here.</p>
+</div>
+
+<div class="kill"><b>Conclusion (recorded 08-15):</b> joint supervision
+wins both ways — each branch is the other's regularizer, at a small,
+measured mask cost. The gen-6 two-branch design is validated; every
+subsequent generation keeps both supervision paths.</div>
+
+<div class="warn" style="margin-top:12px"><b>Attribution caveat
+(accepted in the spec):</b> arm A differs from B and C by <i>two</i>
+mechanisms — the extra supervision signal AND the L_pp consistency
+coupling. These arms cannot separate co-training from the consistency
+loss; a joint-minus-L_pp arm is a recorded follow-up, not part of this
+experiment.</div>
+
+<p class="cap" style="margin-top:26px">Sources:
+<code>experiments/20260815_sf3d_g9_closeup010/notes.md</code> &middot;
+<code>experiments/20260815_sf3d_g9abl_artonly/notes.md</code> &middot;
+<code>experiments/20260815_sf3d_g9abl_trajonly/notes.md</code> &middot;
+<code>docs/superpowers/specs/2026-08-15-supervision-ablation-design.md</code> &middot;
+panels: <code>viz/20260815_sf3d_g9_ablation_panels</code></p>
+
+</div>
+</body>
+</html>

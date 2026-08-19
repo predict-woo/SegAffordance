@@ -1,5 +1,5 @@
-# 20260818_sf3d_g18_2donly: gen-18 — 2D-ONLY training on the g17 stack
-# (spec: docs/superpowers/specs/2026-08-18-2donly-gen18-design.md)
+# 20260818_sf3d_g17_2donly: gen-17-2D — 2D-ONLY training on the g17 stack
+# (spec: docs/superpowers/specs/2026-08-18-2donly-gen17-2d-design.md)
 # — the g17 model VERBATIM (split axis heads, origin heatmap, dinov3 @512,
 # v3) trained with ZERO 3D ground truth: 3D trajectory / axis / origin /
 # type labels reserved for eval. Supervision: GT mask + 2D point + 2D
@@ -134,7 +134,7 @@ trainer:
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        dirpath: "/workspace/SegAffordance/experiments/20260818_sf3d_g18_2donly/checkpoints"
+        dirpath: "/workspace/SegAffordance/experiments/20260818_sf3d_g17_2donly/checkpoints"
         monitor: "val/loss_total"
         mode: "min"
         save_top_k: 3
@@ -144,7 +144,7 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: "/workspace/SegAffordance/experiments/20260818_sf3d_g18_2donly/logs"
+      save_dir: "/workspace/SegAffordance/experiments/20260818_sf3d_g17_2donly/logs"
       name: "csv"
   log_every_n_steps: 10
 

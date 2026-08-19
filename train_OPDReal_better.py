@@ -517,7 +517,7 @@ class OPDRealTrainingModule(pl.LightningModule):
         total_loss = total_loss + proj_total
         geometric_terms = {**geometric_terms, **proj_terms}
 
-        # Gen-18 z_p depth tether (2026-08-18 spec): GT-free — the lifted
+        # Gen-17-2D z_p depth tether (2026-08-18 spec): GT-free — the lifted
         # point's depth vs the INPUT depth at a DETACHED point_uv (the
         # tether teaches the lift, not the heatmap; depth holes masked).
         _da_w = getattr(self.loss_params, "depth_anchor_weight", 0.0)

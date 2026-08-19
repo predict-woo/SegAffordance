@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The Twist Era: Why We Ended It</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 0; background: #f6f7f9; color: #1c2733; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 28px 32px 60px; }
+  h1 { font-size: 26px; margin: 8px 0 4px; }
+  h2 { font-size: 19px; margin: 34px 0 10px; border-bottom: 2px solid #d7dde5; padding-bottom: 6px; }
+  p.lead { color: #45566b; margin: 4px 0 18px; max-width: 950px; }
+  .card { background: #fff; border: 1px solid #e1e6ec; border-radius: 10px; padding: 18px 20px; margin: 14px 0; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .row .card { flex: 1 1 360px; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 10px; margin-bottom: 8px; }
+  .old { background: #e3ecf9; color: #23508e; }
+  .new { background: #e0f3e6; color: #1e7a3c; }
+  .bad { background: #fde8d8; color: #a03a25; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .cap { font-size: 13px; color: #5b6b7d; margin-top: 8px; line-height: 1.45; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { border: 1px solid #dde3ea; padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: #eef1f5; }
+  td.good { background: #e9f6ee; font-weight: 600; }
+  td.poor { background: #fdeee6; }
+  .note { background: #eef4fb; border-left: 4px solid #3d7cc9; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px; color: #2c4157; }
+  .warn { background: #fdf3e7; border-left: 4px solid #d68a2e; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px; color: #5a4327; }
+  .kill { background: #fbeaea; border-left: 4px solid #c0392b; padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 15px; color: #58231b; }
+  code { background: #eef1f5; border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+  .big { font-size: 30px; font-weight: 700; line-height: 1.1; }
+  .stat { text-align: center; padding: 12px 8px; }
+  .stat .lbl { font-size: 12.5px; color: #5b6b7d; margin-top: 4px; line-height: 1.35; }
+  ul { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; line-height: 1.45; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>The Twist Era (gen-2 → gen-5): why we ended it</h1>
+<p class="lead">
+The se(3) twist <code>(&omega;, v)</code> was the sole predicted motion
+representation: type read from <b>|&omega;|</b> (rotation ⇔ |&omega;| ≈ 1,
+translation ⇔ |&omega;| ≈ 0), radius decoded hyperbolically from it. That
+one design choice — <b>a regression magnitude carrying a discrete
+label</b> — created a hedging failure that three generations of machinery
+reduced but never removed. The numbers below are the case for retiring it.
+</p>
+
+<h2>1 · The structural problem: hedging |&omega;| is geometry, not calibration</h2>
+<div class="row">
+  <div class="card">
+    <span class="tag bad">Twist: type inside a regression target</span>
+    <svg viewBox="0 0 560 200" width="100%">
+      <line x1="40" y1="150" x2="520" y2="150" stroke="#8fa3b8" stroke-width="1.5"/>
+      <text x="40" y="172" font-size="12" fill="#5b6b7d">|&omega;| = 0</text>
+      <text x="480" y="172" font-size="12" fill="#5b6b7d">|&omega;| = 1</text>
+      <circle cx="60" cy="150" r="7" fill="#23508e"/>
+      <text x="60" y="130" font-size="12" text-anchor="middle" fill="#23508e" font-weight="600">translation</text>
+      <circle cx="500" cy="150" r="7" fill="#1e7a3c"/>
+      <text x="500" y="130" font-size="12" text-anchor="middle" fill="#1e7a3c" font-weight="600">rotation</text>
+      <circle cx="205" cy="150" r="9" fill="#c0392b"/>
+      <text x="205" y="126" font-size="12.5" text-anchor="middle" fill="#c0392b" font-weight="700">hedge: |&omega;| ≈ 0.3</text>
+      <text x="205" y="110" font-size="11.5" text-anchor="middle" fill="#a03a25">loss-optimal under ambiguity</text>
+      <path d="M205,60 q0,-14 14,-14 h120 q14,0 14,14" fill="none" stroke="#c0392b" stroke-dasharray="4 3"/>
+      <text x="280" y="38" font-size="12" text-anchor="middle" fill="#a03a25">radius = f(1/|&omega;|) → 10× inflated</text>
+      <line x1="280" y1="62" x2="230" y2="138" stroke="#c0392b" stroke-dasharray="4 3"/>
+    </svg>
+    <p class="cap">Under type ambiguity, the MSE-optimal |&omega;| is a
+    probability-weighted average — a value that means <i>neither</i> type,
+    and that the hyperbolic radius decode amplifies into a ~10× radius
+    error. Hedging has a direct geometric cost.</p>
+  </div>
+  <div class="card">
+    <span class="tag new">CE head: hedging is free and harmless</span>
+    <svg viewBox="0 0 560 200" width="100%">
+      <rect x="90" y="55" width="170" height="80" rx="8" fill="#e0f3e6" stroke="#1e7a3c"/>
+      <text x="175" y="88" font-size="13" text-anchor="middle" font-weight="600">type: softmax(2)</text>
+      <text x="175" y="108" font-size="12" text-anchor="middle" fill="#3c6e4c">P(rot)=0.55 is a calibrated</text>
+      <text x="175" y="123" font-size="12" text-anchor="middle" fill="#3c6e4c">probability, nothing decodes it</text>
+      <rect x="310" y="55" width="170" height="80" rx="8" fill="#fff" stroke="#8fa3b8"/>
+      <text x="395" y="88" font-size="13" text-anchor="middle" font-weight="600">origin: explicit 3D point</text>
+      <text x="395" y="108" font-size="12" text-anchor="middle" fill="#5b6b7d">radius = dist(p, axis line)</text>
+      <text x="395" y="123" font-size="12" text-anchor="middle" fill="#5b6b7d">linear — no hyperbolic decode</text>
+      <text x="285" y="170" font-size="12.5" text-anchor="middle" fill="#45566b">gen-2's CE head: 95% type acc. Emergent type-from-|&omega;| never beat 89.4%.</text>
+    </svg>
+    <p class="cap">Cross-entropy hedging is calibrated uncertainty with
+    <b>zero geometric side effect</b>. This is the gen-6 design in one
+    sentence: put each quantity in the output space that suits it.</p>
+  </div>
+</div>
+
+<h2>2 · Gen-3 (08-04) — twist as sole representation: the hedge, diagnosed</h2>
+<div class="row">
+  <div class="card stat"><div class="big" style="color:#c0392b">0.295</div><div class="lbl">revolute |&omega;| (target ≈ 1)<br>→ radius ~10× inflated</div></div>
+  <div class="card stat"><div class="big" style="color:#c0392b">0.0182</div><div class="lbl">trajectory MSE — parked exactly at the<br>zero-motion baseline (0.0181)</div></div>
+  <div class="card stat"><div class="big" style="color:#c0392b">60.2%</div><div class="lbl">type-from-|&omega;|<br>(gen-2's CE head: 95%)</div></div>
+  <div class="card stat"><div class="big">42.8°</div><div class="lbl">twist axis error</div></div>
+</div>
+<div class="note">Posterior-mean hedging, both halves: |&omega;| averaged
+between the type modes, and the trajectory head sat <i>at</i> the
+zero-motion baseline — predicting no motion at all was loss-optimal under
+opening-direction ambiguity.</div>
+
+<h2>3 · Gen-4 (08-11) — body metric + K=4 WTA: trajectory fixed, &omega; hedge survived the machinery</h2>
+<div class="row">
+  <div class="card">
+    <span class="tag new">What the machinery fixed</span>
+    <ul>
+      <li>Trajectory un-parked: winner MSE <b>0.0099</b> vs baseline 0.018</li>
+      <li>traj_dir_acc 79.7 → <b>82.7%</b>, cos 0.508 → 0.546</li>
+      <li>WTA healthy: hypothesis spread <b>0.452</b>, all 4 bundles alive (win shares 0.21–0.28), selector 56% vs 25% random</li>
+      <li>mIoU 0.103 → <b>0.118</b> (best CLIP arm to date)</li>
+    </ul>
+  </div>
+  <div class="card">
+    <span class="tag bad">What it did not fix</span>
+    <ul>
+      <li>Even the <b>oracle</b> bundle's revolute |&omega;| ≈ <b>0.08</b> (selected: 0.10)</li>
+      <li>Radius ratio median <b>9.6×</b> — 98% of samples inflated</li>
+      <li>Only <b>6%</b> of revolute samples decoded as rotation</li>
+      <li>Type-from-|&omega;| <b>52.0%</b> (down from 60.2), axis err <b>48.4°</b> (up from 42.8)</li>
+    </ul>
+  </div>
+</div>
+<div class="warn"><b>Measured cause, not conjecture:</b> at
+&rho; = 0.25 a full &omega;-hedge cost only <b>~0.03</b> of WTA distortion
+(0.5·&rho;²·1) — the cells split along the expensive dimensions (field
+term, 4.0-weighted trajectory) and averaging &omega; inside each cell
+stayed nearly free. Bonus failure: the literature anneal schedule (T0=10)
+collapsed all 4 hypotheses onto one point (pairwise distance 0.005) — a
+symmetric fixed point WTA cannot escape; aborted at epoch 9 and relaunched
+with T0=0.5.</div>
+
+<h2>4 · Gen-5 (08-12) — maximum effort: it worked, and that is the problem</h2>
+<div class="row">
+  <div class="card" style="flex:1 1 420px">
+    <span class="tag old">Price paid to make &omega; supervisable</span>
+    <ul>
+      <li><code>twist_metric_rho</code> 0.25 → <b>0.75</b>: hedge cost ~0.03 → <b>~0.28</b> of distortion</li>
+      <li><code>min_revolute_radius: 0.10</code> — the <b>entire knob/dial/faucet class deleted</b>: 40% of revolute records, 417,765 → 356,747. Knobs supervised &omega; through pure ambiguity (pred |&omega;| 0.06 knob vs 0.25 door, corr 0.58)</li>
+      <li>Eval split filtered too — metrics no longer comparable to gen-3/4</li>
+    </ul>
+  </div>
+  <div class="card" style="flex:1 1 420px">
+    <span class="tag new">Best twist results ever</span>
+    <ul>
+      <li>Revolute |&omega;| median <b>0.59</b> vs prismatic 0.10 (clean 6× separation)</li>
+      <li>Decoded-as-rot 6% → <b>61%</b>; radius ratio 9.6 → <b>2.13</b></li>
+      <li>Type-from-|&omega;| <b>89.4%</b>, axis err <b>29.4°</b>, traj_dir <b>92.6%</b> / cos 0.750</li>
+    </ul>
+  </div>
+  <div class="card" style="flex:1 1 320px">
+    <span class="tag bad">Residuals at the ceiling</span>
+    <ul>
+      <li>|&omega;| still <b>41% short of 1</b>, unsaturated after 16 epochs (0.30 → 0.53 → 0.59, still climbing)</li>
+      <li>Radius still <b>2.1×</b> off</li>
+      <li>mIoU regressed to <b>0.090</b> (g4: 0.118)</li>
+      <li>Type still <b>5.6 pts below</b> gen-2's plain CE head</li>
+    </ul>
+  </div>
+</div>
+
+<h2>5 · The scoreboard</h2>
+<div class="card">
+<table>
+  <tr>
+    <th></th>
+    <th>gen-3<br><span style="font-weight:400">twist only</span></th>
+    <th>gen-4<br><span style="font-weight:400">+ body metric, K=4 WTA</span></th>
+    <th>gen-5<br><span style="font-weight:400">+ &rho; 0.75, − knob class&thinsp;*</span></th>
+    <th>CE-head reference</th>
+  </tr>
+  <tr><td>revolute |&omega;| (→ 1)</td><td class="poor">0.295</td><td class="poor">0.10</td><td>0.59</td><td rowspan="3" style="vertical-align:middle; color:#5b6b7d">not applicable —<br>no magnitude decode<br>exists at all</td></tr>
+  <tr><td>decoded-as-rot, revolute</td><td class="poor">—</td><td class="poor">6%</td><td>61%</td></tr>
+  <tr><td>radius ratio (→ 1×)</td><td class="poor">~10×</td><td class="poor">9.6×</td><td>2.13×</td></tr>
+  <tr><td>type accuracy</td><td class="poor">60.2</td><td class="poor">52.0</td><td>89.4</td><td class="good">95 (gen-2) · 95.3 (gen-17)</td></tr>
+  <tr><td>axis error (deg)</td><td>42.8</td><td class="poor">48.4</td><td>29.4</td><td class="good">14.6 (g11b) · 16.7 (g13)</td></tr>
+  <tr><td>traj_dir acc (%)</td><td class="poor">79.7 (parked)</td><td>82.7</td><td>92.6</td><td class="good">94.5 (g16)</td></tr>
+  <tr><td>mIoU</td><td>0.103</td><td class="good">0.118</td><td class="poor">0.090</td><td class="good">0.27 (g13+)</td></tr>
+  <tr><td>machinery required</td><td>—</td><td>2 specs, K=4 bundles,<br>anneal schedule, body metric</td><td>+ tuned &rho;, − 40% of<br>revolute data</td><td class="good">one Linear(256, 2)</td></tr>
+</table>
+<p class="cap">* gen-5 evaluates on the radius-filtered split (hardest
+type/axis samples removed); cross-generation deltas use door-class-only
+breakdowns where possible. CE-reference axis/mask numbers are post-twist
+arms on different data/recipes — shown for scale, not as controlled
+comparisons; the like-for-like line is gen-2's 95% type on the same era.</p>
+</div>
+
+<h2>6 · The decision (gen-6 spec, 08-13)</h2>
+<div class="kill">
+Gen-5 proved the WTA + body-metric machinery <i>can</i> fight the
+type-in-|&omega;| hedge to |&omega;| = 0.59 — <b>"but that is a permanent
+tax paid to make a regression target carry a discrete label."</b> Two
+design specs, 4 hypothesis bundles, an annealing schedule, a tuned metric,
+and 40% of the revolute data thrown away bought 89.4% type accuracy; a
+plain CE head — which structurally cannot hedge geometrically — had
+already delivered 95% in gen-2, and delivered 95.3% (best ever) in gen-17.
+</div>
+<div class="note" style="margin-top:12px">
+<b>Gen-6 replacement:</b> each quantity in its natural output space — type
+as CE logits, axis as a normalized 3-vector, origin as an explicit 3D
+point (radius computed <i>linearly</i> from it), trajectory as K=1 direct
+readout. The twist code paths remain in the repo, config-gated, so
+gen-3/4/5 stay reproducible. Kept from the era: the fast anneal lesson,
+the radius filter, and the trajectory-hedging diagnosis that later
+motivated gen-16's normalized trajectory loss.
+</div>
+
+<p class="cap" style="margin-top:26px">Sources:
+<code>experiments/20260804_sf3d_twist_g3/notes.md</code> ·
+<code>experiments/20260811_sf3d_twist_g4/notes.md</code> ·
+<code>experiments/20260812_sf3d_twist_g5/notes.md</code> ·
+<code>docs/superpowers/specs/2026-08-13-split-heads-gen6-design.md</code></p>
+
+</div>
+</body>
+</html>

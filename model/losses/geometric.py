@@ -993,7 +993,7 @@ class TrajectoryProjectionLoss(nn.Module):
         self.weight = weight
         self.near_plane = near_plane
         self.energy_floor = energy_floor
-        # Gen-18 (2026-08-18 spec): per-row relative error — each row's
+        # Gen-17-2D (2026-08-18 spec): per-row relative error — each row's
         # masked MSE divided by its GT track's motion energy (track
         # relative to its first valid point). Same philosophy as the
         # gen-16 normalized trajectory loss: without it, big drawer pulls

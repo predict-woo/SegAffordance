@@ -1,7 +1,7 @@
-"""Gen-18 2D-only training pieces (2026-08-18 spec).
+"""Gen-17-2D 2D-only training pieces (2026-08-18 spec).
 
 Normalized projection loss (per-row relative error in uv-space), the z_p
-depth tether, and the g18 config chain (g17 model verbatim, 3D-GT loss
+depth tether, and the g17-2d config chain (g17 model verbatim, 3D-GT loss
 weights zeroed).
 """
 import os
@@ -151,12 +151,12 @@ def _load_cfg(name):
         return yaml.safe_load(f)
 
 
-def test_g18_config_matches_spec():
+def test_g17_2d_config_matches_spec():
     g17 = _load_cfg("sf3d_train_runpod_g17_splitax.yaml")
-    g18 = _load_cfg("sf3d_train_runpod_g18_2donly.yaml")
+    g17_2d = _load_cfg("sf3d_train_runpod_g17_2donly.yaml")
     # model architecture byte-identical to g17
-    assert g18["model"]["model_params"] == g17["model"]["model_params"]
-    lp = dict(g18["model"]["loss_params"])
+    assert g17_2d["model"]["model_params"] == g17["model"]["model_params"]
+    lp = dict(g17_2d["model"]["loss_params"])
     for k in ("vae_weight", "motion_type_weight", "origin_weight",
               "origin_map_weight", "point_3d_weight", "trajectory_weight"):
         assert lp[k] == 0.0, k
@@ -170,18 +170,18 @@ def test_g18_config_matches_spec():
         assert lp[k] == 0.5, k
     assert lp["pred_pred_art_weight"] == 0.1
     assert lp["pred_pred_art_normalized"] is True
-    assert g18["data"]["return_trajectory_2d"] is True
-    d17 = dict(g17["data"]); d18 = dict(g18["data"])
+    assert g17_2d["data"]["return_trajectory_2d"] is True
+    d17 = dict(g17["data"]); d18 = dict(g17_2d["data"])
     d18.pop("return_trajectory_2d")
     assert d17 == d18
-    assert "20260818_sf3d_g18_2donly" in g18["trainer"]["callbacks"][0]["init_args"]["dirpath"]
-    assert g18["trainer"]["max_epochs"] == g17["trainer"]["max_epochs"]
+    assert "20260818_sf3d_g17_2donly" in g17_2d["trainer"]["callbacks"][0]["init_args"]["dirpath"]
+    assert g17_2d["trainer"]["max_epochs"] == g17["trainer"]["max_epochs"]
 
 
 # ------------------------------------------------ trainer integration
 
 def test_training_step_2donly_no_3dgt_gradient():
-    # Full _common_step with the g18 loss weights: finite loss, and the
+    # Full _common_step with the g17_2d loss weights: finite loss, and the
     # split axis heads receive gradient ONLY through L_pp (turning L_pp
     # off must zero their grads — proves no 3D-GT term leaks in).
     from tests.test_origin_local_sample import _build_module, _training_step

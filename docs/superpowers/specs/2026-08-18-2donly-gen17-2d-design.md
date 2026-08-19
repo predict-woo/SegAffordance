@@ -1,8 +1,8 @@
-# Gen-18: 2D-Only Training on the Gen-17 Stack
+# Gen-17-2D: 2D-Only Training on the Gen-17 Stack
 
 **Date:** 2026-08-18
 **Status:** APPROVED (user, 2026-08-18)
-**Companion:** docs/slides/2026-08-18_g18_2donly_structure.html
+**Companion:** docs/slides/2026-08-18_g17_2donly_structure.html
 **Predecessor proof:** 20260804_sf3d_2donly (twist era: mechanism works,
 signal weak; needed ω-prior, type collapsed).
 
@@ -41,8 +41,8 @@ track, and the model's internal consistency.
 
 ## Config
 
-`config/sf3d_train_runpod_g18_2donly.yaml` = g17 config, loss_params per
-the table above, paths → `experiments/20260818_sf3d_g18_2donly`. Same
+`config/sf3d_train_runpod_g17_2donly.yaml` = g17 config, loss_params per
+the table above, paths → `experiments/20260818_sf3d_g17_2donly`. Same
 data/epochs/seed; model_params byte-identical to g17.
 
 ## Expectations & eval
@@ -67,6 +67,6 @@ finetune the g17 recipe from this checkpoint vs from scratch.
 4. Config as above. Tests: normalized-projection (collapse scores ~1/row,
    flag-off bit-identity, eps floor, all-masked rows dropped);
    depth-anchor (gradient reaches z_p head only; masked on depth holes);
-   config chain (g18 = g17 + loss table + paths); training-step
+   config chain (g17-2d = g17 + loss table + paths); training-step
    integration (finite loss, no 3D-GT gradient: axis/type/origin heads'
    grads come only from L_pp).

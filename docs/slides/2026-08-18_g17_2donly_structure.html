@@ -133,7 +133,7 @@ Legend:&nbsp;
 <h2>2 · Loss configuration vs gen-17</h2>
 <div class="card">
 <table>
-  <tr><th>Term</th><th>g17 (3D)</th><th>g18 2D-only</th><th>Why</th></tr>
+  <tr><th>Term</th><th>g17 (3D)</th><th>g17-2d 2D-only</th><th>Why</th></tr>
   <tr><td>mask / point map / coord</td><td>0.5 each</td><td>0.5 each</td><td>image-space GT — allowed by the premise</td></tr>
   <tr><td>L_traj_proj (projection)</td><td>0.0</td><td><b>0.5, normalized</b></td><td>THE data term; replaces the 3D trajectory MSE</td></tr>
   <tr><td>L_pp (normalized)</td><td>0.1</td><td><b>0.1</b></td><td>GT-free; the only teacher of axis / origin / type</td></tr>
@@ -213,7 +213,7 @@ Everything in the colored diagram above ports as-is.
 
 <div class="warn" style="margin-top:12px">
 <b>Implementation footprint:</b> no model change. (1) config
-<code>sf3d_train_runpod_g18_2donly.yaml</code> = g17 model params + the §2
+<code>sf3d_train_runpod_g17_2donly.yaml</code> = g17 model params + the §2
 weight table; (2) <code>trajectory_proj_normalized</code> flag in the
 projection loss; (3) <code>depth_anchor_weight</code> z_p tether in the
 trainer; (4) log batch-mean p_rev. Everything else already exists.
