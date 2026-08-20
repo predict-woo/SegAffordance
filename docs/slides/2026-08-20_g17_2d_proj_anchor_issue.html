@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The 2D Reprojection Failure</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 0; background: #f6f7f9; color: #1c2733; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 28px 32px 60px; }
+  h1 { font-size: 26px; margin: 8px 0 4px; }
+  h2 { font-size: 19px; margin: 34px 0 10px; border-bottom: 2px solid #d7dde5; padding-bottom: 6px; }
+  p.lead { color: #45566b; margin: 4px 0 18px; max-width: 950px; }
+  .card { background: #fff; border: 1px solid #e1e6ec; border-radius: 10px; padding: 18px 20px; margin: 14px 0; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .row .card { flex: 1 1 480px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .cap { font-size: 13px; color: #5b6b7d; margin-top: 8px; line-height: 1.45; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { border: 1px solid #dde3ea; padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: #eef1f5; }
+  .note { background: #eef4fb; border-left: 4px solid #3d7cc9; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px; color: #2c4157; }
+  .warn { background: #fdf3e7; border-left: 4px solid #d68a2e; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px; color: #5a4327; }
+  code { background: #eef1f5; border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Why the 2D Reprojection Error Stayed Terrible</h1>
+<p class="lead">
+The 2D-only arm optimized exactly the metric you care about — projected
+predicted 3D curve vs the GT 2D track — and still ended WORSE than a model
+that predicts zero motion. Two stacked problems explain it: the metric is
+mostly measuring <b>where the curve is pinned</b> (the anchor), and the
+loss's own gradients <b>destroyed the thing that does the pinning</b>.
+</p>
+
+<h2>1 · What the loss actually compares — the anchor rides along</h2>
+<div class="card">
+  <svg viewBox="0 0 1160 320" width="100%">
+    <defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#7a8ca0"/></marker></defs>
+    <!-- left: the comparison -->
+    <text x="270" y="26" font-size="14" text-anchor="middle" font-weight="700">The projected curve = anchor + shape</text>
+    <!-- GT track cyan -->
+    <path d="M 120 220 Q 220 150 340 140" fill="none" stroke="#18b3c9" stroke-width="4"/>
+    <circle cx="120" cy="220" r="6" fill="#18b3c9"/>
+    <text x="105" y="245" font-size="12" fill="#0e7c8c">GT track (cyan), starts at the GT point</text>
+    <!-- predicted curve, same shape, offset -->
+    <path d="M 210 120 Q 310 50 430 40" fill="none" stroke="#c03fc4" stroke-width="4" stroke-dasharray="8 5"/>
+    <circle cx="210" cy="120" r="6" fill="#c03fc4"/>
+    <text x="330" y="26" font-size="12" fill="#8e2a91"></text>
+    <text x="435" y="60" font-size="12" fill="#8e2a91">projected prediction —</text>
+    <text x="435" y="76" font-size="12" fill="#8e2a91">PERFECT shape, wrong anchor</text>
+    <!-- offset arrow -->
+    <line x1="120" y1="220" x2="205" y2="125" stroke="#c0392b" stroke-width="2.5" marker-end="url(#a)"/>
+    <text x="120" y="160" font-size="12.5" fill="#c0392b" font-weight="600">anchor offset</text>
+    <text x="120" y="176" font-size="12" fill="#c0392b">= point_uv error, lifted + reprojected</text>
+    <!-- per point error lines -->
+    <line x1="230" y1="188" x2="255" y2="100" stroke="#e2a9a1" stroke-width="1.5"/>
+    <line x1="285" y1="152" x2="330" y2="63" stroke="#e2a9a1" stroke-width="1.5"/>
+    <line x1="340" y1="140" x2="430" y2="40" stroke="#e2a9a1" stroke-width="1.5"/>
+    <text x="285" y="290" font-size="12.5" fill="#45566b">The loss is index-matched on ABSOLUTE positions: every one of the 20</text>
+    <text x="285" y="306" font-size="12.5" fill="#45566b">per-point errors contains the full anchor offset. Shape can be perfect; score ≈ ruined.</text>
+    <line x1="590" y1="30" x2="590" y2="300" stroke="#d7dde5" stroke-width="2"/>
+    <!-- right: measured decomposition -->
+    <text x="880" y="26" font-size="14" text-anchor="middle" font-weight="700">Measured decomposition (400 val rows, uv units)</text>
+    <!-- bars: gt scale reference line -->
+    <text x="620" y="60" font-size="12" font-weight="600">g17-2donly</text>
+    <rect x="620" y="70" width="418" height="16" fill="#e8b1ae"/><text x="1045" y="83" font-size="11.5">anchor 0.19</text>
+    <rect x="620" y="92" width="352" height="16" fill="#d8b6e8"/><text x="980" y="105" font-size="11.5">shape 0.16</text>
+    <text x="620" y="150" font-size="12" font-weight="600">g17 (full 3D, reference)</text>
+    <rect x="620" y="160" width="198" height="16" fill="#e8b1ae"/><text x="825" y="173" font-size="11.5">anchor 0.09</text>
+    <rect x="620" y="182" width="242" height="16" fill="#d8b6e8"/><text x="870" y="195" font-size="11.5">shape 0.11</text>
+    <line x1="1092" y1="55" x2="1092" y2="205" stroke="#18b3c9" stroke-width="2.5" stroke-dasharray="5 4"/>
+    <text x="1092" y="222" font-size="11.5" fill="#0e7c8c" text-anchor="middle">GT motion scale ≈ 0.21</text>
+    <text x="620" y="255" font-size="12.5" fill="#45566b">The 2D-only anchor error alone ≈ the ENTIRE motion being measured —</text>
+    <text x="620" y="271" font-size="12.5" fill="#45566b">the anchor degraded 2–3× vs g17 (its 2D point error: 0.095 → 0.307),</text>
+    <text x="620" y="287" font-size="12.5" fill="#45566b">and it poisons all 20 points of every row.</text>
+  </svg>
+</div>
+
+<h2>2 · Why the anchor died: the loss's own gradient path</h2>
+<div class="card">
+  <svg viewBox="0 0 1160 330" width="100%">
+    <defs><marker id="r" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#c0392b"/></marker></defs>
+    <rect x="20" y="30" width="230" height="60" rx="8" fill="#fde8d8" stroke="#c0392b"/>
+    <text x="135" y="55" font-size="13" text-anchor="middle" font-weight="600">normalized ratio</text>
+    <text x="135" y="73" font-size="11.5" text-anchor="middle" fill="#7a3b2e">÷ track energy (tiny) → ×30–50</text>
+    <text x="135" y="86" font-size="11.5" text-anchor="middle" fill="#7a3b2e">spikes measured at launch</text>
+    <line x1="250" y1="60" x2="320" y2="60" stroke="#c0392b" stroke-width="2.5" marker-end="url(#r)"/>
+    <rect x="322" y="30" width="250" height="60" rx="8" fill="#fff" stroke="#c0392b"/>
+    <text x="447" y="52" font-size="13" text-anchor="middle" font-weight="600">∂loss / ∂point_uv</text>
+    <text x="447" y="70" font-size="11.5" text-anchor="middle" fill="#7a3b2e">flows through grid_sample(depth, uv):</text>
+    <text x="447" y="84" font-size="11.5" text-anchor="middle" fill="#7a3b2e">∂z/∂uv is HUGE at depth edges</text>
+    <line x1="572" y1="60" x2="642" y2="60" stroke="#c0392b" stroke-width="2.5" marker-end="url(#r)"/>
+    <rect x="644" y="30" width="240" height="60" rx="8" fill="#fff" stroke="#c0392b"/>
+    <text x="764" y="55" font-size="13" text-anchor="middle" font-weight="600">shared trunk hammered</text>
+    <text x="764" y="73" font-size="11.5" text-anchor="middle" fill="#7a3b2e">projector · decoder · FPN — the same</text>
+    <text x="764" y="86" font-size="11.5" text-anchor="middle" fill="#7a3b2e">weights masks + heatmaps live in</text>
+    <line x1="884" y1="60" x2="954" y2="60" stroke="#c0392b" stroke-width="2.5" marker-end="url(#r)"/>
+    <rect x="956" y="20" width="184" height="80" rx="8" fill="#fde8d8" stroke="#c0392b"/>
+    <text x="1048" y="45" font-size="13" text-anchor="middle" font-weight="600">masks collapse EMPTY</text>
+    <text x="1048" y="63" font-size="11.5" text-anchor="middle" fill="#7a3b2e">Dice-on-empty ≈ plateau 0.57,</text>
+    <text x="1048" y="77" font-size="11.5" text-anchor="middle" fill="#7a3b2e">vanishing gradient —</text>
+    <text x="1048" y="91" font-size="11.5" text-anchor="middle" fill="#7a3b2e">never recovers</text>
+    <!-- depth edge inset -->
+    <text x="180" y="140" font-size="13" font-weight="700">Why depth edges make it worse:</text>
+    <rect x="30" y="155" width="180" height="120" rx="6" fill="#eef1f5" stroke="#8fa3b8"/>
+    <rect x="30" y="155" width="90" height="120" fill="#cfd9e4"/>
+    <circle cx="120" cy="215" r="7" fill="none" stroke="#c0392b" stroke-width="3"/>
+    <text x="75" y="290" font-size="11.5" fill="#5b6b7d">door (near)</text>
+    <text x="165" y="290" font-size="11.5" fill="#5b6b7d">wall (far)</text>
+    <text x="230" y="180" font-size="12.5" fill="#45566b">Interaction points sit ON depth discontinuities</text>
+    <text x="230" y="197" font-size="12.5" fill="#45566b">(handles, rims, edges of the moving part). Nudging</text>
+    <text x="230" y="214" font-size="12.5" fill="#45566b">point_uv one pixel across the edge teleports the sampled</text>
+    <text x="230" y="231" font-size="12.5" fill="#45566b">depth by a meter — so the anchor's z, and with it the whole</text>
+    <text x="230" y="248" font-size="12.5" fill="#45566b">projected curve, is wildly gradient-sensitive exactly where</text>
+    <text x="230" y="265" font-size="12.5" fill="#45566b">the point head is supposed to converge.</text>
+    <!-- timeline -->
+    <text x="700" y="140" font-size="13" font-weight="700">The timeline in the training CSV (launch 2):</text>
+    <text x="700" y="163" font-size="12.5" fill="#45566b">step 9 — projection ratio <tspan fill="#c0392b" font-weight="600">51.5</tspan>, mask loss 3.5 (learning)</text>
+    <text x="700" y="182" font-size="12.5" fill="#45566b">step ~200 — mask loss hits <tspan fill="#c0392b" font-weight="600">0.57 = the empty-prediction plateau</tspan></text>
+    <text x="700" y="201" font-size="12.5" fill="#45566b">…epoch 29 — mask loss still 0.57. Point error ends 3× worse than g17.</text>
+    <text x="700" y="228" font-size="12.5" fill="#45566b">The twist-era 2donly arm ran this SAME projection loss UNNORMALIZED</text>
+    <text x="700" y="245" font-size="12.5" fill="#45566b">(errors bounded by uv² ≤ ~1) and kept its masks — the ×30–50</text>
+    <text x="700" y="262" font-size="12.5" fill="#45566b">amplification came from the gen-16-style normalization I added.</text>
+  </svg>
+  <p class="cap">So the causality is circular and self-defeating: the loss
+  needs a good anchor to measure shape → its own amplified gradients
+  destroy the features that place the anchor → the anchor offset dominates
+  the loss → the trajectory head gets almost no usable shape signal.</p>
+</div>
+
+<h2>3 · One more calibration fact: the yardstick is harsh</h2>
+<div class="card">
+<table>
+  <tr><th></th><th>anchor err</th><th>shape err</th><th>total</th><th>GT motion scale</th></tr>
+  <tr><td>g17-2donly (rot / trans)</td><td>0.21 / 0.18</td><td>0.19 / 0.15</td><td>0.24 / 0.23</td><td rowspan="2">0.22 / 0.21</td></tr>
+  <tr><td>g17 — full 3D, traj_dir 94.9%</td><td>0.07 / 0.11</td><td>0.12 / 0.10</td><td>0.15 / 0.16</td></tr>
+</table>
+<p class="cap">Even the best 3D-supervised model scores ~0.10–0.12 shape
+error against a 0.21 motion scale — its arcs ride the tracks direction-wise
+but over/under-shoot in extent, and this metric charges every uv of that.
+"Learned it somewhat" on this metric looks like ~0.10, not ~0.01. The
+2D-only arm's real shortfall is the anchor column.</p>
+</div>
+
+<h2>4 · The fix that falls out of the diagram</h2>
+<div class="row">
+  <div class="card">
+    <b>Cut the red path: detach the anchor.</b>
+    <p class="cap" style="margin-top:6px">Stop gradients at the anchor (both
+    point_uv and the sampled z) inside the projection loss. The term then
+    teaches ONLY trajectory shape — and point placement keeps its own
+    clean, direct 2D supervision (heatmap + coord), which is how g17 gets
+    its 0.095 point error. The depth-edge gradient bomb is defused
+    entirely; the anchor still improves, just via the right teacher.</p>
+  </div>
+  <div class="card">
+    <b>Drop the ×30–50 amplifier.</b>
+    <p class="cap" style="margin-top:6px">Back to plain masked MSE (the
+    twist-era form that coexisted with healthy masks), or cap the
+    normalized ratio. The rot/trans scale imbalance the normalization
+    targeted is much milder in bounded uv space than it was in meters.</p>
+  </div>
+  <div class="card">
+    <b>Track what you actually care about.</b>
+    <p class="cap" style="margin-top:6px">Add <code>test/traj_proj2d_err</code>
+    (+ the anchor/shape split) to the standard test pass — for every arm,
+    not just 2D ones. It would also have exposed g17's own 0.15 headroom
+    a week ago. The probe (<code>tools/diag_proj2d.py</code>) already
+    computes it.</p>
+  </div>
+</div>
+
+</div>
+</body>
+</html>
