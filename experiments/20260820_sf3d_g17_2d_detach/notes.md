@@ -24,4 +24,4 @@ loss teaches shape properly once its gradients stop routing through the
 depth-edge anchor. Articulation (axis/type/origin) unchanged-bad, as
 expected: that is the separate L_pp-is-too-weak problem.
 
-vis: (three-way table in the fullfix arm's notes)
+vis: viz/20260821_sf3d_g17_2d_detach_panels (three-way metric table in the fullfix arm's notes)

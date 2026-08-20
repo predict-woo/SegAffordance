@@ -8,6 +8,7 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
 |---|---|---|
+| [20260821_sf3d_g17_2d_detach_panels](20260821_sf3d_g17_2d_detach_panels/README.md) | arm A solo (2D-only + anchor detach) — trajectories ride the GT tracks, masks back, axes still unlearned | `tools/sf3d_vis_predictions.py` |
 | [20260819_sf3d_g17_2d_vs_g17_panels](20260819_sf3d_g17_2d_vs_g17_panels/README.md) | 2D-only vs full 3D — points/grounding survive, direction visible but compressed, masks near-gone, axes random | `tools/sf3d_vis_predictions.py` |
 | [20260818_sf3d_g17_vs_g16_panels](20260818_sf3d_g17_vs_g16_panels/README.md) | split-axis-heads before/after — fridge axis flip fixed (170°→20°), full sweeps kept, trans rays unchanged | `tools/sf3d_vis_predictions.py` |
 | [20260817_sf3d_g16_vs_g13_panels](20260817_sf3d_g16_vs_g13_panels/README.md) | rot-collapse fix before/after — g16 arcs sweep full extent on GT+orbit, g13 clumps at the anchor | `tools/sf3d_vis_predictions.py` |
