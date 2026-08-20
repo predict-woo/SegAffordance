@@ -26,6 +26,7 @@ CONFIGS = [
     ("g14", "config/sf3d_train_runpod_g14_taps.yaml"),
     ("g15", "config/sf3d_train_runpod_g15_costmap.yaml"),
     ("g17", "config/sf3d_train_runpod_g17_splitax.yaml"),
+    ("g19dct", "config/sf3d_train_runpod_g19_dct.yaml"),
 ]
 # SMOKE_ONLY=g17: run a single stage — five consecutive ViT-L constructions
 # in one process OOM the 24GB dev card even with del + empty_cache.
