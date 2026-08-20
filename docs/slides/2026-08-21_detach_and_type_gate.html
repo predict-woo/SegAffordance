@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Detach & the Type Gate</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 0; background: #f6f7f9; color: #1c2733; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 28px 32px 60px; }
+  h1 { font-size: 26px; margin: 8px 0 4px; }
+  h2 { font-size: 19px; margin: 34px 0 10px; border-bottom: 2px solid #d7dde5; padding-bottom: 6px; }
+  p.lead { color: #45566b; margin: 4px 0 18px; max-width: 950px; }
+  .card { background: #fff; border: 1px solid #e1e6ec; border-radius: 10px; padding: 18px 20px; margin: 14px 0; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .row .card { flex: 1 1 480px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .cap { font-size: 13px; color: #5b6b7d; margin-top: 8px; line-height: 1.45; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { border: 1px solid #dde3ea; padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: #eef1f5; }
+  .note { background: #eef4fb; border-left: 4px solid #3d7cc9; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px; color: #2c4157; }
+  code { background: #eef1f5; border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 10px; margin-bottom: 8px; }
+  .bad { background: #fde8d8; color: #a33b26; }
+  .good { background: #e0f3e6; color: #1e7a3c; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>What "Detach the Anchor" Actually Does — and Why the Type Gate Didn't Care</h1>
+<p class="lead">
+Two questions, one page. First: <code>detach</code> changes NOTHING about
+what the loss computes — it only changes <b>which weights receive the
+error signal</b> when the loss is backpropagated. Second: the type head's
+only teacher in 2D-only training is a completely different channel that
+the detach neither broke nor fixed — which is why type sat at the
+majority baseline in every arm.
+</p>
+
+<h2>1 · Detach = same forward, cut backward</h2>
+<div class="row">
+  <div class="card">
+    <span class="tag bad">BEFORE — gradients flow everywhere the values came from</span>
+    <svg viewBox="0 0 560 330" width="100%">
+      <defs><marker id="g1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#7a8ca0"/></marker>
+      <marker id="r1" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#c0392b"/></marker></defs>
+      <!-- forward chain -->
+      <rect x="20" y="20" width="150" height="44" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="95" y="39" font-size="12" text-anchor="middle" font-weight="600">point_uv</text>
+      <text x="95" y="55" font-size="10.5" text-anchor="middle" fill="#5b6b7d">from the heatmap / trunk</text>
+      <rect x="205" y="20" width="150" height="44" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="280" y="39" font-size="12" text-anchor="middle" font-weight="600">depth lookup</text>
+      <text x="280" y="55" font-size="10.5" text-anchor="middle" fill="#5b6b7d">grid_sample(D, uv)</text>
+      <rect x="390" y="20" width="150" height="44" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="465" y="39" font-size="12" text-anchor="middle" font-weight="600">anchor (3D)</text>
+      <line x1="170" y1="42" x2="203" y2="42" stroke="#7a8ca0" marker-end="url(#g1)"/>
+      <line x1="355" y1="42" x2="388" y2="42" stroke="#7a8ca0" marker-end="url(#g1)"/>
+      <rect x="20" y="110" width="150" height="44" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="95" y="129" font-size="12" text-anchor="middle" font-weight="600">trajectory head</text>
+      <text x="95" y="145" font-size="10.5" text-anchor="middle" fill="#5b6b7d">relative 3D curve</text>
+      <rect x="205" y="110" width="335" height="44" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="372" y="129" font-size="12" text-anchor="middle" font-weight="600">anchor + curve → project → vs GT track</text>
+      <text x="372" y="145" font-size="10.5" text-anchor="middle" fill="#5b6b7d">the projection LOSS value</text>
+      <line x1="170" y1="132" x2="203" y2="132" stroke="#7a8ca0" marker-end="url(#g1)"/>
+      <line x1="465" y1="64" x2="440" y2="108" stroke="#7a8ca0" marker-end="url(#g1)"/>
+      <!-- backward arrows -->
+      <text x="30" y="200" font-size="12.5" font-weight="700" fill="#c0392b">backward (the error signal):</text>
+      <line x1="372" y1="215" x2="120" y2="215" stroke="#c0392b" stroke-width="2.5" marker-end="url(#r1)"/>
+      <text x="240" y="208" font-size="11" fill="#c0392b">→ trajectory head ✓ (wanted)</text>
+      <line x1="372" y1="248" x2="120" y2="248" stroke="#c0392b" stroke-width="2.5" stroke-dasharray="6 3" marker-end="url(#r1)"/>
+      <text x="238" y="241" font-size="11" fill="#c0392b">→ anchor → depth lookup → point_uv →</text>
+      <text x="238" y="263" font-size="11" fill="#c0392b">heatmap → projector → decoder → FPN (toxic)</text>
+      <text x="30" y="300" font-size="11.5" fill="#7a3b2e">The second path carries ∂z/∂uv from the depth edge — huge, noisy —</text>
+      <text x="30" y="316" font-size="11.5" fill="#7a3b2e">amplified ×30–50 by the normalization. It wrecked the shared trunk.</text>
+    </svg>
+  </div>
+  <div class="card">
+    <span class="tag good">AFTER — detach: identical values, one receiver</span>
+    <svg viewBox="0 0 560 330" width="100%">
+      <defs><marker id="g2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#7a8ca0"/></marker>
+      <marker id="r2" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#c0392b"/></marker></defs>
+      <rect x="20" y="20" width="150" height="44" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="95" y="39" font-size="12" text-anchor="middle" font-weight="600">point_uv</text>
+      <rect x="205" y="20" width="150" height="44" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="280" y="39" font-size="12" text-anchor="middle" font-weight="600">depth lookup</text>
+      <rect x="390" y="20" width="150" height="44" rx="7" fill="#e0f3e6" stroke="#1e7a3c"/>
+      <text x="465" y="39" font-size="12" text-anchor="middle" font-weight="600">anchor.detach()</text>
+      <text x="465" y="55" font-size="10.5" text-anchor="middle" fill="#3c6e4c">same VALUE, treated as a constant</text>
+      <line x1="170" y1="42" x2="203" y2="42" stroke="#7a8ca0" marker-end="url(#g2)"/>
+      <line x1="355" y1="42" x2="388" y2="42" stroke="#7a8ca0" marker-end="url(#g2)"/>
+      <rect x="20" y="110" width="150" height="44" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="95" y="129" font-size="12" text-anchor="middle" font-weight="600">trajectory head</text>
+      <rect x="205" y="110" width="335" height="44" rx="7" fill="#fff" stroke="#8fa3b8"/>
+      <text x="372" y="129" font-size="12" text-anchor="middle" font-weight="600">anchor + curve → project → vs GT track</text>
+      <text x="372" y="145" font-size="10.5" text-anchor="middle" fill="#5b6b7d">IDENTICAL loss value (unit-tested)</text>
+      <line x1="170" y1="132" x2="203" y2="132" stroke="#7a8ca0" marker-end="url(#g2)"/>
+      <line x1="465" y1="64" x2="440" y2="108" stroke="#7a8ca0" marker-end="url(#g2)"/>
+      <text x="30" y="200" font-size="12.5" font-weight="700" fill="#1e7a3c">backward:</text>
+      <line x1="372" y1="215" x2="120" y2="215" stroke="#c0392b" stroke-width="2.5" marker-end="url(#r2)"/>
+      <text x="240" y="208" font-size="11" fill="#c0392b">→ trajectory head ✓ (the only receiver)</text>
+      <line x1="372" y1="248" x2="480" y2="248" stroke="#9aa7b5" stroke-width="2.5"/>
+      <line x1="452" y1="236" x2="472" y2="260" stroke="#1e7a3c" stroke-width="3"/>
+      <line x1="472" y1="236" x2="452" y2="260" stroke="#1e7a3c" stroke-width="3"/>
+      <text x="255" y="270" font-size="11" fill="#5b6b7d">anchor path: STOPPED — no gradient enters</text>
+      <text x="30" y="300" font-size="11.5" fill="#3c6e4c">"Grade the trajectory as if the anchor were a fixed fact of the world."</text>
+      <text x="30" y="316" font-size="11.5" fill="#3c6e4c">point_uv still improves — via its OWN losses (heatmap + coord, clean 2D GT).</text>
+    </svg>
+  </div>
+</div>
+<div class="note">
+The subtlety people trip on: detaching does NOT freeze the anchor. Every
+training step still uses the CURRENT predicted point (the anchor keeps
+getting better as the heatmap losses improve it) — the projection loss
+just stops being one of its teachers. Division of labor: heatmap/coord
+teach WHERE, the projection loss teaches the curve's SHAPE from there.
+Result: masks 0.057→0.242 mIoU, point 0.307→0.117, shape 0.16→0.0997.
+</div>
+
+<h2>2 · Why none of this reaches the type head</h2>
+<div class="card">
+  <svg viewBox="0 0 1160 350" width="100%">
+    <defs><marker id="b3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#3d7cc9"/></marker>
+    <marker id="p3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#8e44ad"/></marker></defs>
+    <text x="280" y="26" font-size="14" text-anchor="middle" font-weight="700" fill="#3d7cc9">3D arm (g17): type has a DIRECT teacher</text>
+    <rect x="60" y="45" width="200" height="46" rx="7" fill="#fff" stroke="#8fa3b8"/>
+    <text x="160" y="64" font-size="12" text-anchor="middle" font-weight="600">appearance features</text>
+    <text x="160" y="80" font-size="10.5" text-anchor="middle" fill="#5b6b7d">drawer front + knob vs door + hinge</text>
+    <line x1="260" y1="68" x2="310" y2="68" stroke="#3d7cc9" stroke-width="2.5" marker-end="url(#b3)"/>
+    <rect x="312" y="45" width="120" height="46" rx="7" fill="#fff" stroke="#8fa3b8"/>
+    <text x="372" y="64" font-size="12" text-anchor="middle" font-weight="600">type head</text>
+    <line x1="432" y1="68" x2="482" y2="68" stroke="#3d7cc9" stroke-width="2.5" marker-end="url(#b3)"/>
+    <rect x="484" y="45" width="120" height="46" rx="7" fill="#e3ecf9" stroke="#23508e"/>
+    <text x="544" y="64" font-size="12" text-anchor="middle" font-weight="600">CE vs GT label</text>
+    <text x="544" y="80" font-size="10.5" text-anchor="middle" fill="#23508e">weight 0.5 → 95.3%</text>
+
+    <line x1="20" y1="115" x2="1140" y2="115" stroke="#d7dde5" stroke-width="2"/>
+
+    <text x="420" y="145" font-size="14" font-weight="700" fill="#8e44ad">2D-only arms: type's ONLY teacher is L_pp's fit comparison — a long, degraded chain</text>
+    <rect x="30" y="165" width="170" height="46" rx="7" fill="#fff" stroke="#8fa3b8"/>
+    <text x="115" y="184" font-size="12" text-anchor="middle" font-weight="600">predicted trajectory</text>
+    <text x="115" y="200" font-size="10.5" text-anchor="middle" fill="#a33b26">depth-sloppy: 2D pins 2 of 3 DOF</text>
+    <line x1="200" y1="188" x2="248" y2="188" stroke="#8e44ad" stroke-width="2.5" marker-end="url(#p3)"/>
+    <rect x="250" y="150" width="180" height="40" rx="7" fill="#fff" stroke="#8fa3b8"/>
+    <text x="340" y="167" font-size="12" text-anchor="middle" font-weight="600">line residual (trans fit)</text>
+    <text x="340" y="182" font-size="10.5" text-anchor="middle" fill="#5b6b7d">bounded ≤ 1, needs only an axis</text>
+    <rect x="250" y="196" width="180" height="40" rx="7" fill="#fff" stroke="#a33b26"/>
+    <text x="340" y="213" font-size="12" text-anchor="middle" font-weight="600">circle residual (rot fit)</text>
+    <text x="340" y="228" font-size="10.5" text-anchor="middle" fill="#a33b26">needs the ORIGIN — which is dark</text>
+    <line x1="430" y1="188" x2="478" y2="188" stroke="#8e44ad" stroke-width="2.5" marker-end="url(#p3)"/>
+    <rect x="480" y="165" width="190" height="46" rx="7" fill="#f4ecfa" stroke="#8e44ad"/>
+    <text x="575" y="184" font-size="12" text-anchor="middle" font-weight="600">∂L_pp/∂p_rev =</text>
+    <text x="575" y="200" font-size="12" text-anchor="middle" font-weight="600">circle − line (per sample)</text>
+    <line x1="670" y1="188" x2="718" y2="188" stroke="#8e44ad" stroke-width="2.5" marker-end="url(#p3)"/>
+    <rect x="720" y="165" width="120" height="46" rx="7" fill="#fff" stroke="#8fa3b8"/>
+    <text x="780" y="190" font-size="12" text-anchor="middle" font-weight="600">type head</text>
+    <rect x="870" y="150" width="270" height="80" rx="7" fill="#fdf3e7" stroke="#d68a2e"/>
+    <text x="1005" y="172" font-size="12" text-anchor="middle" font-weight="600">what it learns: ~nothing</text>
+    <text x="1005" y="190" font-size="11" text-anchor="middle" fill="#5a4327">signal = a noisy residual difference at</text>
+    <text x="1005" y="205" font-size="11" text-anchor="middle" fill="#5a4327">weight 0.1; balance prior only pins the</text>
+    <text x="1005" y="220" font-size="11" text-anchor="middle" fill="#5a4327">MEAN (no per-sample information)</text>
+    <text x="30" y="270" font-size="12.5" fill="#45566b">Two reasons the residual difference is noise: (1) the arc-vs-line distinction lives mostly in DEPTH — exactly the</text>
+    <text x="30" y="287" font-size="12.5" fill="#45566b">dimension 2D supervision leaves free — so the predicted curves are geometrically ambiguous between the two models;</text>
+    <text x="30" y="304" font-size="12.5" fill="#45566b">(2) the circle fit needs the predicted origin, which itself trains only through L_pp on rot rows — a chicken-and-egg:</text>
+    <text x="30" y="321" font-size="12.5" fill="#45566b">no gate → no origin training → bad circle fits → true doors don't prefer the circle branch → no gate. Deadlocked.</text>
+  </svg>
+</div>
+
+<h2>3 · So what did the detach change for type? Nothing — by construction</h2>
+<div class="card">
+<table>
+  <tr><th></th><th>trunk / masks / point</th><th>trajectory shape</th><th>type accuracy</th></tr>
+  <tr><td>g17-2d (broken)</td><td>collapsed (0.057)</td><td>0.16</td><td>75.2</td></tr>
+  <tr><td>arm A (detach)</td><td><b>recovered (0.242)</b></td><td><b>0.0997</b></td><td>75.4</td></tr>
+  <tr><td>arm B (+ unnormalized)</td><td><b>0.260</b></td><td>0.128</td><td>79.0</td></tr>
+  <tr><td>always-trans baseline</td><td>—</td><td>—</td><td>77.5</td></tr>
+  <tr><td>g17 (3D labels)</td><td>0.265</td><td>0.11</td><td><b>95.3</b></td></tr>
+</table>
+<p class="cap">The detach operated on the blue data-term path (§1); the type
+head hangs off the purple consistency path (§2). Fixing the first
+recovered everything downstream of the trunk — but the gate's channel was
+never broken by the anchor bug and never fixed by the detach: it is weak
+by construction. All three 2D arms sit within ±2 points of the
+always-trans baseline; type was never learned in any of them.</p>
+</div>
+
+<div class="note">
+<b>The way out (parked, not yet run):</b> the GT 2D tracks themselves
+carry type information — drawer tracks are straight, door tracks are
+(usually) curved in projection. A straightness statistic on the GT track
+= a legitimate 2D-only pseudo-label; a CE on confident pseudo-labels
+(abstain on edge-on ambiguous ones) would restore the DIRECT
+appearance→type channel of the top diagram without touching a single 3D
+label — and a working gate would in turn unlock the origin/axis training
+that the circle branch's deadlock currently blocks.
+</div>
+
+</div>
+</body>
+</html>
