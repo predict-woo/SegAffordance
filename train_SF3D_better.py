@@ -12,7 +12,11 @@ from pytorch_lightning.loggers import WandbLogger
 from config.opd_train import Config, LossParams, ModelParams, OptimizerParams
 from datasets.scenefun3d_datamodule import SF3DDataModule
 from model.losses import decode_twist, point_to_line_distance
-from model.losses.geometric import normalized_intrinsics
+from model.losses.geometric import (
+    backproject_points,
+    normalized_intrinsics,
+    project_points,
+)
 from model.losses.split import perpendicular_foot
 from model.segmenter import CRIS
 from train_OPDReal_better import OPDRealTrainingModule
@@ -48,6 +52,14 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         self._test_axis_errors_signed_rot = []   # rot rows only (flips there
                                                  # reverse the swing direction)
         self._test_ma_signed_correct_all = 0     # type ok AND signed <= thr
+        # 2D reprojection decomposition (2026-08-20): GT 2D track vs the
+        # predicted 3D curve projected with the input-depth anchor — the
+        # 2D-only arm's headline metric, split into anchor placement vs
+        # trajectory shape (first points aligned). Collected only when the
+        # batch carries the 2D track (return_trajectory_2d configs).
+        self._test_proj2d_err = []
+        self._test_proj2d_anchor = []
+        self._test_proj2d_shape = []
         self._test_origin_errors_rotational_all = []
         # Ablation arms (2026-08-15 spec): set during test_step when the
         # axis/type heads actually produced predictions.
@@ -266,6 +278,7 @@ class SF3DTrainingModule(OPDRealTrainingModule):
     def test_step(self, batch, batch_idx):
         # Unpack batch, handling optional camera parameters
         camera_params_in_batch = len(batch) > 10
+        _trajectory_2d_extras = []  # filled only by the 15-tuple format
         if camera_params_in_batch:
             # This is the new format including trajectory (a 15-tuple appends
             # the 2D trajectory columns, unused by these metrics)
@@ -556,6 +569,51 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                         ((pred_net * gt_net).sum() / denom).item()
                     )
 
+            # --- 2D reprojection decomposition (mirrors tools/diag_proj2d.py
+            # and the TrajectoryProjectionLoss chain: point_uv lifted with
+            # the INPUT depth, + relative trajectory, projected) ---
+            if (
+                len(_trajectory_2d_extras) >= 2
+                and outputs.point_uv is not None
+                and outputs.trajectory_pred is not None
+                and camera_params_in_batch
+                and intrinsic_matrix is not None
+            ):
+                _dev = outputs.point_uv.device
+                _K_n = normalized_intrinsics(
+                    intrinsic_matrix[i:i + 1].float().to(_dev),
+                    _img_size[i:i + 1].float().to(_dev),
+                )
+                _uv = outputs.point_uv[i:i + 1].detach().float()
+                _grid = (_uv * 2.0 - 1.0).view(1, 1, 1, 2)
+                _z = F.grid_sample(
+                    depth[i:i + 1].float().to(_dev), _grid, align_corners=False
+                ).view(1)
+                if float(_z) > 1e-3:
+                    _anchor = backproject_points(_K_n, _uv, _z)
+                    _curve = (
+                        _anchor.unsqueeze(1)
+                        + outputs.trajectory_pred[i:i + 1].detach().float()
+                    )
+                    _proj = project_points(_K_n, _curve)[0]
+                    _track = (
+                        _trajectory_2d_extras[0][i].float()
+                        / _img_size[i].float().clamp(min=1.0)
+                    ).to(_dev)
+                    _tvalid = _trajectory_2d_extras[1][i].bool().to(_dev)
+                    _v = _tvalid & (_curve[0, :, 2] > 0.05)
+                    if int(_v.sum()) >= 2 and int(_tvalid.sum()) >= 1:
+                        _p, _t = _proj[_v], _track[_v]
+                        self._test_proj2d_err.append(
+                            float((_p - _t).norm(dim=-1).mean())
+                        )
+                        self._test_proj2d_shape.append(
+                            float(((_p - _p[0]) - (_t - _t[0])).norm(dim=-1).mean())
+                        )
+                        self._test_proj2d_anchor.append(
+                            float((_proj[0] - _track[_tvalid][0]).norm())
+                        )
+
             # --- Original evaluation for IoU-matched samples ---
             if iou_val > self.config.test_iou_threshold:
                 self._test_num_matched += 1
@@ -842,6 +900,19 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                 )
                 self.log("test/twist_dir_acc", twist_dir_acc, logger=True, sync_dist=True)
 
+        proj2d_stats = None
+        if self._test_proj2d_err:
+            proj2d_stats = {}
+            for name, vals in (
+                ("test/traj_proj2d_err", self._test_proj2d_err),
+                ("test/traj_proj2d_anchor", self._test_proj2d_anchor),
+                ("test/traj_proj2d_shape", self._test_proj2d_shape),
+            ):
+                g = self.all_gather(torch.tensor(vals, device=self.device))
+                m = float(g.mean().item()) if g.numel() > 0 else 0.0
+                self.log(name, m, logger=True, sync_dist=False)
+                proj2d_stats[name] = m
+
         if self._test_traj_dir_cos:
             traj_dir_cos = float(
                 torch.tensor(self._test_traj_dir_cos).mean().item()
@@ -898,6 +969,13 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                 print(
                     f"Mean Origin Error (m, for rotational): {mean_origin_error_m:.4f}"
                 )
+            if proj2d_stats is not None:
+                print(
+                    "2D Reprojection (uv): total "
+                    f"{proj2d_stats['test/traj_proj2d_err']:.4f}  anchor "
+                    f"{proj2d_stats['test/traj_proj2d_anchor']:.4f}  shape "
+                    f"{proj2d_stats['test/traj_proj2d_shape']:.4f}"
+                )
             if twist_ran:
                 print(f"\n--- Twist Head (unified screw parameterisation) ---")
                 print(f"Type Accuracy (|omega| > 0.5): {twist_type_acc:.2f}%")
@@ -950,6 +1028,9 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         self._test_type_correct_all = 0
         self._test_ma_correct_all = 0
         self._test_ma_signed_correct_all = 0
+        self._test_proj2d_err.clear()
+        self._test_proj2d_anchor.clear()
+        self._test_proj2d_shape.clear()
         self._test_has_axis_head = False
         self._test_has_type_head = False
         self._test_origin_errors_rotational_all.clear()

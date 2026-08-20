@@ -219,3 +219,56 @@ def test_training_step_2donly_no_3dgt_gradient():
     loss0.backward()
     g = m0.model.motion_mlp.motion_head_rot[0].weight.grad
     assert g is None or torch.all(g == 0)  # nothing else touches the axis
+
+
+# --------------------------------------------------- detach-anchor (arm A/B)
+
+def test_detach_anchor_blocks_gradient_to_point_uv():
+    point_uv = (torch.full((B, 2), 0.5)).requires_grad_(True)
+    traj = (torch.randn(B, N, 3) * 0.05).requires_grad_(True)
+    track = torch.rand(B, N, 2) * 0.4 + 0.3
+    loss = TrajectoryProjectionLoss(weight=1.0, normalized=True,
+                                    detach_anchor=True)
+    total, _ = loss(_outputs(point_uv, traj), _targets(track), _depth())
+    total.backward()
+    assert point_uv.grad is None or torch.all(point_uv.grad == 0)
+    assert traj.grad is not None and traj.grad.abs().sum() > 0
+
+
+def test_undetached_anchor_gradient_reaches_point_uv():
+    point_uv = (torch.full((B, 2), 0.5)).requires_grad_(True)
+    traj = (torch.randn(B, N, 3) * 0.05).requires_grad_(True)
+    track = torch.rand(B, N, 2) * 0.4 + 0.3
+    loss = TrajectoryProjectionLoss(weight=1.0, normalized=True,
+                                    detach_anchor=False)
+    total, _ = loss(_outputs(point_uv, traj), _targets(track), _depth())
+    total.backward()
+    assert point_uv.grad is not None and point_uv.grad.abs().sum() > 0
+
+
+def test_detach_anchor_same_forward_value():
+    point_uv = torch.full((B, 2), 0.5)
+    traj = torch.randn(B, N, 3) * 0.05
+    track = torch.rand(B, N, 2) * 0.4 + 0.3
+    a, _ = TrajectoryProjectionLoss(weight=1.0, normalized=True,
+                                    detach_anchor=True)(
+        _outputs(point_uv, traj), _targets(track), _depth())
+    b, _ = TrajectoryProjectionLoss(weight=1.0, normalized=True,
+                                    detach_anchor=False)(
+        _outputs(point_uv, traj), _targets(track), _depth())
+    assert torch.allclose(a, b)
+
+
+def test_arm_configs_match_spec():
+    base = _load_cfg("sf3d_train_runpod_g17_2donly.yaml")
+    for name, normalized in (("sf3d_train_runpod_g17_2d_detach.yaml", True),
+                             ("sf3d_train_runpod_g17_2d_fullfix.yaml", False)):
+        arm = _load_cfg(name)
+        assert arm["model"]["model_params"] == base["model"]["model_params"], name
+        lp = dict(arm["model"]["loss_params"])
+        assert lp.pop("trajectory_proj_detach_anchor") is True, name
+        assert lp.pop("trajectory_proj_normalized") is normalized, name
+        blp = dict(base["model"]["loss_params"])
+        blp.pop("trajectory_proj_normalized")
+        assert lp == blp, name
+        assert arm["data"] == base["data"], name

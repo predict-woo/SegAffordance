@@ -261,6 +261,11 @@ class LossParams:
     # p_rev_mean 0.44 -> 0.0015). Target = the key set's rot fraction.
     p_rev_balance_weight: float = 0.0
     p_rev_balance_target: float = 0.225
+    # 2026-08-20 (g17-2d post-mortem): detach the projection loss's anchor
+    # (point_uv + sampled depth) so the term teaches only trajectory shape.
+    # The un-detached gradient through grid_sample at depth edges collapsed
+    # the shared trunk (masks/heatmaps) in the first g17-2d runs.
+    trajectory_proj_detach_anchor: bool = False
     # Gen-17-2D: GT-free z_p tether — masked MSE between the lifted point's
     # depth and the INPUT depth sampled at a detached point_uv. Keeps the
     # lift calibrated when the 3D point loss is off (2D-only arms).

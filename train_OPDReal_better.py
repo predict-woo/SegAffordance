@@ -96,6 +96,9 @@ class OPDRealTrainingModule(pl.LightningModule):
             energy_floor=getattr(
                 self.loss_params, "trajectory_proj_energy_floor", 1e-4
             ),
+            detach_anchor=getattr(
+                self.loss_params, "trajectory_proj_detach_anchor", False
+            ),
         )
         self.twist_loss = TwistLoss(
             weight=getattr(self.loss_params, "twist_weight", 0.5),

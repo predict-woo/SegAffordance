@@ -987,12 +987,20 @@ class TrajectoryProjectionLoss(nn.Module):
 
     def __init__(
         self, weight: float, near_plane: float = 0.05, normalized: bool = False,
-        energy_floor: float = 1e-4,
+        energy_floor: float = 1e-4, detach_anchor: bool = False,
     ):
         super().__init__()
         self.weight = weight
         self.near_plane = near_plane
         self.energy_floor = energy_floor
+        # 2026-08-20 (g17-2d post-mortem): stop gradients at the anchor
+        # (point_uv AND the depth sample). ∂z/∂uv through grid_sample is
+        # enormous at depth discontinuities — and interaction points sit ON
+        # them (handles, rims) — so the un-detached term hammered the shared
+        # trunk and collapsed masks/heatmaps. Detached, the term teaches
+        # ONLY trajectory shape; anchor placement keeps its own direct 2D
+        # supervision (heatmap + coord losses).
+        self.detach_anchor = detach_anchor
         # Gen-17-2D (2026-08-18 spec): per-row relative error — each row's
         # masked MSE divided by its GT track's motion energy (track
         # relative to its first valid point). Same philosophy as the
@@ -1025,11 +1033,15 @@ class TrajectoryProjectionLoss(nn.Module):
                 targets.camera_intrinsic.to(device), targets.img_size.to(device)
             )
             coords = outputs.point_uv.float()
+            if self.detach_anchor:
+                coords = coords.detach()
             grid = (coords * 2.0 - 1.0).view(-1, 1, 1, 2)
             z = F.grid_sample(
                 depth.to(device).float(), grid, align_corners=False
             ).view(-1)
             anchor = backproject_points(K_norm, coords, z)
+            if self.detach_anchor:
+                anchor = anchor.detach()
             anchor_ok = z > 1e-3
 
             traj_abs = anchor.unsqueeze(1) + outputs.trajectory_pred.float()
