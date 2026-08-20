@@ -315,12 +315,19 @@ class MotionMLP(nn.Module):
 class TrajectoryMLP(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: int = 256, num_points: int = 20,
                  delta_cumsum: bool = False, num_hypotheses: int = 1,
-                 absolute: bool = False):
+                 absolute: bool = False, dct_coeffs: int = 0):
         super().__init__()
         assert not (absolute and delta_cumsum), (
             "trajectory_absolute and trajectory_delta_cumsum are mutually "
             "exclusive: absolute mode is the direct (non-cumsum) readout"
         )
+        if dct_coeffs > 0 and delta_cumsum:
+            raise ValueError(
+                "trajectory_dct_coeffs and trajectory_delta_cumsum are "
+                "competing smoothing parameterizations — pick one"
+            )
+        if dct_coeffs > num_points:
+            raise ValueError("trajectory_dct_coeffs cannot exceed num_points")
         self.num_points = num_points
         # absolute: the num_points outputs are ABSOLUTE camera-frame points
         # (gen-7), not positions relative to the trajectory's own first point.
@@ -342,6 +349,24 @@ class TrajectoryMLP(nn.Module):
         # into the zigzag clouds the direct head produced (see
         # viz/20260803_sf3d_twist_traj_points).
         self.delta_cumsum = delta_cumsum
+        # Gen-19: truncated-DCT readout — the head emits dct_coeffs
+        # low-frequency DCT-II coefficients per axis and a fixed IDCT
+        # matrix decodes them to num_points positions. Jitter above the
+        # K-th frequency is UNREPRESENTABLE by construction (the
+        # motion-forecasting standard: Mao'19 / siMLPe / HumanMAC —
+        # knowledge/trajectory-parameterization-survey.md). Losses stay on
+        # the decoded points; forward output shape is unchanged.
+        self.dct_coeffs = int(dct_coeffs)
+        if self.dct_coeffs > 0:
+            N, K = num_points, self.dct_coeffs
+            n = torch.arange(N, dtype=torch.float64)
+            k = torch.arange(N, dtype=torch.float64)
+            dct_m = torch.cos(math.pi * (n[None, :] + 0.5) * k[:, None] / N)
+            dct_m *= math.sqrt(2.0 / N)
+            dct_m[0] /= math.sqrt(2.0)
+            # Orthonormal: inverse == transpose. Keep the first K rows'
+            # transpose as the (N, K) decode matrix.
+            self.register_buffer("idct_m", dct_m[:K].T.contiguous().float())
         self.backbone = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(True),
@@ -349,7 +374,10 @@ class TrajectoryMLP(nn.Module):
             nn.ReLU(True),
         )
         # Each point has 3 coordinates (x, y, z)
-        out_points = num_points - 1 if delta_cumsum else num_points
+        if self.dct_coeffs > 0:
+            out_points = self.dct_coeffs
+        else:
+            out_points = num_points - 1 if delta_cumsum else num_points
         self.trajectory_head = nn.Linear(
             hidden_dim, num_hypotheses * out_points * 3
         )
@@ -359,6 +387,10 @@ class TrajectoryMLP(nn.Module):
         h = self.backbone(condition)
         trajectory_pred = self.trajectory_head(h)
         K = self.num_hypotheses
+        if self.dct_coeffs > 0:
+            coeffs = trajectory_pred.view(-1, K, self.dct_coeffs, 3)
+            # (N, C) @ (B, K, C, 3) -> (B, K, N, 3)
+            return torch.einsum("nc,bkcd->bknd", self.idct_m, coeffs)
         if self.delta_cumsum:
             deltas = trajectory_pred.view(-1, K, self.num_points - 1, 3)
             rel = torch.cumsum(deltas, dim=2)

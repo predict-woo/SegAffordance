@@ -266,6 +266,7 @@ class CRIS(nn.Module):
                 delta_cumsum=getattr(model_params, "trajectory_delta_cumsum", False),
                 num_hypotheses=self.twist_num_hypotheses,
                 absolute=getattr(model_params, "trajectory_absolute", False),
+                dct_coeffs=getattr(model_params, "trajectory_dct_coeffs", 0),
             )
         else:
             self.trajectory_predictor = None

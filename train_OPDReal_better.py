@@ -502,6 +502,53 @@ class OPDRealTrainingModule(pl.LightningModule):
                 sync_dist=True,
             )
 
+            # Gen-19 first-difference losses (2026-08-21 spec): supervise the
+            # consecutive segment vectors. diff() is translation-invariant,
+            # so the relative-vs-absolute frame question is moot — compare
+            # diffs of the raw tensors directly. Velocity = siMLPe (mean L2
+            # norm), angle/length = MADiff (segments with |dgt| < 1mm
+            # skipped from the angle term).
+            _vw = getattr(self.loss_params, "trajectory_velocity_weight", 0.0)
+            _aw = getattr(self.loss_params, "trajectory_angle_weight", 0.0)
+            _lw = getattr(self.loss_params, "trajectory_length_weight", 0.0)
+            if _vw > 0.0 or _aw > 0.0 or _lw > 0.0:
+                _dp = torch.diff(outputs.trajectory_pred.float(), dim=1)
+                _dg = torch.diff(trajectory_gt_device.float(), dim=1)
+                if _vw > 0.0:
+                    L_traj_velocity = (_dp - _dg).norm(dim=-1).mean()
+                    total_loss = total_loss + _vw * L_traj_velocity
+                    grad_terms["traj_velocity"] = _vw * L_traj_velocity
+                    self.log(
+                        f"{step_type}/L_traj_velocity", L_traj_velocity,
+                        on_step=(step_type == "train"), on_epoch=True,
+                        logger=True, sync_dist=True,
+                    )
+                if _aw > 0.0:
+                    _seg_ok = _dg.norm(dim=-1) > 1e-3
+                    _cos = F.cosine_similarity(_dp, _dg, dim=-1, eps=1e-6)
+                    if bool(_seg_ok.any()):
+                        L_traj_angle = (1.0 - _cos[_seg_ok]).mean()
+                    else:
+                        L_traj_angle = (_cos.sum() * 0.0)
+                    total_loss = total_loss + _aw * L_traj_angle
+                    grad_terms["traj_angle"] = _aw * L_traj_angle
+                    self.log(
+                        f"{step_type}/L_traj_angle", L_traj_angle,
+                        on_step=(step_type == "train"), on_epoch=True,
+                        logger=True, sync_dist=True,
+                    )
+                if _lw > 0.0:
+                    L_traj_length = (
+                        (_dp.norm(dim=-1) - _dg.norm(dim=-1)).abs().mean()
+                    )
+                    total_loss = total_loss + _lw * L_traj_length
+                    grad_terms["traj_length"] = _lw * L_traj_length
+                    self.log(
+                        f"{step_type}/L_traj_length", L_traj_length,
+                        on_step=(step_type == "train"), on_epoch=True,
+                        logger=True, sync_dist=True,
+                    )
+
         # Geometric consistency between the motion/twist and trajectory heads.
         # Which scheme runs is set by loss_params.geometric_loss; every variant
         # no-ops when the batch lacks the targets it needs, so this is safe to

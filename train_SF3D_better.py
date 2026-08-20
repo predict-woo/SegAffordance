@@ -60,6 +60,11 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         self._test_proj2d_err = []
         self._test_proj2d_anchor = []
         self._test_proj2d_shape = []
+        # Gen-19 smoothness metric: mean second-difference magnitude of the
+        # predicted (and GT, as the floor) 3D trajectory — the quantitative
+        # form of "the trajectories are noisy".
+        self._test_traj_rough_pred = []
+        self._test_traj_rough_gt = []
         self._test_origin_errors_rotational_all = []
         # Ablation arms (2026-08-15 spec): set during test_step when the
         # axis/type heads actually produced predictions.
@@ -566,6 +571,20 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                     ).item()
                     self._test_twist_line_dist_rotational.append(line_dist)
 
+            # --- Smoothness: mean second-difference magnitude (gen-19) ---
+            if (
+                outputs.trajectory_pred is not None
+                and trajectory_gt is not None
+            ):
+                _tp = outputs.trajectory_pred[i].detach().float()
+                _tg = trajectory_gt[i].to(_tp.device).float()
+                self._test_traj_rough_pred.append(
+                    float((_tp[2:] - 2 * _tp[1:-1] + _tp[:-2]).norm(dim=-1).mean())
+                )
+                self._test_traj_rough_gt.append(
+                    float((_tg[2:] - 2 * _tg[1:-1] + _tg[:-2]).norm(dim=-1).mean())
+                )
+
             # Net sweep direction of the predicted 3D trajectory vs GT
             # (cos > 0 = the curve heads the right way).
             if (
@@ -926,6 +945,18 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                 self.log(name, m, logger=True, sync_dist=False)
                 proj2d_stats[name] = m
 
+        rough_stats = None
+        if self._test_traj_rough_pred:
+            rough_stats = {}
+            for name, vals in (
+                ("test/traj_rough_pred", self._test_traj_rough_pred),
+                ("test/traj_rough_gt", self._test_traj_rough_gt),
+            ):
+                g = self.all_gather(torch.tensor(vals, device=self.device))
+                m = float(g.mean().item()) if g.numel() > 0 else 0.0
+                self.log(name, m, logger=True, sync_dist=False)
+                rough_stats[name] = m
+
         if self._test_traj_dir_cos:
             traj_dir_cos = float(
                 torch.tensor(self._test_traj_dir_cos).mean().item()
@@ -989,6 +1020,12 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                     f"{proj2d_stats['test/traj_proj2d_anchor']:.4f}  shape "
                     f"{proj2d_stats['test/traj_proj2d_shape']:.4f}"
                 )
+            if rough_stats is not None:
+                print(
+                    "Trajectory Roughness (m, 2nd-diff): pred "
+                    f"{rough_stats['test/traj_rough_pred']:.5f}  gt "
+                    f"{rough_stats['test/traj_rough_gt']:.5f}"
+                )
             if twist_ran:
                 print(f"\n--- Twist Head (unified screw parameterisation) ---")
                 print(f"Type Accuracy (|omega| > 0.5): {twist_type_acc:.2f}%")
@@ -1044,6 +1081,8 @@ class SF3DTrainingModule(OPDRealTrainingModule):
         self._test_proj2d_err.clear()
         self._test_proj2d_anchor.clear()
         self._test_proj2d_shape.clear()
+        self._test_traj_rough_pred.clear()
+        self._test_traj_rough_gt.clear()
         self._test_has_axis_head = False
         self._test_has_type_head = False
         self._test_origin_errors_rotational_all.clear()

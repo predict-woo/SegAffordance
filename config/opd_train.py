@@ -108,6 +108,11 @@ class ModelParams:
     # risks on record in the spec). Mutually exclusive with
     # trajectory_delta_cumsum.
     trajectory_absolute: bool = False
+    # Gen-19 (2026-08-21 spec): truncated-DCT trajectory readout — the head
+    # emits this many low-frequency DCT coefficients per axis, decoded to
+    # the 20 points by a fixed IDCT buffer. 0 = legacy direct readout.
+    # Incompatible with trajectory_delta_cumsum.
+    trajectory_dct_coeffs: int = 0
     motion_type_input_dropout: float = 0.5
     # K > 1: winner-takes-all articulation hypotheses — TwistMLP emits K
     # (twist, logit) pairs and TrajectoryMLP K matching trajectories; one
@@ -266,6 +271,14 @@ class LossParams:
     # The un-detached gradient through grid_sample at depth edges collapsed
     # the shared trunk (masks/heatmaps) in the first g17-2d runs.
     trajectory_proj_detach_anchor: bool = False
+    # Gen-19 (2026-08-21 spec): first-difference (segment-vector) losses on
+    # the 3D trajectory — the survey's cheap smoothness recipe. Velocity:
+    # siMLPe convention, mean L2 norm of (dpred - dgt), weight 1.0 when on.
+    # Angle/length: MADiff convention, 1 - cos(dpred, dgt) over segments
+    # with |dgt| > 1mm, and mean |  |dpred| - |dgt| |. All default off.
+    trajectory_velocity_weight: float = 0.0
+    trajectory_angle_weight: float = 0.0
+    trajectory_length_weight: float = 0.0
     # Gen-17-2D: GT-free z_p tether — masked MSE between the lifted point's
     # depth and the INPUT depth sampled at a detached point_uv. Keeps the
     # lift calibrated when the 3D point loss is off (2D-only arms).
