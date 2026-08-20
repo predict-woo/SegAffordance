@@ -19,7 +19,6 @@ launch 2's p_rev_mean held 0.15–0.17 throughout.
 | metric | g17 | g17-2d 2D-only | read |
 |---|---|---|---|
 | traj_dir acc / cos | 94.9 / 0.811 | **80.96 / 0.379** | REAL signal — direction far above the 50% chance floor, from ordered 2D matching alone |
-| type acc | 95.3 | 75.2 | ≈ the 77.5% majority-trans baseline — gate stayed ALIVE (16% rot calls) but L_pp did not sort samples; weak/no separation |
 | axis (sign-agnostic, all) | 25.8° | 58.7° | ≈ the 57.3° random-direction expectation — axis did NOT emerge from L_pp alone |
 | axis flip rate (rot) | 13.3% | 54.9% | ≈ random sign, exactly as predicted (sign unobservable) |
 | mIoU / PDet | 0.265 / 20.6 | **0.057 / 1.1** | THE SURPRISE — masks collapsed despite identical 2D mask supervision |
@@ -55,3 +54,8 @@ finetune-from-2D-vs-scratch payoff experiment is NOT worth running on this
 checkpoint; fix the interference first if 2D-only stays a priority.
 
 vis: viz/20260819_sf3d_g17_2d_vs_g17_panels
+
+Note (2026-08-21): the type head is UNSUPERVISED in 2D-only arms
+(motion_type_weight 0 — labels reserved for eval), so type accuracy
+is NOT a reported metric for them (harness now skips it, same
+convention as absent heads). MA is skipped with it.

@@ -82,7 +82,7 @@ Legend:&nbsp;
     <line x1="640" y1="64" x2="820" y2="92" stroke="#7a8ca0" marker-end="url(#a)"/>
     <rect x="760" y="94" width="380" height="86" rx="7" fill="#f4ecfa" stroke="#8e44ad"/>
     <text x="950" y="112" font-size="12.5" text-anchor="middle" font-weight="600">MotionMLP trunk (shared)</text>
-    <text x="950" y="130" font-size="11.5" text-anchor="middle"><tspan fill="#8e44ad">type_head → p_rev (self-organizing)</tspan></text>
+    <text x="950" y="130" font-size="11.5" text-anchor="middle"><tspan fill="#8e44ad">type_head → p_rev (UNSUPERVISED — gate only)</tspan></text>
     <text x="950" y="147" font-size="11.5" text-anchor="middle"><tspan fill="#8e44ad">motion_head_rot → circle branch</tspan> · <tspan fill="#8e44ad">motion_head_trans → line branch</tspan></text>
     <text x="950" y="164" font-size="11" text-anchor="middle" fill="#7a5a8e">no axis GT, no type CE — L_pp is the only teacher</text>
 
@@ -117,7 +117,7 @@ Legend:&nbsp;
     <text x="40" y="410" font-size="14" font-weight="700" fill="#8e44ad">CONSISTENCY TERM — normalized L_pp (unchanged, already GT-free)</text>
     <text x="40" y="434" font-size="12.5" fill="#3d2c4e">(1 − p_rev) · line(trajectory ⟂ <tspan font-weight="600">trans axis</tspan>)   +   p_rev · circle(trajectory orbits <tspan font-weight="600">rot axis</tspan> through lifted origin, radius = anchor distance)</text>
     <text x="40" y="458" font-size="12" fill="#5a4370">Every input is a prediction. With the trajectory pinned to the observed 2D track by the data term, L_pp back-propagates that</text>
-    <text x="40" y="474" font-size="12" fill="#5a4370">evidence into the axis heads, the origin lift (z_q), the lifted point (z_p) — and into p_rev, which self-organizes: index 1 is</text>
+    <text x="40" y="474" font-size="12" fill="#5a4370">evidence into the axis heads, the origin lift (z_q), the lifted point (z_p) — and into p_rev (index 1 is</text>
     <text x="40" y="490" font-size="12" fill="#5a4370">structurally tied to the CIRCLE residual, so "rot" keeps its meaning without a single type label (no label-permutation ambiguity).</text>
 
     <line x1="570" y1="146" x2="570" y2="208" stroke="#2f6fd0" stroke-width="1.6" marker-end="url(#b)"/>
@@ -158,7 +158,7 @@ Legend:&nbsp;
     projected curve scores ~1.0 for every row, rot and trans alike.</p>
   </div>
   <div class="card">
-    <b>Let p_rev self-organize; add no ω-prior analog.</b>
+    <b>Let p_rev float; add no ω-prior analog. [2026-08-21: type never emerged — unsupervised, unreported.]</b>
     <p class="cap" style="margin-top:6px">The twist-era 2D-only arm needed
     an |ω| Occam prior and still collapsed type to trans. The split family
     is structurally better off: p_rev's two branches are DIFFERENT

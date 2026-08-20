@@ -490,7 +490,20 @@ class SF3DTrainingModule(OPDRealTrainingModule):
             # placeholder, so absent-head metrics stay absent instead of
             # polluting the means.
             has_axis = motion_pred is not None or twist_decoded is not None
-            has_type = motion_type_logits is not None or twist_decoded is not None
+            # A type head trained with motion_type_weight = 0 (the 2D-only
+            # arms: labels are reserved for eval and the head is
+            # unsupervised) has meaningless logits — reporting its
+            # "accuracy" reads as a finding when there is none (user
+            # decision 2026-08-21). Same convention as absent heads: the
+            # type metrics stay absent, and MA (which needs a type call)
+            # with them. The head itself still runs (L_pp gate, row-wise
+            # axis selection).
+            _type_supervised = (
+                getattr(self.loss_params, "motion_type_weight", 0.5) > 0.0
+            )
+            has_type = (
+                motion_type_logits is not None or twist_decoded is not None
+            ) and _type_supervised
             self._test_has_axis_head |= has_axis
             self._test_has_type_head |= has_type
             axis_err = None

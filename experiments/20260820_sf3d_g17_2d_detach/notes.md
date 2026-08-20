@@ -13,7 +13,7 @@ epoch 24 (val 1.5182).
 | proj2d total / anchor / shape | 0.235 / 0.19 / 0.16 | **0.175 / 0.129 / 0.0997** | 0.155 / 0.09 / 0.11 |
 | mIoU / PDet | 0.057 / 1.1 | **0.242 / 16.1** | 0.265 / 20.6 |
 | 2D point | 0.307 | **0.117** | 0.095 |
-| type / axis(all) | 75.2 / 58.7° | 75.4 / 63.5° | 95.3 / 25.8° |
+| axis (all) | 58.7° | 63.5° | 25.8° |
 
 ## Reading
 
@@ -25,3 +25,8 @@ depth-edge anchor. Articulation (axis/type/origin) unchanged-bad, as
 expected: that is the separate L_pp-is-too-weak problem.
 
 vis: viz/20260821_sf3d_g17_2d_detach_panels (three-way metric table in the fullfix arm's notes)
+
+Note (2026-08-21): the type head is UNSUPERVISED in 2D-only arms
+(motion_type_weight 0 — labels reserved for eval), so type accuracy
+is NOT a reported metric for them (harness now skips it, same
+convention as absent heads). MA is skipped with it.

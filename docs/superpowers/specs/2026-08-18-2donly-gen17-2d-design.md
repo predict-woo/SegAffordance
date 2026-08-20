@@ -20,8 +20,9 @@ track, and the model's internal consistency.
   `clamp(min=1e-4)`; rows without valid points are dropped from the row
   mean. Encodes the gen-16 rot-collapse lesson in uv-space.
 - **Consistency term:** normalized L_pp @ 0.1, unchanged — sole teacher of
-  the split axis heads, origin lift, and p_rev. Type self-organizes as
-  model selection (index 1 structurally = circle = rot).
+  the split axis heads, origin lift, and p_rev. (The original hope that
+  type would self-organize as model selection was REFUTED by the runs —
+  see 2026-08-21 note below; the type head is effectively unsupervised.)
 - **z_p tether:** `depth_anchor_weight: 0.5` — masked MSE between the
   predicted lifted-point depth (`point_3d_pred[..., 2]`) and the input
   depth sampled at a DETACHED `point_uv` (mask: sampled depth > 1e-3).
@@ -48,8 +49,9 @@ data/epochs/seed; model_params byte-identical to g17.
 ## Expectations & eval
 
 Standard test pass (3D GT is eval-only, exactly SF3D's role). Success ≠
-g17 parity: (a) type separation and traj_dir far above chance with zero 3D
-labels; (b) sign-agnostic axis meaningfully better than random (sign is
+g17 parity: (a) traj_dir far above chance with zero 3D labels (the type
+head is UNSUPERVISED here — its outputs feed L_pp/selection only and its
+"accuracy" is not a reported metric, decision 2026-08-21); (b) sign-agnostic axis meaningfully better than random (sign is
 UNOBSERVABLE — both L_pp branches quadratic in the axis; expect ~50% flip
 rate, read the sign-agnostic columns). Origin metrics expected weak (z_q
 trains only through L_pp). The payoff experiment (separate, later):

@@ -13,7 +13,6 @@ comparable across arms, different loss composition).
 | proj2d SHAPE | 0.16 | **0.0997** | 0.128 | 0.11 |
 | mIoU / PDet | 0.057 / 1.1 | 0.242 / 16.1 | **0.260 / 19.6** | 0.265 / 20.6 |
 | 2D point | 0.307 | 0.117 | **0.100** | 0.095 |
-| type acc | 75.2 | 75.4 | **79.0** | 95.3 |
 
 ## Where the improvement came from
 
@@ -25,8 +24,7 @@ comparable across arms, different loss composition).
      matches the 3D-supervised g17): per-row equalization gives
      small-motion rows a fair gradient share.
    - DROPPING it (arm B) further calms the trunk → best masks (mIoU
-     0.260, nearly g17), best point (0.100), best anchor, best label-free
-     type (79.0) — but shape degrades to 0.128 (big-motion rows dominate
+     0.260, nearly g17), best point (0.100), best anchor, but shape degrades to 0.128 (big-motion rows dominate
      the plain MSE).
    - proj2d TOTAL is a wash (0.175 vs 0.174) — the two arms spend the
      same budget on different components.
@@ -38,3 +36,8 @@ is detach + normalized-with-cap (or a normalization warmup) to get arm A's
 shape with arm B's trunk health. As a PRETRAINING candidate, arm B is now
 plausible (masks nearly intact + best point) where the original g17-2d was
 poison.
+
+Note (2026-08-21): the type head is UNSUPERVISED in 2D-only arms
+(motion_type_weight 0 — labels reserved for eval), so type accuracy
+is NOT a reported metric for them (harness now skips it, same
+convention as absent heads). MA is skipped with it.
