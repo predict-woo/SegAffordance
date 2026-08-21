@@ -28,3 +28,5 @@ curve's fine placement. traj_dir essentially flat.
 
 Note (2026-08-22): fdiff-arm comparison and combined recommendation in
 20260821_sf3d_g19_fdiff/notes.md.
+
+vis: viz/20260822_sf3d_g19_smoothness_panels

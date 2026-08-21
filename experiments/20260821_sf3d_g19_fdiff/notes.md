@@ -38,3 +38,5 @@ fdiff losses is the natural gen-20 (smooth basis AND supervised segment
 directions); if a single winner must ship today, g19-fdiff's checkpoint
 is the best OVERALL articulation model (MA 29.9, traj_dir 96.1) and
 g19-dct the best visual/smoothness model.
+
+vis: viz/20260822_sf3d_g19_smoothness_panels

@@ -8,6 +8,7 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
 |---|---|---|
+| [20260822_sf3d_g19_smoothness_panels](20260822_sf3d_g19_smoothness_panels/README.md) | smoothness fix 3-way — g17 jitter vs g19-dct ordered smooth arcs vs g19-fdiff tight-direction arcs | `tools/sf3d_vis_predictions.py` |
 | [20260821_sf3d_g17_2d_detach_panels](20260821_sf3d_g17_2d_detach_panels/README.md) | arm A solo (2D-only + anchor detach) — trajectories ride the GT tracks, masks back, axes still unlearned | `tools/sf3d_vis_predictions.py` |
 | [20260819_sf3d_g17_2d_vs_g17_panels](20260819_sf3d_g17_2d_vs_g17_panels/README.md) | 2D-only vs full 3D — points/grounding survive, direction visible but compressed, masks near-gone, axes random | `tools/sf3d_vis_predictions.py` |
 | [20260818_sf3d_g17_vs_g16_panels](20260818_sf3d_g17_vs_g16_panels/README.md) | split-axis-heads before/after — fridge axis flip fixed (170°→20°), full sweeps kept, trans rays unchanged | `tools/sf3d_vis_predictions.py` |
