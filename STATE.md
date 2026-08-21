@@ -37,14 +37,14 @@ exists, segmenter.py:636), emergent type from L_pp (majority baseline).
   ignore); `g17_2d_fdiff2d` = wash, NOT adopted. Notes + INDEX rows in.
 - Label-efficiency: `s10_3d` DONE 2026-08-22 (early-stop ep25, best
   ep20) — trunk COLLAPSES on 10% scratch (mIoU 0.021, PDet 0.4) while
-  articulation heads degrade gracefully (matched 25.0°); pod `g2dfd`
-  DELETED after test pass. `p90_2d` DONE (early-stop ep11, best ep6):
-  trunk solid (mIoU 0.228) but UNDER the full-data DCT arm (0.2655) —
-  early stop likely undertrained the trunk (test metrics improve past
-  the val plateau); recorded as the first confound if ft10 lands short.
-  `ft10_3d` (g17 recipe + DCT head + finetune_from_path = p90 best)
-  LAUNCHED on `g2ddct`. On end: final test pass, DELETE POD, headline
-  A/B/C table vs g17.
+  articulation heads degrade gracefully (matched 25.0°). `p90_2d` DONE
+  (best ep6; trunk mIoU 0.228, under full-data 0.2655 — early stop
+  undertrained it, recorded confound). `ft10_3d` DONE (best ep19):
+  **headline** — trunk transfers (mIoU 0.217 = 82% of full-3D, PDet
+  10.9, roughness 0.0176 best ever), articulation only partial (MA 8.7
+  vs 25.9). Verdict: 2D+10% ≫ 10% alone, short of full 3D on
+  articulation. Full table in ft10_3d/notes.md. ALL PODS DELETED —
+  nothing running or in flight.
 - Dev pod could NOT start (host GPUs taken); volume file transfer goes
   via scp through the training pods meanwhile; dev pod may need
   delete+recreate (state survives — do when next needed for viz/sync).
@@ -72,7 +72,9 @@ exists, segmenter.py:636), emergent type from L_pp (majority baseline).
 - Relational-grounding tail ("second drawer…" misses) — TALENT-style
   contrastive parked.
 - Cost-map-without-taps on the current best base (g15's geometry gains).
-- Finetune-from-2D vs scratch (needs a non-poison 2D ckpt; arm B qualifies).
+- Finetune-from-2D vs scratch: DONE 2026-08-22 (label-efficiency study).
+  Follow-ups if pursued: longer p90 pretrain (fixed 30 ep, kills the
+  undertraining confound); ratio sweep (5%/25%); class-level holdout.
 - 700GB scratch volume deletion (~$49/mo, holds raw SceneFun3D; NEEDS
   USER APPROVAL).
 - US mirror volume (~$7/mo, doubles pod-creation surface) — recorded
