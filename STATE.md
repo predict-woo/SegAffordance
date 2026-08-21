@@ -35,11 +35,15 @@ exists, segmenter.py:636), emergent type from L_pp (majority baseline).
   everywhere (shape 0.0947, mIoU 0.2655 = 3D level; ADOPTED as p90
   pretrain recipe; origin/radius cols exploded = unsupervised garbage,
   ignore); `g17_2d_fdiff2d` = wash, NOT adopted. Notes + INDEX rows in.
-- Label-efficiency runs: `s10_3d` (scratch 10%) TRAINING on reused pod
-  `g2dfd` (monitor bpyl4waj7; partition verified 19/202 scenes, 5502
-  samples = 0.102); `p90_2d` (DCT recipe on 90%) LAUNCHING on reused pod
-  `g2ddct`. Then ft10_3d (g17 recipe + finetune_from_path = p90 best) on
-  whichever pod frees first; delete pods after their final test passes.
+- Label-efficiency: `s10_3d` DONE 2026-08-22 (early-stop ep25, best
+  ep20) — trunk COLLAPSES on 10% scratch (mIoU 0.021, PDet 0.4) while
+  articulation heads degrade gracefully (matched 25.0°); pod `g2dfd`
+  DELETED after test pass. `p90_2d` (2D-DCT recipe on 90%) still
+  TRAINING on `g2ddct` (monitor bb0c03san). When it ends: test pass,
+  then launch ft10_3d on the SAME pod (g17 recipe, train_scene_subset
+  finetune, model.finetune_from_path = p90 best ckpt — write
+  sf3d_train_runpod_ft10_3d.yaml from the s10 config + that path),
+  then final test pass, delete pod, headline A/B/C table.
 - Dev pod could NOT start (host GPUs taken); volume file transfer goes
   via scp through the training pods meanwhile; dev pod may need
   delete+recreate (state survives — do when next needed for viz/sync).
