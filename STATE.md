@@ -38,12 +38,13 @@ exists, segmenter.py:636), emergent type from L_pp (majority baseline).
 - Label-efficiency: `s10_3d` DONE 2026-08-22 (early-stop ep25, best
   ep20) — trunk COLLAPSES on 10% scratch (mIoU 0.021, PDet 0.4) while
   articulation heads degrade gracefully (matched 25.0°); pod `g2dfd`
-  DELETED after test pass. `p90_2d` (2D-DCT recipe on 90%) still
-  TRAINING on `g2ddct` (monitor bb0c03san). When it ends: test pass,
-  then launch ft10_3d on the SAME pod (g17 recipe, train_scene_subset
-  finetune, model.finetune_from_path = p90 best ckpt — write
-  sf3d_train_runpod_ft10_3d.yaml from the s10 config + that path),
-  then final test pass, delete pod, headline A/B/C table.
+  DELETED after test pass. `p90_2d` DONE (early-stop ep11, best ep6):
+  trunk solid (mIoU 0.228) but UNDER the full-data DCT arm (0.2655) —
+  early stop likely undertrained the trunk (test metrics improve past
+  the val plateau); recorded as the first confound if ft10 lands short.
+  `ft10_3d` (g17 recipe + DCT head + finetune_from_path = p90 best)
+  LAUNCHED on `g2ddct`. On end: final test pass, DELETE POD, headline
+  A/B/C table vs g17.
 - Dev pod could NOT start (host GPUs taken); volume file transfer goes
   via scp through the training pods meanwhile; dev pod may need
   delete+recreate (state survives — do when next needed for viz/sync).
