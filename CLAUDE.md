@@ -1,5 +1,9 @@
 # SegAffordance
 
+**Read `STATE.md` first** — the living project-state document (current
+best checkpoints, generation lineage, in-flight experiments, open
+threads, infra facts, conventions). Update it at every wrap/decision.
+
 Affordance segmentation research code (PyTorch Lightning). Training entry
 points are `train_SF3D_better.py`, `train_OPDMulti_better.py`,
 `train_OPDReal_better.py`, each driven by a YAML config in `config/`
