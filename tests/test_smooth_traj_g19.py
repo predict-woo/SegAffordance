@@ -164,3 +164,67 @@ def test_training_step_both_arms():
     m4.loss_params.trajectory_velocity_weight = 0.0
     loss4 = _training_step(m4)
     assert torch.equal(loss3, loss4)
+
+
+# ------------------------------------------- uv-space fdiff port (2D arms)
+
+from tests.test_2donly_g17_2d import _outputs, _targets, _depth, _setup
+from model.losses.geometric import TrajectoryProjectionLoss
+
+
+def test_uv_fdiff_weights_off_bit_identity():
+    point_uv, traj, track = _setup()
+    base = TrajectoryProjectionLoss(weight=1.0, normalized=True)
+    ported = TrajectoryProjectionLoss(weight=1.0, normalized=True,
+                                      fdiff_velocity_weight=0.0,
+                                      fdiff_angle_weight=0.0,
+                                      fdiff_length_weight=0.0)
+    a, _ = base(_outputs(point_uv, traj), _targets(track), _depth())
+    b, _ = ported(_outputs(point_uv, traj), _targets(track), _depth())
+    assert torch.equal(a, b)
+
+
+def test_uv_fdiff_terms_present_and_finite():
+    point_uv, traj, track = _setup(seed=5)
+    loss = TrajectoryProjectionLoss(weight=1.0, normalized=True,
+                                    detach_anchor=True,
+                                    fdiff_velocity_weight=1.0,
+                                    fdiff_angle_weight=0.5,
+                                    fdiff_length_weight=0.5)
+    total, terms = loss(_outputs(point_uv, traj), _targets(track), _depth())
+    for k in ("L_traj_proj", "L_proj_fdiff_vel", "L_proj_fdiff_ang",
+              "L_proj_fdiff_len"):
+        assert k in terms and torch.isfinite(terms[k]), k
+    assert torch.isfinite(total)
+
+
+def test_uv_fdiff_gradient_reaches_trajectory_not_anchor():
+    point_uv, traj, track = _setup(seed=6)
+    point_uv = point_uv.requires_grad_(True)
+    traj = traj.clone().requires_grad_(True)
+    loss = TrajectoryProjectionLoss(weight=0.0, normalized=True,  # fdiff ONLY
+                                    detach_anchor=True,
+                                    fdiff_velocity_weight=1.0,
+                                    fdiff_angle_weight=0.5,
+                                    fdiff_length_weight=0.5)
+    total, _ = loss(_outputs(point_uv, traj), _targets(track), _depth())
+    total.backward()
+    assert traj.grad is not None and traj.grad.abs().sum() > 0
+    assert point_uv.grad is None or torch.all(point_uv.grad == 0)
+
+
+def test_uv_fdiff_2d_configs_match_spec():
+    base = _load_cfg("sf3d_train_runpod_g17_2d_detach.yaml")
+    dct = _load_cfg("sf3d_train_runpod_g17_2d_dct.yaml")
+    mp = dict(dct["model"]["model_params"])
+    assert mp.pop("trajectory_dct_coeffs") == 6
+    assert mp == base["model"]["model_params"]
+    assert dct["model"]["loss_params"] == base["model"]["loss_params"]
+
+    fd = _load_cfg("sf3d_train_runpod_g17_2d_fdiff2d.yaml")
+    assert fd["model"]["model_params"] == base["model"]["model_params"]
+    lp = dict(fd["model"]["loss_params"])
+    assert lp.pop("proj_fdiff_velocity_weight") == 1.0
+    assert lp.pop("proj_fdiff_angle_weight") == 0.5
+    assert lp.pop("proj_fdiff_length_weight") == 0.5
+    assert lp == base["model"]["loss_params"]

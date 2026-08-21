@@ -99,6 +99,15 @@ class OPDRealTrainingModule(pl.LightningModule):
             detach_anchor=getattr(
                 self.loss_params, "trajectory_proj_detach_anchor", False
             ),
+            fdiff_velocity_weight=getattr(
+                self.loss_params, "proj_fdiff_velocity_weight", 0.0
+            ),
+            fdiff_angle_weight=getattr(
+                self.loss_params, "proj_fdiff_angle_weight", 0.0
+            ),
+            fdiff_length_weight=getattr(
+                self.loss_params, "proj_fdiff_length_weight", 0.0
+            ),
         )
         self.twist_loss = TwistLoss(
             weight=getattr(self.loss_params, "twist_weight", 0.5),

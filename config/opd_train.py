@@ -271,6 +271,13 @@ class LossParams:
     # The un-detached gradient through grid_sample at depth edges collapsed
     # the shared trunk (masks/heatmaps) in the first g17-2d runs.
     trajectory_proj_detach_anchor: bool = False
+    # 2026-08-22: gen-19 fdiff losses ported to uv-space for the 2D-only
+    # arms — segment vectors of the PROJECTED curve vs the GT 2D track
+    # (both-endpoints-valid segments only). Same conventions as the 3D
+    # fdiff trio; all default off.
+    proj_fdiff_velocity_weight: float = 0.0
+    proj_fdiff_angle_weight: float = 0.0
+    proj_fdiff_length_weight: float = 0.0
     # Gen-19 (2026-08-21 spec): first-difference (segment-vector) losses on
     # the 3D trajectory — the survey's cheap smoothness recipe. Velocity:
     # siMLPe convention, mean L2 norm of (dpred - dgt), weight 1.0 when on.

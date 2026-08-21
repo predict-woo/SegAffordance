@@ -988,11 +988,23 @@ class TrajectoryProjectionLoss(nn.Module):
     def __init__(
         self, weight: float, near_plane: float = 0.05, normalized: bool = False,
         energy_floor: float = 1e-4, detach_anchor: bool = False,
+        fdiff_velocity_weight: float = 0.0, fdiff_angle_weight: float = 0.0,
+        fdiff_length_weight: float = 0.0,
     ):
         super().__init__()
         self.weight = weight
         self.near_plane = near_plane
         self.energy_floor = energy_floor
+        # 2026-08-22: the gen-19 first-difference losses ported to uv-space
+        # for the 2D-only arms — segment vectors of the PROJECTED predicted
+        # curve vs the GT 2D track (velocity = mean L2 of the diff
+        # difference; angle = 1 - cos over segments with |track diff| >
+        # 1e-3 uv; length = mean |norm difference|). A segment counts only
+        # when BOTH endpoints are valid. Legal 2D supervision — the 3D-GT
+        # fdiff losses (train_OPDReal_better) cannot run in 2D-only arms.
+        self.fdiff_velocity_weight = fdiff_velocity_weight
+        self.fdiff_angle_weight = fdiff_angle_weight
+        self.fdiff_length_weight = fdiff_length_weight
         # 2026-08-20 (g17-2d post-mortem): stop gradients at the anchor
         # (point_uv AND the depth sample). ∂z/∂uv through grid_sample is
         # enormous at depth discontinuities — and interaction points sit ON
@@ -1014,7 +1026,12 @@ class TrajectoryProjectionLoss(nn.Module):
 
     def forward(self, outputs, targets, depth) -> LossTerms:
         if (
-            self.weight == 0.0
+            (
+                self.weight == 0.0
+                and self.fdiff_velocity_weight == 0.0
+                and self.fdiff_angle_weight == 0.0
+                and self.fdiff_length_weight == 0.0
+            )
             or outputs.trajectory_pred is None
             or targets.trajectory_2d is None
             or targets.camera_intrinsic is None
@@ -1078,4 +1095,38 @@ class TrajectoryProjectionLoss(nn.Module):
                 term = ratio[row_ok].mean()
             else:
                 term = (sq * mask).sum() / count
-        return self.weight * term, {"L_traj_proj": term}
+
+            terms = {"L_traj_proj": term}
+            total = self.weight * term
+            if (
+                self.fdiff_velocity_weight > 0.0
+                or self.fdiff_angle_weight > 0.0
+                or self.fdiff_length_weight > 0.0
+            ):
+                dp = proj[:, 1:] - proj[:, :-1]                    # (B, N-1, 2)
+                dt = track[:, 1:] - track[:, :-1]
+                seg_ok = (mask[:, 1:] * mask[:, :-1]) > 0.5        # both ends
+                seg_cnt = seg_ok.float().sum().clamp(min=1.0)
+                zero = (proj.sum() * 0.0)
+                if self.fdiff_velocity_weight > 0.0:
+                    vel = ((dp - dt).norm(dim=-1) * seg_ok.float()).sum() / seg_cnt
+                    vel = vel if bool(seg_ok.any()) else zero
+                    terms["L_proj_fdiff_vel"] = vel
+                    total = total + self.fdiff_velocity_weight * vel
+                if self.fdiff_angle_weight > 0.0:
+                    ang_ok = seg_ok & (dt.norm(dim=-1) > 1e-3)
+                    cos = F.cosine_similarity(dp, dt, dim=-1, eps=1e-6)
+                    ang = (
+                        (1.0 - cos[ang_ok]).mean() if bool(ang_ok.any()) else zero
+                    )
+                    terms["L_proj_fdiff_ang"] = ang
+                    total = total + self.fdiff_angle_weight * ang
+                if self.fdiff_length_weight > 0.0:
+                    length = (
+                        ((dp.norm(dim=-1) - dt.norm(dim=-1)).abs()
+                         * seg_ok.float()).sum() / seg_cnt
+                    )
+                    length = length if bool(seg_ok.any()) else zero
+                    terms["L_proj_fdiff_len"] = length
+                    total = total + self.fdiff_length_weight * length
+        return total, terms
