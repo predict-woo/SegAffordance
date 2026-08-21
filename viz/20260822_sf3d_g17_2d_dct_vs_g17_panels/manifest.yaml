@@ -1,0 +1,20 @@
+command: tools/sf3d_vis_predictions.py --model g17 config/sf3d_train_runpod_g17_splitax.yaml
+  experiments/20260818_sf3d_g17_splitax/checkpoints/best-epoch18-valloss0.9272.ckpt
+  --model g17-2d-dct config/sf3d_train_runpod_g17_2d_dct.yaml experiments/20260822_sf3d_g17_2d_dct/checkpoints/best-epoch19-valloss1.3702.ckpt
+  --data-root /workspace/datasets/sf3d_processed_v3 --frame-cache-path /workspace/datasets/sf3d_frames_512.lmdb
+  --input-size 512 --key-cache /workspace/cache/sf3d_v2_keys_cutoff05_minrad010_maskfrac0010_edge05.pkl
+  --min-revolute-radius 0.10 --min-mask-area-frac 0.001 --edge-margin-frac 0.05 --num
+  16 --seed 42421 --out viz/20260822_sf3d_g17_2d_dct_vs_g17_panels
+tool_commit: 5a20de2
+generated: '2026-08-21T13:44:08+00:00'
+models:
+- name: g17
+  config: config/sf3d_train_runpod_g17_splitax.yaml
+  ckpt: experiments/20260818_sf3d_g17_splitax/checkpoints/best-epoch18-valloss0.9272.ckpt
+- name: g17-2d-dct
+  config: config/sf3d_train_runpod_g17_2d_dct.yaml
+  ckpt: experiments/20260822_sf3d_g17_2d_dct/checkpoints/best-epoch19-valloss1.3702.ckpt
+num: 16
+seed: 42421
+data_root: /workspace/datasets/sf3d_processed_v3
+key_cache: /workspace/cache/sf3d_v2_keys_cutoff05_minrad010_maskfrac0010_edge05.pkl

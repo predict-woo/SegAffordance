@@ -42,3 +42,5 @@ uv-fdiff is not adopted (see 20260822_sf3d_g17_2d_fdiff2d).
 
 test pass: `test.log` (ckpt best-epoch19-valloss1.3702)
 spec: docs/superpowers/specs/2026-08-21-smooth-trajectory-g19-design.md (port section)
+
+vis: viz/20260822_sf3d_g17_2d_dct_vs_g17_panels (GT | g17 | 2D-DCT three-way)

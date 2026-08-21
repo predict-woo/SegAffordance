@@ -8,6 +8,7 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
 |---|---|---|
+| [20260822_sf3d_g17_2d_dct_vs_g17_panels](20260822_sf3d_g17_2d_dct_vs_g17_panels/README.md) | best 2D arm vs 3D — 2D-DCT trajectories smooth and glued to GT tracks, masks at the 3D level; articulation overlays garbage (unsupervised) | `tools/sf3d_vis_predictions.py` |
 | [20260822_sf3d_g19_smoothness_panels](20260822_sf3d_g19_smoothness_panels/README.md) | smoothness fix 3-way — g17 jitter vs g19-dct ordered smooth arcs vs g19-fdiff tight-direction arcs | `tools/sf3d_vis_predictions.py` |
 | [20260821_sf3d_g17_2d_detach_panels](20260821_sf3d_g17_2d_detach_panels/README.md) | arm A solo (2D-only + anchor detach) — trajectories ride the GT tracks, masks back, axes still unlearned | `tools/sf3d_vis_predictions.py` |
 | [20260819_sf3d_g17_2d_vs_g17_panels](20260819_sf3d_g17_2d_vs_g17_panels/README.md) | 2D-only vs full 3D — points/grounding survive, direction visible but compressed, masks near-gone, axes random | `tools/sf3d_vis_predictions.py` |
