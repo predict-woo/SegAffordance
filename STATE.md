@@ -31,10 +31,14 @@ exists, segmenter.py:636), emergent type from L_pp (majority baseline).
 
 ## In flight (2026-08-22)
 
-- Training: `g2ddct` (arm A 2D base + DCT head) and `g2dfd` (arm A +
-  uv-space fdiff port) on two PRO 6000 pods; combined monitor active.
-  Wrap: test pass (proj2d + roughness columns), delete pods, compare vs
-  arm A (shape 0.0997 / roughness / masks), notes/INDEX.
+- Training: `g2ddct` (arm A 2D base + DCT head) still running (~ep 25+).
+  DONE 2026-08-22: `g17_2d_fdiff2d` — a WASH vs arm-A-detach (direction
+  +2.3 acc, everything else slightly worse, val turnover ep10, 3D
+  roughness 0.177); uv-fdiff NOT adopted for 2D (notes + INDEX row in).
+  Its pod (`g2dfd`) REUSED for the label-efficiency scratch-10 arm
+  (20260822_sf3d_s10_3d) — launching. Dev pod could NOT start (host GPUs
+  taken); volume file transfer goes via scp through `segaff-g2dfd`
+  meanwhile; dev pod may need delete+recreate (state survives).
 - The 3D next candidate (recorded, not commissioned): gen-20 = DCT head +
   fdiff losses combined.
 - COMMISSIONED next (user, 2026-08-22): 2D-pretrain label-efficiency
