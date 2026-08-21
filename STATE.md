@@ -37,6 +37,17 @@ exists, segmenter.py:636), emergent type from L_pp (majority baseline).
   arm A (shape 0.0997 / roughness / masks), notes/INDEX.
 - The 3D next candidate (recorded, not commissioned): gen-20 = DCT head +
   fdiff losses combined.
+- COMMISSIONED next (user, 2026-08-22): 2D-pretrain label-efficiency
+  (spec: docs/superpowers/specs/2026-08-22-2d-pretrain-label-efficiency-design.md).
+  Arms: A = g17 recipe scratch on 10% train scenes (config
+  sf3d_train_runpod_s10_3d.yaml, READY — can launch on a freed pod after
+  its test pass, no re-poll); B = best-2D-recipe pretrain on 90%
+  (p90_2d — recipe decided by the in-flight 2D arms' results) → g17
+  finetune on the 10% via model.finetune_from_path (ft10_3d — config
+  written when p90's best ckpt exists); C = existing g17_splitax numbers.
+  Machinery landed: data.train_scene_subset pretrain|finetune (scene-level
+  greedy-by-sample-count partition, ratio 0.1 seed 4242, val/test
+  untouched; partition_subset_by_scene + 9 tests, suite 226).
 
 ## Open threads / parked (user decision or next pick)
 

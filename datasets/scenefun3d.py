@@ -912,6 +912,59 @@ def split_dataset_by_scene(
     return train_subset, val_subset
 
 
+def partition_subset_by_scene(
+    subset: Subset,
+    ratio: float,
+    seed: int,
+) -> Tuple[Subset, Subset]:
+    """
+    Partition a train Subset (from split_dataset_by_scene) into a large
+    "pretrain" part and a small "finetune" part, again at scene level so no
+    scene's near-duplicate frames straddle the two parts (the 2D-pretrain
+    label-efficiency experiments; spec:
+    docs/superpowers/specs/2026-08-22-2d-pretrain-label-efficiency-design.md).
+
+    Scenes are shuffled with a dedicated rng and accumulated greedily BY
+    SAMPLE COUNT into the finetune part until it holds >= ratio of the
+    subset's samples (scenes are very unequal in size, so a scene-count
+    split would miss the target fraction badly). The last scene overshoots;
+    the realized fraction is printed. Deterministic in (subset, ratio, seed).
+
+    Returns:
+        (pretrain_subset, finetune_subset) — disjoint, union == subset.
+    """
+    dataset = subset.dataset
+    scene_to_indices: Dict[str, List[int]] = {}
+    for idx in subset.indices:
+        key_str = dataset.item_keys[idx].decode("utf-8")
+        scene_id = key_str.split("/")[0]
+        scene_to_indices.setdefault(scene_id, []).append(idx)
+
+    scene_ids = sorted(scene_to_indices.keys())
+    rng = random.Random(seed)
+    rng.shuffle(scene_ids)
+
+    total = len(subset.indices)
+    target = ratio * total
+    finetune_indices: List[int] = []
+    n_finetune_scenes = 0
+    for scene_id in scene_ids:
+        if len(finetune_indices) >= target:
+            break
+        finetune_indices.extend(scene_to_indices[scene_id])
+        n_finetune_scenes += 1
+    finetune_set = set(finetune_indices)
+    pretrain_indices = [i for i in subset.indices if i not in finetune_set]
+
+    print(
+        f"Scene partition (seed={seed}): finetune {n_finetune_scenes}/"
+        f"{len(scene_ids)} scenes, {len(finetune_indices)}/{total} samples "
+        f"({len(finetune_indices) / total:.3f} vs target {ratio}); "
+        f"pretrain {len(pretrain_indices)} samples"
+    )
+    return Subset(dataset, pretrain_indices), Subset(dataset, finetune_indices)
+
+
 if __name__ == "__main__":
     print("Testing SF3DDataset by loading random elements and generating debug visualizations...")
     

@@ -5,7 +5,12 @@ import pytorch_lightning as pl
 import torch
 from torch.utils.data import DataLoader, Dataset, Subset
 
-from .scenefun3d import SF3DDataset, get_default_transforms, split_dataset_by_scene
+from .scenefun3d import (
+    SF3DDataset,
+    get_default_transforms,
+    partition_subset_by_scene,
+    split_dataset_by_scene,
+)
 
 
 class SF3DDataModule(pl.LightningDataModule):
@@ -28,6 +33,9 @@ class SF3DDataModule(pl.LightningDataModule):
         min_revolute_radius: float = 0.0,
         min_mask_area_frac: float = 0.0,
         edge_margin_frac: float = 0.0,
+        train_scene_subset: Optional[str] = None,
+        train_subset_ratio: float = 0.1,
+        train_subset_seed: int = 4242,
     ) -> None:
         super().__init__()
         self.train_data_dir = train_data_dir
@@ -61,6 +69,19 @@ class SF3DDataModule(pl.LightningDataModule):
         # Interaction point + projected q* inside the central region
         # (this fraction of W/H from every edge). See SF3DDataset.
         self.edge_margin_frac = edge_margin_frac
+        # 2D-pretrain label-efficiency arms: after the val split, keep only
+        # the "pretrain" (~1-ratio) or "finetune" (~ratio) scene-level part
+        # of the TRAIN subset. None (default) = full train, unchanged. Val
+        # and test are never affected. The seed is deliberately independent
+        # of manual_seed so the partition doesn't move with the val split.
+        if train_scene_subset not in (None, "pretrain", "finetune"):
+            raise ValueError(
+                "train_scene_subset must be None, 'pretrain' or 'finetune', "
+                f"got {train_scene_subset!r}"
+            )
+        self.train_scene_subset = train_scene_subset
+        self.train_subset_ratio = train_subset_ratio
+        self.train_subset_seed = train_subset_seed
 
         self.train_dataset: Optional[Dataset] = None
         self.val_dataset: Optional[Dataset] = None
@@ -97,6 +118,18 @@ class SF3DDataModule(pl.LightningDataModule):
                     val_split_ratio=self.val_split_ratio,
                     manual_seed=self.manual_seed,
                 )
+
+                if self.train_scene_subset is not None:
+                    pretrain_subset, finetune_subset = partition_subset_by_scene(
+                        self.train_dataset,
+                        ratio=self.train_subset_ratio,
+                        seed=self.train_subset_seed,
+                    )
+                    self.train_dataset = (
+                        pretrain_subset
+                        if self.train_scene_subset == "pretrain"
+                        else finetune_subset
+                    )
 
     def train_dataloader(self) -> DataLoader:
         if self.train_dataset is None:
