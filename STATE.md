@@ -12,7 +12,7 @@ terse; details live in the linked specs/notes. Last update: 2026-08-22.
 | **best articulation (3D)** | 20260821_sf3d_g19_fdiff | best-epoch29-valloss1.1780 — MA 29.9, traj_dir 96.1/0.819 (records) |
 | **best smooth/visual (3D)** | 20260821_sf3d_g19_dct | best-epoch20-valloss0.9652 — roughness 0.0090 (10×), mIoU 0.2685 + PDet 21.72 (records) |
 | previous overall best | 20260818_sf3d_g17_splitax | best-epoch18-valloss0.9272 |
-| best 2D-only | 20260820_sf3d_g17_2d_detach | best-epoch24 — proj2d shape 0.0997 (= 3D level) |
+| best 2D-only | 20260822_sf3d_g17_2d_dct | best-epoch19-valloss1.3702 — shape 0.0947, mIoU 0.2655 (= 3D level), roughness 0.032 |
 
 ## Generation lineage (full numbers in experiments/INDEX.md + notes.md)
 
@@ -31,14 +31,18 @@ exists, segmenter.py:636), emergent type from L_pp (majority baseline).
 
 ## In flight (2026-08-22)
 
-- Training: `g2ddct` (arm A 2D base + DCT head) still running (~ep 25+).
-  DONE 2026-08-22: `g17_2d_fdiff2d` — a WASH vs arm-A-detach (direction
-  +2.3 acc, everything else slightly worse, val turnover ep10, 3D
-  roughness 0.177); uv-fdiff NOT adopted for 2D (notes + INDEX row in).
-  Its pod (`g2dfd`) REUSED for the label-efficiency scratch-10 arm
-  (20260822_sf3d_s10_3d) — launching. Dev pod could NOT start (host GPUs
-  taken); volume file transfer goes via scp through `segaff-g2dfd`
-  meanwhile; dev pod may need delete+recreate (state survives).
+- BOTH 2D smoothness arms DONE 2026-08-22: `g17_2d_dct` = best 2D arm
+  everywhere (shape 0.0947, mIoU 0.2655 = 3D level; ADOPTED as p90
+  pretrain recipe; origin/radius cols exploded = unsupervised garbage,
+  ignore); `g17_2d_fdiff2d` = wash, NOT adopted. Notes + INDEX rows in.
+- Label-efficiency runs: `s10_3d` (scratch 10%) TRAINING on reused pod
+  `g2dfd` (monitor bpyl4waj7; partition verified 19/202 scenes, 5502
+  samples = 0.102); `p90_2d` (DCT recipe on 90%) LAUNCHING on reused pod
+  `g2ddct`. Then ft10_3d (g17 recipe + finetune_from_path = p90 best) on
+  whichever pod frees first; delete pods after their final test passes.
+- Dev pod could NOT start (host GPUs taken); volume file transfer goes
+  via scp through the training pods meanwhile; dev pod may need
+  delete+recreate (state survives — do when next needed for viz/sync).
 - The 3D next candidate (recorded, not commissioned): gen-20 = DCT head +
   fdiff losses combined.
 - COMMISSIONED next (user, 2026-08-22): 2D-pretrain label-efficiency
