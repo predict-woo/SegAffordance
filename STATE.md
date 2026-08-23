@@ -99,10 +99,13 @@ exists, segmenter.py:636), emergent type from L_pp (majority baseline).
   when idle; start on demand (`dev.sh start`, ~1 min), stop after.** The
   mutagen mirror routes through it — with it off, Mac↔volume syncs queue.
 - Training pods: PRO 6000 class only (96GB; 4500-class can't hold the 512
-  stack). Stock: poll creates every ~10 min via Monitor-wrapped script
+  stack — its create fallback REMOVED from train_pod.sh 2026-08-23 after
+  a second bad auto-create: 29G shm truncates frames_512 → SIGBUS).
+  Stock: poll creates every ~10 min via Monitor-wrapped script
   (~10-90 min to land); WK $1.89/hr, Server $2.09/hr. ALWAYS reconcile
-  `pod list` after creates (orphans bill silently); delete pods right
-  after their test pass.
+  `pod list` after creates (orphans bill silently) AND verify the landed
+  GPU (`nvidia-smi`) before launching; delete pods right after their
+  test pass.
 - Launch: `bash runpod/train_pod.sh launch <name> <exp_id> <config>` —
   auto-selects trainer, stages LMDBs from the CONFIG's paths to /dev/shm.
   Detached jobs: `setsid nohup ... < /dev/null` (plain nohup died once).
