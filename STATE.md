@@ -69,10 +69,13 @@ exists, segmenter.py:636), emergent type from L_pp (majority baseline).
   in PredPredArticulationLoss (`dir_weight`; 1−cos between trajectory
   chords and the screw velocity field at chord midpoints — exactly 0 at
   consistency for any step size, 2 under a flip; L_pp's locus residuals
-  are sign-blind, this is the oriented complement). Before training with
-  it: run a GT-GT diag on the dataset to confirm SF3D's canonical axis
-  sign obeys the right-hand rule w.r.t. the GT sweep (if not, the term
-  would fight the GT axis loss). Not yet wired to config/trainer.
+  are sign-blind, this is the oriented complement). GT convention
+  VERIFIED 2026-08-23 (tests/test_gt_sign_convention.py, runs the real
+  writer code via AST extraction): rot arcs sweep right-hand-positive
+  about the stored axis and trans rays run along +axis BY CONSTRUCTION
+  (writer e2 = n×e1, t∈[0,+90°]; v3 rebuild sign-preserving; reader
+  order-preserving) — the term never fights GT supervision. Ready to
+  wire to config/trainer and run.
 - 2D-only articulation deadlock — candidates: track-curvature pseudo-type
   labels; analytic screw decode (survey option 3, routes 2D gradients
   into articulation params).
