@@ -52,16 +52,19 @@ writing garbage.
 
 ## In flight (2026-08-24)
 
-- **Label-efficiency v2 RUNNING** (spec
-  docs/superpowers/specs/2026-08-23-label-efficiency-v2-dir-term-design.md;
-  all arms = "g21" recipe: g17 + DCT head + pred_pred_art_dir_weight 0.1):
-  pods `segaffordance-g21` (C' 20260823_sf3d_g21_dct_dir, 100% 3D) and
-  `segaffordance-p90d` (B'1 20260823_sf3d_p90_2d_dir, 90% 2D) both ~ep
-  21/30, ~1h left as of 2026-08-24. Then: test passes; A'
-  (s10_3d_dir) launches on the freed g21 pod, B'2 (ft10_3d_dir, config
-  written then) on the p90d pod; delete pods after. NOTE: CSV logger is
-  version_1 on both (a dead 4500 launch claimed version_0). B'1's val
-  L_geo_pp_dir 0.64→0.07 = first-ever 2D axis-sign learning.
+- **Label-efficiency v2 DONE 2026-08-24** (all four arms wrapped, notes
+  + INDEX in, MY pods deleted). Headline (all g21 recipe): B' ≫ A'
+  (MA 11.4 vs 4.9, mIoU 0.188 vs 0.029), B' < C' (MA 26.6, mIoU 0.271);
+  vs v1 the ARTICULATION transfer improved a lot (matched axis within
+  2.2° of the 100% baseline) while mask transfer dipped. C' set mIoU
+  0.2712 / PDet 23.21 RECORDS. **Dir-term verdict: FAILED as
+  implemented at 0.1** — rot flips 13.3→15.4 and traj_dir 94.5→88.8 on
+  3D (g21 vs g19_dct), traj_dir 84→64 on the 2D pretrain: the two-way
+  gradient lets wrong axes drag trajectories. Twice-motivated fix,
+  PARKED: detach the trajectory inside the term (axis-only gradients).
+  Cross-read pending: the other session's supabl2 arms (their arm D =
+  L_pp fully off on this recipe). B'2 was quota-cut at ep29 (val at
+  plateau — negligible loss); its ep30 truncated ckpt was removed.
 - **Supervision ablation v2 RUNNING** (spec
   docs/superpowers/specs/2026-08-24-supervision-ablation-v2-design.md;
   separate session, coordinated 2026-08-24): re-runs the 2026-08-15
