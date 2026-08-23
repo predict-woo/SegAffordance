@@ -42,6 +42,8 @@ NOTHING was deleted beyond my own run's verifiably-corrupt checkpoint.
 Options awaiting the user, in rough order of payoff:
 1. Trim old experiment checkpoints — experiments/ holds ~586G; pre-g17
    generations (g9–g16 top-3+last each) are the bulk and superseded.
+   Every experiment's TEST METRICS are safe in git (notes.md + INDEX)
+   regardless — trimming loses only .ckpt weights, never results.
 2. ~~Check/purge MooseFS trash~~ — **RULED OUT empirically 2026-08-24**:
    deleting a 4.35G checkpoint made the space available INSTANTLY (a
    100MB write went through at 436 MB/s immediately after, then 500MB
