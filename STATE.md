@@ -29,6 +29,27 @@ losses (direction is loss-driven, MA 29.9)**. Gen-18 = renamed g17-2d
 (never reuse the name). Refuted ideas: sigmoid-octant axis bug (rescale
 exists, segmenter.py:636), emergent type from L_pp (majority baseline).
 
+## ⚠ VOLUME QUOTA EXHAUSTED (2026-08-24) — USER DECISION NEEDED
+
+`/workspace` refuses ALL writes (EDQUOT verified: 8MB probe fails; a
+pytorch-lightning hparams.yaml write raised Errno 122). Both sessions'
+final runs died the same silent death: a checkpoint write TRUNCATED at
+quota (ft10_3d_dir's best-epoch30 was 3.76G vs 4.35G — removed; arm D
+supabl2_nolpp died at ep9). Measured usage ~894G against the nominal
+1TB — effective capacity is lower than nominal, plausibly MooseFS trash
+accounting (deleted files retained for trashtime count against quota).
+NOTHING was deleted beyond my own run's verifiably-corrupt checkpoint.
+Options awaiting the user, in rough order of payoff:
+1. Trim old experiment checkpoints — experiments/ holds ~586G; pre-g17
+   generations (g9–g16 top-3+last each) are the bulk and superseded.
+2. Check/purge MooseFS trash (needs mfsmeta mount) — non-destructive if
+   the files were already deliberately deleted.
+3. `/workspace/venv-local.tar.tmp` (4.9G, stale-looking temp at volume
+   root, neither session's) — candidate deletion.
+4. Resize the volume up (paid) / revisit the 700GB scratch volume.
+All GPU work is stopped or finishing without volume writes; nothing is
+writing garbage.
+
 ## In flight (2026-08-24)
 
 - **Label-efficiency v2 RUNNING** (spec
