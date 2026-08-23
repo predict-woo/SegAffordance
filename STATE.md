@@ -42,13 +42,24 @@ NOTHING was deleted beyond my own run's verifiably-corrupt checkpoint.
 Options awaiting the user, in rough order of payoff:
 1. Trim old experiment checkpoints — experiments/ holds ~586G; pre-g17
    generations (g9–g16 top-3+last each) are the bulk and superseded.
-2. Check/purge MooseFS trash (needs mfsmeta mount) — non-destructive if
-   the files were already deliberately deleted.
+2. ~~Check/purge MooseFS trash~~ — **RULED OUT empirically 2026-08-24**:
+   deleting a 4.35G checkpoint made the space available INSTANTLY (a
+   100MB write went through at 436 MB/s immediately after, then 500MB
+   at 1.3 GB/s). Trash is not holding anything, so there is no free
+   space to recover this way — option 1 is the real lever.
 3. `/workspace/venv-local.tar.tmp` (4.9G, stale-looking temp at volume
    root, neither session's) — candidate deletion.
 4. Resize the volume up (paid) / revisit the 700GB scratch volume.
 All GPU work is stopped or finishing without volume writes; nothing is
-writing garbage.
+writing garbage. The ablation session's two live arms (supabl2_nolpp,
+supabl2_art) now write checkpoints to POD-LOCAL `/dev/shm/ckpt_*`
+instead of the volume — training continues through the freeze, and only
+the KB-sized CSV logs touch `/workspace`. Consequence: those checkpoints
+DIE WITH THE POD, so each arm's test pass runs on its own pod before
+deletion and only the metrics reach the volume. Space freed by that
+session so far: arm D's two superseded checkpoints (epoch06/07, both
+worse than the epoch08 it keeps), ~8.7G, deliberately left as headroom
+for the other session's finishing writes.
 
 ## In flight (2026-08-24)
 
