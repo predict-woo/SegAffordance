@@ -41,6 +41,22 @@ exists, segmenter.py:636), emergent type from L_pp (majority baseline).
   written then) on the p90d pod; delete pods after. NOTE: CSV logger is
   version_1 on both (a dead 4500 launch claimed version_0). B'1's val
   L_geo_pp_dir 0.64→0.07 = first-ever 2D axis-sign learning.
+- **Supervision ablation v2 RUNNING** (spec
+  docs/superpowers/specs/2026-08-24-supervision-ablation-v2-design.md;
+  separate session, coordinated 2026-08-24): re-runs the 2026-08-15
+  joint-vs-either ablation on the g21 recipe AND adds the deconfounding
+  arm that spec deferred. Arm A (joint) is NOT retrained — it is the
+  reused `20260823_sf3d_g21_dct_dir` (C') run above. New arms, all
+  derived from `sf3d_train_runpod_g21_dct_dir.yaml`:
+  `20260824_sf3d_supabl2_art` (B, trajectory head gone — L_pp dies with
+  it structurally), `20260824_sf3d_supabl2_traj` (C, articulation heads
+  gone; needs split_axis_heads + use_origin_local_feature off, which
+  gen-9's arm C did not), `20260824_sf3d_supabl2_nolpp` (D, arm A's
+  supervision with pred_pred_art_weight + dir_weight 0 — geometric_loss
+  stays "pred_pred_art" so L_geo_pred_pred_art is still LOGGED as a
+  diagnostic). D is TRAINING on pod `segaffordance-abl-nolpp`; B and C
+  are waiting on PRO 6000 stock (exhausted 2026-08-24). Cleanup scope of
+  that session = `abl-*` pods only.
 - Dev pod still DOWN (host GPUs taken; delete+recreate when next
   needed). Mutagen mirror therefore down — the volume's code tree was
   synced to commit a991ae9 via `git archive | ssh tar -x` through a
