@@ -235,3 +235,96 @@ Revised headline comparisons:
 
 Nothing about the running arms changes — B, C and D are unaffected. This
 is purely a decision about which columns the wrap table headlines.
+
+---
+
+# RESULTS (2026-08-24) — all arms complete
+
+Five arms, one test protocol (5,088 samples). `--` = metric legitimately
+absent because that arm has no such head; never a zero placeholder.
+
+| metric | A₀ g19_dct<br>joint + L_pp | A g21_dct_dir<br>joint + L_pp + dir | **D** nolpp<br>joint, no coupling | **B** art<br>articulation only | **C** traj<br>trajectory only |
+|---|---|---|---|---|---|
+| mIoU | 0.2685 | **0.2712** | 0.2650 | 0.2680 | 0.2689 |
+| PDet | 21.72 | **23.21** | 21.95 | 22.60 | 22.82 |
+| type acc | **95.15** | — | 93.63 | 93.85 | -- |
+| MA | 25.98 | 26.61 | **28.22** | 20.40 | -- |
+| axis matched (°) | 18.21 | 20.76 | **17.07** | 23.29 | -- |
+| axis all (°) | 25.29 | 27.04 | **25.30** | 29.20 | -- |
+| rot flip rate | **13.30** | 15.45 | 14.79 | 21.82 | -- |
+| origin q* (m) | 0.2764 | 0.2780 | **0.2726** | 0.2900 | -- |
+| radius err (m) | 0.1410 | 0.1400 | **0.1201** | 0.1361 | -- |
+| 3D point (m) | 0.2592 | 0.2440 | 0.2459 | **0.2429** | 0.2456 |
+| traj_dir acc | **94.52** | 88.78 | 94.26 | -- | 94.36 |
+| traj_dir cos | 0.8000 | 0.7240 | **0.8003** | -- | 0.7799 |
+| roughness (m) | 0.0090 | 0.0085 | **0.0085** | -- | 0.0090 |
+
+(A's numbers from `experiments/20260823_sf3d_g21_dct_dir/notes.md`, the
+concurrent session's run; A₀ from `20260821_sf3d_g19_dct`.)
+
+## The three answers
+
+**1. Does trajectory supervision improve articulation? YES — and more
+than in v1.** B vs D (co-training with no consistency coupling on either
+side): **MA +7.8** (20.40 → 28.22), **matched axis −6.2°**, axis-all
+−3.9°, origin −1.7 cm, radius −1.6 cm. v1 measured this as type −3.0 and
+matched axis +4.6°; here type is FLAT and the whole effect lands on the
+axis, which fits g17's split rot/trans heads already reading type at ~94%
+unaided.
+
+**2. Does articulation supervision improve the trajectory? NO — this is
+the non-replication.** C vs D: traj_dir accuracy **94.36 vs 94.26, flat**,
+cosine +0.020, roughness flat. v1 called this "the largest single effect
+in the ablation" at **−5.5 points** of traj_dir (93.10 → 87.58). The
+trajectory head no longer needs the help: g16's normalized trajectory loss
+and g19's DCT parameterization supply the scale, smoothness and
+orientation that articulation supervision used to contribute indirectly.
+Arm C reaches traj_dir 94.36 / roughness 0.0090 knowing nothing about
+joint type, axis or origin.
+
+**So the coupling is now ASYMMETRIC.** In v1 it looked mutual. On this
+stack the trajectory teaches articulation a great deal; articulation
+teaches the trajectory essentially nothing.
+
+**3. Was the v1 win co-training or the consistency loss? Co-training —
+and L_pp is a trade.** A₀ vs D (clean isolation: identical recipe,
+identical supervision, dir term absent from both) shows turning L_pp OFF
+*improves* MA +2.2, matched axis −1.1°, radius −2.1 cm, and costs type
+−1.5 and rot flips +1.5. The joint arm's articulation advantage does NOT
+come from the consistency term.
+
+**Bonus, only arm D could show it: consistency never emerges for free.**
+D's passive `val/L_geo_pred_pred_art` is flat across all 30 epochs
+(0.382 → 0.370) while its training loss falls normally, vs 0.234 → 0.124
+in A₀ which trains on it. Heads supervised toward the same ground truth do
+NOT drift into agreement by themselves — L_pp is what makes them agree.
+That is the affirmative case for the term's existence even though it costs
+MA.
+
+**Sign, unexpectedly.** Removing the trajectory nearly DOUBLES the
+rot-axis flip rate (14.79 → 21.82). The trajectory's time ordering is the
+only sign-aware signal in the loss set — L_pp's locus residuals are
+sign-blind by construction. This is direct evidence for why the ~13%
+flip problem exists, obtained with the failed dir term nowhere in the
+comparison, and it suggests trajectory-side supervision is a more
+promising lever on sign than another L_pp term.
+
+**Masks: task competition replicates exactly.** Fewer heads = better
+masks, three-way consistent (C 0.2689 > B 0.2680 > D 0.2650), the same
+ordering gen-9 found. Two generations, different backbone and resolution,
+same effect.
+
+## Caveats
+
+- Single seed, single run per arm; treat sub-0.005 mIoU and sub-1-point
+  differences as noise. The effects called out above (+7.8 MA, −6.2°,
+  −7.0 flips, the flat traj_dir) are far outside that.
+- `axis matched` uses a per-arm denominator (IoU>0.5 rows only), and PDet
+  differs across arms, so those columns compare slightly different sample
+  sets.
+- Arms B and D each restarted once mid-run because of the volume quota
+  event; both resumed from intact checkpoints and reached max_epochs
+  normally. Arm C ran clean.
+- No viz batch: a cross-arm panel needs all checkpoints on one pod, and
+  the quota freeze made consolidating them impossible. All arms' weights
+  were pod-local and died with their pods; the metrics are the artifact.
