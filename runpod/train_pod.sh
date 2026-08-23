@@ -26,11 +26,11 @@ GPUS=(
   "NVIDIA RTX PRO 6000 Blackwell Server Edition"
   "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
   "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition"
-  # Fallback: the gen-5 workhorse (~490 samples/s SF3D). PRO 6000 stock in
-  # EU-RO-1 is unreliable ("Low" listings routinely fail actual creates).
-  # NOTE 4500-class hosts cap /dev/shm at 29G — launch stages LMDBs on
-  # container NVMe (/root/lmdb) and runs 24 workers (see launch).
-  "NVIDIA RTX PRO 4500 Blackwell"
+  # NO 4500 fallback (removed 2026-08-23, second bad auto-create): its 29G
+  # /dev/shm truncates the 39G frames_512 LMDB (SIGBUS at batch 0), the
+  # 40G container disk can't hold both LMDBs either, and 32GB VRAM doesn't
+  # fit the 512-stack batch. The gen-13+ stack needs PRO 6000 class only —
+  # poll creates until 6000 stock lands instead of falling back.
 )
 
 pod_id() {
