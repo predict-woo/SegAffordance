@@ -64,8 +64,15 @@ exists, segmenter.py:636), emergent type from L_pp (majority baseline).
 
 ## Open threads / parked (user decision or next pick)
 
-- Rot axis SIGN flips ~13% (sign-aware metrics 2026-08-18) — candidate:
-  sign-consistency between predicted axis and predicted sweep.
+- Rot axis SIGN flips ~13% (sign-aware metrics 2026-08-18). The fix is
+  IMPLEMENTED + unit-tested (2026-08-23): midpoint screw-direction term
+  in PredPredArticulationLoss (`dir_weight`; 1−cos between trajectory
+  chords and the screw velocity field at chord midpoints — exactly 0 at
+  consistency for any step size, 2 under a flip; L_pp's locus residuals
+  are sign-blind, this is the oriented complement). Before training with
+  it: run a GT-GT diag on the dataset to confirm SF3D's canonical axis
+  sign obeys the right-hand rule w.r.t. the GT sweep (if not, the term
+  would fight the GT axis loss). Not yet wired to config/trainer.
 - 2D-only articulation deadlock — candidates: track-curvature pseudo-type
   labels; analytic screw decode (survey option 3, routes 2D gradients
   into articulation params).

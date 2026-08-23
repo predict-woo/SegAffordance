@@ -171,6 +171,9 @@ class PredPredArticulationLoss(GeometricConsistencyLoss):
         trajectory_is_absolute: bool = False,
         normalized: bool = False,
         radius_floor: float = 0.10,
+        dir_weight: float = 0.0,
+        dir_seg_floor: float = 1e-3,
+        dir_lever_floor: float = 1e-2,
     ):
         super().__init__()
         self.weight = weight
@@ -178,6 +181,10 @@ class PredPredArticulationLoss(GeometricConsistencyLoss):
         self.trajectory_is_absolute = trajectory_is_absolute
         self.normalized = normalized
         self.radius_floor = radius_floor
+        # Midpoint screw-direction term (sign consistency), see forward().
+        self.dir_weight = dir_weight
+        self.dir_seg_floor = dir_seg_floor
+        self.dir_lever_floor = dir_lever_floor
 
     def forward(self, outputs, targets, depth=None) -> LossTerms:
         required = (
@@ -259,7 +266,54 @@ class PredPredArticulationLoss(GeometricConsistencyLoss):
             # through the total unconditionally, and the inputs must receive
             # (zero) gradients rather than a "does not require grad" error.
             term = per_sample.sum() * 0.0
-        return self.weight * term, {"L_geo_pred_pred_art": term}
+
+        total = self.weight * term
+        logs = {"L_geo_pred_pred_art": term}
+
+        # Midpoint screw-direction term (sign consistency). The locus
+        # residuals above are invariant to axis -> -axis: a line and a
+        # circle are unoriented point sets, so the prismatic direction and
+        # the hinge sign are unconstrained by them. The trajectory's TIME
+        # ORDERING carries the orientation: demand the screw's velocity
+        # field, evaluated at chord MIDPOINTS, align (signed cosine) with
+        # the chords. For an exact arc the chord is parallel to the tangent
+        # at the arc midpoint, so the residual is exactly zero at
+        # consistency for ANY step size — evaluated at the endpoints it
+        # would keep a 1 - cos(step/2) floor and a nonzero gradient at the
+        # optimum. Prismatic is the omega -> 0 limit (v = axis, constant).
+        # The origin enters DETACHED: sign should steer the axis and the
+        # trajectory, not hand the origin a second escape route. Segments
+        # shorter than dir_seg_floor and revolute midpoints closer than
+        # dir_lever_floor to the axis (ill-defined tangent) are masked out.
+        if self.dir_weight != 0.0:
+            seg = d[:, 1:] - d[:, :-1]                            # (B, N-1, 3)
+            mid = 0.5 * (d[:, 1:] + d[:, :-1])                    # (B, N-1, 3)
+            seg_ok = seg.norm(dim=-1) > self.dir_seg_floor        # (B, N-1)
+
+            cos_line = F.cosine_similarity(
+                seg, dhat_line.expand_as(seg), dim=-1, eps=1e-8
+            )
+            v_circ = torch.cross(
+                dhat_n.expand_as(mid), mid - c.detach(), dim=-1
+            )
+            circ_ok = seg_ok & (v_circ.norm(dim=-1) > self.dir_lever_floor)
+            cos_circ = F.cosine_similarity(seg, v_circ, dim=-1, eps=1e-8)
+
+            def _masked_mean(x, ok):
+                okf = ok.float()
+                return (x * okf).sum(-1) / okf.sum(-1).clamp(min=1.0)
+
+            dir_line = _masked_mean(1.0 - cos_line, seg_ok)       # (B,)
+            dir_circ = _masked_mean(1.0 - cos_circ, circ_ok)      # (B,)
+            per_sample_dir = (1.0 - p_rev) * dir_line + p_rev * dir_circ
+            if bool(valid.any()):
+                dir_term = per_sample_dir[valid].mean()
+            else:
+                dir_term = per_sample_dir.sum() * 0.0
+            total = total + self.dir_weight * dir_term
+            logs["L_geo_pp_dir"] = dir_term
+
+        return total, logs
 
 
 def normalized_intrinsics(K: torch.Tensor, img_size: torch.Tensor) -> torch.Tensor:
