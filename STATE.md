@@ -78,22 +78,35 @@ for the other session's finishing writes.
   Cross-read pending: the other session's supabl2 arms (their arm D =
   L_pp fully off on this recipe). B'2 was quota-cut at ep29 (val at
   plateau — negligible loss); its ep30 truncated ckpt was removed.
-- **Supervision ablation v2 RUNNING** (spec
+- **Supervision ablation v2 DONE 2026-08-24** (spec + full results table:
   docs/superpowers/specs/2026-08-24-supervision-ablation-v2-design.md;
-  separate session, coordinated 2026-08-24): re-runs the 2026-08-15
-  joint-vs-either ablation on the g21 recipe AND adds the deconfounding
-  arm that spec deferred. Arm A (joint) is NOT retrained — it is the
-  reused `20260823_sf3d_g21_dct_dir` (C') run above. New arms, all
-  derived from `sf3d_train_runpod_g21_dct_dir.yaml`:
-  `20260824_sf3d_supabl2_art` (B, trajectory head gone — L_pp dies with
-  it structurally), `20260824_sf3d_supabl2_traj` (C, articulation heads
-  gone; needs split_axis_heads + use_origin_local_feature off, which
-  gen-9's arm C did not), `20260824_sf3d_supabl2_nolpp` (D, arm A's
-  supervision with pred_pred_art_weight + dir_weight 0 — geometric_loss
-  stays "pred_pred_art" so L_geo_pred_pred_art is still LOGGED as a
-  diagnostic). D is TRAINING on pod `segaffordance-abl-nolpp`; B and C
-  are waiting on PRO 6000 stock (exhausted 2026-08-24). Cleanup scope of
-  that session = `abl-*` pods only.
+  arms `20260824_sf3d_supabl2_{art,traj,nolpp}`, notes + INDEX rows in;
+  ALL ITS PODS DELETED). Re-ran the 2026-08-15 joint-vs-either ablation on
+  the g21 stack and added the deconfounding arm that spec deferred. Arm A
+  was the REUSED g21_dct_dir run; A₀ = g19_dct (L_pp on, dir off) turned
+  out to be the cleaner joint partner. Three answers:
+  1. **Trajectory → articulation: YES, bigger than v1** (arm B vs D, no
+     consistency coupling on either side): MA +7.8 (20.4→28.2), matched
+     axis −6.2°. v1's effect was on TYPE; on the split-head stack type is
+     flat and it all lands on the AXIS.
+  2. **Articulation → trajectory: NO — v1's biggest effect does NOT
+     replicate.** traj_dir 94.36 (C) vs 94.26 (D), flat, where v1 measured
+     −5.5. g16's normalized traj loss + g19's DCT head now supply what
+     articulation used to. **The coupling is ASYMMETRIC now.**
+  3. **The v1 win was co-training, not L_pp.** A₀ vs D: turning L_pp OFF
+     *improves* MA +2.2, matched axis −1.1°, radius −2.1cm; it buys type
+     (+1.5) and rot sign stability (13.3 vs 14.8 flips) instead.
+  Also: **consistency never emerges for free** — arm D's passive
+  L_geo_pred_pred_art is FLAT 0.382→0.370 over 30 epochs vs A₀'s trained
+  0.234→0.124 (only arm D could show this). And removing the trajectory
+  nearly DOUBLES the rot flip rate (14.8→21.8) — the trajectory's time
+  ordering is the only sign-aware signal in the loss set, so
+  **trajectory-side supervision looks a better lever on the sign problem
+  than another L_pp term** (relevant to the parked dir-term fix).
+  Masks: fewer heads = better masks, C>B>D, replicating gen-9 exactly.
+  CAVEAT: all three arms' weights were POD-LOCAL and died with their pods
+  (quota freeze) — metrics in notes/INDEX/logs are the durable artifact;
+  re-running an arm is ~4h/$8. No viz batch for the same reason.
 - Dev pod still DOWN (host GPUs taken; delete+recreate when next
   needed). Mutagen mirror therefore down — the volume's code tree was
   synced to commit a991ae9 via `git archive | ssh tar -x` through a
