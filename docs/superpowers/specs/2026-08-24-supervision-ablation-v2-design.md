@@ -192,3 +192,46 @@ channels_last + compile.
 - Cross-generation comparison to the gen-9 numbers on absolute metric
   values. Only the DIRECTION and rough SIZE of each effect transfer —
   different backbone, resolution, data version, and loss set.
+
+## AMENDMENT 2026-08-24: a fifth arm exists for free, and it is the better partner
+
+The concurrent session's label-efficiency v2 wrap landed while these arms
+were training, and it changes which comparisons should be headlined.
+
+**Finding that forces this:** the `pred_pred_art_dir_weight: 0.1` term in
+the g21 recipe FAILED — vs `20260821_sf3d_g19_dct` (identical but for the
+term) it made rot flips WORSE (13.3 → 15.4) and traj_dir worse (94.5 →
+88.8). Arm A (= `20260823_sf3d_g21_dct_dir`) therefore carries a known
+net-negative term, which would understate the joint arm in every A-vs-B
+and A-vs-C comparison.
+
+**The fix costs nothing:** `20260821_sf3d_g19_dct` IS the g21 recipe minus
+the dir term — same data, same 59,174-key split, same 30 epochs, same
+DCT head — and it is already run, tested, and in INDEX. Adopt it as a
+fifth arm:
+
+| arm | trajectory GT | articulation GT | L_pp | dir term |
+|---|---|---|---|---|
+| **A₀** `20260821_sf3d_g19_dct` | ✓ | ✓ | 0.1 | — |
+| **A** `20260823_sf3d_g21_dct_dir` | ✓ | ✓ | 0.1 | 0.1 |
+| **D** `20260824_sf3d_supabl2_nolpp` | ✓ | ✓ | — | — |
+| **B** `20260824_sf3d_supabl2_art` | — | ✓ | — | — |
+| **C** `20260824_sf3d_supabl2_traj` | ✓ | — | — | — |
+
+Revised headline comparisons:
+
+- **A₀ vs D is now the clean L_pp isolation** — identical recipe, identical
+  supervision, consistency weight 0.1 vs 0, dir term absent from BOTH.
+  This is strictly better than the A vs D comparison the original spec
+  planned, which confounded L_pp with the failed dir term.
+- **A₀ vs B and A₀ vs C** replace A vs B / A vs C as the restatement of
+  the 2026-08-15 question ("does joint beat either alone?"), using the
+  joint arm that does NOT carry the bad term.
+- **D vs B and D vs C** answer the purer question the original ablation
+  could not: does co-training alone help, with no consistency coupling
+  anywhere in the comparison?
+- A vs A₀ (the dir term) is the concurrent session's experiment, not
+  this one's; cite it, don't re-derive it.
+
+Nothing about the running arms changes — B, C and D are unaffected. This
+is purely a decision about which columns the wrap table headlines.
