@@ -212,3 +212,95 @@ def test_ablation_configs_match_spec():
         ckpt = c["trainer"]["callbacks"][0]["init_args"]["dirpath"]
         logd = c["trainer"]["logger"]["init_args"]["save_dir"]
         assert tag in ckpt and tag in logd
+
+
+# ---- v2 arms (2026-08-24 spec) ---------------------------------------------
+#
+# Same three questions on the g21 recipe (g17 split-axis + DCT head + the
+# midpoint dir term), plus the deconfounding arm the 2026-08-15 spec named
+# as a follow-up and never ran. Arm A is NOT retrained: it is the reused
+# 20260823_sf3d_g21_dct_dir run, so `base` below is literally that config.
+
+
+def test_supabl2_configs_match_spec():
+    base = _load("sf3d_train_runpod_g21_dct_dir.yaml")       # arm A (reused)
+    art = _load("sf3d_train_runpod_supabl2_art.yaml")        # arm B
+    trj = _load("sf3d_train_runpod_supabl2_traj.yaml")       # arm C
+    nol = _load("sf3d_train_runpod_supabl2_nolpp.yaml")      # arm D
+
+    bm, am, tm, nm = (c["model"]["model_params"] for c in (base, art, trj, nol))
+    bl, al, tl, nl = (c["model"]["loss_params"] for c in (base, art, trj, nol))
+    bd, ad, td, nd = (c["data"] for c in (base, art, trj, nol))
+
+    # Arm B: only the trajectory path is removed. L_pp dies with it — the
+    # loss module requires outputs.trajectory_pred.
+    assert am["use_trajectory_head"] is False
+    assert al["geometric_loss"] == "none"
+    assert al["trajectory_weight"] == 0.0
+    assert al["pred_pred_art_weight"] == 0.0
+    assert al["pred_pred_art_dir_weight"] == 0.0
+    assert am["use_motion_head"] and am["use_motion_type_head"]
+    assert am["split_axis_heads"] and am["use_origin_heatmap"]
+    assert am["predict_point_depth"]
+
+    # Arm C: every articulation path removed. split_axis_heads and
+    # use_origin_local_feature must go off too — both raise in
+    # CRIS.__init__ without their dependencies (new vs the gen-9 arm).
+    assert tm["use_motion_head"] is False
+    assert tm["use_motion_type_head"] is False
+    assert tm["split_axis_heads"] is False
+    assert tm["use_origin_heatmap"] is False
+    assert tm["use_origin_local_feature"] is False
+    assert tm["predict_point_depth"] is True
+    assert tm.get("use_trajectory_head", True) is True
+    assert tm["trajectory_dct_coeffs"] == bm["trajectory_dct_coeffs"]
+    assert tl["geometric_loss"] == "none"
+    for k in ("vae_weight", "motion_type_weight", "origin_weight",
+              "origin_map_weight", "pred_pred_art_weight",
+              "pred_pred_art_dir_weight"):
+        assert tl[k] == 0.0, k
+
+    # Arm D: supervision IDENTICAL to arm A, consistency coupling off. The
+    # module stays built at zero weight so L_geo_pred_pred_art is still
+    # logged as a diagnostic — switching to "none" would lose it.
+    assert nl["geometric_loss"] == "pred_pred_art"
+    assert nl["pred_pred_art_weight"] == 0.0
+    assert nl["pred_pred_art_dir_weight"] == 0.0
+    assert nm == bm, "arm D must be architecturally identical to arm A"
+    for k, v in bl.items():
+        if k in ("pred_pred_art_weight", "pred_pred_art_dir_weight"):
+            continue
+        assert nl[k] == v, f"arm D changed {k}: {nl[k]} != {v}"
+
+    # Constants identical across every arm.
+    for m, l, d in ((am, al, ad), (tm, tl, td), (nm, nl, nd)):
+        assert d["key_cache_path"] == bd["key_cache_path"]
+        assert d["train_data_dir"] == bd["train_data_dir"]
+        assert d["frame_cache_path"] == bd["frame_cache_path"]
+        assert d["min_revolute_radius"] == bd["min_revolute_radius"]
+        assert d["min_mask_area_frac"] == bd["min_mask_area_frac"]
+        assert d["edge_margin_frac"] == bd["edge_margin_frac"]
+        assert d["batch_size_train"] == bd["batch_size_train"]
+        assert d["input_size"] == bd["input_size"]
+        assert d["point_source"] == bd["point_source"]
+        assert m["backbone"] == bm["backbone"]
+        assert m["backbone_image_size"] == bm["backbone_image_size"]
+        assert l["mask_weight"] == bl["mask_weight"]
+        assert l["point_3d_weight"] == bl["point_3d_weight"]
+        assert l["point_map_weight"] == bl["point_map_weight"]
+        assert l["coord_weight"] == bl["coord_weight"]
+    for c in (base, art, trj, nol):
+        assert c["trainer"]["max_epochs"] == 30
+        assert c["model"]["optimizer_params"]["scheduler_milestones"] == [24, 28]
+        assert c["seed_everything"] == 42
+        assert c["model"]["freeze_backbone"] is True
+
+    # Each arm writes to its own experiment dir, and none of them writes
+    # into the concurrent session's label-efficiency v2 dirs.
+    for c, tag in ((art, "20260824_sf3d_supabl2_art"),
+                   (trj, "20260824_sf3d_supabl2_traj"),
+                   (nol, "20260824_sf3d_supabl2_nolpp")):
+        ckpt = c["trainer"]["callbacks"][0]["init_args"]["dirpath"]
+        logd = c["trainer"]["logger"]["init_args"]["save_dir"]
+        assert tag in ckpt and tag in logd
+        assert "20260823_" not in ckpt and "20260823_" not in logd
