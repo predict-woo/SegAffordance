@@ -991,6 +991,7 @@ def build_geometric_loss(
             trajectory_is_absolute=trajectory_is_absolute,
             normalized=getattr(loss_params, "pred_pred_art_normalized", False),
             radius_floor=getattr(loss_params, "pred_pred_art_radius_floor", 0.10),
+            dir_weight=getattr(loss_params, "pred_pred_art_dir_weight", 0.0),
         )
     if name == "projected":
         return ProjectedGeometricLoss(

@@ -282,3 +282,22 @@ def test_split_heads_pairing():
     )
     _, terms = dir_only_loss()(out, None)
     assert terms["L_geo_pp_dir"].item() == pytest.approx(0.0, abs=1e-6)
+
+
+def test_build_geometric_loss_wires_dir_weight():
+    from types import SimpleNamespace
+    from model.losses.geometric import build_geometric_loss
+
+    lp = SimpleNamespace(
+        geometric_loss="pred_pred_art",
+        pred_pred_art_weight=0.1,
+        pred_pred_art_normalized=True,
+        pred_pred_art_radius_floor=0.10,
+        pred_pred_art_dir_weight=0.1,
+    )
+    loss = build_geometric_loss(lp)
+    assert isinstance(loss, PredPredArticulationLoss)
+    assert loss.dir_weight == 0.1
+    # legacy params (no field) -> off
+    del lp.pred_pred_art_dir_weight
+    assert build_geometric_loss(lp).dir_weight == 0.0

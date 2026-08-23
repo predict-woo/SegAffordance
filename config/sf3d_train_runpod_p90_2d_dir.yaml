@@ -1,0 +1,222 @@
+# 20260823_sf3d_p90_2d_dir: label-efficiency v2 arm B'1 — the 2D-DCT
+# pretrain recipe + the screw-direction term (the 2D line's first sign
+# teacher: L_pp at 0.1 is its sole articulation loss and was axis-sign-blind)
+# on the ~90% scene partition. FIXED 30 epochs, NO early stopping — v1's
+# patience-5 stop at epoch 6 undertrained the trunk 14% below the
+# full-data 2D arm (the recorded confound this rerun kills). Differences
+# vs sf3d_train_runpod_p90_2d.yaml: experiment dirs, dir term, epochs.
+# Spec: docs/superpowers/specs/2026-08-23-label-efficiency-v2-dir-term-design.md
+seed_everything: 42
+
+model:
+  # gen-7: CLIP FROZEN (user decision). Watch item: the gen-5 frozen run
+  # had the mask regression, and gen-7 leans on masks harder than any
+  # generation (heatmaps share the projector with the mask channel).
+  freeze_backbone: true
+  model_params:
+    backbone: "dinov3"
+    backbone_id: "facebook/dinov3-vitl16-pretrain-lvd1689m"
+    text_source: "dinotxt"
+    dinotxt_weights: "/workspace/cache/dinov3/dinov3_vitl16_dinotxt_vision_head_and_text_encoder-a442d8f5.pth"
+    dinov3_backbone_weights: "/workspace/cache/dinov3/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth"
+    dinov3_repo_dir: "/workspace/cache/dinov3repo"
+    backbone_image_size: 512
+    clip_pretrain: "pretrain/RN50.pt" # unused by the dinov3 backbone
+    word_len: 77                     # Standard CLIP context length
+    use_depth: true                  # SF3D uses depth
+    # CVAE dropped 2026-08-03: its KLD had collapsed to ~3e-5 (posterior ==
+    # prior, z carried nothing) so it was a deterministic MLP with extra
+    # parameters and loss terms — and the multimodal output it was meant to
+    # protect (trajectory) never went through z anyway. MotionMLP predicts
+    # the same axis + type logits; L_vae degenerates to plain axis MSE.
+    # NOT resumable from use_cvae checkpoints (module names differ).
+    use_cvae: false
+    # gen-6/7: twist head off — articulation comes from the split heads.
+    use_twist_head: false
+    use_motion_head: true          # axis direction head (unchanged from gen-6)
+    split_axis_heads: true         # gen-17: motion_head_rot + motion_head_trans
+    use_motion_type_head: true     # type CE head (unchanged from gen-6)
+    use_motion_type_input: false   # hint removed — the type head predicts
+    motion_type_input_dropout: 0.5 # inert with the hint off
+    motion_type_embedding_dim: 16  # inert with the hint off
+    twist_pitch_free: false        # inert with the twist head off
+    # gen-7: trajectory is emitted as raw ABSOLUTE camera-frame points —
+    # delta-cumsum off (the two gates are mutually exclusive, asserted).
+    trajectory_delta_cumsum: false  # g8: Euler-style RELATIVE direct readout (no cumsum, no absolute)
+    trajectory_absolute: false
+    trajectory_dct_coeffs: 6       # 2D+DCT arm: smooth basis on the 2D-only path
+    twist_num_hypotheses: 1        # WTA off — single articulation output
+    point_prediction_3d: false     # gen-7: 2D heatmap machinery back on
+    use_origin_head: false         # replaced by the origin heatmap + z_q lift
+    use_origin_heatmap: true       # 3rd projector channel + origin_uv + z_q
+    use_origin_local_feature: true # gen-11: z_q gets the hinge-pixel sample
+    predict_point_depth: true      # z_p head — lifts point_uv to 3D
+    pool_with_predicted_mask: false # GT-mask teacher forcing at train
+    depth_feat_channels: [128, 256]
+    fpn_in: [512, 1024, 1024]      # Input channels for FPN from backbone.
+    fpn_out: [256, 512, 1024]        # Output channels for FPN layers.
+    # Decoder (Transformer)
+    num_layers: 3                    # Number of layers in Transformer decoder
+    num_head: 8                      # Number of attention heads
+    dim_ffn: 1024                    # Dimension of feed-forward network in Transformer
+    dropout: 0.2                     # Dropout rate in Transformer
+    intermediate: False              # Whether the Transformer decoder returns intermediate layer outputs
+    # Projector
+    proj_dropout: 0.25
+    # VAE for Motion Prediction
+    vae_latent_dim: 32
+    vae_hidden_dim: 256
+    # motion type
+    num_motion_types: 2
+    # NHWC conv layout + torch.compile: 845 -> 529 ms/batch on the dev GPU
+    # (1.6x; profiled 2026-08-03 — the decode-path convs/upsamples dominate
+    # the step and cuDNN's NCHW->NHWC shuffling was ~5% of GPU time).
+    # Numerically equivalent layout; compile pays ~minutes at first step.
+    channels_last: true
+    compile_model: true
+
+  loss_params:
+    # Loss functions
+    bce_weight: 0.5             # Weight for BCE loss in DiceBCELoss
+    dice_weight: 0.5            # Weight for Dice loss in DiceBCELoss
+    # loss weights
+    mask_weight: 0.5
+    point_map_weight: 0.5          # classical heatmap BCE, back on for gen-7
+    coord_weight: 0.5              # soft-argmax coord loss, back on for gen-7
+    origin_map_weight: 0.0         # 2D-only: q* projection is 3D GT
+    point_3d_weight: 0.0           # 2D-only: traj[0] is 3D GT (z_p tether replaces it)
+    vae_weight: 0.0                # 2D-only: no axis GT — L_pp is the only axis teacher
+    axis_sign_agnostic: false      # SF3D sign is canonical
+    motion_type_weight: 0.0        # 2D-only: labels reserved for eval; p_rev self-organizes
+    origin_weight: 0.0             # 2D-only: q* is 3D GT
+    trajectory_weight: 0.0         # 2D-only: 3D trajectory GT off; projection loss is the data term
+    trajectory_loss_normalized: true
+    geometric_loss: "pred_pred_art"
+    pred_pred_art_weight: 0.1      # calibrated for normalized branches (spec)
+    pred_pred_art_normalized: true   # dimensionless relative-error branches
+    pred_pred_art_radius_floor: 0.10
+    # g21: midpoint screw-direction term — sign consistency between
+    # the trajectory's time ordering and the axis heads (L_pp's locus
+    # residuals are axis-sign-blind). Same scale as the L_pp weight.
+    pred_pred_art_dir_weight: 0.1 # = min_revolute_radius
+    trajectory_proj_weight: 0.5    # THE data term (normalized, gen-16 lesson in uv-space)
+    trajectory_proj_normalized: true
+    depth_anchor_weight: 0.5       # GT-free z_p tether: z_p vs input depth at detached point_uv
+    trajectory_proj_detach_anchor: true # ARM A: the anchor gradient path severed; normalization KEPT
+    trajectory_proj_energy_floor: 0.0025 # (5% of image)^2 — first-launch ratio spikes fix
+    p_rev_balance_weight: 0.5      # anti-collapse batch prior (first launch: gate died in 1 epoch)
+    p_rev_balance_target: 0.225    # rot fraction of the key set (13297/59174)
+    twist_weight: 0.0              # twist machinery off
+    # loss parameters
+    point_sigma: 16.0              # 8 px at 256 = 16 px at 512 — same physical extent
+    vae_beta: 0.01                 # unused (no CVAE); kept for dataclass
+
+  optimizer_params:
+    lr: 0.00001
+    weight_decay: 0.0001
+    scheduler_milestones: [24, 28]
+    scheduler_gamma: 0.1
+
+  config:
+    log_image_interval_steps: 100
+    input_size: [512, 512]           # Image input size (height, width)
+    enable_wandb: False
+    val_vis_samples: 2
+    manual_seed: 42
+
+trainer:
+  # 16 epochs (~6.8M samples) ≈ 2.8h at the measured rate (665 samples/s
+  # end-to-end on an RTX PRO 6000: fast_pipeline + /dev/shm LMDBs +
+  # channels_last + compile, GPU-bound with 2 ms data wait, profiled
+  # 2026-08-03; was ~272-300 samples/s ≈ 7h before the optimization pass —
+  # the pipeline alone sustains 2,780 samples/s). Extend from last.ckpt if
+  # the curves are still moving; milestones scale with the schedule.
+  max_epochs: 30
+  accelerator: "gpu"
+  devices: 1
+  precision: 16
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: "/workspace/SegAffordance/experiments/20260823_sf3d_p90_2d_dir/checkpoints"
+        monitor: "val/loss_total"
+        mode: "min"
+        save_top_k: 3
+        save_last: true
+        auto_insert_metric_name: false
+        filename: "best-epoch{epoch:02d}-valloss{val/loss_total:.4f}"
+  logger:
+    class_path: pytorch_lightning.loggers.CSVLogger
+    init_args:
+      save_dir: "/workspace/SegAffordance/experiments/20260823_sf3d_p90_2d_dir/logs"
+      name: "csv"
+  log_every_n_steps: 10
+
+# sf3d_processed_v3: v2 with prismatic sweeps rescaled from 0.1 m to 0.7 m
+# (the revolute median). Same records/filters — v3 symlinks v2's frames.lmdb
+# and the key cache validates against v3's identical entry count, so both
+# cache paths below stay. Splat masks, corrected revolute arcs, 2D
+# trajectories, per-record sensor provenance (reader filters at
+# sensor_max_occluded_frac=0.5 -> 417,765 records). Warm the page cache
+# before launch (train_pod.sh does):
+#   cat /workspace/datasets/sf3d_processed_v3/data.lmdb/data.mdb > /dev/null
+# Batch size is provisional until the v2 smoke run settles throughput; keep it
+# identical across all SF3D arms when changing it.
+data:
+  return_trajectory_2d: true    # the 2D track IS the data term
+  train_data_dir: "/workspace/datasets/sf3d_processed_v3"
+  # Memoised sensor-filtered key list (297s -> 3s startup; created by the
+  # first run, validated against the LMDB entry count and cutoff).
+  key_cache_path: "/workspace/cache/sf3d_v2_keys_cutoff05_minrad010_maskfrac0010_edge05.pkl"
+  # Training-sized frame bytes in ONE mmap-served LMDB. Without it, per-
+  # sample full-res file reads bottleneck on the FUSE daemon at ~73
+  # samples/s with the GPU 75% idle (profiled 2026-07-28). train_pod.sh
+  # launch stages both LMDBs into /dev/shm and overrides these paths on the
+  # CLI — FUSE mmap gets cost ~3.5 ms even page-cache-warm.
+  # g13: 512-px variant, built by tools/sf3d_build_frame_cache.py
+  # --depth-size 512; staged into /dev/shm by the launch — 6000-class
+  # pods only.
+  frame_cache_path: "/workspace/datasets/sf3d_frames_512.lmdb"
+  # cv2-only decode + uint8 RGB (normalized on GPU in the model) + reused
+  # mask buffers: 25.4 -> 12.7 ms/sample, pipeline 280 -> 435 samples/s at
+  # 40 workers (profiled 2026-08-03 on the ~10-core cgroup quota). Masks/
+  # depth/bbox bit-identical to the legacy path; only the RGB resize kernel
+  # differs, so pre-2026-08 checkpoints are not exactly comparable.
+  fast_pipeline: true
+  # gen-5: drop knob/dial/faucet-class rotations (element-to-axis < 0.10 m;
+  # 40% of revolute records, bimodal with a gap at 3-15 cm). They supervise
+  # omega through pure ambiguity (element ON the axis, stub trajectory);
+  # part-scale articulation is the model's scope. Kept for gen-6/7.
+  # Applies to train AND val/test: metrics not comparable to gen-3/4.
+  min_revolute_radius: 0.10
+  # g8: close-up-only experiment (user decision) — GT mask must cover >0.25%
+  # of the image (splat px / W*H). Keeps 19,296 of 458k records (4.2%);
+  # FRESH metric baseline, comparable to nothing before it; val ~1.9k.
+  min_mask_area_frac: 0.001
+  # g9: interaction point AND projected q* (revolute) must sit at least
+  # 5% of W/H away from every image border — guards the soft-argmax
+  # readouts against edge-clamped supervision targets.
+  edge_margin_frac: 0.05
+  val_split_ratio: 0.1
+  # Label-efficiency partition: the ~90% scene-level "pretrain" complement
+  # of the 10% finetune scenes (same seed => exact complement, disjoint).
+  train_scene_subset: "pretrain"
+  train_subset_ratio: 0.1
+  train_subset_seed: 4242
+  # g13: the datamodule transforms and the frame-cache size validation
+  # key off THIS field — must match the model's 512 input and the 512-px
+  # frame cache.
+  input_size: [512, 512]
+  # g13: 4× activations at 512; revisit toward 128 after the first
+  # epoch's memory high-water.
+  batch_size_train: 64
+  batch_size_val: 64
+  num_workers_train: 64
+  num_workers_val: 32
+  manual_seed: 42
+  # Element centroid as the supervised interaction point (graspable, on the
+  # element for both motion types) — kept from the twist arms. Gen-7
+  # supervises its projected heatmap + coord in 2D; the 3D loss target for
+  # the lifted point is the trajectory start (the element point in camera
+  # space).
+  point_source: "element"

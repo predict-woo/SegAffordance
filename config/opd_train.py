@@ -189,6 +189,13 @@ class LossParams:
     # energy fraction) and the r_hat floor, = min_revolute_radius.
     pred_pred_art_normalized: bool = False
     pred_pred_art_radius_floor: float = 0.10
+    # Gen-21: midpoint screw-direction term (sign consistency). The locus
+    # branches are invariant to axis -> -axis; this adds 1 - cos between
+    # trajectory chords and the screw velocity field at chord midpoints
+    # (exactly 0 at consistency, 2 under a flip). Dimensionless — scale
+    # with pred_pred_art_weight. GT convention verified right-hand
+    # (tests/test_gt_sign_convention.py). 0 = off (legacy behaviour).
+    pred_pred_art_dir_weight: float = 0.0
     # gen-6 split arm. axis_sign_agnostic True = classical 1 - cos^2
     # (antiparallel OK — OPD annotates only the axis LINE); False = 1 - cos,
     # for SF3D where the stored sign is canonical.
