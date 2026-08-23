@@ -29,7 +29,25 @@ losses (direction is loss-driven, MA 29.9)**. Gen-18 = renamed g17-2d
 (never reuse the name). Refuted ideas: sigmoid-octant axis bug (rescale
 exists, segmenter.py:636), emergent type from L_pp (majority baseline).
 
-## In flight (2026-08-22)
+## In flight (2026-08-24)
+
+- **Label-efficiency v2 RUNNING** (spec
+  docs/superpowers/specs/2026-08-23-label-efficiency-v2-dir-term-design.md;
+  all arms = "g21" recipe: g17 + DCT head + pred_pred_art_dir_weight 0.1):
+  pods `segaffordance-g21` (C' 20260823_sf3d_g21_dct_dir, 100% 3D) and
+  `segaffordance-p90d` (B'1 20260823_sf3d_p90_2d_dir, 90% 2D) both ~ep
+  21/30, ~1h left as of 2026-08-24. Then: test passes; A'
+  (s10_3d_dir) launches on the freed g21 pod, B'2 (ft10_3d_dir, config
+  written then) on the p90d pod; delete pods after. NOTE: CSV logger is
+  version_1 on both (a dead 4500 launch claimed version_0). B'1's val
+  L_geo_pp_dir 0.64→0.07 = first-ever 2D axis-sign learning.
+- Dev pod still DOWN (host GPUs taken; delete+recreate when next
+  needed). Mutagen mirror therefore down — the volume's code tree was
+  synced to commit a991ae9 via `git archive | ssh tar -x` through a
+  training pod; anyone changing code that must run on pods has to scp
+  or re-archive it themselves.
+
+## Earlier (2026-08-22)
 
 - BOTH 2D smoothness arms DONE 2026-08-22: `g17_2d_dct` = best 2D arm
   everywhere (shape 0.0947, mIoU 0.2655 = 3D level; ADOPTED as p90
