@@ -962,6 +962,61 @@ class ScrewConsistencyLoss(GeometricConsistencyLoss):
         return self._zero(twist)
 
 
+def analytic_screw_trajectory(
+    motion_type_gt: torch.Tensor,
+    axis_trans: torch.Tensor,
+    axis_rot: torch.Tensor,
+    origin_pred: torch.Tensor,
+    point_3d_pred: torch.Tensor,
+    num_points: int = 20,
+    trans_length: float = 0.7,
+    rot_sweep: float = math.pi / 2.0,
+) -> torch.Tensor:
+    """Differentiable analog of the GT writer's trajectory construction
+    (tools/sf3d_process.py compute_trajectory_3d_camera_coords), evaluated
+    on PREDICTED articulation parameters. Returns the RELATIVE trajectory
+    (first point = 0), (B, N, 3) — the frame the trajectory loss consumes.
+
+    Mechanism-study probe (spec 2026-08-25): the trajectory becomes a pure
+    reparameterization of (axis, origin, point) with ZERO new parameters,
+    so trajectory-loss gains that survive this decode are loss-geometry
+    (dense/conditioned/conjunction supervision), not head capacity.
+
+    Per the writer, exactly:
+      trans: rel_k = t_k * trans_length * normalize(axis_trans),
+             t_k = linspace(0, 1, N)  -> along +axis (sign-sensitive).
+      rot:   lever r = (I - nn^T)(p0 - q) about unit axis n through q;
+             rel_k = (cos th_k - 1) r + sin th_k (n x r),
+             th_k = linspace(0, rot_sweep, N)  -> right-hand-positive
+             sweep starting at p0, radius |r|, plane at p0's own height.
+    Perfect predictions reproduce the GT curve exactly (well-posedness
+    locked by tests against the AST-extracted writer). Rows are routed by
+    GT type, mirroring the axis-loss routing: gradients flow into the
+    matching axis head, the origin, and the 3D point (the conjunction is
+    deliberate — that coupling IS the hypothesis under test).
+    """
+    device = point_3d_pred.device
+    b = point_3d_pred.shape[0]
+    t = torch.linspace(0.0, 1.0, num_points, device=device)          # (N,)
+
+    d_hat = F.normalize(axis_trans.float(), p=2, dim=1, eps=1e-8)
+    rel_trans = trans_length * t[None, :, None] * d_hat[:, None, :]  # (B,N,3)
+
+    n_hat = F.normalize(axis_rot.float(), p=2, dim=1, eps=1e-8)
+    rel0 = (point_3d_pred - origin_pred).float()                     # (B, 3)
+    along = (rel0 * n_hat).sum(-1, keepdim=True)
+    lever = rel0 - along * n_hat                                     # (B, 3)
+    tangent = torch.cross(n_hat, lever, dim=-1)                      # (B, 3)
+    theta = rot_sweep * t                                            # (N,)
+    rel_rot = (
+        (torch.cos(theta)[None, :, None] - 1.0) * lever[:, None, :]
+        + torch.sin(theta)[None, :, None] * tangent[:, None, :]
+    )                                                                # (B,N,3)
+
+    is_rot = (motion_type_gt.view(b, 1, 1) > 0.5).float()
+    return is_rot * rel_rot + (1.0 - is_rot) * rel_trans
+
+
 def build_geometric_loss(
     loss_params, trajectory_is_absolute: bool = False
 ) -> GeometricConsistencyLoss:

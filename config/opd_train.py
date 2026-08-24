@@ -189,6 +189,12 @@ class LossParams:
     # energy fraction) and the r_hat floor, = min_revolute_radius.
     pred_pred_art_normalized: bool = False
     pred_pred_art_radius_floor: float = 0.10
+    # Mechanism study (2026-08-25): analytic screw decode — with the
+    # trajectory HEAD off, decode the trajectory differentiably from the
+    # predicted articulation params (mirror of the GT writer) and apply
+    # the normalized trajectory loss. Pure reparameterization, zero new
+    # parameters. 0 = off.
+    analytic_trajectory_weight: float = 0.0
     # Gen-21: midpoint screw-direction term (sign consistency). The locus
     # branches are invariant to axis -> -axis; this adds 1 - cos between
     # trajectory chords and the screw velocity field at chord midpoints

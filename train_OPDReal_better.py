@@ -462,6 +462,52 @@ class OPDRealTrainingModule(pl.LightningModule):
                     on_step=False, on_epoch=True, logger=True, sync_dist=True,
                 )
 
+        # Mechanism-study probe (spec 2026-08-25): with NO trajectory head,
+        # decode the trajectory ANALYTICALLY from the predicted articulation
+        # parameters (differentiable mirror of the GT writer) and apply the
+        # standard normalized trajectory loss to it. Zero new parameters —
+        # isolates the trajectory loss's GEOMETRY (dense, well-conditioned,
+        # sign-linear, conjunction-coupled supervision of axis/origin/point)
+        # from the trajectory HEAD's feature shaping. Requires split axis
+        # heads + GT type routing, like the axis loss.
+        if (
+            getattr(self.loss_params, "analytic_trajectory_weight", 0.0) > 0.0
+            and outputs.trajectory_pred is None
+            and targets.trajectory is not None
+            and targets.motion_type is not None
+            and outputs.motion_pred_rot is not None
+            and outputs.origin_pred is not None
+            and outputs.point_3d_pred is not None
+        ):
+            from model.losses.geometric import analytic_screw_trajectory
+
+            _gt_dev = targets.trajectory.to(outputs.origin_pred.device)
+            _gt_rel = (_gt_dev - _gt_dev[:, 0:1, :]).float()
+            _decoded = analytic_screw_trajectory(
+                motion_type_gt=targets.motion_type.to(outputs.origin_pred.device),
+                axis_trans=outputs.motion_pred_trans,
+                axis_rot=outputs.motion_pred_rot,
+                origin_pred=outputs.origin_pred.float(),
+                point_3d_pred=outputs.point_3d_pred.float(),
+                num_points=_gt_rel.shape[1],
+            )
+            # Same per-row normalized form as the gen-16 trajectory loss.
+            _err = (_decoded - _gt_rel).pow(2).sum(-1).mean(-1)
+            _gt_energy = _gt_rel.pow(2).sum(-1).mean(-1)
+            L_traj_analytic = (_err / _gt_energy.clamp(min=1e-4)).mean()
+            total_loss = (
+                total_loss
+                + self.loss_params.analytic_trajectory_weight * L_traj_analytic
+            )
+            grad_terms["traj_analytic"] = (
+                self.loss_params.analytic_trajectory_weight * L_traj_analytic
+            )
+            self.log(
+                f"{step_type}/L_traj_analytic", L_traj_analytic,
+                on_step=(step_type == "train"), on_epoch=True,
+                logger=True, sync_dist=True,
+            )
+
         if (
             targets.trajectory is not None
             and outputs.trajectory_pred is not None
