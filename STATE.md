@@ -45,7 +45,27 @@ venv-local.tar.tmp (4.9G, stale), 700GB scratch volume deletion
 silently at quota — pause mutagen FIRST on any quota event; trash holds
 nothing (deletes reclaim instantly).
 
-## In flight (2026-08-24)
+## In flight (2026-08-25, overnight autonomous)
+
+- THREE runs training, ALL on power-capped hosts (EU-RO-1-wide tonight:
+  600W cap pins SM clocks at 600-1400MHz, 2-3x slow; verified via
+  nvidia-smi throttle reasons; stock takes 25-31 poll rounds — accept,
+  don't re-roll): `fdnolpp` (fdiff, L_pp off — the L_pp isolation off
+  the DCT head), `fddir` (fdiff + L_pp + dir — first dir-term run on the
+  PLAIN head, separates dir-harm from dirxDCT), `andec`
+  (20260825_sf3d_analytic_decode — the mechanism-study discriminator:
+  arm-B config + differentiable writer-mirror decode loss,
+  analytic_trajectory_weight 0.5; smoke-passed; well-posedness locked by
+  tests/test_analytic_decode.py). ETAs 7-12h from ~2026-08-25 06:00.
+- Mechanism study (spec 2026-08-25-trajectory-mechanism-design.md): toy
+  probes already REFUTED the saddle story (both losses saddle at the
+  antipode; angular wins head-to-head) and the generic multi-task
+  miniature is NULL — andec at scale is the arbiter. Final toy rebuilt
+  after the verdict.
+- New launch rule: verify nvidia-smi GPU NAME and post-warmup
+  clocks.sm/it-rate on every fresh pod (lemon hosts real).
+
+## Earlier in flight (2026-08-24)
 
 - **Label-efficiency v2 DONE 2026-08-24** (all four arms wrapped, notes
   + INDEX in, MY pods deleted). Headline (all g21 recipe): B' ≫ A'
