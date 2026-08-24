@@ -27,6 +27,34 @@ axis −6.2°, rot flips −7.0**.
 
 Not mutually exclusive; the question is the split.
 
+## Toy results (2026-08-25, tools/toy_traj_mechanism.py — ran FIRST, and
+## they prune the hypothesis space)
+
+- **H1's naive "saddle escape" version is REFUTED.** Measured gradient
+  profiles: point-space arc MSE saddles at the antipode exactly like
+  1−cos (flipping the axis reverses the arc — that's also a stationary
+  point), just with ~1.7× scale. Head-to-head on a single latent the
+  angular loss is BETTER: it recovers a 100%-flipped student to 0%
+  (point-space sticks at 5.4% — real local minima) and converges tighter
+  from scratch (0.6° vs 3.3°).
+- **The ablation miniature is NULL.** Shared-trunk toy (axis/origin/p0
+  heads, finite noisy data, held-out eval): adding a trajectory head
+  does NOT improve the axis (37.0° vs baseline 34.9°); the analytic
+  decode is flat (35.2°); detached-aux identical to baseline. The
+  real transfer is NOT reproduced by generic redundant multi-task
+  supervision on an MLP trunk.
+
+Consequence: whatever moves MA +7.8 at scale lives in something the toy
+lacks — plausibly the structured vision trunk (the trajectory teaches
+WHERE the moving part is / spatial feature quality), the perception-
+limited underfitting regime, or type-discriminative curve shapes. E1
+remains the arbiter: if the analytic decode reproduces the gain at
+scale, the loss-through-articulation-heads route suffices (toy was too
+weak to show it); if it lands at arm B, H2-at-scale (vision-feature
+shaping) is all that's left, and the follow-up is the detached-trunk
+trajectory head AT SCALE. The final toy will be rebuilt to match the
+mechanism the scale experiments confirm.
+
 ## Experiment 1 (the discriminator): analytic screw decode
 
 `20260825_sf3d_analytic_decode` — arm B's exact config (NO trajectory
