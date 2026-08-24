@@ -29,39 +29,21 @@ losses (direction is loss-driven, MA 29.9)**. Gen-18 = renamed g17-2d
 (never reuse the name). Refuted ideas: sigmoid-octant axis bug (rescale
 exists, segmenter.py:636), emergent type from L_pp (majority baseline).
 
-## ⚠ VOLUME QUOTA EXHAUSTED (2026-08-24) — USER DECISION NEEDED
+## Volume quota: RESOLVED 2026-08-24 (trim executed, user-approved)
 
-`/workspace` refuses ALL writes (EDQUOT verified: 8MB probe fails; a
-pytorch-lightning hparams.yaml write raised Errno 122). Both sessions'
-final runs died the same silent death: a checkpoint write TRUNCATED at
-quota (ft10_3d_dir's best-epoch30 was 3.76G vs 4.35G — removed; arm D
-supabl2_nolpp died at ep9). Measured usage ~894G against the nominal
-1TB — effective capacity is lower than nominal, plausibly MooseFS trash
-accounting (deleted files retained for trashtime count against quota).
-NOTHING was deleted beyond my own run's verifiably-corrupt checkpoint.
-Options awaiting the user, in rough order of payoff:
-1. Trim old experiment checkpoints — experiments/ holds ~586G; pre-g17
-   generations (g9–g16 top-3+last each) are the bulk and superseded.
-   Every experiment's TEST METRICS are safe in git (notes.md + INDEX)
-   regardless — trimming loses only .ckpt weights, never results.
-2. ~~Check/purge MooseFS trash~~ — **RULED OUT empirically 2026-08-24**:
-   deleting a 4.35G checkpoint made the space available INSTANTLY (a
-   100MB write went through at 436 MB/s immediately after, then 500MB
-   at 1.3 GB/s). Trash is not holding anything, so there is no free
-   space to recover this way — option 1 is the real lever.
-3. `/workspace/venv-local.tar.tmp` (4.9G, stale-looking temp at volume
-   root, neither session's) — candidate deletion.
-4. Resize the volume up (paid) / revisit the 700GB scratch volume.
-All GPU work is stopped or finishing without volume writes; nothing is
-writing garbage. The ablation session's two live arms (supabl2_nolpp,
-supabl2_art) now write checkpoints to POD-LOCAL `/dev/shm/ckpt_*`
-instead of the volume — training continues through the freeze, and only
-the KB-sized CSV logs touch `/workspace`. Consequence: those checkpoints
-DIE WITH THE POD, so each arm's test pass runs on its own pod before
-deletion and only the metrics reach the volume. Space freed by that
-session so far: arm D's two superseded checkpoints (epoch06/07, both
-worse than the epoch08 it keeps), ~8.7G, deliberately left as headroom
-for the other session's finishing writes.
+The 2026-08-24 EDQUOT freeze is over. User approved keep-best-only for
+superseded runs: **310.3G freed across 127 files** (41 dirs trimmed to
+their single INDEX-reported best ckpt; 12 keep-all dirs untouched — the
+STATE best table, OPD bests, label-eff v2 arms, p90_2d). Special cases:
+twist_clip keeps last.ckpt (INDEX reference), opdreal_frozenclip keeps
+best-epoch11; the supabl2 stale mid-run volume snapshots were deleted
+entirely (real bests died with their pods). experiments/ is now 263G,
+volume ~584G used, write probe 843 MB/s. Verified: every trimmed dir has
+exactly 1 ckpt, keep-all dirs 4. Open volume items still parked:
+venv-local.tar.tmp (4.9G, stale), 700GB scratch volume deletion
+(needs user), possible resize. Quota lesson stays: MooseFS truncates
+silently at quota — pause mutagen FIRST on any quota event; trash holds
+nothing (deletes reclaim instantly).
 
 ## In flight (2026-08-24)
 
@@ -107,11 +89,10 @@ for the other session's finishing writes.
   CAVEAT: all three arms' weights were POD-LOCAL and died with their pods
   (quota freeze) — metrics in notes/INDEX/logs are the durable artifact;
   re-running an arm is ~4h/$8. No viz batch for the same reason.
-- Dev pod still DOWN (host GPUs taken; delete+recreate when next
-  needed). Mutagen mirror therefore down — the volume's code tree was
-  synced to commit a991ae9 via `git archive | ssh tar -x` through a
-  training pod; anyone changing code that must run on pods has to scp
-  or re-archive it themselves.
+- Dev pod RECREATED 2026-08-24 (`lltgv0y73agseu`, RTX PRO 4000,
+  $0.57/hr, RUNNING) and the mutagen mirror was sync-reset to it —
+  normal edit-locally/run-on-pod workflow restored; the mirror is
+  reconciling the Mac tree (HEAD) onto the volume.
 
 ## Earlier (2026-08-22)
 
