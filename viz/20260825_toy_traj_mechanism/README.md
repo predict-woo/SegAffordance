@@ -20,3 +20,19 @@ docs/superpowers/specs/2026-08-25-trajectory-mechanism-design.md).
 
 Regenerate: `python tools/toy_traj_mechanism.py --out viz/20260825_toy_traj_mechanism`
 (the miniature runs via `run_ablation_miniature`).
+
+## v2 probe (post-verdict, underfitting regime) — also null
+
+Nonlinear 2-layer teacher, capacity-limited student (hidden 48), 400
+train samples: baseline 41.7° / aux-head 42.5° / analytic 44.6° median
+axis error — no trajectory variant helps here either (run on the dev
+pod; probe preserved inline in the batch README history via git).
+
+**Toy conclusion after three regimes (easy, shared-trunk, underfitting):
+the trajectory→articulation transfer does NOT reduce to a generic
+low-dimensional mechanism.** It is real and large at scale (the analytic
+decode recovers ~75% of it on the actual model) but requires the actual
+perception system — structured visual features, heatmap/depth-lift head
+pathways, the scale optimization regime. The honest artifact is this
+pair: at-scale attribution (experiments 20260825_*) + small-scale
+irreducibility (this batch).

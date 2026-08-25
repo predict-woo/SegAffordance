@@ -58,8 +58,10 @@ All four runs done, wrapped, pods deleted. The synthesis:
    the MASK gains (the decode arm's masks fall below arm B). Same
    information, better-conditioned parameterization = different
    optimization problem. (20260825_sf3d_analytic_decode/notes.md.)
-   Toy probes: saddle story refuted; generic multi-task miniature null —
-   the conditioning advantage needs the real coupled imperfect heads.
+   Toy probes CLOSED after three null regimes (easy, shared-trunk,
+   underfitting): the transfer does not reduce to a generic
+   low-dimensional mechanism — at-scale attribution + small-scale
+   irreducibility is the final answer (viz/20260825_toy_traj_mechanism).
 2. **The dir term verdict, revised:** g21's failure was substantially
    the dir×DCT INTERACTION. On the plain head (fddir) the term achieves
    its design goal: rot flips 15.2→**11.24 (record)**, matched axis

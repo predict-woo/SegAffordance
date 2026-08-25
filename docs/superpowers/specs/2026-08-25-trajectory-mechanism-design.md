@@ -107,3 +107,17 @@ and dir isolation off the DCT head. Wrapped as they land.
 
 E1 ≈ $8 (one 30-epoch run + test). Follow-ups ≤ 2 more runs. Pods:
 reuse freed fdiff pods or poll (PRO 6000 only).
+
+
+## CLOSURE (2026-08-25, end of overnight program)
+
+E1 verdict: **~75% loss geometry** (analytic decode: MA 26.5 between
+B 20.4 and D 28.2, flips mostly recovered; masks fall BELOW B → the
+head's contribution is the trunk/mask side). Toy: three regimes
+(easy, shared-trunk miniature, underfitting v2) all NULL — the effect
+does not reduce to a generic low-dimensional mechanism; at-scale
+attribution + small-scale irreducibility is the final answer. Companion
+findings from the fdiff grid: L_pp's value is family-dependent
+(fdnolpp), and the dir term achieves its design goal on the plain head
+(fddir: rot flips 11.24 record) — its g21 harm was the dir×DCT
+interaction. Gen-22 candidate updated in STATE. Study closed.
