@@ -10,6 +10,7 @@ terse; details live in the linked specs/notes. Last update: 2026-08-22.
 | role | experiment | checkpoint |
 |---|---|---|
 | **best articulation (3D)** | 20260821_sf3d_g19_fdiff | best-epoch29-valloss1.1780 — MA 29.9, traj_dir 96.1/0.819 (records) |
+| **best axis precision (3D)** | 20260825_sf3d_fdiff_dir | best-epoch24-valloss1.2487 — matched 14.62°, rot flips 11.24 (both records) |
 | **best smooth/visual (3D)** | 20260821_sf3d_g19_dct | best-epoch20-valloss0.9652 — roughness 0.0090 (10×), mIoU 0.2685 + PDet 21.72 (records) |
 | previous overall best | 20260818_sf3d_g17_splitax | best-epoch18-valloss0.9272 |
 | best 2D-only | 20260822_sf3d_g17_2d_dct | best-epoch19-valloss1.3702 — shape 0.0947, mIoU 0.2655 (= 3D level), roughness 0.032 |
@@ -45,32 +46,40 @@ venv-local.tar.tmp (4.9G, stale), 700GB scratch volume deletion
 silently at quota — pause mutagen FIRST on any quota event; trash holds
 nothing (deletes reclaim instantly).
 
-## In flight (2026-08-25, overnight autonomous)
+## Overnight program COMPLETE (2026-08-25) — mechanism study + fdiff grid
 
-- THREE runs training, ALL on power-capped hosts (EU-RO-1-wide tonight:
-  600W cap pins SM clocks at 600-1400MHz, 2-3x slow; verified via
-  nvidia-smi throttle reasons; stock takes 25-31 poll rounds — accept,
-  don't re-roll): `fdnolpp` (fdiff, L_pp off — the L_pp isolation off
-  the DCT head), `fddir` (fdiff + L_pp + dir — first dir-term run on the
-  PLAIN head, separates dir-harm from dirxDCT), `andec`
-  (20260825_sf3d_analytic_decode — the mechanism-study discriminator:
-  arm-B config + differentiable writer-mirror decode loss,
-  analytic_trajectory_weight 0.5; smoke-passed; well-posedness locked by
-  tests/test_analytic_decode.py). ETAs 7-12h from ~2026-08-25 06:00.
-- **MECHANISM VERDICT (2026-08-25, andec DONE):** the trajectory→
-  articulation transfer is ~75% LOSS GEOMETRY — the zero-parameter
-  analytic decode recovers MA 26.5 of the B→D 20.4→28.2 gap, flips
-  21.8→15.4 — and does NOT need shared-feature routing; the head's own
-  contribution is the MASK gains (decode arm's masks fall below B).
-  Full table in 20260825_sf3d_analytic_decode/notes.md. Gen-22
-  candidate: trajectory head + analytic decode + fdiff, no L_pp.
-- Mechanism study (spec 2026-08-25-trajectory-mechanism-design.md): toy
-  probes already REFUTED the saddle story (both losses saddle at the
-  antipode; angular wins head-to-head) and the generic multi-task
-  miniature is NULL — andec at scale is the arbiter. Final toy rebuilt
-  after the verdict.
-- New launch rule: verify nvidia-smi GPU NAME and post-warmup
-  clocks.sm/it-rate on every fresh pod (lemon hosts real).
+All four runs done, wrapped, pods deleted. The synthesis:
+
+1. **WHY trajectory supervision helps articulation (user's question):
+   ~75% is LOSS GEOMETRY.** The analytic screw decode (writer-mirror
+   from predicted articulation params, ZERO new parameters) recovers MA
+   26.5 of the arm-B→D 20.4→28.2 gap and most of the flip-rate gain,
+   with NO shared-feature routing needed. The head's own contribution is
+   the MASK gains (the decode arm's masks fall below arm B). Same
+   information, better-conditioned parameterization = different
+   optimization problem. (20260825_sf3d_analytic_decode/notes.md.)
+   Toy probes: saddle story refuted; generic multi-task miniature null —
+   the conditioning advantage needs the real coupled imperfect heads.
+2. **The dir term verdict, revised:** g21's failure was substantially
+   the dir×DCT INTERACTION. On the plain head (fddir) the term achieves
+   its design goal: rot flips 15.2→**11.24 (record)**, matched axis
+   **14.62° (record)**, traj_dir only −0.7. Detach-trajectory variant
+   now doubly attractive (may keep flips and recover the −2.1 MA).
+3. **The L_pp trade is FAMILY-DEPENDENT:** off = MA +2.2 on DCT
+   (supabl2 D) but MA −2.4 on fdiff (fdnolpp) — while fdnolpp still
+   takes precision columns (matched 15.09°, flips 10.4/13.5, radius
+   0.113). No universal "drop L_pp".
+4. Threshold-MA vs precision is the recurring trade: g19_fdiff keeps
+   the MA crown (29.9); every intervention that sharpens precision
+   (drop L_pp, add dir) pays ~2 MA at the pass threshold.
+- **Gen-22 candidate (updated):** trajectory head + analytic decode +
+  fdiff + dir‑term(plain head or detached); L_pp ±0.1 to be MEASURED.
+  Not commissioned.
+- Ops footnotes: all four ran on power-capped EU-RO-1 hosts (600W cap,
+  0.6–1.2 it/s — verify clocks at launch); a Mac network outage + a
+  Claude session restart cost three background watchers (re-armed) and
+  delayed one pod delete + push (both recovered); mutagen mirror was
+  stuck "connecting to beta" at last check — scp via dev pod works.
 
 ## Earlier in flight (2026-08-24)
 
