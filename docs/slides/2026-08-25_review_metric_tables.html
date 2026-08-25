@@ -1,0 +1,91 @@
+<meta charset="utf-8">
+<title>Week review — metric tables</title>
+<style>
+  :root { --ink:#1a1f2b; --dim:#5a6478; --line:#d5dae4; --accent:#2456c4;
+          --best:#0d7a43; --bestbg:#e9f6ee; --warn:#c0392b; --chip:#eef2fa; }
+  body { font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif; color:var(--ink);
+         background:#fafbfd; margin:0; padding:32px 40px 64px; line-height:1.45; }
+  h1 { font-size:25px; margin:0 0 2px; }
+  .sub { color:var(--dim); margin-bottom:26px; font-size:14px; }
+  h2 { font-size:19px; margin:36px 0 2px; }
+  .cap { color:var(--dim); font-size:13px; margin-bottom:8px; }
+  table { border-collapse:collapse; background:#fff; border:1px solid var(--line);
+          border-radius:8px; overflow:hidden; font-size:13.5px; }
+  th, td { padding:6px 14px; text-align:right; border-bottom:1px solid #eef1f6; }
+  th { background:#f2f5fa; font-weight:600; }
+  th:first-child, td:first-child { text-align:left; color:var(--dim); font-weight:500; white-space:nowrap; }
+  td.b { color:var(--best); font-weight:700; background:var(--bestbg); }
+  td.w { color:var(--warn); }
+  .rec { font-size:10px; vertical-align:super; color:var(--best); font-weight:700; }
+  .new th.n, .new td.n { background:#f4f8ff; }
+  .take { margin:10px 0 0; font-size:13.5px; color:var(--ink); max-width:1000px; }
+  .take b { color:var(--accent); }
+  .legend { font-size:12px; color:var(--dim); margin-top:6px; }
+  .arrow-dn::after { content:" ↓"; color:#98a1b3; font-size:11px; }
+  .arrow-up::after { content:" ↑"; color:#98a1b3; font-size:11px; }
+</style>
+
+<h1>Week review — the numbers</h1>
+<div class="sub">All tables: the standard 5,088-sample held-out scene split (val = test in this project). <span style="color:var(--best);font-weight:700">Green</span> = best in row; <span class="rec">R</span> = all-time record. ↑ higher better, ↓ lower better.</div>
+
+<!-- ========== TABLE 1 : 3D generations ========== -->
+<h2>1 · 3D generations: g17 → smoothness (g19) → direction term</h2>
+<div class="cap">One recipe lineage; each column changes one thing. fdiff+dir landed overnight (2026-08-25).</div>
+<table class="new">
+<tr><th>metric</th><th>g17<br><span style="font-weight:400">split heads</span></th><th>g19 DCT<br><span style="font-weight:400">+DCT head</span></th><th>g19 fdiff<br><span style="font-weight:400">+fdiff losses</span></th><th>g21<br><span style="font-weight:400">DCT+dir</span></th><th class="n">fdiff+dir<br><span style="font-weight:400">plain head ★new</span></th></tr>
+<tr><td class="arrow-up">mIoU</td><td>0.265</td><td>0.269</td><td>0.250</td><td class="b">0.271<span class="rec">R</span></td><td class="n">0.241</td></tr>
+<tr><td class="arrow-up">PDet</td><td>20.6</td><td>21.7</td><td>18.0</td><td class="b">23.2<span class="rec">R</span></td><td class="n">17.3</td></tr>
+<tr><td class="arrow-up">MA (pass rate)</td><td>25.9</td><td>26.0</td><td class="b">29.9<span class="rec">R</span></td><td>26.6</td><td class="n">27.8</td></tr>
+<tr><td class="arrow-dn">matched axis °</td><td>16.9</td><td>18.2</td><td>17.2</td><td class="w">20.8</td><td class="n b">14.6<span class="rec">R</span></td></tr>
+<tr><td class="arrow-dn">rot flip rate %</td><td>13.3</td><td>13.3</td><td>15.2</td><td class="w">15.5</td><td class="n b">11.2<span class="rec">R</span></td></tr>
+<tr><td class="arrow-dn">origin (m)</td><td class="b">0.257</td><td>0.276</td><td>0.296</td><td>0.278</td><td class="n">0.288</td></tr>
+<tr><td class="arrow-up">traj direction %</td><td>94.9</td><td>94.5</td><td class="b">96.1<span class="rec">R</span></td><td class="w">88.8</td><td class="n">95.5</td></tr>
+<tr><td class="arrow-dn">roughness (m)</td><td>0.092</td><td>0.0090</td><td>0.051</td><td class="b">0.0085<span class="rec">R</span></td><td class="n">0.049</td></tr>
+</table>
+<p class="take"><b>Reads:</b> the DCT head owns smoothness + masks; fdiff losses own MA + direction; the dir term <i>failed on the DCT head</i> (g21's red column — the basis funnels the drag into net direction) but <i>achieved its design goal on the plain head</i>: the stubborn ~13% rot-flip tail finally moved (11.2<span class="rec">R</span>) with matched axis 14.6°<span class="rec">R</span>, paying only ~2 MA at the threshold. No single champion — the recurring trade is threshold-MA vs axis precision.</p>
+
+<!-- ========== TABLE 2 : 2D line ========== -->
+<h2>2 · 2D-only training: base vs the two g19 ports</h2>
+<div class="cap">Zero 3D labels in all 2D arms (projection loss + L_pp only). Rightmost: the fully-3D-supervised g17 for reference.</div>
+<table>
+<tr><th>metric</th><th>2D base<br><span style="font-weight:400">(anchor-detach)</span></th><th>+uv-fdiff</th><th>+DCT head</th><th style="color:#98a1b3">g17 (3D ref)</th></tr>
+<tr><td class="arrow-dn">proj2d shape (uv)</td><td>0.100</td><td class="w">0.107</td><td class="b">0.095</td><td style="color:#98a1b3">0.11</td></tr>
+<tr><td class="arrow-dn">proj2d anchor (uv)</td><td>0.129</td><td>0.134</td><td class="b">0.109</td><td style="color:#98a1b3">0.09</td></tr>
+<tr><td class="arrow-up">mIoU</td><td>0.242</td><td>0.237</td><td class="b">0.266</td><td style="color:#98a1b3">0.265</td></tr>
+<tr><td class="arrow-up">PDet</td><td>16.1</td><td>15.8</td><td class="b">19.4</td><td style="color:#98a1b3">20.6</td></tr>
+<tr><td class="arrow-dn">2D point</td><td>0.117</td><td>0.108</td><td class="b">0.094</td><td style="color:#98a1b3">0.095</td></tr>
+<tr><td class="arrow-up">traj direction %</td><td>87.6</td><td>89.9</td><td class="b">91.3</td><td style="color:#98a1b3">94.9</td></tr>
+<tr><td class="arrow-dn">roughness (m)</td><td>—</td><td class="w">0.177</td><td class="b">0.032</td><td style="color:#98a1b3">0.092</td></tr>
+</table>
+<p class="take"><b>Reads:</b> the DCT head helps 2D <i>more</i> than 3D — masks and 2D point reach the 3D-supervised level and trajectory shape beats it, with zero 3D labels (the low-dim basis absorbs projection-loss noise). uv-fdiff is a wash — direction up, everything else slightly down. Axis/origin columns omitted: articulation is unsupervised in 2D arms (near-random by design, not signal).</p>
+
+<!-- ========== TABLE 3 : label efficiency ========== -->
+<h2>3 · Label efficiency: 90% 2D pretrain → 10% 3D finetune</h2>
+<div class="cap">A = scratch on 10% of 3D data · B = 2D-pretrain then 10% 3D · C = 100% 3D upper bound. v1 on the g17 recipe; v2 on g21 (DCT + dir) with the pretrain fully trained.</div>
+<table>
+<tr><th>metric</th><th>A (10%)</th><th>B (2D→10%)</th><th>C (100%)</th><th style="border-left:2px solid var(--line)">A′ (10%)</th><th>B′ (2D→10%)</th><th>C′ (100%)</th></tr>
+<tr><td class="arrow-up">mIoU</td><td>0.021</td><td>0.217</td><td class="b">0.265</td><td style="border-left:2px solid var(--line)">0.029</td><td>0.188</td><td class="b">0.271</td></tr>
+<tr><td class="arrow-up">PDet</td><td>0.4</td><td>10.9</td><td class="b">20.6</td><td style="border-left:2px solid var(--line)">1.0</td><td>13.4</td><td class="b">23.2</td></tr>
+<tr><td class="arrow-up">MA</td><td>4.9</td><td>8.7</td><td class="b">25.9</td><td style="border-left:2px solid var(--line)">4.9</td><td>11.4</td><td class="b">26.6</td></tr>
+<tr><td class="arrow-dn">matched axis °</td><td>25.0</td><td>28.5</td><td class="b">16.9</td><td style="border-left:2px solid var(--line)">38.4</td><td>23.0</td><td class="b">20.8</td></tr>
+<tr><td class="arrow-dn">origin (m)</td><td>0.56</td><td>0.53</td><td class="b">0.26</td><td style="border-left:2px solid var(--line)">0.52</td><td>0.57</td><td class="b">0.28</td></tr>
+<tr><td class="arrow-up">traj direction %</td><td>80.3</td><td>81.0</td><td class="b">94.9</td><td style="border-left:2px solid var(--line)">80.2</td><td>82.1</td><td class="b">88.8</td></tr>
+</table>
+<p class="take"><b>Reads:</b> 10% of 3D data alone cannot buy a perception trunk (masks near zero in both versions) while articulation heads degrade gracefully — and the 2D pretrain supplies exactly the missing trunk (masks ×10, detection ×14–30). Articulation transfer improved sharply in v2: matched axis lands within 2.2° of the 100% baseline. Verdict both times: <b>2D+10% ≫ 10% alone, still short of 100%</b> — the remaining gap is concentrated in MA and origin, i.e. quantities only 3D labels teach.</p>
+
+<!-- ========== TABLE 4 : supervision ablation ========== -->
+<h2>4 · Supervision ablation v2 (g21-era stack)</h2>
+<div class="cap">What does each supervision family contribute? Columns ordered by how much trajectory/consistency supervision they carry. (Arms B/D/C by the parallel session; A₀/A reused from table 1.)</div>
+<table>
+<tr><th>metric</th><th>B<br><span style="font-weight:400">articulation only</span></th><th>D<br><span style="font-weight:400">joint, no L_pp</span></th><th>A₀ = g19 DCT<br><span style="font-weight:400">joint + L_pp</span></th><th>A = g21<br><span style="font-weight:400">+ L_pp + dir</span></th><th>C<br><span style="font-weight:400">trajectory only</span></th></tr>
+<tr><td class="arrow-up">mIoU</td><td>0.268</td><td>0.265</td><td>0.269</td><td class="b">0.271</td><td>0.269</td></tr>
+<tr><td class="arrow-up">PDet</td><td>22.6</td><td>22.0</td><td>21.7</td><td class="b">23.2</td><td>22.8</td></tr>
+<tr><td class="arrow-up">MA</td><td class="w">20.4</td><td class="b">28.2</td><td>26.0</td><td>26.6</td><td>—</td></tr>
+<tr><td class="arrow-dn">matched axis °</td><td class="w">23.3</td><td class="b">17.1</td><td>18.2</td><td>20.8</td><td>—</td></tr>
+<tr><td class="arrow-dn">rot flip rate %</td><td class="w">21.8</td><td>14.8</td><td class="b">13.3</td><td>15.5</td><td>—</td></tr>
+<tr><td class="arrow-up">traj direction %</td><td>—</td><td>94.3</td><td class="b">94.5</td><td class="w">88.8</td><td>94.4</td></tr>
+<tr><td class="arrow-dn">roughness (m)</td><td>—</td><td class="b">0.0085</td><td>0.0090</td><td class="b">0.0085</td><td>0.0090</td></tr>
+</table>
+<p class="take"><b>Reads:</b> the coupling is <b>asymmetric</b> — removing the trajectory (B) costs 7.8 MA and doubles rot flips, but removing articulation (C) costs the trajectory nothing. L_pp is a <b>trade, not a free win</b>: on this family it buys type accuracy and sign stability at the cost of ~2 MA (and the trade <i>reverses</i> on the fdiff family — no universal rule). Consistency never emerges untrained (arm D's passively-logged L_pp stays flat). Masks: fewer heads = better masks (C&gt;B&gt;D), replicating gen-9.</p>
+
+<div class="legend" style="margin-top:30px">Sources: experiments/INDEX.md + per-experiment notes.md; exact values from each run's test.log. Type accuracy omitted from tables (reported outside the test/ metric block for only some runs); it appears in the L_pp trade: L_pp on ≈ +1.5 type. The mechanism-study arm (analytic decode, MA 26.5 with zero trajectory parameters) is deliberately not a column here — it answers a different question (see the overnight synthesis in STATE.md).</div>
