@@ -57,6 +57,13 @@ nothing (deletes reclaim instantly).
   arm-B config + differentiable writer-mirror decode loss,
   analytic_trajectory_weight 0.5; smoke-passed; well-posedness locked by
   tests/test_analytic_decode.py). ETAs 7-12h from ~2026-08-25 06:00.
+- **MECHANISM VERDICT (2026-08-25, andec DONE):** the trajectory→
+  articulation transfer is ~75% LOSS GEOMETRY — the zero-parameter
+  analytic decode recovers MA 26.5 of the B→D 20.4→28.2 gap, flips
+  21.8→15.4 — and does NOT need shared-feature routing; the head's own
+  contribution is the MASK gains (decode arm's masks fall below B).
+  Full table in 20260825_sf3d_analytic_decode/notes.md. Gen-22
+  candidate: trajectory head + analytic decode + fdiff, no L_pp.
 - Mechanism study (spec 2026-08-25-trajectory-mechanism-design.md): toy
   probes already REFUTED the saddle story (both losses saddle at the
   antipode; angular wins head-to-head) and the generic multi-task
