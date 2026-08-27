@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Continuous Trajectory Loss</title>
+<script>
+  MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+              svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+  :root {
+    --ink: #1a1d23; --muted: #5b6472; --faint: #8b93a1;
+    --paper: #fbfaf7; --card: #ffffff; --line: #e3e0d8;
+    --accent: #7a4fc0; --orange: #e07a2f; --blue: #3d6fb4; --green: #3e8e5f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink);
+    font: 16px/1.7 "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    padding: 48px 20px 96px; }
+  main { max-width: 820px; margin: 0 auto; }
+  h1 { font-size: 32px; line-height: 1.2; letter-spacing: -0.5px; }
+  .sub { color: var(--muted); margin: 10px 0 6px; font-size: 17px; }
+  .meta { color: var(--faint); font-size: 13px; margin-bottom: 40px; }
+  h2 { font-size: 21px; margin: 52px 0 12px; letter-spacing: -0.3px; }
+  h2 .n { display: inline-block; background: var(--ink); color: var(--paper);
+    font-size: 12px; font-weight: 700; border-radius: 999px; padding: 2px 10px;
+    vertical-align: 3px; margin-right: 10px; }
+  p { margin: 12px 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 20px 26px; margin: 20px 0; }
+  .verdict { border-left: 4px solid var(--accent); background: #f5f1fb; border-radius: 6px;
+    padding: 16px 20px; margin: 22px 0; }
+  .aside { border-left: 4px solid var(--green); background: #f0f7f2; border-radius: 6px;
+    padding: 14px 20px; margin: 18px 0; font-size: 15px; }
+  .caveat { border-left: 4px solid var(--orange); background: #fdf3ec; border-radius: 6px;
+    padding: 14px 20px; margin: 18px 0; font-size: 15px; }
+  .disp { overflow-x: auto; padding: 4px 0; }
+  code { font: 13px/1.5 "SF Mono", ui-monospace, Menlo, monospace;
+    background: #f1efe9; border-radius: 4px; padding: 1px 5px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; margin: 14px 0; }
+  th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  mjx-container { color: var(--ink); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>The continuous limit of the trajectory loss</h1>
+<p class="sub">What happens to our decoded-trajectory loss when the number of sampled points
+\(N \to \infty\)? Answer: the sampling disappears entirely — the loss becomes a closed-form
+metric on the articulation parameters themselves, with each term interpretable.</p>
+<p class="meta">SegAffordance theory note · follows the trajectory-mechanism study
+(2026-08-27/28) · conventions: relative frame, GT-matched parameterization</p>
+
+<!-- ================================================================ -->
+<h2><span class="n">1</span>Setup</h2>
+
+<p>The decode maps articulation parameters to a curve as a function of the motion variable
+\(\theta\). In the relative frame (curve starts at the origin):</p>
+
+<div class="card">
+<p><b>Rotation</b> — lever \(\mathbf r = (I - \hat n \hat n^\top)(p_0 - q)\), tangent
+\(\mathbf t = \hat n \times \mathbf r\), sweep \(\Theta = \tfrac{\pi}{2}\):</p>
+<div class="disp">\[
+p(\theta) = (\cos\theta - 1)\,\mathbf r + \sin\theta\,\mathbf t,
+\qquad \theta \in [0, \Theta]
+\]</div>
+<p><b>Translation</b> — unit direction \(\hat d\), extent \(L\):</p>
+<div class="disp">\[
+p(\theta) = \theta L\, \hat d, \qquad \theta \in [0, 1]
+\]</div>
+</div>
+
+<p>The \(N\)-point training loss is a mean of squared errors at uniform \(\theta\) samples,
+normalized per-row by the GT curve's energy. That mean is a Riemann sum, so as
+\(N \to \infty\) it converges (at \(O(1/N^2)\) on these smooth integrands) to</p>
+
+<div class="disp">\[
+\mathcal L \;=\;
+\frac{\displaystyle\int_0^\Theta \bigl\lVert p(\theta) - p^*(\theta) \bigr\rVert^2 \, d\theta}
+     {\displaystyle\int_0^\Theta \bigl\lVert p^*(\theta) \bigr\rVert^2 \, d\theta}
+\;=\;
+\frac{\lVert \Phi(\text{pred}) - \Phi(\text{gt}) \rVert^2_{L^2}}
+     {\lVert \Phi(\text{gt}) \rVert^2_{L^2}}
+\]</div>
+
+<p>where \(\Phi\) is the decode viewed as a map from parameters into the function space
+\(L^2([0,\Theta];\mathbb R^3)\). So the continuous loss is the <b>\(L^2\) distance between
+the curves as functions of \(\theta\)</b> — a relative error, dimensionless by the
+normalization.</p>
+
+<div class="aside"><b>Why "as functions" matters.</b> This is <em>not</em> a distance between
+the curves' images (point sets), like Chamfer or Hausdorff. A reversed arc has the same image
+but is a different function of \(\theta\) — which is exactly why axis <em>sign</em> survives
+in this loss and is invisible to any geometry-only distance.</div>
+
+<!-- ================================================================ -->
+<h2><span class="n">2</span>The integral closes — infinite points for free</h2>
+
+<p>Both curves are linear in the fixed basis \(\{\cos\theta - 1,\ \sin\theta\}\), so with
+residuals \(\Delta\mathbf r = \mathbf r - \mathbf r^*\) and
+\(\Delta\mathbf t = \mathbf t - \mathbf t^*\):</p>
+
+<div class="disp">\[
+p(\theta) - p^*(\theta) = (\cos\theta - 1)\,\Delta\mathbf r + \sin\theta\,\Delta\mathbf t
+\]</div>
+
+<p>and the numerator needs only three scalar integrals over \([0, \tfrac{\pi}{2}]\):</p>
+
+<div class="disp">\[
+\int (\cos\theta-1)^2 = \tfrac{3\pi}{4} - 2, \qquad
+\int \sin^2\theta = \tfrac{\pi}{4}, \qquad
+\int (\cos\theta-1)\sin\theta = -\tfrac12
+\]</div>
+
+<div class="card">
+<p><b>Rotation, closed form:</b></p>
+<div class="disp">\[
+\int_0^{\pi/2}\!\lVert p - p^* \rVert^2\,d\theta
+= \Bigl(\tfrac{3\pi}{4}-2\Bigr)\lVert\Delta\mathbf r\rVert^2
++ \tfrac{\pi}{4}\,\lVert\Delta\mathbf t\rVert^2
+- \Delta\mathbf r \cdot \Delta\mathbf t
+\]</div>
+<p>A fixed positive-definite quadratic form — the Gram matrix
+\(\bigl[\begin{smallmatrix} 0.356 & -0.5 \\ -0.5 & 0.785 \end{smallmatrix}\bigr]\)
+of the two basis functions (\(\det \approx 0.03 > 0\)) — acting on the <b>radial</b> residual
+\(\Delta\mathbf r\) and the <b>tangential</b> residual \(\Delta\mathbf t\). The tangential
+term, which carries the axis sign (\(\mathbf t = \hat n \times \mathbf r\) flips with
+\(\hat n\)), is weighted \(\approx 2.2\times\) the radial one at a 90° sweep.</p>
+<p><b>Translation, closed form:</b></p>
+<div class="disp">\[
+\int_0^{1}\!\lVert \theta L(\hat d - \hat d^*) \rVert^2\,d\theta
+= \tfrac{L^2}{3}\,\lVert \hat d - \hat d^* \rVert^2
+= \tfrac{2L^2}{3}\,\bigl(1 - \cos\angle(\hat d, \hat d^*)\bigr)
+\]</div>
+<p>— i.e. the continuous prismatic trajectory loss <b>is exactly the sign-aware
+\(1-\cos\) axis loss</b>, rescaled. In the limit, the "redundant label" story compresses to:
+for translation it literally <em>is</em> the axis loss; for rotation it is a genuinely
+different quadratic coupling axis \(\wedge\) origin \(\wedge\) point through
+\((\mathbf r, \mathbf t)\).</p>
+</div>
+
+<!-- ================================================================ -->
+<h2><span class="n">3</span>What it is, conceptually: a pullback metric</h2>
+
+<div class="verdict">
+<p>\(\Phi\) embeds articulation parameters into curve space; the loss is the \(L^2\) metric
+<b>pulled back</b> through \(\Phi\):</p>
+<div class="disp">\[
+d_{\text{artic}}(x, y) \;=\; \lVert \Phi(x) - \Phi(y) \rVert_{L^2}
+\]</div>
+<p>"Trajectory supervision" is thus: <em>replace the hand-picked product of per-head losses
+with the metric induced by the physical motion itself.</em> Our empirical mechanism finding —
+the zero-parameter decode recovers ~90% of the trajectory benefit — restates as: the pullback
+metric is better-conditioned for learning than the ad-hoc one. And the nonconvexity localizes
+cleanly: the loss is <em>exactly quadratic</em> in \((\mathbf r, \mathbf t)\); everything hard
+lives in the chart \((\hat n, q, p_0) \mapsto (\mathbf r, \mathbf t)\).</p>
+</div>
+
+<!-- ================================================================ -->
+<h2><span class="n">4</span>The first-difference losses have a limit too: Sobolev</h2>
+
+<p>First differences divided by the step converge to derivatives, so the velocity /
+segment-direction / segment-length losses converge to functionals of
+\(p'(\theta)\) — the loss family becomes a <b>Sobolev \(H^1\) metric</b> (position +
+first-derivative matching); \(k\)-th differences would give \(H^k\). The derivative term also
+closes for our curves:</p>
+
+<div class="disp">\[
+\int_0^{\pi/2}\!\lVert p' - p^{*\prime} \rVert^2\,d\theta
+= \tfrac{\pi}{4}\Bigl(\lVert\Delta\mathbf r\rVert^2 + \lVert\Delta\mathbf t\rVert^2\Bigr)
+- \Delta\mathbf r \cdot \Delta\mathbf t
+\]</div>
+
+<p>Note the re-weighting: the derivative term treats radial and tangential residuals
+<em>equally</em> (\(\tfrac{\pi}{4}\) each), where the position term favored the tangential
+one. That is a tidy account of why the first-difference losses and the point loss proved
+complementary rather than redundant in the experiments — they are different quadratic forms on
+the same residuals.</p>
+
+<!-- ================================================================ -->
+<h2><span class="n">5</span>Practical corollaries</h2>
+
+<table>
+<tr><th>corollary</th><th>consequence</th></tr>
+<tr><td>Replace the 20-point decode with the closed-form quadratic</td>
+    <td>zero discretization error, no \(N\) to choose, cheaper — "infinite points" computed exactly</td></tr>
+<tr><td>The sweep extent \(\Theta\) becomes a principled knob</td>
+    <td>the Gram coefficients are functions of \(\Theta\): as \(\Theta \to 0\) the metric
+        collapses to pure instantaneous-velocity (tangent/sign) supervision; larger \(\Theta\)
+        grows the radial/origin weight</td></tr>
+<tr><td>Term-by-term interpretability</td>
+    <td>the loss decomposes into named residuals (radial, tangential/sign) with explicit
+        weights — diagnosable per sample</td></tr>
+</table>
+
+<div class="caveat"><b>Honest caveat:</b> at \(N = 20\) the quadrature error of the sampled
+loss is already tiny (\(O(1/N^2)\) on smooth trig integrands), so the closed form is an
+elegance-and-analysis win more than a performance one. Its real value is making the loss
+interpretable in articulation space — and revealing that the prismatic case was the axis loss
+all along.</div>
+
+<p class="meta" style="margin-top: 36px">Companion pages:
+<code>2026-08-28_trajectory_supervision_standalone.html</code> (the experiments this note
+formalizes) · <code>2026-08-27_traj_mechanism_study.html</code> (the original mechanism
+study). Conventions as in <code>model/losses/geometric.py: analytic_screw_trajectory</code>.</p>
+
+</main>
+</body>
+</html>
