@@ -46,6 +46,21 @@ venv-local.tar.tmp (4.9G, stale), 700GB scratch volume deletion
 silently at quota — pause mutagen FIRST on any quota event; trash holds
 nothing (deletes reclaim instantly).
 
+## In flight (2026-08-28): HOI4D raw download
+
+- New volume `segaffordance-hoi4d` (f2h0jczstn, 500GB EU-RO-1, $35/mo)
+  + CPU pod `segaff-hoi4d-dl` (qo9j1a31r6cu49, $0.06/hr-class)
+  downloading the OFFICIAL HOI4D release (~174GB: RGB
+  HOI4D_release.zip 23G, depth tar.gz0-6 127G, annotations 22G, CAD
+  1.5G, camera params + hand pose 0.5G) from the project's OneDrive
+  shares via the anonymous badger-token API (no per-sequence access
+  exists — monolithic archives). Script /workspace/hoi4d_download.py
+  on that volume; log /workspace/hoi4d_download.log; per-file resume +
+  size verification; monitor armed. DELETE THE POD when done; the
+  volume holds the raw data for the 10-sequence hand-supervision
+  prototype (hoi4d_hands_package on the main volume, see 2026-08-28
+  notes) and future furniture-category extraction.
+
 ## fdiff-family ablation transfer COMPLETE (2026-08-28)
 
 Both arms done, wrapped, pods deleted. The user's two questions:
