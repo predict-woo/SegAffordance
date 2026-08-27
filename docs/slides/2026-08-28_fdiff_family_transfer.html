@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The fdiff-Family Transfer</title>
+<style>
+  :root {
+    --ink: #1a1d23; --muted: #5b6472; --faint: #8b93a1;
+    --paper: #fbfaf7; --card: #ffffff; --line: #e3e0d8;
+    --gray: #9aa1ac;   /* arm B — articulation-only */
+    --green: #3e8e5f;  /* C_f — trajectory-only */
+    --orange: #e07a2f; /* analytic decode */
+    --blue: #3d6fb4;   /* joint (fdnolpp) */
+    --accent: #7a4fc0; --red: #c04f4f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink);
+    font: 16px/1.65 "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    padding: 48px 20px 96px; }
+  main { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 34px; line-height: 1.2; letter-spacing: -0.5px; }
+  .sub { color: var(--muted); margin: 10px 0 6px; font-size: 17px; }
+  .meta { color: var(--faint); font-size: 13px; margin-bottom: 40px; }
+  h2 { font-size: 22px; margin: 56px 0 14px; letter-spacing: -0.3px; }
+  h2 .q { display: inline-block; background: var(--ink); color: var(--paper);
+    font-size: 12px; font-weight: 700; border-radius: 999px; padding: 2px 10px;
+    vertical-align: 3px; margin-right: 10px; }
+  p { margin: 12px 0; }
+  .figure { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px 18px 8px; margin: 22px 0; overflow-x: auto; }
+  .figure svg { display: block; margin: 0 auto; }
+  .cap { color: var(--muted); font-size: 13.5px; line-height: 1.5; padding: 10px 6px 8px;
+    border-top: 1px dashed var(--line); margin-top: 12px; }
+  .verdict { border-left: 4px solid var(--accent); background: #f5f1fb; border-radius: 6px;
+    padding: 16px 20px; margin: 22px 0; }
+  .flip { border-left: 4px solid var(--red); background: #fbf1f1; border-radius: 6px;
+    padding: 14px 20px; margin: 18px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; margin: 14px 0; }
+  th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  .win { font-weight: 700; }
+  code { font: 13px/1.5 "SF Mono", ui-monospace, Menlo, monospace;
+    background: #f1efe9; border-radius: 4px; padding: 1px 5px; }
+  .legend { display: flex; gap: 20px; flex-wrap: wrap; font-size: 13.5px;
+    color: var(--muted); margin: 8px 0 4px 6px; }
+  .legend span::before { content: ""; display: inline-block; width: 11px; height: 11px;
+    border-radius: 3px; margin-right: 7px; vertical-align: -1px; }
+  .lg-b::before { background: var(--gray); }
+  .lg-c::before { background: var(--green); }
+  .lg-a::before { background: var(--orange); }
+  .lg-j::before { background: var(--blue); }
+  .svg-label { font: 12.5px "Avenir Next", system-ui, sans-serif; fill: var(--muted); }
+  .svg-num   { font: 700 13px "Avenir Next", system-ui, sans-serif; fill: var(--ink); }
+  .svg-title { font: 600 13.5px "Avenir Next", system-ui, sans-serif; fill: var(--ink); }
+  .svg-note  { font: italic 12px "Avenir Next", system-ui, sans-serif; fill: var(--faint); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Does the ablation transfer to the fdiff family?</h1>
+<p class="sub">The DCT-family results — joint-training wins, and the "redundant label = loss
+geometry" mechanism — re-tested on the fdiff family (plain trajectory head + first-difference
+losses). Two questions, two new runs, two reused corners.</p>
+<p class="meta">SegAffordance · experiments of 2026-08-27 → 28 · new arms:
+<code>20260827_sf3d_supabl3_traj_fdiff</code> (C_f), <code>20260827_sf3d_andec_fdiff</code>
+(decode+fdiff) · reused: supabl2 arm B (articulation-only is family-independent — fdiff dies
+with the trajectory head, so there is only ONE no-trajectory model) and
+<code>fdnolpp</code> (joint, no consistency terms) · spec:
+<code>2026-08-27-fdiff-family-ablation-design.md</code></p>
+
+<!-- ================================================================ -->
+<h2><span class="q">Q1</span>Is joint training better than either path alone? Yes — on both sides.</h2>
+
+<div class="legend"><span class="lg-b">B — articulation-only</span>
+<span class="lg-c">C_f — trajectory-only</span>
+<span class="lg-j">joint (fdnolpp)</span></div>
+
+<div class="figure">
+<svg width="820" height="250" viewBox="0 0 820 250">
+  <!-- articulation side: MA -->
+  <text x="205" y="22" text-anchor="middle" class="svg-title">articulation: MA ↑ (joint vs art-only)</text>
+  <line x1="60" y1="210" x2="350" y2="210" stroke="#c9c5ba"/>
+  <rect x="95"  y="90.4" width="60" height="119.6" fill="#9aa1ac" rx="3"/>
+  <rect x="255" y="48.9" width="60" height="161.1" fill="#3d6fb4" rx="3"/>
+  <text x="125" y="81" text-anchor="middle" class="svg-num">20.4</text>
+  <text x="285" y="40" text-anchor="middle" class="svg-num">27.5</text>
+  <text x="125" y="228" text-anchor="middle" class="svg-label">B</text>
+  <text x="285" y="228" text-anchor="middle" class="svg-label">joint</text>
+  <text x="205" y="246" text-anchor="middle" class="svg-label" fill="#3e8e5f">+7.1 MA, matched axis −8.2° — huge, same as DCT</text>
+
+  <!-- trajectory side: dir acc -->
+  <text x="615" y="22" text-anchor="middle" class="svg-title">trajectory: direction acc ↑ (joint vs traj-only)</text>
+  <line x1="470" y1="210" x2="760" y2="210" stroke="#c9c5ba"/>
+  <!-- zoomed axis 92-97 -->
+  <text x="462" y="214" text-anchor="end" class="svg-label">92</text>
+  <rect x="505" y="122.8" width="60" height="87.2" fill="#3e8e5f" rx="3"/>
+  <rect x="665" y="72.9" width="60" height="137.1" fill="#3d6fb4" rx="3"/>
+  <text x="535" y="114" text-anchor="middle" class="svg-num">94.4</text>
+  <text x="695" y="64" text-anchor="middle" class="svg-num">95.8</text>
+  <text x="535" y="228" text-anchor="middle" class="svg-label">C_f</text>
+  <text x="695" y="228" text-anchor="middle" class="svg-label">joint</text>
+  <text x="615" y="246" text-anchor="middle" class="svg-label" fill="#3e8e5f">+1.4 acc / +0.019 cos — small but REAL (DCT: ~nil)</text>
+</svg>
+<div class="cap">Both coupling directions favor joint training on the fdiff family. The right
+panel is the surprise: on the DCT family, articulation→trajectory measured ~zero (94.36 vs
+94.26 — "the coupling is asymmetric"). With fdiff's direction-sensitive losses in play,
+articulation supervision gives the trajectory a measurable assist. The asymmetry survives —
+one side is 5× the other — but the weak side is no longer nil. Smoothness is untouched by
+articulation (roughness 0.0497 vs 0.0499): it belongs entirely to the fdiff losses.</div>
+</div>
+
+<!-- ================================================================ -->
+<h2><span class="q">Q2</span>Does the mechanism verdict transfer? Yes — ~89% loss geometry.</h2>
+
+<p>Same discriminator as before: delete the trajectory head, decode the curve
+deterministically from the predicted articulation parameters (zero new parameters), and — new
+for this family — apply the fdiff first-difference losses <em>to the decoded curve</em>.</p>
+
+<div class="legend"><span class="lg-b">B — no trajectory</span>
+<span class="lg-a">decode+fdiff (0 params)</span>
+<span class="lg-j">joint (head)</span></div>
+
+<div class="figure">
+<svg width="820" height="260" viewBox="0 0 820 260">
+  <!-- MA -->
+  <text x="140" y="22" text-anchor="middle" class="svg-title">MA ↑</text>
+  <line x1="35" y1="220" x2="245" y2="220" stroke="#c9c5ba"/>
+  <rect x="55"  y="97.6" width="46" height="122.4" fill="#9aa1ac" rx="3"/>
+  <rect x="117" y="59.6" width="46" height="160.4" fill="#e07a2f" rx="3"/>
+  <rect x="179" y="54.8" width="46" height="165.2" fill="#3d6fb4" rx="3"/>
+  <text x="78"  y="88" text-anchor="middle" class="svg-num">20.4</text>
+  <text x="140" y="51" text-anchor="middle" class="svg-num">26.7</text>
+  <text x="202" y="46" text-anchor="middle" class="svg-num">27.5</text>
+  <path d="M101 240 H 163" stroke="#7a4fc0" stroke-width="2"/>
+  <text x="140" y="256" text-anchor="middle" class="svg-label" fill="#7a4fc0">~89% of the gap, zero parameters</text>
+
+  <!-- rot flips (lower better) -->
+  <text x="415" y="22" text-anchor="middle" class="svg-title">rot flip rate ↓</text>
+  <line x1="310" y1="220" x2="520" y2="220" stroke="#c9c5ba"/>
+  <rect x="330" y="89.2" width="46" height="130.8" fill="#9aa1ac" rx="3"/>
+  <rect x="392" y="141.9" width="46" height="78.1" fill="#e07a2f" rx="3"/>
+  <rect x="454" y="139.1" width="46" height="80.9" fill="#3d6fb4" rx="3"/>
+  <text x="353" y="80"  text-anchor="middle" class="svg-num">21.8</text>
+  <text x="415" y="133" text-anchor="middle" class="svg-num">13.0</text>
+  <text x="477" y="130" text-anchor="middle" class="svg-num">13.5</text>
+  <text x="415" y="243" text-anchor="middle" class="svg-note">decode BEATS the head</text>
+
+  <!-- matched axis (lower better) -->
+  <text x="690" y="22" text-anchor="middle" class="svg-title">matched axis ↓</text>
+  <line x1="585" y1="220" x2="795" y2="220" stroke="#c9c5ba"/>
+  <rect x="605" y="80.3" width="46" height="139.7" fill="#9aa1ac" rx="3"/>
+  <rect x="667" y="112.5" width="46" height="107.5" fill="#e07a2f" rx="3"/>
+  <rect x="729" y="129.4" width="46" height="90.6" fill="#3d6fb4" rx="3"/>
+  <text x="628" y="71"  text-anchor="middle" class="svg-num">23.3°</text>
+  <text x="690" y="104" text-anchor="middle" class="svg-num">17.9°</text>
+  <text x="752" y="121" text-anchor="middle" class="svg-num">15.1°</text>
+  <text x="690" y="243" text-anchor="middle" class="svg-note">the head's one remaining edge</text>
+</svg>
+<div class="cap">The zero-parameter decode recovers 6.3 of the 7.1-point MA gap (DCT family:
+75%) — and outright beats the joint arm on flip rate, origin (0.259 vs 0.266), and masks
+(0.257 vs 0.246). The head's edge is confined to matched-axis sharpness and radius (0.113 vs
+0.135). Bonus: fdiff geometry composes with the decode parameter-free — vs the plain decode of
+two days ago it improves matched axis −1.1° and rot flips −2.4.</div>
+</div>
+
+<div class="verdict"><b>The mechanism conclusion is family-robust.</b> On both trajectory
+representations, the articulation value of the "redundant" trajectory label is the
+<b>loss geometry</b> — a dense, jointly-constrained, GT-anchored objective over the same
+quantities — recoverable with zero parameters and no gradient routing through shared features.
+The fraction is, if anything, larger on the family whose losses carry more geometry (89% vs
+75%).</div>
+
+<!-- ================================================================ -->
+<h2><span class="q">✗</span>The one thing that did NOT transfer: the mask ordering inverts</h2>
+
+<div class="figure">
+<svg width="820" height="255" viewBox="0 0 820 255">
+  <text x="215" y="22" text-anchor="middle" class="svg-title">DCT family — mIoU ↑ (axis from 0.24)</text>
+  <line x1="80" y1="205" x2="370" y2="205" stroke="#c9c5ba"/>
+  <text x="72" y="209" text-anchor="end" class="svg-label">0.24</text>
+  <rect x="105" y="60.7" width="56" height="144.3" fill="#3e8e5f" rx="3"/>
+  <rect x="192" y="63.3" width="56" height="141.7" fill="#9aa1ac" rx="3"/>
+  <rect x="279" y="72.5" width="56" height="132.5" fill="#3d6fb4" rx="3"/>
+  <text x="133" y="52" text-anchor="middle" class="svg-num">0.2689</text>
+  <text x="220" y="55" text-anchor="middle" class="svg-num">0.2680</text>
+  <text x="307" y="64" text-anchor="middle" class="svg-num">0.2650</text>
+  <text x="133" y="223" text-anchor="middle" class="svg-label">C (traj-only)</text>
+  <text x="220" y="223" text-anchor="middle" class="svg-label">B</text>
+  <text x="307" y="223" text-anchor="middle" class="svg-label">joint</text>
+  <text x="215" y="245" text-anchor="middle" class="svg-label" fill="#3e8e5f">trajectory-only BEST</text>
+
+  <text x="620" y="22" text-anchor="middle" class="svg-title">fdiff family — mIoU ↑ (axis from 0.24)</text>
+  <line x1="485" y1="205" x2="775" y2="205" stroke="#c9c5ba"/>
+  <rect x="510" y="63.3" width="56" height="141.7" fill="#9aa1ac" rx="3"/>
+  <rect x="597" y="99.3" width="56" height="105.7" fill="#3e8e5f" rx="3"/>
+  <rect x="684" y="174.8" width="56" height="30.2" fill="#3d6fb4" rx="3"/>
+  <text x="538" y="55"  text-anchor="middle" class="svg-num">0.2680</text>
+  <text x="625" y="91"  text-anchor="middle" class="svg-num">0.2608</text>
+  <text x="712" y="166" text-anchor="middle" class="svg-num">0.2459</text>
+  <text x="538" y="223" text-anchor="middle" class="svg-label">B</text>
+  <text x="625" y="223" text-anchor="middle" class="svg-label">C_f (traj-only)</text>
+  <text x="712" y="223" text-anchor="middle" class="svg-label">joint</text>
+  <text x="620" y="245" text-anchor="middle" class="svg-label" fill="#c04f4f">trajectory supervision now COSTS masks</text>
+</svg>
+<div class="cap">Same experiment design, opposite ordering. On DCT, trajectory-only had the best
+masks of all arms; on fdiff it loses to articulation-only, and the joint arm drops to 0.246.
+Every fdiff arm's masks sit at ~0.24–0.25 while DCT arms hold 0.265+.</div>
+</div>
+
+<div class="flip"><b>Revised story:</b> "trajectory supervision is trunk-friendly" — the account
+given after the DCT ablation — was a <b>DCT-head property</b>, not a trajectory property. The
+smooth 6-coefficient basis filters the gradients flowing back through the GT-mask-pooled
+features; the plain head + first-difference losses send harsher signals, and the trunk pays.
+Consistent with the decode arms too: the fdiff decode's mask dip vs arm B is milder than the
+DCT-era decode's, and it no longer undercuts the joint arm.</div>
+
+<!-- ================================================================ -->
+<h2><span class="q">Σ</span>The two-family grid, and what it settles</h2>
+
+<table>
+<tr><th>finding</th><th>DCT family</th><th>fdiff family</th><th>status</th></tr>
+<tr><td>trajectory → articulation</td><td class="win">MA +7.8</td><td class="win">MA +7.1</td><td>robust</td></tr>
+<tr><td>…of which loss geometry (decode)</td><td>~75%</td><td>~89%</td><td>robust, larger with fdiff</td></tr>
+<tr><td>articulation → trajectory</td><td>~nil</td><td>+1.4 acc</td><td>asymmetry holds, weak side nonzero</td></tr>
+<tr><td>masks: who protects the trunk</td><td>the DCT head</td><td>nobody (traj costs masks)</td><td><b>DCT-specific</b></td></tr>
+<tr><td>L_pp's value (from the earlier grid)</td><td>MA −2.2 (harmful)</td><td>MA +2.4 (helpful)</td><td>family-dependent</td></tr>
+</table>
+
+<p>Every component of the parked <b>gen-22 candidate</b> now has a measured, family-qualified
+role: DCT head for the trunk/masks, analytic decode (+fdiff geometry) for articulation at zero
+cost, fdiff losses for direction/MA, the dir term for sign on non-DCT representations — and
+L_pp decided empirically per configuration, not by assumption. Campaign cost ≈ $17, both runs
+on full-speed hosts.</p>
+
+<p class="meta" style="margin-top: 36px">All numbers: standard 5,088-sample test split, DINOv3@512
+g17 split-axis stack. Full tables in <code>experiments/INDEX.md</code> and the two experiments'
+<code>notes.md</code>. Companion page: <code>2026-08-27_traj_mechanism_study.html</code> (the
+original mechanism study this campaign re-tested).</p>
+
+</main>
+</body>
+</html>
