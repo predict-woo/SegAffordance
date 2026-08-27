@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What Trajectory Supervision Buys</title>
+<style>
+  :root {
+    --ink: #1a1d23; --muted: #5b6472; --faint: #8b93a1;
+    --paper: #fbfaf7; --card: #ffffff; --line: #e3e0d8;
+    --gray: #9aa1ac;   /* articulation-only */
+    --green: #3e8e5f;  /* trajectory-only */
+    --orange: #e07a2f; /* formula arm */
+    --blue: #3d6fb4;   /* both paths */
+    --accent: #7a4fc0; --red: #c04f4f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink);
+    font: 16px/1.65 "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    padding: 48px 20px 96px; }
+  main { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 33px; line-height: 1.2; letter-spacing: -0.5px; }
+  .sub { color: var(--muted); margin: 10px 0 6px; font-size: 17px; }
+  .meta { color: var(--faint); font-size: 13px; margin-bottom: 40px; }
+  h2 { font-size: 22px; margin: 54px 0 14px; letter-spacing: -0.3px; }
+  h2 .n { display: inline-block; background: var(--ink); color: var(--paper);
+    font-size: 12px; font-weight: 700; border-radius: 999px; padding: 2px 10px;
+    vertical-align: 3px; margin-right: 10px; }
+  p { margin: 12px 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 20px 24px; margin: 20px 0; }
+  .figure { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px 18px 8px; margin: 22px 0; overflow-x: auto; }
+  .figure svg { display: block; margin: 0 auto; }
+  .cap { color: var(--muted); font-size: 13.5px; line-height: 1.5; padding: 10px 6px 8px;
+    border-top: 1px dashed var(--line); margin-top: 12px; }
+  .verdict { border-left: 4px solid var(--accent); background: #f5f1fb; border-radius: 6px;
+    padding: 16px 20px; margin: 22px 0; }
+  .warn { border-left: 4px solid var(--red); background: #fbf1f1; border-radius: 6px;
+    padding: 14px 20px; margin: 18px 0; }
+  .defs { font-size: 14px; }
+  .defs dt { font-weight: 700; margin-top: 10px; }
+  .defs dd { color: var(--muted); margin-left: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; margin: 14px 0; }
+  th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  .legend { display: flex; gap: 20px; flex-wrap: wrap; font-size: 13.5px;
+    color: var(--muted); margin: 8px 0 4px 6px; }
+  .legend span::before { content: ""; display: inline-block; width: 11px; height: 11px;
+    border-radius: 3px; margin-right: 7px; vertical-align: -1px; }
+  .lg-b::before { background: var(--gray); }
+  .lg-c::before { background: var(--green); }
+  .lg-a::before { background: var(--orange); }
+  .lg-j::before { background: var(--blue); }
+  .svg-label { font: 12.5px "Avenir Next", system-ui, sans-serif; fill: var(--muted); }
+  .svg-num   { font: 700 13px "Avenir Next", system-ui, sans-serif; fill: var(--ink); }
+  .svg-title { font: 600 13.5px "Avenir Next", system-ui, sans-serif; fill: var(--ink); }
+  .svg-note  { font: italic 12px "Avenir Next", system-ui, sans-serif; fill: var(--faint); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>What trajectory supervision buys — and why</h1>
+<p class="sub">Our model looks at one RGB-D image of an articulated object (a cabinet, a laptop,
+a trash can) plus a text instruction, and predicts how the part moves. We supervise it two
+ways. This page reports a controlled study of what each supervision path contributes — with a
+surprising answer about <em>why</em> one of them works.</p>
+<p class="meta">SegAffordance · four training runs, identical everything except supervision ·
+each evaluated on the same 5,088-image held-out test set</p>
+
+<!-- ================================================================ -->
+<h2><span class="n">1</span>Setup: two ways of describing the same motion</h2>
+
+<p>For every training image the dataset provides two descriptions of the part's motion:</p>
+
+<div class="card defs">
+<dt>Articulation parameters (compact)</dt>
+<dd>Motion <b>type</b> (rotation vs sliding), the 3D <b>axis</b> direction, the hinge
+<b>origin</b> point, and the 3D <b>interaction point</b> on the part — about nine numbers. The
+model has a small prediction head for each.</dd>
+<dt>Trajectory (verbose)</dt>
+<dd>A curve of 20 3D points tracing the path the part sweeps when the motion is executed — a
+straight ray for sliding parts, an arc around the hinge for rotating ones. The model has a
+separate head that predicts these 60 numbers, trained with a point-matching loss plus
+first-difference losses (they compare consecutive point-to-point steps of the predicted and
+true curves, supervising per-segment direction and length).</dd>
+</div>
+
+<p><b>The catch that motivated this study:</b> the trajectory labels are <em>computed from</em>
+the articulation labels. Given axis, origin, type, and the part's location, a fixed geometric
+formula generates the curve — the trajectory contains <b>zero information</b> the compact
+labels don't already carry. Naively, adding it to training should change nothing. It changes a
+lot.</p>
+
+<!-- ================================================================ -->
+<h2><span class="n">2</span>The experiment: four models, one variable</h2>
+
+<div class="card defs">
+<dt style="color:var(--gray)">■ Articulation-only</dt>
+<dd>Trajectory head deleted, trajectory losses gone. Only the compact labels teach the model.</dd>
+<dt style="color:var(--green)">■ Trajectory-only</dt>
+<dd>The opposite: articulation heads deleted; only the curve teaches the model.</dd>
+<dt style="color:var(--blue)">■ Both paths (joint)</dt>
+<dd>Everything on — the normal recipe. (No auxiliary consistency losses in any arm, so the
+paths interact only through the shared image features.)</dd>
+<dt style="color:var(--orange)">■ The formula arm — trajectory loss without a trajectory network</dt>
+<dd>The diagnostic. The trajectory head is deleted, but during training we take the model's own
+<em>predicted</em> axis/origin/point, run them through <b>the same geometric formula that
+generated the labels</b> (differentiably), and apply the trajectory losses to that computed
+curve. The model gains <b>zero parameters</b> — it never "learns" trajectories — yet its
+articulation heads now feel the trajectory losses directly. If this arm matches the joint model,
+the benefit of trajectory supervision was never the extra network; it was the <em>loss</em>.</dd>
+</div>
+
+<div class="figure">
+<svg width="800" height="185" viewBox="0 0 800 185">
+  <rect x="10" y="55" width="125" height="75" rx="8" fill="#eef2f8" stroke="#c6d2e4"/>
+  <text x="72" y="87" text-anchor="middle" class="svg-title">image features</text>
+  <text x="72" y="107" text-anchor="middle" class="svg-label">(shared trunk)</text>
+  <path d="M140 92 H 195" stroke="#8b93a1" stroke-width="2" marker-end="url(#g)"/>
+  <rect x="200" y="30" width="165" height="125" rx="8" fill="#fff" stroke="#c9c5ba"/>
+  <text x="282" y="53" text-anchor="middle" class="svg-title">articulation heads</text>
+  <text x="282" y="78" text-anchor="middle" class="svg-label">type · axis</text>
+  <text x="282" y="98" text-anchor="middle" class="svg-label">origin · point</text>
+  <text x="282" y="128" text-anchor="middle" class="svg-note">~9 numbers</text>
+  <path d="M370 92 H 430" stroke="#e07a2f" stroke-width="2.5" marker-end="url(#o)"/>
+  <rect x="435" y="55" width="170" height="75" rx="8" fill="#fdf3ec" stroke="#e9c9ad"/>
+  <text x="520" y="83" text-anchor="middle" class="svg-title" fill="#b45f1d">the label formula</text>
+  <text x="520" y="103" text-anchor="middle" class="svg-label">ray / arc · 0 parameters</text>
+  <path d="M610 92 H 665" stroke="#e07a2f" stroke-width="2.5" marker-end="url(#o)"/>
+  <rect x="670" y="55" width="120" height="75" rx="8" fill="#f0f7f2" stroke="#bcd8c6"/>
+  <text x="730" y="83" text-anchor="middle" class="svg-title">trajectory</text>
+  <text x="730" y="103" text-anchor="middle" class="svg-title">losses</text>
+  <path d="M520 132 C 520 168, 310 172, 284 158" fill="none" stroke="#e07a2f"
+        stroke-width="2" stroke-dasharray="6 5" marker-end="url(#o)"/>
+  <text x="440" y="176" text-anchor="middle" class="svg-note">gradients flow straight back into the articulation heads</text>
+  <defs>
+    <marker id="g" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#8b93a1"/></marker>
+    <marker id="o" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#e07a2f"/></marker>
+  </defs>
+</svg>
+<div class="cap">The formula arm. A prediction is only rewarded when axis, origin, and point are
+<em>jointly</em> right — that's what placing the curve requires — and a wrong axis direction
+sweeps the curve the wrong way, making sign errors expensive. Same information as the compact
+losses, very different shape.</div>
+</div>
+
+<p class="defs" style="color:var(--muted); font-size:14px"><b>Metrics used below:</b>
+<b>MA</b> — fraction of test samples where the part is correctly detected <em>and</em> its
+predicted axis is within tolerance (the headline articulation score, higher better). <b>Matched
+axis error</b> — mean angular error of the axis on correctly-detected samples (lower better).
+<b>Flip rate</b> — how often the predicted rotation axis points the <em>wrong way</em>
+(backwards door swing). <b>mIoU</b> — part-mask segmentation quality.</p>
+
+<!-- ================================================================ -->
+<h2><span class="n">3</span>Finding 1: training both paths together beats either alone</h2>
+
+<div class="legend"><span class="lg-b">articulation-only</span>
+<span class="lg-c">trajectory-only</span><span class="lg-j">both</span></div>
+
+<div class="figure">
+<svg width="820" height="250" viewBox="0 0 820 250">
+  <text x="205" y="22" text-anchor="middle" class="svg-title">articulation score (MA) ↑</text>
+  <line x1="60" y1="210" x2="350" y2="210" stroke="#c9c5ba"/>
+  <rect x="95"  y="90.4" width="60" height="119.6" fill="#9aa1ac" rx="3"/>
+  <rect x="255" y="48.9" width="60" height="161.1" fill="#3d6fb4" rx="3"/>
+  <text x="125" y="81" text-anchor="middle" class="svg-num">20.4</text>
+  <text x="285" y="40" text-anchor="middle" class="svg-num">27.5</text>
+  <text x="125" y="228" text-anchor="middle" class="svg-label">articulation-only</text>
+  <text x="285" y="228" text-anchor="middle" class="svg-label">both</text>
+  <text x="205" y="246" text-anchor="middle" class="svg-label" fill="#3e8e5f">adding the “redundant” curve: +7.1 MA, axis error −8.2°</text>
+
+  <text x="615" y="22" text-anchor="middle" class="svg-title">trajectory direction accuracy ↑ (axis from 92)</text>
+  <line x1="470" y1="210" x2="760" y2="210" stroke="#c9c5ba"/>
+  <rect x="505" y="122.8" width="60" height="87.2" fill="#3e8e5f" rx="3"/>
+  <rect x="665" y="72.9" width="60" height="137.1" fill="#3d6fb4" rx="3"/>
+  <text x="535" y="114" text-anchor="middle" class="svg-num">94.4</text>
+  <text x="695" y="64" text-anchor="middle" class="svg-num">95.8</text>
+  <text x="535" y="228" text-anchor="middle" class="svg-label">trajectory-only</text>
+  <text x="695" y="228" text-anchor="middle" class="svg-label">both</text>
+  <text x="615" y="246" text-anchor="middle" class="svg-label" fill="#3e8e5f">and articulation labels return the favor: +1.4</text>
+</svg>
+<div class="cap">Left: the articulation heads improve enormously when the curve is co-trained —
+despite the curve carrying no new information. Right: the trajectory head also improves when
+articulation is co-trained, by a much smaller margin. The coupling is strongly asymmetric:
+trajectory teaches articulation ~5× more than the reverse.</div>
+</div>
+
+<!-- ================================================================ -->
+<h2><span class="n">4</span>Finding 2: it was never the network — ~90% of the gain is the loss itself</h2>
+
+<div class="legend"><span class="lg-b">articulation-only</span>
+<span class="lg-a">formula arm (0 extra params)</span><span class="lg-j">both (full head)</span></div>
+
+<div class="figure">
+<svg width="820" height="260" viewBox="0 0 820 260">
+  <text x="140" y="22" text-anchor="middle" class="svg-title">MA ↑</text>
+  <line x1="35" y1="220" x2="245" y2="220" stroke="#c9c5ba"/>
+  <rect x="55"  y="97.6" width="46" height="122.4" fill="#9aa1ac" rx="3"/>
+  <rect x="117" y="59.6" width="46" height="160.4" fill="#e07a2f" rx="3"/>
+  <rect x="179" y="54.8" width="46" height="165.2" fill="#3d6fb4" rx="3"/>
+  <text x="78"  y="88" text-anchor="middle" class="svg-num">20.4</text>
+  <text x="140" y="51" text-anchor="middle" class="svg-num">26.7</text>
+  <text x="202" y="46" text-anchor="middle" class="svg-num">27.5</text>
+  <path d="M101 240 H 163" stroke="#7a4fc0" stroke-width="2"/>
+  <text x="140" y="256" text-anchor="middle" class="svg-label" fill="#7a4fc0">~89% of the gap — no trajectory network at all</text>
+
+  <text x="415" y="22" text-anchor="middle" class="svg-title">axis pointing backwards (flip rate) ↓</text>
+  <line x1="310" y1="220" x2="520" y2="220" stroke="#c9c5ba"/>
+  <rect x="330" y="89.2" width="46" height="130.8" fill="#9aa1ac" rx="3"/>
+  <rect x="392" y="141.9" width="46" height="78.1" fill="#e07a2f" rx="3"/>
+  <rect x="454" y="139.1" width="46" height="80.9" fill="#3d6fb4" rx="3"/>
+  <text x="353" y="80"  text-anchor="middle" class="svg-num">21.8%</text>
+  <text x="415" y="133" text-anchor="middle" class="svg-num">13.0%</text>
+  <text x="477" y="130" text-anchor="middle" class="svg-num">13.5%</text>
+  <text x="415" y="243" text-anchor="middle" class="svg-note">the formula arm even beats the full model</text>
+
+  <text x="690" y="22" text-anchor="middle" class="svg-title">matched axis error ↓</text>
+  <line x1="585" y1="220" x2="795" y2="220" stroke="#c9c5ba"/>
+  <rect x="605" y="80.3" width="46" height="139.7" fill="#9aa1ac" rx="3"/>
+  <rect x="667" y="112.5" width="46" height="107.5" fill="#e07a2f" rx="3"/>
+  <rect x="729" y="129.4" width="46" height="90.6" fill="#3d6fb4" rx="3"/>
+  <text x="628" y="71"  text-anchor="middle" class="svg-num">23.3°</text>
+  <text x="690" y="104" text-anchor="middle" class="svg-num">17.9°</text>
+  <text x="752" y="121" text-anchor="middle" class="svg-num">15.1°</text>
+  <text x="690" y="243" text-anchor="middle" class="svg-note">the head's one remaining edge</text>
+</svg>
+<div class="cap">The formula arm — trajectory losses applied to a curve computed from the model's
+own articulation predictions, zero added parameters — recovers ~89% of the joint model's
+articulation gain, beats it on wrong-way axes and hinge-origin error, and concedes only some
+axis sharpness. The trajectory network is <em>not</em> where the value lives.</div>
+</div>
+
+<div class="verdict"><b>Why a redundant label helps.</b> The curve re-expresses the same nine
+numbers as sixty <em>coupled</em> ones: to place it correctly, axis ∧ origin ∧ point must be
+right <em>together</em>, a wrong axis direction sweeps it backwards (large, obvious error), and
+every point contributes gradient. Same information, better-shaped objective. The practical
+corollary is free performance: any model — even one with no trajectory head — can get most of
+this benefit by decoding its articulation predictions through the label formula and applying
+the trajectory losses there.</div>
+
+<!-- ================================================================ -->
+<h2><span class="n">5</span>Finding 3: the cost side — segmentation pays</h2>
+
+<div class="figure">
+<svg width="820" height="235" viewBox="0 0 820 235">
+  <text x="410" y="22" text-anchor="middle" class="svg-title">part-mask quality (mIoU) ↑ — axis from 0.24</text>
+  <line x1="180" y1="195" x2="640" y2="195" stroke="#c9c5ba"/>
+  <text x="172" y="199" text-anchor="end" class="svg-label">0.24</text>
+  <rect x="205" y="53.3" width="70" height="141.7" fill="#9aa1ac" rx="3"/>
+  <rect x="315" y="89.3" width="70" height="105.7" fill="#3e8e5f" rx="3"/>
+  <rect x="425" y="115.0" width="70" height="80.0"  fill="#e07a2f" rx="3"/>
+  <rect x="535" y="164.8" width="70" height="30.2" fill="#3d6fb4" rx="3"/>
+  <text x="240" y="45"  text-anchor="middle" class="svg-num">0.268</text>
+  <text x="350" y="81"  text-anchor="middle" class="svg-num">0.261</text>
+  <text x="460" y="107" text-anchor="middle" class="svg-num">0.257</text>
+  <text x="570" y="156" text-anchor="middle" class="svg-num">0.246</text>
+  <text x="240" y="213" text-anchor="middle" class="svg-label">articulation-only</text>
+  <text x="350" y="213" text-anchor="middle" class="svg-label">trajectory-only</text>
+  <text x="460" y="213" text-anchor="middle" class="svg-label">formula arm</text>
+  <text x="570" y="213" text-anchor="middle" class="svg-label">both</text>
+</svg>
+<div class="cap">Every form of trajectory pressure costs some segmentation quality, and the full
+joint model pays the most. The mechanism: the trajectory losses back-propagate through features
+pooled from the part region, and their gradients compete with what the mask decoder wants from
+those same pixels.</div>
+</div>
+
+<div class="warn"><b>So there is no free lunch, only a favorable trade:</b> trajectory
+supervision converts a little segmentation quality (−0.02 mIoU) into a lot of articulation
+quality (+7 MA, axis error down a third, wrong-way axes down 40%). And the formula arm buys
+most of that at the smallest mask cost.</div>
+
+<!-- ================================================================ -->
+<h2><span class="n">Σ</span>Takeaways</h2>
+
+<div class="card">
+<p><b>1.</b> Supervising a target that is <em>mathematically derived</em> from labels you
+already use can still improve a model dramatically — information content and training value
+are different things.</p>
+<p><b>2.</b> The value lives in the <em>loss geometry</em>: dense, jointly-constrained,
+direction-aware error signals. It can be captured with zero extra parameters by decoding
+predictions through the label-generating formula.</p>
+<p><b>3.</b> The coupling is asymmetric: motion curves teach articulation parameters far more
+than articulation parameters teach curves.</p>
+<p><b>4.</b> The price is a small segmentation dip — a trade to make deliberately, not an
+accident to discover later.</p>
+</div>
+
+<p class="meta" style="margin-top: 36px">Four runs, identical architecture/data/schedule except
+the supervision paths; 5,088-sample held-out test. Experiment records:
+20260824_sf3d_supabl2_art · 20260825_sf3d_fdiff_nolpp · 20260827_sf3d_supabl3_traj_fdiff ·
+20260827_sf3d_andec_fdiff (repo: experiments/INDEX.md).</p>
+
+</main>
+</body>
+</html>
