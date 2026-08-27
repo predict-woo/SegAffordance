@@ -46,7 +46,26 @@ venv-local.tar.tmp (4.9G, stale), 700GB scratch volume deletion
 silently at quota — pause mutagen FIRST on any quota event; trash holds
 nothing (deletes reclaim instantly).
 
-## In flight (2026-08-27): fdiff-family ablation transfer
+## fdiff-family ablation transfer COMPLETE (2026-08-28)
+
+Both arms done, wrapped, pods deleted. The user's two questions:
+1. **Joint > either alone on fdiff? YES, on both sides.** Joint
+   (fdnolpp) vs art-only (B): MA +7.1, matched −8.2°. Joint vs
+   traj-only (C_f): traj_dir +1.4/+0.019 — small but real, where DCT
+   measured ~nil. The coupling asymmetry survives but fdiff's weak
+   direction is nonzero.
+2. **The mechanism verdict is FAMILY-ROBUST and stronger on fdiff:**
+   decode+fdiff (zero params) recovers ~89% of the B→joint gap (MA
+   26.7 of 20.4→27.5; DCT: 75%) and BEATS the joint arm on flips,
+   origin, and masks. fdiff geometry composes with the decode
+   parameter-free (matched −1.1°, rot flips −2.4 vs plain decode).
+Non-transfer: the DCT mask ordering (C>B>D) inverts on fdiff
+(B>C_f>joint) — "trajectory supervision is trunk-friendly" was
+DCT-specific (the smooth basis sends gentle gradients; plain+fdiff is
+harsher). Full tables: 20260827_sf3d_{andec_fdiff,supabl3_traj_fdiff}
+notes.md.
+
+## Earlier (2026-08-27): fdiff-family ablation transfer
 
 - User-commissioned: does the DCT-family ablation transfer to fdiff?
   Two new arms (spec 2026-08-27-fdiff-family-ablation-design.md; smokes
