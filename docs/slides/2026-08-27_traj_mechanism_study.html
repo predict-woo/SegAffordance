@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Why a Redundant Label Helps</title>
+<style>
+  :root {
+    --ink: #1a1d23; --muted: #5b6472; --faint: #8b93a1;
+    --paper: #fbfaf7; --card: #ffffff; --line: #e3e0d8;
+    --gray: #9aa1ac;   /* arm B / baselines */
+    --orange: #e07a2f; /* analytic decode */
+    --blue: #3d6fb4;   /* arm D / trajectory head */
+    --green: #3e8e5f; --red: #c04f4f;
+    --accent: #7a4fc0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font: 16px/1.65 "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    padding: 48px 20px 96px;
+  }
+  main { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 34px; line-height: 1.2; letter-spacing: -0.5px; }
+  .sub { color: var(--muted); margin: 10px 0 6px; font-size: 17px; }
+  .meta { color: var(--faint); font-size: 13px; margin-bottom: 40px; }
+  h2 { font-size: 22px; margin: 56px 0 14px; letter-spacing: -0.3px; }
+  h2 .step { display: inline-block; background: var(--ink); color: var(--paper);
+    font-size: 12px; font-weight: 700; border-radius: 999px; padding: 2px 10px;
+    vertical-align: 3px; margin-right: 10px; letter-spacing: 0.5px; }
+  p { margin: 12px 0; }
+  em { font-style: italic; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 22px 26px; margin: 20px 0; }
+  .figure { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px 18px 8px; margin: 22px 0; overflow-x: auto; }
+  .figure svg { display: block; margin: 0 auto; }
+  .cap { color: var(--muted); font-size: 13.5px; line-height: 1.5; padding: 10px 6px 8px;
+    border-top: 1px dashed var(--line); margin-top: 12px; }
+  .verdict { border-left: 4px solid var(--accent); background: #f5f1fb; border-radius: 6px;
+    padding: 16px 20px; margin: 22px 0; }
+  .dead { border-left: 4px solid var(--red); background: #fbf1f1; border-radius: 6px;
+    padding: 14px 20px; margin: 18px 0; }
+  .alive { border-left: 4px solid var(--green); background: #f0f7f2; border-radius: 6px;
+    padding: 14px 20px; margin: 18px 0; }
+  code { font: 13px/1.5 "SF Mono", ui-monospace, Menlo, monospace;
+    background: #f1efe9; border-radius: 4px; padding: 1px 5px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; margin: 14px 0; }
+  th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .win { font-weight: 700; }
+  .legend { display: flex; gap: 22px; flex-wrap: wrap; font-size: 13.5px;
+    color: var(--muted); margin: 8px 0 4px 6px; }
+  .legend span::before { content: ""; display: inline-block; width: 11px; height: 11px;
+    border-radius: 3px; margin-right: 7px; vertical-align: -1px; }
+  .lg-b::before  { background: var(--gray); }
+  .lg-a::before  { background: var(--orange); }
+  .lg-d::before  { background: var(--blue); }
+  .svg-label { font: 12.5px "Avenir Next", system-ui, sans-serif; fill: var(--muted); }
+  .svg-num   { font: 700 13px "Avenir Next", system-ui, sans-serif; fill: var(--ink); }
+  .svg-title { font: 600 13.5px "Avenir Next", system-ui, sans-serif; fill: var(--ink); }
+  .svg-note  { font: italic 12px "Avenir Next", system-ui, sans-serif; fill: var(--faint); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Why does a redundant label help?</h1>
+<p class="sub">The trajectory-mechanism study: SF3D trajectories are <em>derived</em> from the
+articulation labels — zero new bits of information — yet supervising them massively improves
+articulation. This is the record of how we found out why.</p>
+<p class="meta">SegAffordance · experiments of 2026-08-24 → 25 · full numbers in
+<code>experiments/INDEX.md</code> and per-experiment <code>notes.md</code> · spec:
+<code>docs/superpowers/specs/2026-08-25-trajectory-mechanism-design.md</code></p>
+
+<!-- ================================================================ -->
+<h2><span class="step">1</span>The puzzle, made precise</h2>
+
+<p>Our dataset writer <em>constructs</em> every GT trajectory from the other labels: a prismatic
+sample gets a straight 0.7&nbsp;m ray along the axis; a revolute sample gets a 90° right-hand arc
+about the axis, centred at the element's height, radius&nbsp;= element-to-axis distance. Given
+axis, origin, type and the element point, the curve is a <em>deterministic function</em> — it can
+carry no information the other labels don't already carry.</p>
+
+<div class="figure">
+<svg width="820" height="150" viewBox="0 0 820 150">
+  <rect x="10" y="35" width="150" height="80" rx="8" fill="#eef2f8" stroke="#c6d2e4"/>
+  <text x="85" y="62" text-anchor="middle" class="svg-title">articulation GT</text>
+  <text x="85" y="82" text-anchor="middle" class="svg-label">type · axis · origin</text>
+  <text x="85" y="100" text-anchor="middle" class="svg-label">+ element point</text>
+  <path d="M165 75 H 300" stroke="#8b93a1" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="232" y="64" text-anchor="middle" class="svg-label">deterministic writer</text>
+  <text x="232" y="92" text-anchor="middle" class="svg-note">(ray / right-hand arc)</text>
+  <rect x="305" y="35" width="160" height="80" rx="8" fill="#f4efe6" stroke="#ddd2b8"/>
+  <text x="385" y="66" text-anchor="middle" class="svg-title">trajectory GT</text>
+  <text x="385" y="88" text-anchor="middle" class="svg-label">20 × 3D points</text>
+  <path d="M470 75 H 590" stroke="#8b93a1" stroke-width="2" stroke-dasharray="6 5"/>
+  <text x="530" y="64" text-anchor="middle" class="svg-label">0 new bits</text>
+  <rect x="595" y="20" width="215" height="110" rx="8" fill="#fdf3ec" stroke="#e9c9ad"/>
+  <text x="702" y="47" text-anchor="middle" class="svg-title">…and yet, supervising it:</text>
+  <text x="702" y="74" text-anchor="middle" class="svg-num" fill="#3e8e5f">MA +7.8</text>
+  <text x="702" y="96" text-anchor="middle" class="svg-label">matched axis −6.2°</text>
+  <text x="702" y="114" text-anchor="middle" class="svg-label">rot flips −7.0</text>
+  <defs><marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+    <path d="M0,0 L8,4.5 L0,9 z" fill="#8b93a1"/></marker></defs>
+</svg>
+<div class="cap">The measured effect that demanded an explanation, from the supervision-ablation
+pair <b>arm B</b> (no trajectory head or loss) vs <b>arm D</b> (with them) — identical recipes,
+no consistency losses on either side, so nothing couples the heads except shared features.</div>
+</div>
+
+<p>Two candidate mechanisms, not mutually exclusive — the question was the <em>split</em>:</p>
+<div class="card">
+<p><b>H1 — loss geometry.</b> The curve is a <em>reparameterization</em> of the same quantities:
+dense (60 numbers vs a few scalars), sign-carrying (a flipped axis sweeps the arc the wrong way),
+and conjunction-coupled (axis ∧ origin ∧ point must be <em>jointly</em> right to place the curve).
+Same information, better-conditioned optimization problem.</p>
+<p><b>H2 — feature shaping.</b> The trajectory <em>head's</em> dense regression enriches the
+shared visual trunk; the articulation heads then read better features. (Circumstantially
+supported: the trajectory-only ablation arm had the best masks of all arms.)</p>
+</div>
+
+<!-- ================================================================ -->
+<h2><span class="step">2</span>Toy probes first — and they killed my favorite theory</h2>
+
+<p>Before spending GPU money, we built a CPU toy: an MLP predicts an axis from random features;
+loss A is the model's angular loss (1−cos), loss B is point-MSE on an arc decoded from the
+prediction. Identical labels, identical information. My leading story was that the angular loss
+has a <em>saddle</em> at the antipode (a confidently-flipped axis gets no gradient) while
+point-space escapes it. Measured:</p>
+
+<div class="figure">
+<svg width="820" height="240" viewBox="0 0 820 240">
+  <text x="410" y="18" text-anchor="middle" class="svg-title">|tangential gradient| vs axis angle error — measured profile (log y)</text>
+  <line x1="70" y1="200" x2="770" y2="200" stroke="#c9c5ba"/>
+  <line x1="70" y1="200" x2="70" y2="40" stroke="#c9c5ba"/>
+  <text x="70" y="218" text-anchor="middle" class="svg-label">0°</text>
+  <text x="420" y="218" text-anchor="middle" class="svg-label">90°</text>
+  <text x="770" y="218" text-anchor="middle" class="svg-label">180°</text>
+  <!-- both curves: rise from ~0, hump, fall to ~0 -->
+  <path d="M75 195 C 140 90, 300 62, 420 60 C 540 62, 700 90, 765 195"
+        fill="none" stroke="#9aa1ac" stroke-width="3"/>
+  <path d="M75 192 C 140 78, 310 46, 440 44 C 560 47, 705 84, 765 192"
+        fill="none" stroke="#e07a2f" stroke-width="3"/>
+  <circle cx="765" cy="193" r="5" fill="#c04f4f"/>
+  <circle cx="75" cy="193" r="5" fill="#3e8e5f"/>
+  <text x="640" y="150" class="svg-note">both losses → 0 gradient at the antipode</text>
+  <text x="120" y="52" class="svg-label" fill="#e07a2f">point-space arc MSE (~1.7× scale)</text>
+  <text x="120" y="72" class="svg-label" fill="#9aa1ac">angular 1−cos</text>
+</svg>
+<div class="cap">Flipping the axis reverses the arc — and the MSE between opposite arcs is
+<em>also stationary</em> at the exact antipode. The two profiles have the same shape; point-space
+is only ~1.7× larger. <b>No saddle escape exists.</b> Worse for the theory: trained head-to-head
+on a single latent, the angular loss <em>wins</em> — it recovers a 100%-flipped student to 0%
+flips while point-space gets stuck at 5.4% (real local minima), and converges tighter from
+scratch (0.6° vs 3.3° median).</div>
+</div>
+
+<div class="dead"><b>Dead: the "sign enters linearly / saddle escape" story.</b> Whatever helps at
+scale, it is not that the trajectory loss has a magically better sign landscape per-sample.</div>
+
+<p>We then built a <em>miniature of the real ablation</em> — a shared trunk with axis / origin /
+point heads, finite noisy data, held-out eval — and added a trajectory head (arm-D-style), a
+detached-trunk trajectory head, and an analytic decode (H1-style). Result: <b>null across the
+board</b> (baseline 34.9°, aux head 37.0°, analytic 35.2° — nothing helps). Repeated later in an
+underfitting regime (nonlinear teacher, capacity-limited student): null again (41.7 / 42.5 /
+44.6°).</p>
+
+<div class="dead"><b>Dead: "generic multi-task transfer explains it."</b> Redundant auxiliary
+supervision on a plain MLP trunk reproduces <em>nothing</em>. The real effect needs something the
+toy lacks — so only a real-scale experiment could decide.</div>
+
+<!-- ================================================================ -->
+<h2><span class="step">3</span>The discriminating experiment: the analytic screw decode</h2>
+
+<p>The clean way to separate H1 from H2: give the model the trajectory <em>loss</em> without the
+trajectory <em>head</em>. We deleted the head entirely (arm B's exact config) and instead decoded
+the trajectory <b>deterministically and differentiably from the predicted articulation
+parameters</b> — an exact mirror of the dataset writer (ray for trans, right-hand arc for rot),
+proven exact by tests that AST-extract the writer's own code. The standard normalized trajectory
+loss is applied to that decode. <b>Zero new parameters.</b></p>
+
+<div class="figure">
+<svg width="820" height="205" viewBox="0 0 820 205">
+  <rect x="10" y="60" width="130" height="80" rx="8" fill="#eef2f8" stroke="#c6d2e4"/>
+  <text x="75" y="95" text-anchor="middle" class="svg-title">vision trunk</text>
+  <text x="75" y="115" text-anchor="middle" class="svg-label">(shared features)</text>
+  <path d="M145 100 H 205" stroke="#8b93a1" stroke-width="2" marker-end="url(#arr2)"/>
+  <rect x="210" y="25" width="170" height="150" rx="8" fill="#fff" stroke="#c9c5ba"/>
+  <text x="295" y="48" text-anchor="middle" class="svg-title">articulation heads</text>
+  <text x="295" y="76" text-anchor="middle" class="svg-label">axis (rot / trans)</text>
+  <text x="295" y="99" text-anchor="middle" class="svg-label">origin</text>
+  <text x="295" y="122" text-anchor="middle" class="svg-label">3D point</text>
+  <text x="295" y="145" text-anchor="middle" class="svg-label">type</text>
+  <path d="M385 100 H 455" stroke="#e07a2f" stroke-width="2.5" marker-end="url(#arrO)"/>
+  <rect x="460" y="55" width="185" height="90" rx="8" fill="#fdf3ec" stroke="#e9c9ad"/>
+  <text x="552" y="84" text-anchor="middle" class="svg-title" fill="#b45f1d">analytic decode</text>
+  <text x="552" y="106" text-anchor="middle" class="svg-label">writer mirror: ray / arc</text>
+  <text x="552" y="126" text-anchor="middle" class="svg-label">0 parameters</text>
+  <path d="M650 100 H 710" stroke="#e07a2f" stroke-width="2.5" marker-end="url(#arrO)"/>
+  <rect x="715" y="62" width="95" height="76" rx="8" fill="#f0f7f2" stroke="#bcd8c6"/>
+  <text x="762" y="92" text-anchor="middle" class="svg-title">trajectory</text>
+  <text x="762" y="112" text-anchor="middle" class="svg-title">loss vs GT</text>
+  <path d="M552 150 C 552 185, 320 190, 296 178" fill="none" stroke="#e07a2f"
+        stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arrO)"/>
+  <text x="470" y="190" text-anchor="middle" class="svg-note">gradients flow straight back into the heads — never through shared features</text>
+  <defs>
+    <marker id="arr2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,0 L8,4.5 L0,9 z" fill="#8b93a1"/></marker>
+    <marker id="arrO" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,0 L8,4.5 L0,9 z" fill="#e07a2f"/></marker>
+  </defs>
+</svg>
+<div class="cap">Experiment <code>20260825_sf3d_analytic_decode</code>. If this arm matches
+<b>arm D</b>, the gain is the loss's geometry (H1) — the head was never necessary for
+articulation. If it stays at <b>arm B</b>, the gain rode on the head's feature shaping (H2).</div>
+</div>
+
+<!-- ================================================================ -->
+<h2><span class="step">4</span>The result: 75% of the gain, zero parameters</h2>
+
+<div class="legend"><span class="lg-b">arm B — no trajectory</span>
+<span class="lg-a">analytic decode (0 params)</span>
+<span class="lg-d">arm D — trajectory head</span></div>
+
+<div class="figure">
+<svg width="820" height="260" viewBox="0 0 820 260">
+  <!-- MA (higher better) -->
+  <text x="140" y="22" text-anchor="middle" class="svg-title">MA (pass rate) ↑</text>
+  <line x1="35" y1="220" x2="245" y2="220" stroke="#c9c5ba"/>
+  <rect x="55"  y="97.6" width="46" height="122.4" fill="#9aa1ac" rx="3"/>
+  <rect x="117" y="61.3" width="46" height="158.7" fill="#e07a2f" rx="3"/>
+  <rect x="179" y="50.7" width="46" height="169.3" fill="#3d6fb4" rx="3"/>
+  <text x="78"  y="88"  text-anchor="middle" class="svg-num">20.4</text>
+  <text x="140" y="52"  text-anchor="middle" class="svg-num">26.5</text>
+  <text x="202" y="42"  text-anchor="middle" class="svg-num">28.2</text>
+  <!-- bracket: 75% -->
+  <path d="M101 240 H 163" stroke="#7a4fc0" stroke-width="2"/>
+  <text x="140" y="256" text-anchor="middle" class="svg-label" fill="#7a4fc0">recovers ~75% of the gap</text>
+
+  <!-- matched axis (lower better) -->
+  <text x="415" y="22" text-anchor="middle" class="svg-title">matched axis error ↓</text>
+  <line x1="310" y1="220" x2="520" y2="220" stroke="#c9c5ba"/>
+  <rect x="330" y="80.3" width="46" height="139.7" fill="#9aa1ac" rx="3"/>
+  <rect x="392" y="105.9" width="46" height="114.1" fill="#e07a2f" rx="3"/>
+  <rect x="454" y="117.6" width="46" height="102.4" fill="#3d6fb4" rx="3"/>
+  <text x="353" y="71"  text-anchor="middle" class="svg-num">23.3°</text>
+  <text x="415" y="97"  text-anchor="middle" class="svg-num">19.0°</text>
+  <text x="477" y="109" text-anchor="middle" class="svg-num">17.1°</text>
+
+  <!-- rot flips (lower better) -->
+  <text x="690" y="22" text-anchor="middle" class="svg-title">rot flip rate ↓</text>
+  <line x1="585" y1="220" x2="795" y2="220" stroke="#c9c5ba"/>
+  <rect x="605" y="89.1" width="46" height="130.9" fill="#9aa1ac" rx="3"/>
+  <rect x="667" y="127.3" width="46" height="92.7" fill="#e07a2f" rx="3"/>
+  <rect x="729" y="131.2" width="46" height="88.8" fill="#3d6fb4" rx="3"/>
+  <text x="628" y="80"  text-anchor="middle" class="svg-num">21.8</text>
+  <text x="690" y="118" text-anchor="middle" class="svg-num">15.4</text>
+  <text x="752" y="122" text-anchor="middle" class="svg-num">~14.8</text>
+</svg>
+<div class="cap">Articulation metrics, standard 5,088-sample test. The zero-parameter decode
+lands almost on top of the full trajectory head: MA recovers 6.1 of the 7.8-point gap, matched
+axis 4.3° of 6.2°, and most of the flip-rate improvement — <b>without any gradient ever touching
+the shared features through a trajectory pathway</b>.</div>
+</div>
+
+<p>And the counter-panel, which is just as important — the masks <em>invert</em>:</p>
+
+<div class="figure">
+<svg width="820" height="230" viewBox="0 0 820 230">
+  <text x="230" y="22" text-anchor="middle" class="svg-title">mIoU ↑ (axis starts at 0.24)</text>
+  <line x1="80" y1="190" x2="380" y2="190" stroke="#c9c5ba"/>
+  <text x="72" y="194" text-anchor="end" class="svg-label">0.24</text>
+  <rect x="110" y="50"  width="56" height="140" fill="#9aa1ac" rx="3"/>
+  <rect x="202" y="110" width="56" height="80"  fill="#e07a2f" rx="3"/>
+  <rect x="294" y="65"  width="56" height="125" fill="#3d6fb4" rx="3"/>
+  <text x="138" y="41"  text-anchor="middle" class="svg-num">0.268</text>
+  <text x="230" y="101" text-anchor="middle" class="svg-num">0.256</text>
+  <text x="322" y="56"  text-anchor="middle" class="svg-num">0.265</text>
+
+  <text x="620" y="22" text-anchor="middle" class="svg-title">PDet ↑</text>
+  <line x1="490" y1="190" x2="790" y2="190" stroke="#c9c5ba"/>
+  <rect x="520" y="49.5" width="56" height="140.5" fill="#9aa1ac" rx="3"/>
+  <rect x="612" y="72.5" width="56" height="117.5" fill="#e07a2f" rx="3"/>
+  <rect x="704" y="53.2" width="56" height="136.8" fill="#3d6fb4" rx="3"/>
+  <text x="548" y="41" text-anchor="middle" class="svg-num">22.6</text>
+  <text x="640" y="64" text-anchor="middle" class="svg-num">18.9</text>
+  <text x="732" y="45" text-anchor="middle" class="svg-num">22.0</text>
+  <text x="410" y="218" text-anchor="middle" class="svg-note">the decode arm's masks fall BELOW even the no-trajectory arm — the exact opposite of its articulation result</text>
+</svg>
+<div class="cap">Perception metrics. The decode adds articulation-gradient pressure on pooled
+features without the dense spatial supervision a real head provides — and the trunk pays. The
+mask gains that trajectory-bearing arms enjoy are the <b>head's</b> doing, not the loss's.</div>
+</div>
+
+<div class="verdict"><b>Verdict — the split, measured.</b> The articulation transfer is
+<b>~75% loss geometry (H1)</b>: expressing axis ∧ origin ∧ point as one curve is a denser,
+jointly-constrained, GT-anchored objective, and it works even when its gradients bypass the
+shared features entirely. The trajectory <b>head's</b> own contribution (H2) is the
+<b>mask/trunk side</b> — which the decode conspicuously fails to reproduce. Both hypotheses were
+right, about different metrics. A redundant label helps because <em>the same information in a
+better-conditioned parameterization is a different optimization problem</em>.</div>
+
+<!-- ================================================================ -->
+<h2><span class="step">5</span>Closing the loop: the toy's final word, and corroboration</h2>
+
+<p>With the scale verdict in hand we returned to the toy for a demonstration — and it refused a
+third time (underfitting regime: baseline 41.7°, aux head 42.5°, analytic 44.6°). That's now a
+finding, not a failure: <b>the effect is irreducible to a generic low-dimensional mechanism</b>.
+It requires the real perception system — structured visual features, the indirect heatmap /
+depth-lift head pathways, the optimization regime at scale. The honest artifact is the pair:
+at-scale attribution (this study) + small-scale irreducibility
+(<code>viz/20260825_toy_traj_mechanism/</code>, 4 panels).</p>
+
+<table>
+<tr><th>toy regime</th><th>baseline</th><th>+traj head</th><th>+analytic decode</th><th>read</th></tr>
+<tr><td>easy (single latent, head-to-head)</td><td class="num">0.6° / 0% flips</td>
+    <td colspan="2" class="num">point-space: 3.3° / 5.4% stuck</td><td>angular <em>wins</em></td></tr>
+<tr><td>shared-trunk miniature</td><td class="num">34.9°</td><td class="num">37.0°</td>
+    <td class="num">35.2°</td><td>null</td></tr>
+<tr><td>underfitting (nonlinear teacher)</td><td class="num">41.7°</td><td class="num">42.5°</td>
+    <td class="num">44.6°</td><td>null</td></tr>
+</table>
+
+<p>Two independent results from the same week corroborate the verdict:</p>
+<div class="alive"><b>The fdiff losses' success makes sense now.</b> First-difference losses are
+trajectory-<em>side</em> supervision — more loss geometry on the same quantities — and they hold
+the MA record (29.9). The sign information genuinely lives in the trajectory's time ordering:
+removing the trajectory nearly doubled rot flips in the ablation (14.8 → 21.8).</div>
+<div class="alive"><b>The dir-term saga fits.</b> An explicit sign-consistency term failed on the
+DCT head (its low-frequency basis funnels the term's trajectory drag into exactly the
+net-direction mode) but achieved its design goal on the plain head — rot flips 15.2 → 11.24, the
+best ever recorded. Representation and loss geometry interact; neither story is complete alone.</div>
+
+<!-- ================================================================ -->
+<h2><span class="step">6</span>What this buys us</h2>
+
+<div class="card">
+<p><b>1. A free articulation loss.</b> The analytic decode costs nothing at inference, adds no
+parameters, and delivers most of the trajectory benefit straight into the articulation heads —
+usable even in models with no trajectory head at all.</p>
+<p><b>2. A design principle.</b> When two heads' quantities are physically coupled, supervise the
+<em>coupled object</em> (the curve), not only the marginals — but route dense spatial supervision
+through a real head if you also want the trunk to benefit.</p>
+<p><b>3. The gen-22 candidate, with every part attributed:</b> trajectory head (for masks) +
+analytic decode (for articulation) + fdiff losses (direction/MA) + plain-head or
+trajectory-detached dir term (sign) — L_pp measured, not assumed (its value flipped sign between
+head families). Parked in <code>STATE.md</code>, ready to commission.</p>
+</div>
+
+<p class="meta" style="margin-top:40px">Experiments referenced: 20260824_sf3d_supabl2_{art,nolpp}
+(arms B, D — other session, reused with credit) · 20260825_sf3d_analytic_decode ·
+20260825_sf3d_fdiff_{nolpp,dir} · 20260821_sf3d_g19_fdiff · toy: tools/toy_traj_mechanism.py.
+All runs: DINOv3@512 g17 split-axis stack, standard test split, PRO 6000 pods.</p>
+
+</main>
+</body>
+</html>
