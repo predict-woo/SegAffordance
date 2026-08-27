@@ -508,6 +508,54 @@ class OPDRealTrainingModule(pl.LightningModule):
                 logger=True, sync_dist=True,
             )
 
+            # fdiff-family variant (2026-08-27): the gen-19 first-difference
+            # losses applied to the DECODED curve — more loss geometry on the
+            # same 9 predicted DoF, mirroring the trajectory-head fdiff block
+            # exactly (same knobs, same conventions; diff() makes the
+            # relative-vs-absolute frame moot). Only one of the two fdiff
+            # blocks can ever fire: this one requires trajectory_pred to be
+            # None, the other requires it present.
+            _vw = getattr(self.loss_params, "trajectory_velocity_weight", 0.0)
+            _aw = getattr(self.loss_params, "trajectory_angle_weight", 0.0)
+            _lw = getattr(self.loss_params, "trajectory_length_weight", 0.0)
+            if _vw > 0.0 or _aw > 0.0 or _lw > 0.0:
+                _dp = torch.diff(_decoded.float(), dim=1)
+                _dg = torch.diff(_gt_rel.float(), dim=1)
+                if _vw > 0.0:
+                    L_traj_velocity = (_dp - _dg).norm(dim=-1).mean()
+                    total_loss = total_loss + _vw * L_traj_velocity
+                    grad_terms["traj_velocity"] = _vw * L_traj_velocity
+                    self.log(
+                        f"{step_type}/L_traj_velocity", L_traj_velocity,
+                        on_step=(step_type == "train"), on_epoch=True,
+                        logger=True, sync_dist=True,
+                    )
+                if _aw > 0.0:
+                    _seg_ok = _dg.norm(dim=-1) > 1e-3
+                    _cos = F.cosine_similarity(_dp, _dg, dim=-1, eps=1e-6)
+                    if bool(_seg_ok.any()):
+                        L_traj_angle = (1.0 - _cos[_seg_ok]).mean()
+                    else:
+                        L_traj_angle = (_cos.sum() * 0.0)
+                    total_loss = total_loss + _aw * L_traj_angle
+                    grad_terms["traj_angle"] = _aw * L_traj_angle
+                    self.log(
+                        f"{step_type}/L_traj_angle", L_traj_angle,
+                        on_step=(step_type == "train"), on_epoch=True,
+                        logger=True, sync_dist=True,
+                    )
+                if _lw > 0.0:
+                    L_traj_length = (
+                        (_dp.norm(dim=-1) - _dg.norm(dim=-1)).abs().mean()
+                    )
+                    total_loss = total_loss + _lw * L_traj_length
+                    grad_terms["traj_length"] = _lw * L_traj_length
+                    self.log(
+                        f"{step_type}/L_traj_length", L_traj_length,
+                        on_step=(step_type == "train"), on_epoch=True,
+                        logger=True, sync_dist=True,
+                    )
+
         if (
             targets.trajectory is not None
             and outputs.trajectory_pred is not None
