@@ -10,6 +10,7 @@ terse; details live in the linked specs/notes. Last update: 2026-08-22.
 | role | experiment | checkpoint |
 |---|---|---|
 | **best articulation (3D)** | 20260821_sf3d_g19_fdiff | best-epoch29-valloss1.1780 — MA 29.9, traj_dir 96.1/0.819 (records) |
+| **best origin / distilled loss** | 20260828_sf3d_closedform | best-epoch22-valloss1.1792 — origin 0.250 (record), MA 29.19 with NO trajectory head (closed-form quadratics only) |
 | **best axis precision (3D)** | 20260825_sf3d_fdiff_dir | best-epoch24-valloss1.2487 — matched 14.62°, rot flips 11.24 (both records) |
 | **best smooth/visual (3D)** | 20260821_sf3d_g19_dct | best-epoch20-valloss0.9652 — roughness 0.0090 (10×), mIoU 0.2685 + PDet 21.72 (records) |
 | previous overall best | 20260818_sf3d_g17_splitax | best-epoch18-valloss0.9272 |
@@ -45,6 +46,18 @@ venv-local.tar.tmp (4.9G, stale), 700GB scratch volume deletion
 (needs user), possible resize. Quota lesson stays: MooseFS truncates
 silently at quota — pause mutagen FIRST on any quota event; trash holds
 nothing (deletes reclaim instantly).
+
+## Closed-form loss experiment COMPLETE (2026-08-28)
+
+The continuous-limit distillation holds at scale: arm-B config + the two
+closed-form Gram quadratics (position L2 + derivative H1; no trajectory
+head, no sampled curve, zero params) reaches **MA 29.19** (0.7 shy of the
+all-time record that needed head+fdiff+L_pp) and a **0.250 origin
+record**; exact beats its own sampled approximation by +2.5 MA (the H1
+quadratic outperforms the fdiff trio in the no-head setting); concedes
+matched-axis sharpness (22.3°). Notes:
+20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
+sweep; closed form + DCT head = the distilled gen-22 candidate.
 
 ## HOI4D raw download COMPLETE (2026-08-28)
 
