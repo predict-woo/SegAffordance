@@ -222,8 +222,11 @@ All four runs done, wrapped, pods deleted. The synthesis:
 - Finetune-from-2D vs scratch: DONE 2026-08-22 (label-efficiency study).
   Follow-ups if pursued: longer p90 pretrain (fixed 30 ep, kills the
   undertraining confound); ratio sweep (5%/25%); class-level holdout.
-- 700GB scratch volume deletion (~$49/mo, holds raw SceneFun3D; NEEDS
-  USER APPROVAL).
+- ~~Scratch volume deletion~~ RESOLVED 2026-08-28: `s3qha8tz50` is
+  already gone (verified: delete returns nonexistent, list shows only
+  the main volume) — deleted during/around the 2026-08-24 quota
+  resolution. Raw SceneFun3D is re-downloadable from public sources if
+  ever needed; all training data lives on the main volume.
 - US mirror volume (~$7/mo, doubles pod-creation surface) — recorded
   option; US PRO 6000 creates verified working (probe 2026-08-22).
 
