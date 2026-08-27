@@ -46,6 +46,21 @@ venv-local.tar.tmp (4.9G, stale), 700GB scratch volume deletion
 silently at quota — pause mutagen FIRST on any quota event; trash holds
 nothing (deletes reclaim instantly).
 
+## In flight (2026-08-27): fdiff-family ablation transfer
+
+- User-commissioned: does the DCT-family ablation transfer to fdiff?
+  Two new arms (spec 2026-08-27-fdiff-family-ablation-design.md; smokes
+  passed; pollers hunting PRO 6000 stock): C_f
+  `20260827_sf3d_supabl3_traj_fdiff` (trajectory-only + fdiff, plain
+  head) and `20260827_sf3d_andec_fdiff` (analytic decode + fdiff ON THE
+  DECODE — new trainer block, commit 13ffad8). Reused corners: arm B
+  (art-only, shared by construction — fdiff dies with the head) and
+  fdnolpp (joint). Readouts: joint-vs-either on fdiff; mechanism split
+  (andec_fdiff−B)/(fdnolpp−B); mask ordering transfer.
+- Dev pod RECREATED 2026-08-27 (host lost its GPUs again while stopped);
+  mutagen session recreated cleanly after a git-archive sync — mirror
+  healthy.
+
 ## Overnight program COMPLETE (2026-08-25) — mechanism study + fdiff grid
 
 All four runs done, wrapped, pods deleted. The synthesis:
