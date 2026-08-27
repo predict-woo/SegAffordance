@@ -76,7 +76,7 @@ p(\theta) = \theta L\, \hat d, \qquad \theta \in [0, 1]
 
 <p>The \(N\)-point training loss is a mean of squared errors at uniform \(\theta\) samples,
 normalized per-row by the GT curve's energy. That mean is a Riemann sum, so as
-\(N \to \infty\) it converges (at \(O(1/N^2)\) on these smooth integrands) to</p>
+\(N \to \infty\) it converges to</p>
 
 <div class="disp">\[
 \mathcal L \;=\;
@@ -198,7 +198,7 @@ the same residuals.</p>
 </table>
 
 <div class="caveat"><b>Honest caveat:</b> at \(N = 20\) the quadrature error of the sampled
-loss is already tiny (\(O(1/N^2)\) on smooth trig integrands), so the closed form is an
+loss is already tiny (measured \(\sim 3.5\times 10^{-4}\); the rate is \(O(1/N)\) — uniform sampling with endpoints is not the trapezoid rule), so the closed form is an
 elegance-and-analysis win more than a performance one. Its real value is making the loss
 interpretable in articulation space — and revealing that the prismatic case was the axis loss
 all along.</div>

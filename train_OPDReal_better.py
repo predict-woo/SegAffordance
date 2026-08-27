@@ -462,6 +462,59 @@ class OPDRealTrainingModule(pl.LightningModule):
                     on_step=False, on_epoch=True, logger=True, sync_dist=True,
                 )
 
+        # Closed-form continuous trajectory loss (2026-08-28 theory note):
+        # the N -> infinity limit of the analytic decode, computed exactly
+        # from the articulation parameters — no sampled points at all.
+        # Position (L2) + derivative (H1) Gram quadratics, per-row
+        # normalized, GT-type routed. Fires only with no trajectory head;
+        # mutually exclusive with the sampled analytic block below (guard).
+        _cf_pos = getattr(self.loss_params, "closed_form_trajectory_weight", 0.0)
+        _cf_der = getattr(self.loss_params, "closed_form_velocity_weight", 0.0)
+        if (
+            (_cf_pos > 0.0 or _cf_der > 0.0)
+            and outputs.trajectory_pred is None
+            and targets.trajectory is not None
+            and targets.motion_type is not None
+            and targets.motion is not None
+            and targets.motion_origin_3d is not None
+            and outputs.motion_pred_rot is not None
+            and outputs.origin_pred is not None
+            and outputs.point_3d_pred is not None
+        ):
+            if getattr(self.loss_params, "analytic_trajectory_weight", 0.0) > 0.0:
+                raise ValueError(
+                    "closed_form_* and analytic_trajectory_weight are mutually "
+                    "exclusive — they are the same loss at different N"
+                )
+            from model.losses.geometric import closed_form_screw_loss
+
+            _dev = outputs.origin_pred.device
+            _pos, _der = closed_form_screw_loss(
+                motion_type_gt=targets.motion_type.to(_dev),
+                axis_trans=outputs.motion_pred_trans,
+                axis_rot=outputs.motion_pred_rot,
+                origin_pred=outputs.origin_pred.float(),
+                point_3d_pred=outputs.point_3d_pred.float(),
+                axis_gt=targets.motion.to(_dev),
+                origin_gt=targets.motion_origin_3d.to(_dev),
+                traj_start_gt=targets.trajectory.to(_dev)[:, 0],
+            )
+            L_cf_pos = _pos.mean()
+            L_cf_der = _der.mean()
+            total_loss = total_loss + _cf_pos * L_cf_pos + _cf_der * L_cf_der
+            grad_terms["cf_position"] = _cf_pos * L_cf_pos
+            grad_terms["cf_derivative"] = _cf_der * L_cf_der
+            self.log(
+                f"{step_type}/L_cf_position", L_cf_pos,
+                on_step=(step_type == "train"), on_epoch=True,
+                logger=True, sync_dist=True,
+            )
+            self.log(
+                f"{step_type}/L_cf_derivative", L_cf_der,
+                on_step=(step_type == "train"), on_epoch=True,
+                logger=True, sync_dist=True,
+            )
+
         # Mechanism-study probe (spec 2026-08-25): with NO trajectory head,
         # decode the trajectory ANALYTICALLY from the predicted articulation
         # parameters (differentiable mirror of the GT writer) and apply the

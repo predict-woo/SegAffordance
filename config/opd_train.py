@@ -195,6 +195,13 @@ class LossParams:
     # the normalized trajectory loss. Pure reparameterization, zero new
     # parameters. 0 = off.
     analytic_trajectory_weight: float = 0.0
+    # Closed-form CONTINUOUS version of the decode loss (2026-08-28 theory
+    # note): the N->infinity limit computed exactly — position (L2) and
+    # derivative (H1) Gram quadratics on the radial/tangential residuals,
+    # per-row normalized, GT-type routed. Mutually exclusive with
+    # analytic_trajectory_weight. 0 = off.
+    closed_form_trajectory_weight: float = 0.0
+    closed_form_velocity_weight: float = 0.0
     # Gen-21: midpoint screw-direction term (sign consistency). The locus
     # branches are invariant to axis -> -axis; this adds 1 - cos between
     # trajectory chords and the screw velocity field at chord midpoints

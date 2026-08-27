@@ -1017,6 +1017,73 @@ def analytic_screw_trajectory(
     return is_rot * rel_rot + (1.0 - is_rot) * rel_trans
 
 
+def closed_form_screw_loss(
+    motion_type_gt: torch.Tensor,
+    axis_trans: torch.Tensor,
+    axis_rot: torch.Tensor,
+    origin_pred: torch.Tensor,
+    point_3d_pred: torch.Tensor,
+    axis_gt: torch.Tensor,
+    origin_gt: torch.Tensor,
+    traj_start_gt: torch.Tensor,
+    eps: float = 1e-4,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """The CONTINUOUS (N -> infinity) trajectory loss in closed form
+    (theory note docs/slides/2026-08-28_continuous_trajectory_loss.html).
+
+    The sampled decode loss converges to the L2 function-space distance
+    between the predicted and GT screw curves under matched
+    parameterization; because both curves are linear in the fixed basis
+    {cos t - 1, sin t}, the integrals reduce to Gram quadratics over two
+    residual vectors — radial dr = r - r* and tangential dt = t - t*
+    (t = n x r carries the axis SIGN):
+
+      position (L2):   (3pi/4 - 2)|dr|^2 + (pi/4)|dt|^2 -  dr.dt
+      derivative (H1): (pi/4)(|dr|^2 + |dt|^2)           -  dr.dt
+
+    each normalized by the same quadratic evaluated on the GT curve
+    (r*.t* = 0, |t*| = |r*|, so the denominators are (pi-2)|r*|^2 and
+    (pi/2)|r*|^2). Translation rows collapse to |d_hat - d_hat*|^2
+    = 2(1 - cos) for BOTH terms (the extent L cancels under
+    normalization) — the continuous prismatic trajectory loss IS the
+    sign-aware axis loss. Rows routed by GT type, like the axis loss.
+
+    Returns (position_term, derivative_term), each (B,) per-row
+    dimensionless relative errors. Zero discretization error; equivalent
+    to the sampled decode at N -> infinity (locked by tests).
+    """
+    n_hat = F.normalize(axis_rot.float(), p=2, dim=1, eps=1e-8)
+    n_gt = F.normalize(axis_gt.float(), p=2, dim=1, eps=1e-8)
+
+    def lever_tangent(n, p0, q):
+        rel = (p0 - q).float()
+        r = rel - (rel * n).sum(-1, keepdim=True) * n
+        return r, torch.cross(n, r, dim=-1)
+
+    r_p, t_p = lever_tangent(n_hat, point_3d_pred.float(), origin_pred.float())
+    r_g, t_g = lever_tangent(n_gt, traj_start_gt.float(), origin_gt.float())
+    dr, dt = r_p - r_g, t_p - t_g
+
+    a = 3.0 * math.pi / 4.0 - 2.0
+    c = math.pi / 4.0
+    dr2 = dr.pow(2).sum(-1)
+    dt2 = dt.pow(2).sum(-1)
+    drdt = (dr * dt).sum(-1)
+    rg2 = r_g.pow(2).sum(-1)
+
+    rot_pos = (a * dr2 + c * dt2 - drdt) / ((math.pi - 2.0) * rg2).clamp(min=eps)
+    rot_der = (c * (dr2 + dt2) - drdt) / ((math.pi / 2.0) * rg2).clamp(min=eps)
+
+    d_hat = F.normalize(axis_trans.float(), p=2, dim=1, eps=1e-8)
+    d_gt = F.normalize(axis_gt.float(), p=2, dim=1, eps=1e-8)
+    trans_term = (d_hat - d_gt).pow(2).sum(-1)          # = 2(1 - cos)
+
+    is_rot = (motion_type_gt.float() > 0.5)
+    pos = torch.where(is_rot, rot_pos, trans_term)
+    der = torch.where(is_rot, rot_der, trans_term)
+    return pos, der
+
+
 def build_geometric_loss(
     loss_params, trajectory_is_absolute: bool = False
 ) -> GeometricConsistencyLoss:
