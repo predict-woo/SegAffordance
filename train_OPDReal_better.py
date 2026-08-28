@@ -1,3 +1,4 @@
+import math
 import os
 import typing
 from typing import Any
@@ -498,6 +499,9 @@ class OPDRealTrainingModule(pl.LightningModule):
                 axis_gt=targets.motion.to(_dev),
                 origin_gt=targets.motion_origin_3d.to(_dev),
                 traj_start_gt=targets.trajectory.to(_dev)[:, 0],
+                sweep=getattr(
+                    self.loss_params, "closed_form_sweep", math.pi / 2.0
+                ),
             )
             L_cf_pos = _pos.mean()
             L_cf_der = _der.mean()

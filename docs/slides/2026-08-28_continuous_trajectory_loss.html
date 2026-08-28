@@ -233,9 +233,11 @@ loss.</p>
 <p><b>3. Flip penalties: position collapses, \(H^1\) is invariant.</b> At a flipped axis
 (\(\Delta\mathbf r = 0\), \(\Delta\mathbf t = -2\mathbf t^*\)) the normalized position value
 drops from \(\pi/(\pi-2) \approx 2.75\) to exactly \(1.0\) — a reversed sweep traces the same
-circle, and a full period can barely tell — while the \(H^1\) flip value is \(2.0\) at
-<em>every</em> \(\Theta\). If the position term is meant to punish sign, \(2\pi\) is the worst
-possible sweep; the \(H^1\) term doesn't care.</p>
+circle, and a full period can barely tell — while the \(H^1\) flip value is
+\(2 + \sin(2\Theta)/\Theta\): exactly \(2.0\) at every quarter-turn multiple (so both
+\(\tfrac{\pi}{2}\) and \(2\pi\) give \(2.0\)), rising toward \(4\) as \(\Theta \to 0\). If the
+position term is meant to punish sign, \(2\pi\) is the worst possible sweep; the \(H^1\)
+term's penalty is stable across the sweeps we would actually use.</p>
 <p>The other limit mirrors it: as \(\Theta \to 0\),
 \(\mathcal L_{\mathrm{pos}} \to \lVert\Delta\mathbf t\rVert^2 / \lVert\mathbf t^*\rVert^2\)
 (pure tangential/sign; radial weight fades as \(\Theta^2\)). So \(\Theta\) interpolates a

@@ -202,6 +202,10 @@ class LossParams:
     # analytic_trajectory_weight. 0 = off.
     closed_form_trajectory_weight: float = 0.0
     closed_form_velocity_weight: float = 0.0
+    # Sweep extent Theta for the closed-form Gram coefficients (theory note
+    # section 5). pi/2 = the GT writer's arc and the historical constants;
+    # 2*pi decouples the residuals and reweights position 3:1 radial.
+    closed_form_sweep: float = 1.5707963267948966
     # Gen-21: midpoint screw-direction term (sign consistency). The locus
     # branches are invariant to axis -> -axis; this adds 1 - cos between
     # trajectory chords and the screw velocity field at chord midpoints

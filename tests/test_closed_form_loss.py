@@ -120,3 +120,62 @@ def test_batch_routes_types_row_wise():
     p2, _ = closed_form_screw_loss(*m2[:1], m2[1], m2[1], *m2[2:4], *m2[4:])
     assert pos[0].item() == pytest.approx(p1[0].item(), abs=1e-6)
     assert pos[1].item() == pytest.approx(p2[0].item(), abs=1e-6)
+
+
+# --- general-sweep (Theta) tests: theory note section 5 -------------------
+
+def test_default_sweep_equals_explicit_pi_half():
+    mt, ax_p, q_p, p0_p, ax_gt, q_gt, p0_gt = rand_case(7, rot=True)
+    a = closed_form_screw_loss(mt, ax_p, ax_p, q_p, p0_p, ax_gt, q_gt, p0_gt)
+    b = closed_form_screw_loss(mt, ax_p, ax_p, q_p, p0_p, ax_gt, q_gt, p0_gt,
+                               sweep=math.pi / 2.0)
+    assert a[0][0].item() == pytest.approx(b[0][0].item(), abs=1e-9)
+    assert a[1][0].item() == pytest.approx(b[1][0].item(), abs=1e-9)
+
+
+def test_2pi_flip_values():
+    # At Theta = 2pi the flipped-axis position value collapses to exactly 1.0
+    # (a reversed sweep traces the same circle); the H1 flip value is 2.0 at
+    # every Theta.
+    mt, _, _, _, ax_gt, q_gt, p0_gt = rand_case(8, rot=True)
+    pos, der = closed_form_screw_loss(mt, -ax_gt, -ax_gt, q_gt, p0_gt,
+                                      ax_gt, q_gt, p0_gt, sweep=2.0 * math.pi)
+    assert pos[0].item() == pytest.approx(1.0, rel=1e-4)
+    assert der[0].item() == pytest.approx(2.0, rel=1e-4)
+
+
+def test_h1_flip_value_formula():
+    # H1 flip value = 2 + sin(2*Theta)/Theta: exactly 2.0 at quarter-turn
+    # multiples (sin 2Theta = 0), approaching 4 as Theta -> 0.
+    mt, _, _, _, ax_gt, q_gt, p0_gt = rand_case(9, rot=True)
+    for th in (0.3, math.pi / 2.0, math.pi, 2.0 * math.pi):
+        _, der = closed_form_screw_loss(mt, -ax_gt, -ax_gt, q_gt, p0_gt,
+                                        ax_gt, q_gt, p0_gt, sweep=th)
+        expect = 2.0 + math.sin(2.0 * th) / th
+        assert der[0].item() == pytest.approx(expect, rel=1e-4), th
+
+
+@pytest.mark.parametrize("seed", range(3))
+def test_2pi_converges_to_sampled(seed):
+    mt, ax_p, q_p, p0_p, ax_gt, q_gt, p0_gt = rand_case(seed, rot=True)
+    n = 4001
+    dec = analytic_screw_trajectory(mt, ax_p, ax_p, q_p, p0_p, num_points=n,
+                                    rot_sweep=2.0 * math.pi)
+    gt = analytic_screw_trajectory(mt, ax_gt, ax_gt, q_gt, p0_gt, num_points=n,
+                                   rot_sweep=2.0 * math.pi)
+    err = (dec - gt).pow(2).sum(-1).mean(-1)
+    energy = gt.pow(2).sum(-1).mean(-1)
+    sampled = err / energy.clamp(min=1e-4)
+    pos, _ = closed_form_screw_loss(mt, ax_p, ax_p, q_p, p0_p,
+                                    ax_gt, q_gt, p0_gt, sweep=2.0 * math.pi)
+    assert pos[0].item() == pytest.approx(sampled[0].item(), rel=2e-3)
+
+
+def test_trans_rows_are_sweep_invariant():
+    mt, ax_p, q_p, p0_p, ax_gt, q_gt, p0_gt = rand_case(10, rot=False)
+    a = closed_form_screw_loss(mt, ax_p, ax_p, q_p, p0_p, ax_gt, q_gt, p0_gt,
+                               sweep=math.pi / 2.0)
+    b = closed_form_screw_loss(mt, ax_p, ax_p, q_p, p0_p, ax_gt, q_gt, p0_gt,
+                               sweep=2.0 * math.pi)
+    assert a[0][0].item() == pytest.approx(b[0][0].item(), abs=1e-9)
+    assert a[1][0].item() == pytest.approx(b[1][0].item(), abs=1e-9)

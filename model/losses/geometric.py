@@ -1027,9 +1027,16 @@ def closed_form_screw_loss(
     origin_gt: torch.Tensor,
     traj_start_gt: torch.Tensor,
     eps: float = 1e-4,
+    sweep: float = math.pi / 2.0,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """The CONTINUOUS (N -> infinity) trajectory loss in closed form
     (theory note docs/slides/2026-08-28_continuous_trajectory_loss.html).
+
+    ``sweep`` is the rotation-arc extent Theta the integrals run over
+    (theory note section 5): pi/2 (default) matches the GT writer and the
+    historical constants; 2*pi decouples the residuals (cross-term -> 0)
+    and reweights position 3:1 radial. Translation rows are
+    sweep-invariant (the extent cancels under per-row normalization).
 
     The sampled decode loss converges to the L2 function-space distance
     between the predicted and GT screw curves under matched
@@ -1064,15 +1071,21 @@ def closed_form_screw_loss(
     r_g, t_g = lever_tangent(n_gt, traj_start_gt.float(), origin_gt.float())
     dr, dt = r_p - r_g, t_p - t_g
 
-    a = 3.0 * math.pi / 4.0 - 2.0
-    c = math.pi / 4.0
+    # General-sweep Gram coefficients over [0, sweep] (theory note section 5).
+    # At the default sweep = pi/2 these reduce exactly to the historical
+    # constants: A = 3pi/4 - 2, C = pi/4, 2B = -1, C2 = pi/4, sin^2 = 1.
+    th = float(sweep)
+    A = 1.5 * th + math.sin(2.0 * th) / 4.0 - 2.0 * math.sin(th)   # int (cos-1)^2
+    C = 0.5 * th - math.sin(2.0 * th) / 4.0                        # int sin^2
+    B2 = math.sin(th) ** 2 - 2.0 * (1.0 - math.cos(th))            # 2 * int (cos-1) sin
+    C2 = 0.5 * th + math.sin(2.0 * th) / 4.0                       # int cos^2
     dr2 = dr.pow(2).sum(-1)
     dt2 = dt.pow(2).sum(-1)
     drdt = (dr * dt).sum(-1)
     rg2 = r_g.pow(2).sum(-1)
 
-    rot_pos = (a * dr2 + c * dt2 - drdt) / ((math.pi - 2.0) * rg2).clamp(min=eps)
-    rot_der = (c * (dr2 + dt2) - drdt) / ((math.pi / 2.0) * rg2).clamp(min=eps)
+    rot_pos = (A * dr2 + C * dt2 + B2 * drdt) / ((A + C) * rg2).clamp(min=eps)
+    rot_der = (C * dr2 + C2 * dt2 - (math.sin(th) ** 2) * drdt) / (th * rg2).clamp(min=eps)
 
     d_hat = F.normalize(axis_trans.float(), p=2, dim=1, eps=1e-8)
     d_gt = F.normalize(axis_gt.float(), p=2, dim=1, eps=1e-8)
