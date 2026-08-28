@@ -67,8 +67,9 @@ silent mid-run deaths with truncated ~4.35G ckpts = volume quota.
 
 | role | experiment | checkpoint |
 |---|---|---|
-| **best articulation (3D)** | 20260821_sf3d_g19_fdiff | best-epoch29-valloss1.1780 — MA 29.9, traj_dir 96.1/0.819 (records) |
-| **best origin / distilled loss** | 20260828_sf3d_closedform | best-epoch22-valloss1.1792 — origin 0.250 (record), MA 29.19 with NO trajectory head (closed-form quadratics only) |
+| **best articulation (3D)** | 20260828_sf3d_cf_h1only | best-epoch29-valloss1.1303 — MA 30.64/signed 30.11 + all-axis 24.5° + flips-all 9.8 (ALL RECORDS), NO trajectory head (H1 quadratic + axis anchor only) |
+| **best origin** | 20260828_sf3d_closedform | best-epoch22-valloss1.1792 — origin 0.250 (record), MA 29.19 with NO trajectory head (closed-form pos+der quadratics) |
+| prev best articulation | 20260821_sf3d_g19_fdiff | best-epoch29-valloss1.1780 — MA 29.9, traj_dir 96.1/0.819 (traj records stand) |
 | **best axis precision (3D)** | 20260825_sf3d_fdiff_dir | best-epoch24-valloss1.2487 — matched 14.62°, rot flips 11.24 (both records) |
 | **best smooth/visual (3D)** | 20260821_sf3d_g19_dct | best-epoch20-valloss0.9652 — roughness 0.0090 (10×), mIoU 0.2685 + PDet 21.72 (records) |
 | previous overall best | 20260818_sf3d_g17_splitax | best-epoch18-valloss0.9272 |
@@ -104,6 +105,21 @@ venv-local.tar.tmp (4.9G, stale), 700GB scratch volume deletion
 (needs user), possible resize. Quota lesson stays: MooseFS truncates
 silently at quota — pause mutagen FIRST on any quota event; trash holds
 nothing (deletes reclaim instantly).
+
+## cf_h1only: NEW ALL-TIME MA RECORD (2026-08-29) — the distillation beats its teacher
+
+The closed-form FDIFF (H1 derivative quadratic ONLY at weight 1.0,
+position quadratic OFF, axis loss on, no trajectory head/L_pp):
+**MA 30.64 / signed 30.11** (prev record g19_fdiff 29.91 with the full
+trajectory apparatus), matched 16.6°, all-axis 24.5° + flips-all 9.8
+(both best ever), pass_m 95.5, masks 0.266/21.8 (best of every
+traj-supervised arm). Origin 0.254 — 4mm shy of closedform's record:
+the position quadratic's only real job was absolute lever placement;
+for MA it was deadweight. Composition picture: H1 supervises
+shape-of-motion, 1-cos anchors sign (cf_noaxis showed what's lost
+without it). Follow-ups parked: small-position sweep (0.1/0.2) to chase
+both records in one run; H1-only + DCT head = distilled gen-22; seed
+replicate. Notes: 20260828_sf3d_cf_h1only/notes.md.
 
 ## cf_noaxis ablation COMPLETE (2026-08-28)
 
