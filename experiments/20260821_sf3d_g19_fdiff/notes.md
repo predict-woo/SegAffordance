@@ -40,3 +40,5 @@ is the best OVERALL articulation model (MA 29.9, traj_dir 96.1) and
 g19-dct the best visual/smoothness model.
 
 vis: viz/20260822_sf3d_g19_smoothness_panels
+
+vis: viz/20260829_sf3d_cf_h1only_val_panels (GT | g19_fdiff | cf_h1only, 16 val, seed 42421)

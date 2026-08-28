@@ -58,3 +58,5 @@ distilled gen-22 should now be H1-only + DCT head; seed replicate to
 confirm the record isn't seed luck.
 
 test pass: logs/test.log (ckpt best-epoch29-valloss1.1303). Pod deleted.
+
+vis: viz/20260829_sf3d_cf_h1only_val_panels (GT | g19_fdiff | cf_h1only, 16 val, seed 42421)
