@@ -106,6 +106,16 @@ venv-local.tar.tmp (4.9G, stale), 700GB scratch volume deletion
 silently at quota — pause mutagen FIRST on any quota event; trash holds
 nothing (deletes reclaim instantly).
 
+## External screw-loss A/B (sibling session, 2026-08-29) — PLANNED
+
+A sibling session (ethz-workspace-17) is running a fine-tune A/B of
+`closed_form_screw_loss` on four published articulation models
+(SINGAPO, DIPO, Particulate-B, USDNet) from released checkpoints. Spec:
+docs/specs/2026-08-29_external_screw_loss_ab.md. Isolated by design:
+new EU-FR-1 volumes + H100 pods per experiment, files only under
+runpod/external/ and experiments/external/, no main-volume/dev-pod/
+model//config/ touches. That session owns those paths.
+
 ## cf_h1only: NEW ALL-TIME MA RECORD (2026-08-29) — the distillation beats its teacher
 
 The closed-form FDIFF (H1 derivative quadratic ONLY at weight 1.0,
