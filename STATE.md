@@ -105,6 +105,21 @@ venv-local.tar.tmp (4.9G, stale), 700GB scratch volume deletion
 silently at quota — pause mutagen FIRST on any quota event; trash holds
 nothing (deletes reclaim instantly).
 
+## cf_noaxis ablation COMPLETE (2026-08-28)
+
+Dropping the direct 1-cos axis loss from the closedform recipe
+(vae_weight 0; identifiability argument says the cf quadratics + 3D
+origin/point losses uniquely pin the articulation without it): **theory
+confirmed** — MA 27.71 with zero direct axis supervision (+7.3 over arm
+B) — but the anchor earns −1.5 MA, all through revolute sign (rot flips
+13.7→15.9, the predicted antipodal-saddle cost), while matched axis
+SHARPENS 22.3°→17.6° (the 1-cos was blurring precision to buy sign-
+robustness). Verdict: axis loss on for MA runs, off for precision,
+w≈0.1–0.25 the untested interpolation. Notes:
+20260828_sf3d_cf_noaxis/notes.md. Operational note: with the dev pod
+stopped, the mutagen mirror is dormant — new configs must be scp'd to
+the volume before launching (bit this launch).
+
 ## Closed-form loss experiment COMPLETE (2026-08-28)
 
 The continuous-limit distillation holds at scale: arm-B config + the two
