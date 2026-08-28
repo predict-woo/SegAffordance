@@ -141,6 +141,22 @@ term, which carries the axis sign (\(\mathbf t = \hat n \times \mathbf r\) flips
 for translation it literally <em>is</em> the axis loss; for rotation it is a genuinely
 different quadratic coupling axis \(\wedge\) origin \(\wedge\) point through
 \((\mathbf r, \mathbf t)\).</p>
+
+<div class="aside"><b>Why the assumed length is irrelevant.</b> The writer's prismatic extent
+\(L = 0.7\,\mathrm{m}\) is a dataset <em>convention</em>, not a label — SF3D does not annotate
+real travel range; \(0.7\) was chosen (data v3) to match the revolute median arc length so the
+<em>sampled</em> loss balances gradient magnitude across motion types. The closed form is
+per-row normalized by the same functional evaluated on the GT curve, and for a straight ray
+both numerator and normalizer carry the identical factor \(L^2 \int_0^1 \theta^2\,d\theta\):
+\[
+\frac{\tfrac{L^2}{3}\lVert \hat d - \hat d^*\rVert^2}{\tfrac{L^2}{3}\lVert \hat d^*\rVert^2}
+= \lVert \hat d - \hat d^* \rVert^2 = 2\bigl(1-\cos\angle\bigr)
+\]
+so \(L\) (and the Gram factor, and even the sweep-extent question of §5) cancels exactly.
+The same holds for the derivative term (\(p' = L\hat d\) is constant). Prismatic rows are thus
+dimensionless direction-only supervision no matter what extent the writer assumes — the length
+knob only ever mattered for the sampled paths (trajectory-head targets and the analytic
+decode), where nothing divides it out.</div>
 </div>
 
 <!-- ================================================================ -->
@@ -182,16 +198,70 @@ complementary rather than redundant in the experiments — they are different qu
 the same residuals.</p>
 
 <!-- ================================================================ -->
-<h2><span class="n">5</span>Practical corollaries</h2>
+<h2><span class="n">5</span>The sweep \(\Theta\) as a knob: the full-circle limit</h2>
+
+<p>The sweep extent enters <em>only</em> through the three Gram integrals, so any \(\Theta\)
+gives another closed form. The instructive extreme is the full circle \(\Theta = 2\pi\):</p>
+
+<div class="disp">\[
+\int_0^{2\pi}\!(\cos\theta-1)^2 = 3\pi, \qquad
+\int_0^{2\pi}\!\sin^2\theta = \pi, \qquad
+\int_0^{2\pi}\!(\cos\theta-1)\sin\theta = 0
+\]</div>
+
+<p>and likewise \(\int \sin^2 = \int \cos^2 = \pi\), \(\int \sin\cos = 0\) for the derivative
+basis. With the usual GT-curve normalization
+(\(\mathbf r^* \!\cdot \mathbf t^* = 0\), \(\lVert\mathbf t^*\rVert = \lVert\mathbf r^*\rVert\)):</p>
+
+<div class="card">
+<div class="disp">\[
+\mathcal L_{\mathrm{pos}}^{2\pi}
+= \frac{3\lVert\Delta\mathbf r\rVert^2 + \lVert\Delta\mathbf t\rVert^2}{4\lVert\mathbf r^*\rVert^2},
+\qquad
+\mathcal L_{H^1}^{2\pi}
+= \frac{\lVert\Delta\mathbf r\rVert^2 + \lVert\Delta\mathbf t\rVert^2}{2\lVert\mathbf r^*\rVert^2}
+\]</div>
+<p>Three things change qualitatively against \(\Theta = \tfrac{\pi}{2}\):</p>
+<p><b>1. The cross-term dies.</b> Over a full period the basis functions are orthogonal, so the
+\(-\Delta\mathbf r \cdot \Delta\mathbf t\) coupling vanishes from both terms; the residuals
+decouple, and \(H^1\) becomes the perfectly isotropic circular Sobolev metric.</p>
+<p><b>2. The position term flips to radial-heavy.</b> Radial:tangential weighting goes from
+\(\approx 1 : 2.2\) at a quarter arc to \(3 : 1\) at the full circle — over a whole loop,
+being on the <em>wrong circle</em> (lever/center error) accumulates everywhere, while direction
+error partially averages out. Full-circle position is essentially a purified origin/radius
+loss.</p>
+<p><b>3. Flip penalties: position collapses, \(H^1\) is invariant.</b> At a flipped axis
+(\(\Delta\mathbf r = 0\), \(\Delta\mathbf t = -2\mathbf t^*\)) the normalized position value
+drops from \(\pi/(\pi-2) \approx 2.75\) to exactly \(1.0\) — a reversed sweep traces the same
+circle, and a full period can barely tell — while the \(H^1\) flip value is \(2.0\) at
+<em>every</em> \(\Theta\). If the position term is meant to punish sign, \(2\pi\) is the worst
+possible sweep; the \(H^1\) term doesn't care.</p>
+<p>The other limit mirrors it: as \(\Theta \to 0\),
+\(\mathcal L_{\mathrm{pos}} \to \lVert\Delta\mathbf t\rVert^2 / \lVert\mathbf t^*\rVert^2\)
+(pure tangential/sign; radial weight fades as \(\Theta^2\)). So \(\Theta\) interpolates a
+one-parameter family of metrics: <b>direction-flavored at small sweeps, cross-coupled at
+\(\tfrac{\pi}{2}\), decoupled and radial-heavy at \(2\pi\)</b> — all on the same two residuals,
+none seeing new information (the curve is determined by \((\mathbf r, \mathbf t)\) regardless;
+a \(2\pi\) sweep even "supervises" states no real door visits, harmlessly).</p>
+</div>
+
+<div class="aside"><b>Untested corollary.</b> Since the position term's measured job is origin
+placement (\(\approx 4\,\mathrm{mm}\)) and its \(2\pi\) form is a decoupled \(3\!:\!1\) radial
+quadratic with no cross-term to disturb the axis, the principled two-record candidate is
+\(H^1\) at \(\tfrac{\pi}{2}\) (the MA-record term) <em>plus a small</em>
+\(\mathcal L_{\mathrm{pos}}^{2\pi}\) as a purpose-built origin regularizer.</div>
+
+<!-- ================================================================ -->
+<h2><span class="n">6</span>Practical corollaries</h2>
 
 <table>
 <tr><th>corollary</th><th>consequence</th></tr>
 <tr><td>Replace the 20-point decode with the closed-form quadratic</td>
     <td>zero discretization error, no \(N\) to choose, cheaper — "infinite points" computed exactly</td></tr>
 <tr><td>The sweep extent \(\Theta\) becomes a principled knob</td>
-    <td>the Gram coefficients are functions of \(\Theta\): as \(\Theta \to 0\) the metric
-        collapses to pure instantaneous-velocity (tangent/sign) supervision; larger \(\Theta\)
-        grows the radial/origin weight</td></tr>
+    <td>the Gram coefficients are functions of \(\Theta\) (worked out in §5): \(\Theta \to 0\)
+        collapses to pure tangent/sign supervision, \(2\pi\) to a decoupled radial-heavy
+        quadratic — one family of metrics on the same two residuals</td></tr>
 <tr><td>Term-by-term interpretability</td>
     <td>the loss decomposes into named residuals (radial, tangential/sign) with explicit
         weights — diagnosable per sample</td></tr>
