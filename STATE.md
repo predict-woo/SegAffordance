@@ -3,7 +3,65 @@
 **The single source of truth for "where is this project right now".**
 Update this document at every experiment wrap, decision, or infra change —
 it is the first thing a fresh/compacted session should read. Keep entries
-terse; details live in the linked specs/notes. Last update: 2026-08-22.
+terse; details live in the linked specs/notes. Last update: 2026-08-28.
+
+## COMPACTION SNAPSHOT (2026-08-28) — read this first after context loss
+
+**Nothing is in flight.** No training pods, no downloads, no monitors
+needed (monitors die with session restarts anyway — re-arm only for
+things actually running). Dev pod `segaffordance-dev` IS RUNNING
+($0.57/hr — user knows; stop-when-idle policy applies if they say so).
+Volumes: main `bckt1t9uuf` 1TB (~584G used) + `segaffordance-hoi4d`
+f2h0jczstn 500GB (163G of raw HOI4D archives, size-verified). Working
+tree clean, everything pushed through `afdd56c`.
+
+**The week's intellectual arc (full numbers in INDEX + notes.md):**
+1. Trajectory labels are DERIVED from articulation (writer formula) yet
+   co-training them is worth MA +7–8. Mechanism pinned by the analytic
+   decode (zero-param writer-mirror): ~75–89% of the articulation gain
+   is LOSS GEOMETRY, family-robust; mask gains are the DCT head's
+   feature shaping (fdiff family inverts the mask ordering).
+2. Continuous-limit theory (docs/slides/2026-08-28_continuous_trajectory_loss.html):
+   the N→∞ loss = L² pullback metric; closes to Gram quadratics on
+   radial/tangential residuals; trans rows = exactly the 1−cos axis
+   loss. fdiff limit = Sobolev H¹ (angle/length terms have NO closed
+   form — elliptic).
+3. **The distillation holds at scale** (20260828_sf3d_closedform):
+   closed-form quadratics alone (no trajectory head/curve/params) →
+   MA 29.19 (0.7 shy of the all-time record) + ORIGIN RECORD 0.250;
+   exact beats sampled +2.5 MA; concedes matched-axis 22.3°.
+4. Other measured verdicts: L_pp family-dependent (off = +2.2 MA on
+   DCT, −2.4 on fdiff); dir term harmful on DCT (drags trajectories)
+   but sets flip-rate (11.24) + matched (14.62°) records on the plain
+   head; joint > either alone on fdiff BOTH ways (art→traj +1.4, small
+   but real); toy reductions of the mechanism: 3× null — needs the
+   real system.
+
+**Top follow-up candidates (parked, uncommissioned):** distilled gen-22
+= closed-form quadratics + DCT head (+ maybe dir/detached); Gram
+weight/Θ sweep; matched-axis-gap diagnosis (missing non-quadratic angle
+term?); HOI4D 10-sequence hand prototype (unpack RGB/depth/2Dseg/objpose/
+CAD for cameras ZY20210800001/2 via HOI4D-Instructions decode.py; hands
+package at datasets/hoi4d_hands_package — WiLoR frames are 1-BASED,
+per-subject depth bias +4–16cm; collaborator branch jiaqchen-epic-hand
+NOT on our remote).
+
+**Cross-session facts:** a fork session ("Review SF3D dataset
+preprocessing", e85a4a52-…faab66) exists for the user's week-review —
+standing by, owns nothing; the supervision-ablation session finished
+and closed. New loss knobs since g21: analytic_trajectory_weight,
+closed_form_trajectory_weight/velocity_weight (mutually exclusive with
+analytic; all default 0, trainer blocks fire only with NO trajectory
+head), fdiff-on-decode inside the analytic block. Suite at 312.
+
+**Operational gotchas that keep biting:** background launch wrappers get
+killed by the harness — ALWAYS verify pod state directly (staging sizes
++ pgrep '_better.py fi[t]') rather than trusting wrapper output; verify
+GPU NAME and post-warmup clocks.sm on every fresh pod (power-capped
+lemon hosts, 600W/670MHz signature); EarlyStopping exits print NO
+"stopped" marker; CSV logger version_N bumps on relaunch; scratchpad
+venv dies with session restarts (tests run on the dev pod instead);
+silent mid-run deaths with truncated ~4.35G ckpts = volume quota.
 
 ## Current best checkpoints (all on the volume, `experiments/<id>/checkpoints/`)
 
