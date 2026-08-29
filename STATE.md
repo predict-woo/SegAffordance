@@ -137,6 +137,12 @@ construction. The honest stronger test = training from the CAGE init
 with the full 200-epoch recipe (~$50) — recorded as a candidate, NOT
 commissioned (user decision). Notes: experiments/external/singapo/.
 
+Follow-up read (per-input): the axis-error distribution is BIMODAL —
+median per-input error ≈0.1° (axes snap to canonical directions), all
+of the mean lives in a ~21% tail >20°; the apparent best-of-5
+separation = 3–6 of 154 tail objects keeping one good sample, no tail
+sharpening or mode shift. Confirms "regime, not loss."
+
 **A/B program status: both completed arms NULL** (fine-tune regime);
 DIPO dropped (incomplete release); Particulate blocked on the user's HF
 dataset access. All external pods deleted; volumes kept.
