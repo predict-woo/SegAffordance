@@ -143,7 +143,24 @@ of the mean lives in a ~21% tail >20°; the apparent best-of-5
 separation = 3–6 of 154 tail objects keeping one good sample, no tail
 sharpening or mode shift. Confirms "regime, not loss."
 
-**A/B program status: both completed arms NULL** (fine-tune regime);
+**Result #3 — USDNet ADDITIVE follow-up (user-requested, 2026-08-30):
+first non-null, and it INVERTS the SF3D ordering.** All their losses
+kept, our term added at λ=0.05, seed 1, final epoch, vs theirs_s1
+M/MA/MO/MAO 0.552/0.439/0.446/0.094: capped L2+H1 null; UNCAPPED L2+H1
+MAO +0.037 but MA −0.089; **UNCAPPED L2-only MAO 0.144 (+0.050, best
++both of the campaign) with MA intact (−0.007)**. On USDNet the
+position quadratic drives the combined axis+origin gate and H1 COSTS
+axis AP — the inverse of our clean-data grid (where H1 is the engine
+and L2 deadweight-with-anchor). Plausibly regime-consistent: USDNet
+already has strong direct axis supervision (1−cos) and a |cos| eval, so
+the marginal value lives in origin coupling — exactly where L2's Gram
+weight sits. Caveats: one seed, final-epoch numbers on the reporting
+split (user declined a best-epoch protocol), uncapped terms dominate
+their line-dist loss (13–24× mean). Obvious next: second seed. Six arm
+CSVs: experiments/external/usdnet/.
+
+**A/B program status: both fine-tune-regime arms NULL** (replace-mode);
+the additive L2-only arm is the one positive signal;
 DIPO dropped (incomplete release); Particulate blocked on the user's HF
 dataset access. All external pods deleted; volumes kept.
 
