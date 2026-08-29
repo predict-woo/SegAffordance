@@ -106,15 +106,27 @@ venv-local.tar.tmp (4.9G, stale), 700GB scratch volume deletion
 silently at quota — pause mutagen FIRST on any quota event; trash holds
 nothing (deletes reclaim instantly).
 
-## External screw-loss A/B (sibling session, 2026-08-29) — PLANNED
+## External screw-loss A/B (sibling session, ethz-workspace-17) — IN PROGRESS
 
-A sibling session (ethz-workspace-17) is running a fine-tune A/B of
-`closed_form_screw_loss` on four published articulation models
-(SINGAPO, DIPO, Particulate-B, USDNet) from released checkpoints. Spec:
-docs/specs/2026-08-29_external_screw_loss_ab.md. Isolated by design:
-new EU-FR-1 volumes + H100 pods per experiment, files only under
-runpod/external/ and experiments/external/, no main-volume/dev-pod/
-model//config/ touches. That session owns those paths.
+Fine-tune A/B of `closed_form_screw_loss` on published articulation
+models from released checkpoints. Spec:
+docs/specs/2026-08-29_external_screw_loss_ab.md; results under
+experiments/external/<method>/ (that session owns those paths + its
+EU-FR-1 volumes).
+
+**Result #1 — USDNet (Articulate3D): NULL / slightly negative
+(2026-08-29).** Seed-matched pair: theirs AP50 M/axis/origin/both
+0.552/0.439/0.446/0.094 vs ours-v2 (their losses kept + capped H1,
+λ=0.05) 0.532/0.416/0.423/0.100 — deltas within their seed noise (~5 AP
+between two "theirs" seeds; their config ships seed:null). Naive v1
+(H1 REPLACING their line distance, uncapped) clearly harmful. Two
+transfer lessons: (1) the |r*|² relative normalization EXPLODES on real
+scenes (levers 0.1–1 m, early-training origins metres off → per-row
+12–15) — usable only capped; (2) USDNet already supervises sign via
+1−cos and its eval uses |cos|, so H1's sign sensitivity is invisible to
+their metric — the anchor story can't even show up there. Status:
+SINGAPO running; DIPO dropped (incomplete release); Particulate blocked
+on dataset access. USDNet pod deleted, its volume kept.
 
 ## cf_h1only: NEW ALL-TIME MA RECORD (2026-08-29) — the distillation beats its teacher
 
