@@ -128,6 +128,43 @@ their metric — the anchor story can't even show up there. Status:
 SINGAPO running; DIPO dropped (incomplete release); Particulate blocked
 on dataset access. USDNet pod deleted, its volume kept.
 
+## Closed-form composition grid COMPLETE (2026-08-29 overnight): the 2x2 + Theta
+
+Three overnight single-knob arms (cf_h1_noaxis, cf_l2_noaxis,
+cf_noaxis_2pi) completed the decomposition. MA grid:
+
+|  | + anchor | no anchor |
+|---|---|---|
+| L2+H1 | 29.19 | 27.71 (2pi variant: 27.04) |
+| H1 | **30.64 RECORD** | 25.92 |
+| L2 | unrun (low value) | 23.80 |
+
+Findings (details in the three notes.md):
+1. **Additivity breaks (−3.2 MA interaction): the anchor and the
+   position L2 are SUBSTITUTE stabilizers for H1.** H1 needs one
+   complementary constraint; anchor is the better one (30.64 vs 27.71),
+   and with it present L2 flips to deadweight (−1.45). Unanchored H1
+   also blurs matched (19.3°) and degrades the trunk (masks 0.250/18.0,
+   family-worst) and peaks early. Sweet spot = one scale-free direct
+   constraint + one geometry-coupled derivative term.
+2. **The Theta (sweep) knob is a sign-robustness ↔ direction-precision
+   dial, and its mechanism is DECOUPLING, not penalty magnitude**
+   (cf_noaxis_2pi: rot flips 15.9→13.0 — best no-anchor arm, beats
+   closedform-with-anchor — while matched blurs 17.6→20.2 and origin
+   worsens; ALL THREE registered predictions were directionally wrong).
+   Third-time-confirmed corollary from cf_l2_noaxis (rot flips 20.1
+   despite the family's largest flip penalty): what fixes revolute sign
+   is gradient geometry (scale-free anchor or decoupled/derivative-side
+   tangential gradients), never symmetric-point penalty size.
+3. **L2 alone is the weak half decisively** (+3.4 over arm B vs +10.2
+   for H1+anchor; earliest overfit; origin 0.277 worst — it helps
+   origin only in combination).
+Parked next: Gram weight/Theta sweep; H1(pi/2) + small pos(2pi)
+anti-flip combo (reframed by the 2pi result); {L2+anchor} corner (low
+value); distilled gen-22 = H1-only + DCT head. Ops: lemon-host check
+moved UNDER LOAD in the runbook (056bcfb) after an idle-check pass
+collapsed to 562 MHz / 4x slow mid-run (swap+resume worked cleanly).
+
 ## cf_h1only: NEW ALL-TIME MA RECORD (2026-08-29) — the distillation beats its teacher
 
 The closed-form FDIFF (H1 derivative quadratic ONLY at weight 1.0,
