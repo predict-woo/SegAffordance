@@ -124,9 +124,22 @@ transfer lessons: (1) the |r*|² relative normalization EXPLODES on real
 scenes (levers 0.1–1 m, early-training origins metres off → per-row
 12–15) — usable only capped; (2) USDNet already supervises sign via
 1−cos and its eval uses |cos|, so H1's sign sensitivity is invisible to
-their metric — the anchor story can't even show up there. Status:
-SINGAPO running; DIPO dropped (incomplete release); Particulate blocked
-on dataset access. USDNet pod deleted, its volume kept.
+their metric — the anchor story can't even show up there. **Result #2 — SINGAPO (ICLR'25): NULL (2026-08-30).** Matched 20-epoch
+fine-tunes from the released ckpt (seed/data-order/LR matched; ours =
+x̂₀-space H1(1.0)+anchor(0.5) on the 6 joint channels, λ=0.05, min-SNR
+γ=5, |r*|≥0.05 rows masked). Sign-aware axis eval: init 12.38°/6.7%
+flips → theirs 12.94°/4.7% → ours 13.27°/8.1% — inside the init→theirs
+drift band, and flips moved the WRONG way for the sign story. Their
+IoU/CD metrics equally a wash. Diagnosis (theirs, sound): a converged
+ε-prediction diffusion model is a fixed point of its own loss — "theirs"
+barely moves either — and a λ=0.05 auxiliary is a light touch by
+construction. The honest stronger test = training from the CAGE init
+with the full 200-epoch recipe (~$50) — recorded as a candidate, NOT
+commissioned (user decision). Notes: experiments/external/singapo/.
+
+**A/B program status: both completed arms NULL** (fine-tune regime);
+DIPO dropped (incomplete release); Particulate blocked on the user's HF
+dataset access. All external pods deleted; volumes kept.
 
 ## Closed-form composition grid COMPLETE (2026-08-29 overnight): the 2x2 + Theta
 
