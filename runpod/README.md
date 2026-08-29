@@ -121,6 +121,16 @@ bash runpod/train_pod.sh status train-siglip2 <exp_id>        # proc + GPU + bes
 bash runpod/train_pod.sh delete train-siglip2                 # DO THIS WHEN DONE
 ```
 
+**Lemon-host check happens UNDER LOAD, not at creation.** Power-capped hosts
+report a normal `clocks.max.sm` (3090 MHz) while idle and only collapse once
+training starts (observed 2026-08-29: 562 MHz at the 600 W limit, 0.51 it/s vs
+the healthy ~2.0 — a 4× slowdown that passed the idle check). After launch,
+wait past the compile warmup and require BOTH `clocks.sm` ≳ 2000 MHz under
+~100% utilization AND step rate ≈ 2 it/s (SF3D@512, batch 64). If it fails:
+the fix is delete + recreate + resume — `last.ckpt` on the volume resumes with
+`fit --ckpt_path`, the CSV logger bumps to `version_N+1`, and only the partial
+epoch is lost.
+
 **Run N experiments on N pods in parallel, not sequentially on one.** The cost
 is identical — you pay the same GPU-hours either way — but wall time drops to
 1/N and each run gets a clean GPU. Delete each pod the moment *its* run
