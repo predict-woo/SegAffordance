@@ -24,6 +24,12 @@ IMAGE=runpod/pytorch:1.0.3-cu1281-torch291-ubuntu2404
 # between them — try both before giving up. No A100/H100 in this datacenter.
 GPUS=(
   "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+  # Workstation editions: 3 power-capped lemons observed 2026-08-29/30
+  # (532-670 MHz at the 600 W cap under load, ~4x slow; idle clocks look
+  # normal) across two sessions; every Server Edition ran full clocks.
+  # Kept as fallbacks for stock scarcity — but ALWAYS run the loaded
+  # clock check (runpod/README.md) after launching on one, and expect to
+  # swap+resume.
   "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
   "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition"
   # NO 4500 fallback (removed 2026-08-23, second bad auto-create): its 29G

@@ -159,8 +159,23 @@ split (user declined a best-epoch protocol), uncapped terms dominate
 their line-dist loss (13–24× mean). Obvious next: second seed. Six arm
 CSVs: experiments/external/usdnet/.
 
-**A/B program status: both fine-tune-regime arms NULL** (replace-mode);
-the additive L2-only arm is the one positive signal;
+**Result #4 — SINGAPO + dominant L2 (user-requested, 2026-08-30):
+NEGATIVE, and it completes the export rule.** Their loss + L2 position
+only at λ=0.5 on the 6 joint channels: axis −0.9° (tail-count only,
+4–5 objects), but their geometry metrics degrade across the board and
+part inter-penetration (AOR) worsens 3.7× — a strong joint-channel term
+perturbs the box channels through the shared denoiser (bbox+joints are
+one tensor), and SINGAPO's boxes ARE its origin supervision. Combined
+with #3, the transfer rule is clean: **export the constraint the host
+model is missing, at a weight its own losses can absorb** — USDNet
+lacked origin coupling (L2 helped), SINGAPO lacks nothing our terms
+provide (everything hurts or is null). Ops note (folded into
+train_pod.sh + README): 3 power-capped Workstation-edition PRO 6000
+lemons observed across the two sessions; every Server Edition ran full
+clocks.
+
+**A/B program status: replace-mode fine-tunes NULL; additive arms split
+by host structure** (USDNet L2-only positive, SINGAPO negative);
 DIPO dropped (incomplete release); Particulate blocked on the user's HF
 dataset access. All external pods deleted; volumes kept.
 
