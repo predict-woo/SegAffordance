@@ -258,6 +258,24 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
+## HOI4D official drawer package landed (2026-08-30)
+
+`/workspace/datasets/hoi4d_official_drawer_package/` (1.2G unpacked;
+zip kept beside it). Collaborator-produced on Euler (array 12077585,
+2026-08-28, WiLoR fcb9113, fidelity-audited 0.7–1.0 px vs mirror).
+Contents: (a) `data/` — 8 fully-kitted C4 drawer sequences, 4 subjects
+× 2: WiLoR hands (MANO rotmats, joints 2D/3D, z-corrected
+joints_3d_cam), official METRIC camera-to-world poses (300×4×4, 3Dseg
+SLAM), official intrinsics, official action segments
+(rest/Reachout/open/Stop… timestamps — labeled contact); (b)
+`all_354_furniture_hands/` — the COMPLETE official furniture run: 354
+seqs (187 StorageFurniture C4 + 167 Safe C6), 85,945 detections over
+85,045 frames (~80% frame coverage), hands + camera per seq. Frame
+numbers 1-BASED (max 300); ~99% right hand; priors: wrist 2D 14–21 px,
+depth bias +4–16 cm/subject. This supersedes the 10-seq hands package
+for furniture — full-category hand supervision is now in hand; RGB/
+depth/2Dseg still come from the raw archives on segaffordance-hoi4d.
+
 ## HOI4D raw download COMPLETE (2026-08-28)
 
 - New volume `segaffordance-hoi4d` (f2h0jczstn, 500GB EU-RO-1, $35/mo)
