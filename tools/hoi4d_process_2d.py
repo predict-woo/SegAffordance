@@ -54,16 +54,32 @@ def seq_to_relpath(seq: str) -> str:
 
 
 def load_windows(action_json: Path):
-    evs = json.load(open(action_json))["events"]
+    """Interaction windows as 0-based frame ranges.
+
+    Some HOI4D action JSONs run on a 10-second clock while every video
+    is 300 frames / 15 fps = 20.0 s (13/354 furniture seqs have
+    info.duration == 10.0, 8 lack the field; found by ethz-workspace-17
+    2026-09-01, frame-verified on a C6 seq). Scale event times by
+    video_duration / info.duration; when the field is missing, infer
+    from the last event's end (tiles ~0-10 or ~0-20).
+    """
+    data = json.load(open(action_json))
+    evs = data["events"]
+    video_dur = 300.0 / FPS
+    dur = (data.get("info") or {}).get("duration")
+    if not dur:
+        max_end = max((e["endTime"] for e in evs), default=video_dur)
+        dur = 10.0 if max_end < 12.0 else video_dur
+    scale = video_dur / float(dur)
     out = []
     for e in evs:
         name = e["event"].strip().lower()
         if name in INTERACTION_EVENTS:
-            f0 = max(0, int(np.ceil(e["startTime"] * FPS)))
-            f1 = min(299, int(np.floor(e["endTime"] * FPS)))
+            f0 = max(0, int(np.ceil(e["startTime"] * scale * FPS)))
+            f1 = min(299, int(np.floor(e["endTime"] * scale * FPS)))
             if f1 - f0 >= 6:
                 out.append((name, f0, f1))
-    return out
+    return out, scale
 
 
 def moving_color(mask_dir: Path, f0: int, f1: int):
@@ -153,7 +169,9 @@ def process_sequence(seq: str, ext: Path, hands_root: Path, size: int):
     action = ann / "action" / "color.json"
     if not action.exists():
         return None, "missing-action"
-    windows = load_windows(action)
+    windows, time_scale = load_windows(action)
+    if time_scale != 1.0:
+        print(f"  {seq}: action time scale {time_scale:g}", flush=True)
     if not windows:
         return None, "no-windows"
 
