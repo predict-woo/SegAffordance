@@ -144,3 +144,107 @@ class AnnotationStore:
             flagged = rec["parts"] and all(pt.get("flag") for pt in rec["parts"])
             out[rec["seq"]] = "flagged" if flagged else "annotated"
         return out
+
+
+class Dataset:
+    """Read-only view over the processed-2D LMDBs + hands package."""
+
+    def __init__(self, data_dir, hands_dir):
+        import lmdb
+        self.data_dir, self.hands_dir = Path(data_dir), Path(hands_dir)
+        self._env_d = lmdb.open(str(self.data_dir / "data.lmdb"),
+                                readonly=True, lock=False)
+        self._env_f = lmdb.open(str(self.data_dir / "frames.lmdb"),
+                                readonly=True, lock=False)
+        self.sequences = {}
+        with self._env_d.begin() as txn:
+            for key, _ in txn.cursor():
+                k = key.decode()
+                if k.startswith("__"):
+                    continue
+                seq, _, _ = parse_key(k)
+                self.sequences.setdefault(seq, []).append(k)
+        for v in self.sequences.values():
+            v.sort()
+        self._poses = {}
+
+    def record(self, key):
+        with self._env_d.begin() as txn:
+            return pickle.loads(txn.get(key.encode()))
+
+    def frame(self, key):
+        """-> (rgb_bgr, depth_u16, K scaled to the stored resolution, orig_size)."""
+        import cv2
+        with self._env_f.begin() as txn:
+            fr = pickle.loads(txn.get(key.encode()))
+        rgb = cv2.imdecode(np.frombuffer(fr["jpeg"], np.uint8), cv2.IMREAD_COLOR)
+        depth = cv2.imdecode(np.frombuffer(fr["depth_png"], np.uint8),
+                             cv2.IMREAD_UNCHANGED)
+        K = np.array(self.record(key)["camera_intrinsics"], float)
+        ow, oh = fr["orig_size"]
+        K = K.copy()
+        K[0] *= rgb.shape[1] / ow
+        K[1] *= rgb.shape[0] / oh
+        return rgb, depth, K, (ow, oh)
+
+    def pose(self, seq, frame):
+        if seq not in self._poses:
+            self._poses[seq] = np.load(
+                self.hands_dir / seq / "camera" / "official_poses.npy")
+        return self._poses[seq][frame]
+
+
+def build_scene(ds, seq, cache_dir, max_frames=15, target_points=300_000):
+    """Fused world-frame cloud + per-window overlays for one sequence (npz-cached)."""
+    cache_dir = Path(cache_dir); cache_dir.mkdir(parents=True, exist_ok=True)
+    cpath = cache_dir / f"{seq}.npz"
+    if cpath.exists():
+        z = np.load(cpath, allow_pickle=True)
+        return {"points": z["points"], "colors": z["colors"],
+                "windows": pickle.loads(z["meta"].tobytes())["windows"],
+                "frusta": [p for p in z["frusta"]]}
+
+    keys = ds.sequences[seq]
+    step = max(1, len(keys) // max_frames)
+    chosen = keys[::step][:max_frames]
+    pts_all, col_all, frusta = [], [], []
+    for key in chosen:
+        rgb, depth, K, _ = ds.frame(key)
+        _, _, f = parse_key(key)
+        pose = ds.pose(seq, f)
+        pts, cols = backproject(depth, rgb, K, stride=4)
+        pts_all.append(to_world(pts, pose)); col_all.append(cols)
+        frusta.append(pose)
+    points = np.concatenate(pts_all); colors = np.concatenate(col_all)
+    if len(points) > target_points:
+        idx = np.random.default_rng(0).choice(len(points), target_points, replace=False)
+        points, colors = points[idx], colors[idx]
+
+    windows = {}
+    for key in keys:            # one representative sample per window
+        rec = ds.record(key)
+        w = rec["hoi4d"]["window"]
+        if w in windows:
+            continue
+        rgb, depth, K, (ow, oh) = ds.frame(key)
+        _, _, f = parse_key(key)
+        pose = ds.pose(seq, f)
+        sy, sx = depth.shape[0] / oh, depth.shape[1] / ow
+        mask_pts = []
+        for y, x in rec["mask_coordinates_yx"]:
+            yy, xx = int(y * sy), int(x * sx)
+            z = depth[yy, xx] / 1000.0
+            if z > 0:
+                mask_pts.append([(xx - K[0, 2]) / K[0, 0] * z,
+                                 (yy - K[1, 2]) / K[1, 1] * z, z])
+        mask_w = (to_world(np.array(mask_pts), pose)
+                  if mask_pts else np.zeros((0, 3)))
+        traj_w = to_world(np.array(rec["trajectory_3d_camera_coords"], float), pose)
+        windows[w] = {"event": rec["hoi4d"]["event"], "mask_points": mask_w,
+                      "traj": traj_w, "sample_key": key}
+
+    meta = np.frombuffer(pickle.dumps({"windows": windows}), np.uint8)
+    np.savez_compressed(cpath, points=points, colors=colors,
+                        frusta=np.array(frusta), meta=meta)
+    return {"points": points, "colors": colors, "windows": windows,
+            "frusta": frusta}
