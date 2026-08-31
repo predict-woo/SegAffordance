@@ -174,8 +174,16 @@ train_pod.sh + README): 3 power-capped Workstation-edition PRO 6000
 lemons observed across the two sessions; every Server Edition ran full
 clocks.
 
-**A/B program status: replace-mode fine-tunes NULL; additive arms split
-by host structure** (USDNet L2-only positive, SINGAPO negative);
+**CAMPAIGN CLOSED (user, 2026-08-31).** All three external volumes
+deleted (verified: only bckt1t9uuf + f2h0jczstn remain; only pod =
+segaffordance-dev). Results/bundles preserved in
+experiments/external/. The two follow-up candidates (USDNet second
+seed; SINGAPO CAGE-init ~$50) stay uncommissioned and would need data
+re-staging (~15min USDNet / ~1h SINGAPO) if ever picked up.
+
+Summary of the closed program: replace-mode fine-tunes NULL; additive
+arms split by host structure (USDNet L2-only positive at the origin
+gate, SINGAPO negative via shared-tensor leakage);
 DIPO dropped (incomplete release); Particulate blocked on the user's HF
 dataset access. All external pods deleted; volumes kept.
 
