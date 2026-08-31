@@ -64,19 +64,26 @@ def load_windows(action_json: Path):
     from the last event's end (tiles ~0-10 or ~0-20).
     """
     data = json.load(open(action_json))
-    evs = data["events"]
+    # Two coexisting formats in the release: {"events": [{event, startTime,
+    # endTime}]} and {"markResult": {"marks": [{event, hdTimeStart,
+    # hdTimeEnd}]}} (8/354 furniture seqs use the second).
+    if "events" in data:
+        evs = [(e["event"], e["startTime"], e["endTime"]) for e in data["events"]]
+    else:
+        evs = [(m["event"], m["hdTimeStart"], m["hdTimeEnd"])
+               for m in data["markResult"]["marks"]]
     video_dur = 300.0 / FPS
     dur = (data.get("info") or {}).get("duration")
     if not dur:
-        max_end = max((e["endTime"] for e in evs), default=video_dur)
+        max_end = max((t1 for _, _, t1 in evs), default=video_dur)
         dur = 10.0 if max_end < 12.0 else video_dur
     scale = video_dur / float(dur)
     out = []
-    for e in evs:
-        name = e["event"].strip().lower()
+    for name, t0, t1 in evs:
+        name = name.strip().lower()
         if name in INTERACTION_EVENTS:
-            f0 = max(0, int(np.ceil(e["startTime"] * scale * FPS)))
-            f1 = min(299, int(np.floor(e["endTime"] * scale * FPS)))
+            f0 = max(0, int(np.ceil(t0 * scale * FPS)))
+            f1 = min(299, int(np.floor(t1 * scale * FPS)))
             if f1 - f0 >= 6:
                 out.append((name, f0, f1))
     return out, scale
@@ -178,6 +185,13 @@ def process_sequence(seq: str, ext: Path, hands_root: Path, size: int):
     action = ann / "action" / "color.json"
     if not action.exists():
         return None, "missing-action"
+    # Camera 1 ships 2Dseg/mask/; cameras 2-4 ship 2Dseg/shift_mask/
+    # (masks re-aligned to align_rgb) — same 300-frame palette format.
+    mask_dir = ann / "2Dseg" / "mask"
+    if not mask_dir.exists():
+        mask_dir = ann / "2Dseg" / "shift_mask"
+    if not mask_dir.exists():
+        return None, "missing-2dseg"
     windows, time_scale = load_windows(action)
     if time_scale != 1.0:
         print(f"  {seq}: action time scale {time_scale:g}", flush=True)
@@ -197,7 +211,7 @@ def process_sequence(seq: str, ext: Path, hands_root: Path, size: int):
     samples = []
     needed_frames = set()
     for wi, (event, f0, f1) in enumerate(windows):
-        col = moving_color(ann / "2Dseg" / "mask", f0, f1)
+        col = moving_color(mask_dir, f0, f1)
         if col is None:
             continue
         wf = [f for f in range(f0, f1 + 1) if f in frame_to_i]
@@ -219,7 +233,7 @@ def process_sequence(seq: str, ext: Path, hands_root: Path, size: int):
     for wi, event, f, future, col in samples:
         if f not in rgb:
             continue
-        m = cv2.imread(str(ann / "2Dseg" / "mask" / f"{f:05d}.png"))
+        m = cv2.imread(str(mask_dir / f"{f:05d}.png"))
         if m is None:
             continue
         coords = thin_coords((m == col).all(-1), size)
