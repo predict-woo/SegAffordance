@@ -248,3 +248,34 @@ def build_scene(ds, seq, cache_dir, max_frames=15, target_points=300_000):
                         frusta=np.array(frusta), meta=meta)
     return {"points": points, "colors": colors, "windows": windows,
             "frusta": frusta}
+
+
+def export_sf3d(ds, store, out_path):
+    """Project world-frame annotations into every sample's camera frame (SF3D fields)."""
+    out = {}
+    status = store.status()
+    for seq, keys in ds.sequences.items():
+        if status.get(seq) != "annotated":
+            continue
+        rec0 = store.load(seq)
+        for key in keys:
+            r = ds.record(key)
+            event = r["hoi4d"]["event"]
+            part = next((p for p in rec0["parts"]
+                         if event in p["window_events"]), rec0["parts"][0])
+            _, _, f = parse_key(key)
+            pose = ds.pose(seq, f)
+            K = np.array(r["camera_intrinsics"], float)   # orig-res K
+            cam = world_axis_to_camera(np.array(part["axis_world"], float),
+                                       np.array(part["origin_world"], float),
+                                       pose, K)
+            out[key] = {"motion_type": part["type"],
+                        "motion_dir_3d_camera_coords": cam["motion_dir_3d_camera_coords"].tolist(),
+                        "motion_origin_3d_camera_coords": cam["motion_origin_3d_camera_coords"].tolist(),
+                        "motion_origin_2d_image_coords": cam["motion_origin_2d_image_coords"].tolist()}
+    out_path = Path(out_path)
+    tmp = out_path.with_suffix(".tmp")
+    with open(tmp, "wb") as fh:
+        pickle.dump(out, fh, protocol=4)
+    os.replace(tmp, out_path)
+    return len(out)
