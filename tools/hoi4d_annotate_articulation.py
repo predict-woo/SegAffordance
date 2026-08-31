@@ -109,3 +109,38 @@ def principal_direction(points):
     if d @ (p[-1] - p[0]) < 0:
         d = -d
     return d
+
+
+class AnnotationStore:
+    """Per-sequence articulation annotations (atomic JSON files)."""
+
+    def __init__(self, out_dir):
+        self.dir = Path(out_dir)
+        self.dir.mkdir(parents=True, exist_ok=True)
+
+    def _path(self, seq):
+        return self.dir / f"{seq}.json"
+
+    def load(self, seq):
+        p = self._path(seq)
+        return json.load(open(p)) if p.exists() else None
+
+    def save(self, seq, category, parts):
+        rec = {"seq": seq, "category": category,
+               "annotator": os.environ.get("USER", "unknown"),
+               "time": time.strftime("%Y-%m-%dT%H:%M:%S"),
+               "parts": parts}
+        p = self._path(seq)
+        tmp = p.with_suffix(".tmp")
+        with open(tmp, "w") as f:
+            json.dump(rec, f, indent=1)
+        os.replace(tmp, p)
+        return p
+
+    def status(self):
+        out = {}
+        for p in sorted(self.dir.glob("*.json")):
+            rec = json.load(open(p))
+            flagged = rec["parts"] and all(pt.get("flag") for pt in rec["parts"])
+            out[rec["seq"]] = "flagged" if flagged else "annotated"
+        return out
