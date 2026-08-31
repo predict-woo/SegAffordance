@@ -102,14 +102,23 @@ def moving_color(mask_dir: Path, f0: int, f1: int):
 
 
 def thin_coords(mask: np.ndarray, grid: int):
-    """One representative original-res (y, x) per grid cell."""
-    ys, xs = np.nonzero(mask)
+    """Original-res (y, x) coords restricted to the reader's gather grid.
+
+    SF3DDataset's fast path reconstructs the mask by GATHERING one source
+    pixel per target cell (src = floor((dst+0.5)*scale), scenefun3d.py
+    fast_pipeline block) — coords stored anywhere else are invisible. So
+    store exactly the set pixels the gather will sample: bit-identical
+    downsampled mask at ~mask_frac * grid^2 coords instead of the full
+    original-res splat.
+    """
+    h, w = mask.shape
+    r_idx = np.minimum(((np.arange(grid) + 0.5) * (h / grid)).astype(np.int64), h - 1)
+    c_idx = np.minimum(((np.arange(grid) + 0.5) * (w / grid)).astype(np.int64), w - 1)
+    sub = mask[np.ix_(r_idx, c_idx)]
+    ys, xs = np.nonzero(sub)
     if len(ys) == 0:
         return None
-    h, w = mask.shape
-    cell = (ys * grid // h) * grid + (xs * grid // w)
-    _, first = np.unique(cell, return_index=True)
-    return np.stack([ys[first], xs[first]], axis=1).astype(np.int32)
+    return np.stack([r_idx[ys], c_idx[xs]], axis=1).astype(np.int32)
 
 
 def encode_frame(bgr, depth_u16, size):
