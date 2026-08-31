@@ -288,6 +288,26 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
+## HOI4D 2D training line: FIRST RUN COMPLETE (2026-09-01 overnight)
+
+The g17_2d_dct recipe from scratch on real HOI4D hand video
+(20260901_hoi4d_2d_dct): **perception excels, motion geometry doesn't
+emerge.** Data pipeline built end-to-end (tools/hoi4d_process_2d.py):
+354 furniture seqs → 15,612 samples; format landmines survived
+(shift_mask dirs on cams 2–4, markResult action JSONs, 10s-clock action
+times ×13 — sibling-found, FFV1 16-bit depth, gather-grid mask coords).
+Val: mIoU 0.477 / PDet 53.4 (~2× the SF3D arms), wrist point 0.0084,
+traj shape 0.027 — but traj_dir 49% and p_rev AUC 0.46 both AT CHANCE
+(jittery wrist tracks, GT roughness 0.72: no net-direction signal at
+window scale), and zero-shot to SF3D is null (domain-locked). Verdict:
+2D geometry emergence is a property of CLEAN track supervision. v2
+candidates (parked): smoothed tracks, longer windows, mixed
+SF3D+HOI4D, fine-tune from g17_2d_dct. LMDBs:
+/workspace/datasets/hoi4d_processed_2d (main volume; backup on the
+hoi4d volume — also what the annotator session needs). Panels rendered
+on the volume, images pending next dev-pod sync. train_pod.sh now
+routes *hoi4d* configs like sf3d.
+
 ## HOI4D official drawer package landed (2026-08-30)
 
 `/workspace/datasets/hoi4d_official_drawer_package/` (1.2G unpacked;
