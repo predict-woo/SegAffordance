@@ -3,7 +3,7 @@
 **The single source of truth for "where is this project right now".**
 Update this document at every experiment wrap, decision, or infra change —
 it is the first thing a fresh/compacted session should read. Keep entries
-terse; details live in the linked specs/notes. Last update: 2026-08-28.
+terse; details live in the linked specs/notes. Last update: 2026-09-01.
 
 ## COMPACTION SNAPSHOT (2026-08-28) — read this first after context loss
 
@@ -105,6 +105,28 @@ venv-local.tar.tmp (4.9G, stale), 700GB scratch volume deletion
 (needs user), possible resize. Quota lesson stays: MooseFS truncates
 silently at quota — pause mutagen FIRST on any quota event; trash holds
 nothing (deletes reclaim instantly).
+
+## HOI4D articulation annotator LANDED (2026-09-01)
+
+Web-based manual annotation of articulation parameters on the HOI4D
+processed-2D dataset: `tools/hoi4d_annotate_articulation.py` (viser,
+Apache-2.0; spec docs/superpowers/specs/2026-09-01-hoi4d-articulation-
+annotator-design.md, plan in docs/superpowers/plans/). Per-sequence
+WORLD-frame annotation (axis+origin gizmo, prismatic/revolute, motion
+preview sweep, align-to-trajectory init) over a fused multi-frame
+RGB-D cloud lifted with hands354 official_poses.npy; per-sequence JSONs
++ `export` mode projecting to SF3D-convention camera-frame fields
+(sidecar pickle). 15 unit tests (geometry/store/scene/export) green in
+a local venv; UI smoke ran locally against synthetic LMDBs (server up,
+startup clean, export end-to-end). REAL-data smoke pending: needs the
+processed LMDBs (ethz-workspace-65's build) + dev pod (start blocked
+2026-09-01, host GPUs taken). Serve on the pod:
+`python3 tools/hoi4d_annotate_articulation.py serve --data
+/workspace/hoi4d_processed_2d --hands <hands354> --out
+/workspace/hoi4d_processed_2d/annotations` + SSH port-forward 8080.
+Known data quirk handled upstream: some action JSONs run a 10s clock
+(13/354 furniture seqs + 8 missing the field) — found here 2026-09-01,
+fix landed in hoi4d_process_2d.py load_windows by ethz-workspace-65.
 
 ## External screw-loss A/B (sibling session, ethz-workspace-17) — IN PROGRESS
 
