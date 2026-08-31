@@ -279,3 +279,148 @@ def export_sf3d(ds, store, out_path):
         pickle.dump(out, fh, protocol=4)
     os.replace(tmp, out_path)
     return len(out)
+
+
+def serve(ds, store, cache_dir, port):
+    import viser
+    server = viser.ViserServer(port=port)
+    state = {"seq": None, "scene": None, "window": None}
+
+    status = store.status()
+    seq_names = sorted(ds.sequences)
+
+    def label(s):
+        mark = {"annotated": "[done] ", "flagged": "[flag] "}.get(status.get(s), "")
+        return mark + s
+
+    seq_dd = server.gui.add_dropdown("Sequence", [label(s) for s in seq_names],
+                                     initial_value=label(seq_names[0]))
+    win_dd = server.gui.add_dropdown("Window", ["0"], initial_value="0")
+    type_dd = server.gui.add_dropdown("Type", ["trans", "rot"], initial_value="trans")
+    align_btn = server.gui.add_button("Align axis to trajectory")
+    preview = server.gui.add_slider("Motion preview", min=-1.0, max=1.0,
+                                    step=0.02, initial_value=0.0)
+    save_btn = server.gui.add_button("Save")
+    flag_dd = server.gui.add_dropdown("Flag", ["none", "bad-poses", "ambiguous"],
+                                      initial_value="none")
+    info = server.gui.add_markdown("")
+
+    tc = server.scene.add_transform_controls("/gizmo", scale=0.25)
+
+    def axis_vec():
+        return wxyz_to_matrix(np.array(tc.wxyz)) @ np.array([0.0, 0.0, 1.0])
+
+    def draw_axis():
+        a, o = axis_vec(), np.array(tc.position)
+        seg = np.stack([o - 2.0 * a, o + 2.0 * a])[None]
+        server.scene.add_line_segments("/axis_line", seg,
+                                       colors=np.array([[[255, 60, 60]] * 2]))
+
+    def mask_cloud(points):
+        server.scene.add_point_cloud("/mask", points,
+                                     colors=np.tile([[1.0, 0.15, 0.15]],
+                                                    (len(points), 1)),
+                                     point_size=0.007)
+
+    def load_seq(_=None):
+        seq = seq_names[[label(s) for s in seq_names].index(seq_dd.value)]
+        state["seq"], state["window"] = seq, None
+        state["scene"] = build_scene(ds, seq, cache_dir)
+        sc = state["scene"]
+        server.scene.add_point_cloud("/cloud", sc["points"],
+                                     colors=sc["colors"], point_size=0.004)
+        for i, pose in enumerate(sc["frusta"]):   # small orientation frusta
+            server.scene.add_camera_frustum(
+                f"/frusta/{i}", fov=1.0, aspect=1.0, scale=0.06,
+                wxyz=matrix_to_wxyz(pose[:3, :3]), position=tuple(pose[:3, 3]))
+        wins = sorted(sc["windows"])
+        win_dd.options = [str(w) for w in wins]
+        win_dd.value = str(wins[0])
+        cat = seq.split("_")[2]
+        type_dd.value = "trans" if cat == "C4" else "rot"
+        existing = store.load(seq)
+        if existing and existing["parts"]:
+            p = existing["parts"][0]
+            tc.position = tuple(p["origin_world"])
+            type_dd.value = p["type"]
+        else:  # start the gizmo at the first window's mask centroid
+            m = sc["windows"][wins[0]]["mask_points"]
+            if len(m):
+                tc.position = tuple(m.mean(axis=0))
+        load_window()
+
+    def load_window(_=None):
+        sc, w = state["scene"], int(win_dd.value)
+        state["window"] = w
+        wd = sc["windows"][w]
+        mask_cloud(wd["mask_points"])
+        if len(wd["traj"]) >= 2:
+            segs = np.stack([wd["traj"][:-1], wd["traj"][1:]], axis=1)
+            server.scene.add_line_segments(
+                "/traj", segs,
+                colors=np.tile([[40, 120, 255]], (len(segs), 2, 1)))
+        info.content = f"**{state['seq']}** — window {w}: *{wd['event']}*"
+        draw_axis()
+
+    def do_align(_):
+        wd = state["scene"]["windows"][state["window"]]
+        if len(wd["traj"]) >= 2:
+            d = principal_direction(wd["traj"])
+            z = np.array([0.0, 0.0, 1.0]); v = np.cross(z, d)
+            w = 1.0 + float(z @ d)
+            if np.linalg.norm([w, *v]) < 1e-8:      # antiparallel: flip about x
+                q = np.array([0.0, 1.0, 0.0, 0.0])
+            else:
+                q = np.array([w, *v]); q /= np.linalg.norm(q)
+            tc.wxyz = tuple(q)
+            draw_axis()
+
+    def do_preview(_):
+        wd = state["scene"]["windows"][state["window"]]
+        t = preview.value * (0.4 if type_dd.value == "trans" else np.pi / 2)
+        moved = sweep_points(wd["mask_points"], type_dd.value,
+                             axis_vec(), np.array(tc.position), t)
+        mask_cloud(moved)
+
+    def do_save(_):
+        wd_events = sorted({w["event"] for w in state["scene"]["windows"].values()})
+        part = {"window_events": wd_events, "type": type_dd.value,
+                "axis_world": axis_vec().tolist(),
+                "origin_world": list(map(float, tc.position)),
+                "flag": None if flag_dd.value == "none" else flag_dd.value}
+        store.save(state["seq"], state["seq"].split("_")[2], [part])
+        status.update(store.status())
+        info.content = f"saved {state['seq']}"
+
+    seq_dd.on_update(load_seq)
+    win_dd.on_update(load_window)
+    align_btn.on_click(do_align)
+    preview.on_update(do_preview)
+    save_btn.on_click(do_save)
+    tc.on_update(lambda _: draw_axis())
+
+    load_seq()
+    print(f"annotator up: forward the port and open http://localhost:{port}")
+    while True:
+        time.sleep(3600)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("mode", choices=["serve", "export"])
+    ap.add_argument("--data", required=True)
+    ap.add_argument("--hands", required=True)
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--port", type=int, default=8080)
+    args = ap.parse_args()
+    ds = Dataset(args.data, args.hands)
+    store = AnnotationStore(args.out)
+    if args.mode == "export":
+        n = export_sf3d(ds, store, Path(args.out) / "export_sf3d.pkl")
+        print(f"exported {n} keys")
+    else:
+        serve(ds, store, Path(args.out) / "cache", args.port)
+
+
+if __name__ == "__main__":
+    main()
