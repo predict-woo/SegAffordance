@@ -1,0 +1,15 @@
+command: tools/sf3d_vis_predictions.py --model hoi4d-2d config/hoi4d_train_runpod_2d_dct.yaml
+  experiments/20260901_hoi4d_2d_dct/checkpoints/best-epoch28-valloss0.3584.ckpt --data-root
+  /workspace/datasets/hoi4d_processed_2d --frame-cache-path /workspace/datasets/hoi4d_processed_2d/frames.lmdb
+  --input-size 512 --key-cache /workspace/cache/hoi4d_2d_keys_v1.pkl --num 10 --seed
+  42421 --out viz/20260901_hoi4d_2d_dct_val_panels
+tool_commit: 3e95d4f
+generated: '2026-08-31T20:48:22+00:00'
+models:
+- name: hoi4d-2d
+  config: config/hoi4d_train_runpod_2d_dct.yaml
+  ckpt: experiments/20260901_hoi4d_2d_dct/checkpoints/best-epoch28-valloss0.3584.ckpt
+num: 10
+seed: 42421
+data_root: /workspace/datasets/hoi4d_processed_2d
+key_cache: /workspace/cache/hoi4d_2d_keys_v1.pkl
