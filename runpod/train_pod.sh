@@ -92,7 +92,7 @@ PY
     # — bit the gen-10 launch on 2026-08-15.
     if [ -z "$script" ]; then
       case "$cfg" in
-        *sf3d*) script=train_SF3D_better.py ;;
+        *sf3d*|*hoi4d*) script=train_SF3D_better.py ;;
         *opdmulti*) script=train_OPDMulti_better.py ;;
         *) script=train_OPDReal_better.py ;;
       esac
@@ -105,7 +105,7 @@ PY
     # runs at ~155 MB/s, ~2.5 min for 26 GB, once per pod.
     extra=""
     droot=""
-    case "$cfg" in *sf3d*)
+    case "$cfg" in *sf3d*|*hoi4d*)
       extra="--data.lmdb_path /dev/shm/data.lmdb --data.frame_cache_path /dev/shm/frames.lmdb"
       # Stage the LMDBs the CONFIG points at, not a hardcoded version —
       # hardcoded v2 would have silently trained gen-11 on the wrong
@@ -124,7 +124,7 @@ PY
       case '${cfg}' in *dinov3*)
         cat /workspace/cache/dinov3/*.pth > /dev/null 2>&1 || true
       ;; esac
-      case '${cfg}' in *sf3d*)
+      case '${cfg}' in *sf3d*|*hoi4d*)
         mkdir -p /dev/shm/data.lmdb /dev/shm/frames.lmdb
         [ -f /dev/shm/data.lmdb/data.mdb ] || time cp ${droot}/data.lmdb/data.mdb /dev/shm/data.lmdb/
         [ -f /dev/shm/frames.lmdb/data.mdb ] || time cp ${fcache}/data.mdb /dev/shm/frames.lmdb/
