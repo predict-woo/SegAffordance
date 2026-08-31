@@ -117,9 +117,16 @@ def description_for(cat: str, event: str) -> str:
             "close": "close the safe door"}.get(event, f"{event} the safe door")
 
 
-def read_video_frames(path: Path, wanted: set):
-    """Decode only wanted frame indices (0-based) from a video."""
+def read_video_frames(path: Path, wanted: set, raw: bool = False):
+    """Decode only wanted frame indices (0-based) from a video.
+
+    raw=True disables BGR conversion — HOI4D depth is 16-bit FFV1 and
+    decodes natively to a (H, W) uint16 millimetre map this way
+    (verified 2026-08-31: centre pixel 765 mm at a drawer).
+    """
     cap = cv2.VideoCapture(str(path))
+    if raw:
+        cap.set(cv2.CAP_PROP_CONVERT_RGB, 0)
     out, idx = {}, 0
     last = max(wanted) if wanted else -1
     while idx <= last:
@@ -177,7 +184,7 @@ def process_sequence(seq: str, ext: Path, hands_root: Path, size: int):
         return None, "no-samples"
 
     rgb = read_video_frames(rgb_mp4, needed_frames)
-    depth = (read_video_frames(depth_avi, needed_frames)
+    depth = (read_video_frames(depth_avi, needed_frames, raw=True)
              if depth_avi.exists() else {})
 
     cam, hh, c, n, s, room, t = seq.split("_")
@@ -194,10 +201,13 @@ def process_sequence(seq: str, ext: Path, hands_root: Path, size: int):
         dep = depth.get(f)
         if dep is None:
             dep_u16 = np.zeros(rgb[f].shape[:2], np.uint16)
+        elif dep.ndim == 2 and dep.dtype == np.uint16:
+            dep_u16 = dep                     # native FFV1 16-bit mm map
         else:
-            if dep.ndim == 3:
-                dep = cv2.cvtColor(dep, cv2.COLOR_BGR2GRAY).astype(np.uint16) * 256
-            dep_u16 = dep.astype(np.uint16)
+            raise ValueError(
+                f"{seq} f{f}: unexpected depth decode "
+                f"{dep.shape}/{dep.dtype} — expected (H,W) uint16"
+            )
         key = f"{cam}_{hh}_{c}_{n}/{s}_{room}_{t}_w{wi}_f{f:03d}"
         idxs = [frame_to_i[g] for g in future]
         records[key] = {
