@@ -81,6 +81,9 @@ the hoi4d volume.
    stands (harness-measured).
 3. Panel batch (viz/20260901_hoi4d_2d_dct_val_panels, 12 imgs, now on
    the Mac too) uses the training split (0.15/seed 42) via
-   tools/hoi4d_vis_2d_panels.py; its magenta trajectory overlay uses a
-   hand-rolled projection that may not match the trainer's conventions
-   — treat as decorative.
+   tools/hoi4d_vis_2d_panels.py. The magenta trajectory overlay now
+   reuses the trainer's EXACT projection (normalized K + depth-lifted
+   anchor, train_SF3D_better.py:625) — the first render's hand-rolled
+   pixel-K/z_p-anchor projection drew off-scale garbage, a vivid demo
+   of the 2D arm's projection gauge freedom (the curve is only defined
+   under the training-time projection).

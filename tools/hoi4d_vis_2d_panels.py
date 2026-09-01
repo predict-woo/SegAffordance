@@ -31,6 +31,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.opd_train import ModelParams
 from datasets.scenefun3d import SF3DDataset, split_dataset_by_scene
+from model.losses.geometric import (backproject_points, normalized_intrinsics,
+                                    project_points)
 from model.segmenter import CRIS
 from tools.viz_manifest import write_manifest
 
@@ -107,15 +109,24 @@ def main():
         if out.point_uv is not None:
             qx, qy = (out.point_uv[0].detach().cpu().numpy() * 512).astype(int)
             cv2.circle(pr, (qx, qy), 7, (255, 255, 255), 2)
-        if out.trajectory_pred is not None and out.point_3d_pred is not None:
-            traj = (out.trajectory_pred[0].detach().float().cpu().numpy()
-                    + out.point_3d_pred[0].detach().float().cpu().numpy())
-            K = it[11].numpy()
-            z = np.clip(traj[:, 2], 1e-3, None)
-            u = (K[0, 0] * traj[:, 0] / z + K[0, 2]) * sx
-            v = (K[1, 1] * traj[:, 1] / z + K[1, 2]) * sy
-            cv2.polylines(pr, [np.stack([u, v], 1).astype(int)], False,
-                          (255, 0, 255), 2)
+        if out.trajectory_pred is not None and out.point_uv is not None:
+            # EXACTLY the trainer's projection (train_SF3D_better.py:625):
+            # normalized K, anchor = point_uv lifted with the INPUT depth.
+            # Any other convention renders garbage — the 2D arm's curve is
+            # only defined under this projection (learned 2026-09-02).
+            K_n = normalized_intrinsics(
+                it[11].unsqueeze(0).cuda(), it[8].unsqueeze(0).cuda())
+            uv = out.point_uv.detach().float()
+            grid = (uv * 2.0 - 1.0).view(-1, 1, 1, 2)
+            z = F.grid_sample(it[1].unsqueeze(0).cuda().float(), grid,
+                              align_corners=False).view(-1)
+            anchor = backproject_points(K_n, uv, z)
+            curve = anchor.unsqueeze(1) + out.trajectory_pred.detach().float()
+            proj = project_points(K_n, curve)[0].cpu().numpy()  # uv in [0,1]
+            in_front = curve[0, :, 2].cpu().numpy() > 0.05
+            if z.item() > 1e-3 and in_front.any():
+                pts_p = (proj[in_front] * 512).astype(int)
+                cv2.polylines(pr, [pts_p], False, (255, 0, 255), 2)
         p_rev = torch.softmax(out.motion_type_logits, -1)[0, 1].item() \
             if out.motion_type_logits is not None else float("nan")
         cv2.putText(pr, f"pred  p_rev={p_rev:.2f}", (8, 24),
