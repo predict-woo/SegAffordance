@@ -21,7 +21,7 @@ depth, gather-grid mask coords. Scene split by physical object, 15%.
 | point error (norm) | **0.0084** | ~0.10 |
 | traj shape / err / anchor | **0.027** / 0.028 / 0.012 | 0.0947 / — / — |
 | traj_dir acc / cos | **49.0 / 0.03 (CHANCE)** | 81–84 / — |
-| p_rev C4-vs-C6 AUC | **0.463 (CHANCE)** | (self-organized partially) |
+| p_rev C4-vs-C6 AUC | **0.657 (weak but real)** | (self-organized partially) |
 | GT track roughness | 0.72 (jittery wrist) | ~0 (derived curves) |
 | zero-shot on SF3D val | mIoU 0.003, all ~chance | — |
 
@@ -33,8 +33,8 @@ depth, gather-grid mask coords. Scene split by physical object, 15%.
    mIoU / 53% PDet — nearly double the SF3D arms (bigger parts, salient
    hands, 354 objects); the wrist point is nailed at <1% of the image;
    projected-trajectory SHAPE beats the SF3D arm 3.5×.
-2. **Motion geometry does NOT emerge: direction and type both at
-   chance.** On SF3D-2D, direction emerged (81–84%) from long clean
+2. **Direction does NOT emerge (49%, chance); type WEAKLY does
+   (p_rev AUC 0.657, uncalibrated — both category means ~0.22).** On SF3D-2D, direction emerged (81–84%) from long clean
    derived tracks; here the supervision is short, jittery real wrist
    tracks (GT roughness 0.72 vs ~0) whose NET direction is noisy at
    window scale — and arcs vs lines are indistinguishable in that
@@ -61,3 +61,26 @@ test passes: logs/test.log (HOI4D val), logs/test_sf3d_zeroshot.log.
 ckpt best-epoch28-valloss0.3584. Pod deleted; LMDBs at
 /workspace/datasets/hoi4d_processed_2d (main volume) + backup copy on
 the hoi4d volume.
+
+## CORRECTIONS (2026-09-02, after panel review)
+
+1. **Data bug found via panels: the moving-part selection often picked
+   the HAND.** HOI4D 2Dseg includes the hand as a class, and during
+   open/close windows the hand's mask frequently maximizes the motion-
+   energy criterion. So a substantial share of training masks are
+   hand/arm, not the furniture part — the 0.477 mIoU partly measures
+   hand segmentation. Fix for v2: exclude any color containing/near the
+   WiLoR wrist in most window frames, then apply motion energy.
+   (Interestingly the corrected panels show the model sometimes
+   predicting the DRAWER against a hand GT label — 00_trans panel.)
+2. **My first panels/probe fed the model float 0-255 images** —
+   CRIS.forward normalizes ONLY uint8 (segmenter.py:393). The garbage
+   panels and the original "p_rev AUC 0.46 = chance" claim were this
+   bug; the harness metrics were never affected. Corrected probe:
+   **AUC 0.657** (weak real type signal, uncalibrated). traj_dir 49%
+   stands (harness-measured).
+3. Panel batch (viz/20260901_hoi4d_2d_dct_val_panels, 12 imgs, now on
+   the Mac too) uses the training split (0.15/seed 42) via
+   tools/hoi4d_vis_2d_panels.py; its magenta trajectory overlay uses a
+   hand-rolled projection that may not match the trainer's conventions
+   — treat as decorative.

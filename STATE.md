@@ -297,9 +297,14 @@ emerge.** Data pipeline built end-to-end (tools/hoi4d_process_2d.py):
 (shift_mask dirs on cams 2–4, markResult action JSONs, 10s-clock action
 times ×13 — sibling-found, FFV1 16-bit depth, gather-grid mask coords).
 Val: mIoU 0.477 / PDet 53.4 (~2× the SF3D arms), wrist point 0.0084,
-traj shape 0.027 — but traj_dir 49% and p_rev AUC 0.46 both AT CHANCE
+traj shape 0.027 — but traj_dir 49% at chance
 (jittery wrist tracks, GT roughness 0.72: no net-direction signal at
-window scale), and zero-shot to SF3D is null (domain-locked). Verdict:
+window scale); p_rev AUC 0.657 weak-but-real (CORRECTED 2026-09-02 —
+the earlier chance reading was a float-input viz bug, harness metrics
+unaffected); zero-shot to SF3D null (domain-locked). CAVEAT found via
+panels: the moving-part mask selection often picked the HAND class (it
+wins the motion-energy criterion), so mIoU is partly hand segmentation
+— v2 fix: wrist-exclusion before the motion-energy pick, then rebuild. Verdict:
 2D geometry emergence is a property of CLEAN track supervision. v2
 candidates (parked): smoothed tracks, longer windows, mixed
 SF3D+HOI4D, fine-tune from g17_2d_dct. LMDBs:
