@@ -89,14 +89,46 @@ def load_windows(action_json: Path):
     return out, scale
 
 
-def moving_color(mask_dir: Path, f0: int, f1: int):
-    """The part color whose mask changes most across the window."""
+def hand_colors(mask_dir: Path, frame_wrists, radius: int = 22,
+                min_hit_frac: float = 0.4):
+    """2Dseg classes that ARE the hand: colors whose mask reaches within
+    `radius` px of the WiLoR wrist in >= `min_hit_frac` of the checked
+    frames. The hand class identifies itself this way — the 2026-09-01
+    build's motion-energy pick chose it as "the moving part" in ~57% of
+    records (audit 2026-09-02), because the hand IS the most-changing
+    class during a manipulation window.
+
+    frame_wrists: iterable of (frame_idx, (x_px, y_px)).
+    """
+    hits = {tuple(c): 0 for c in PART_COLORS}
+    checked = 0
+    for f, (wx, wy) in frame_wrists:
+        m = cv2.imread(str(mask_dir / f"{f:05d}.png"))
+        if m is None:
+            continue
+        checked += 1
+        y0, y1 = max(0, int(wy) - radius), int(wy) + radius + 1
+        x0, x1 = max(0, int(wx) - radius), int(wx) + radius + 1
+        patch = m[y0:y1, x0:x1]
+        for col in PART_COLORS:
+            if (patch == col).all(-1).any():
+                hits[tuple(col)] += 1
+    if checked == 0:
+        return set()
+    return {c for c, h in hits.items() if h / checked >= min_hit_frac}
+
+
+def moving_color(mask_dir: Path, f0: int, f1: int, exclude=()):
+    """The part color whose mask changes most across the window,
+    excluding `exclude` (the hand classes from hand_colors)."""
     a = cv2.imread(str(mask_dir / f"{f0:05d}.png"))
     b = cv2.imread(str(mask_dir / f"{f1:05d}.png"))
     if a is None or b is None:
         return None
     best, best_score = None, 0.0
     for col in PART_COLORS:
+        if tuple(col) in exclude:
+            continue
         ma = (a == col).all(-1)
         mb = (b == col).all(-1)
         area = max(ma.sum(), mb.sum())
@@ -172,7 +204,8 @@ def read_video_frames(path: Path, wanted: set, raw: bool = False):
     return out
 
 
-def process_sequence(seq: str, ext: Path, hands_root: Path, size: int):
+def process_sequence(seq: str, ext: Path, hands_root: Path, size: int,
+                     selections: dict | None = None):
     rel = seq_to_relpath(seq)
     cat = seq.split("_")[2]
     ann = ext / "HOI4D_annotations" / rel
@@ -211,7 +244,17 @@ def process_sequence(seq: str, ext: Path, hands_root: Path, size: int):
     samples = []
     needed_frames = set()
     for wi, (event, f0, f1) in enumerate(windows):
-        col = moving_color(mask_dir, f0, f1)
+        if selections is not None:
+            # VLM-chosen part (tools/hoi4d_vlm_select_all.py); windows the
+            # VLM declined (NONE/ERROR) are dropped rather than guessed.
+            sel = selections.get(f"{seq}|{wi}")
+            col = tuple(sel["color"]) if sel and sel.get("color") else None
+        else:
+            det = [f for f in range(f0, f1 + 1) if f in frame_to_i]
+            probe = det[:: max(1, len(det) // 5)][:5]
+            wrists = [(f, tuple(j2d[frame_to_i[f]])) for f in probe]
+            col = moving_color(mask_dir, f0, f1,
+                               exclude=hand_colors(mask_dir, wrists))
         if col is None:
             continue
         wf = [f for f in range(f0, f1 + 1) if f in frame_to_i]
@@ -285,9 +328,15 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--size", type=int, default=512)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--selections", default=None,
+                    help="selections.json from hoi4d_vlm_select_all.py")
     args = ap.parse_args()
 
     import lmdb
+    selections = None
+    if args.selections:
+        selections = json.load(open(args.selections))
+        print("using", len(selections), "VLM selections", flush=True)
     ext, hands_root = Path(args.ext_root), Path(args.hands_root)
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
     seqs = sorted(p.name for p in hands_root.iterdir() if p.is_dir())
@@ -299,7 +348,8 @@ def main():
     stats, n_rec = {}, 0
     for i, seq in enumerate(seqs):
         try:
-            got, status = process_sequence(seq, ext, hands_root, args.size)
+            got, status = process_sequence(seq, ext, hands_root, args.size,
+                                           selections=selections)
         except Exception as e:  # keep going; report at the end
             got, status = None, f"error:{type(e).__name__}"
         stats[status] = stats.get(status, 0) + 1
