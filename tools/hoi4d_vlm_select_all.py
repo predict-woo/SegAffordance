@@ -16,6 +16,7 @@ Run on the HOI4D-volume pod:
 Resume-safe: existing entries in selections.json are not re-asked.
 """
 import argparse
+import faulthandler
 import json
 import os
 import queue
@@ -137,14 +138,25 @@ def vlm_worker(jobs, selections, args, lock, prep_done):
             n = len(selections)
             if n % 25 == 0:
                 print(f"[{n}] selections so far", flush=True)
+                try:
+                    Path(args.out).joinpath("selections.json").write_text(
+                        json.dumps(selections, indent=0))
+                except Exception:
+                    pass
 
 
 def main():
+    faulthandler.enable()
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="/workspace/vlm_select_all")
     ap.add_argument("--model", default="gpt-5.6-luna")
     ap.add_argument("--effort", default="high")
     ap.add_argument("--workers", type=int, default=24)
+    ap.add_argument("--prepare-only", action="store_true",
+                    help="render composites + forced picks, dump jobs.json, "
+                         "no VLM (avoids codex CPU contention on small pods)")
+    ap.add_argument("--consume-jobs", action="store_true",
+                    help="skip prepare; run VLM workers over jobs.json")
     args = ap.parse_args()
 
     ext, hands = Path("/workspace/ext"), Path("/workspace/hands354")
@@ -159,28 +171,51 @@ def main():
     jobs = queue.Queue()
     lock = threading.Lock()
     prep_done = threading.Event()
+    jobs_path = out / "jobs.json"
+
+    all_jobs = []
+    if not args.consume_jobs:
+        n_forced = n_skip = 0
+        for i, seq in enumerate(seqs):
+            sjobs, forced, skipped = prepare_sequence(seq, ext, hands, out,
+                                                      selections)
+            selections.update(forced)
+            all_jobs.extend(sjobs)
+            n_forced += len(forced); n_skip += skipped
+            if (i + 1) % 10 == 0:
+                print(f"prepared {i+1}/{len(seqs)} seqs "
+                      f"({len(all_jobs)} vlm jobs, {n_forced} forced)",
+                      flush=True)
+                sel_path.write_text(json.dumps(selections, indent=0))
+                jobs_path.write_text(json.dumps(
+                    [{**j, "mapping": {str(k): v for k, v in j["mapping"].items()}}
+                     for j in all_jobs]))
+        sel_path.write_text(json.dumps(selections, indent=0))
+        jobs_path.write_text(json.dumps(
+            [{**j, "mapping": {str(k): v for k, v in j["mapping"].items()}}
+             for j in all_jobs]))
+        print(f"prepare complete: {len(all_jobs)} vlm jobs, {n_forced} forced, "
+              f"{n_skip} seqs skipped", flush=True)
+        if args.prepare_only:
+            print("PREPARE-ONLY DONE", flush=True)
+            return
+    else:
+        loaded = json.loads(jobs_path.read_text())
+        for j in loaded:
+            if j["key"] in selections:
+                continue
+            j["mapping"] = {eval(k): v for k, v in j["mapping"].items()}
+            all_jobs.append(j)
+        print(f"consume-jobs: {len(all_jobs)} pending of {len(loaded)}",
+              flush=True)
+
     threads = [threading.Thread(target=vlm_worker,
                                 args=(jobs, selections, args, lock, prep_done))
                for _ in range(args.workers)]
     for t in threads: t.start()
-
-    n_jobs = n_forced = n_skip = 0
-    for i, seq in enumerate(seqs):
-        sjobs, forced, skipped = prepare_sequence(seq, ext, hands, out,
-                                                  selections)
-        with lock:
-            selections.update(forced)
-        for j in sjobs:
-            jobs.put(j)
-        n_jobs += len(sjobs); n_forced += len(forced); n_skip += skipped
-        if (i + 1) % 25 == 0:
-            print(f"prepared {i+1}/{len(seqs)} seqs "
-                  f"({n_jobs} vlm jobs, {n_forced} forced)", flush=True)
-            with lock:
-                sel_path.write_text(json.dumps(selections, indent=0))
+    for j in all_jobs:
+        jobs.put(j)
     prep_done.set()
-    print(f"prepare complete: {n_jobs} vlm jobs, {n_forced} forced, "
-          f"{n_skip} seqs skipped", flush=True)
     for t in threads: t.join()
     sel_path.write_text(json.dumps(selections, indent=0))
     from collections import Counter
