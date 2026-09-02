@@ -288,6 +288,60 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
+## COMPACTION SNAPSHOT 2 (2026-09-03) — VLM mask-selection saga + full-package plan
+
+**IN FLIGHT: nothing running.** The VLM sweep is PAUSED at user request.
+One pod up: `segaff-probe16` (id 6s8stprosx1j81, 16 vCPU/32GB cpu3c,
+$0.48/hr, HOI4D volume) — **user's codex auth.json IS on it at
+/root/.codex (wipe when the sweep story ends)**. Dev pod stopped
+(mirror DORMANT — Mac commits do NOT reach the main volume; scp or
+start dev pod). Volumes: main bckt1t9uuf + hoi4d f2h0jczstn only.
+
+**The VLM mask-selection story (2026-09-02→03):** v1's masks were ~57%
+HAND (motion-energy pick); wrist-exclusion heuristic rejected by user
+after panel review; Set-of-Mark VLM selection adopted (gpt-5.6-luna via
+codex CLI, effort high; pilot 8/8 parse, user-approved). State: 354-seq
+furniture sweep is at **475/1,114 answered** (balanced 155/154/166,
+zero errors, selections.json on the hoi4d volume at
+/workspace/vlm_select_all/ + composites + jobs.json). Tools:
+tools/hoi4d_vlm_select_all.py (prepare-only/consume-jobs split,
+resume-safe, raw replies stored), hoi4d_vlm_part_pilot.py,
+hoi4d_process_2d.py --selections. **These 475 will be DISCARDED** —
+superseded by the planned unified full-package sweep.
+
+**USER-COMMISSIONED NEXT (prep approved, sweep NOT yet — verb survey is
+the go/no-go gate):** ONE sweep over the full 2,973-seq collaborator
+package (/workspace/hoi4d_all_2973_hands.zip on the hoi4d volume,
+verified complete: byte-identical superset of hands354, 16 categories,
++ hoi4d_action_segments.csv with FRAME-CONVERTED windows for 2,972).
+Settled decisions: (1) descriptions PIGGYBACKED on the sweep call
+(ANSWER:/DESC: two-field format, image-grounded imperative — re-pilot
+the parse first); (2) trajectories/point switch wrist→MIDDLE KNUCKLE =
+MANO joint index 9 (verify ordering empirically: ~40-80px from joint 0);
+(3) windows from the CSV (retires 10s-clock + markResult landmines;
+JSON fallback for the 1 missing seq); (4) generalized object-generic
+prompt; (5) proposed defaults pending bless: per-window hand = most
+detections (was right-only), furniture re-ask included. Prep steps:
+unpack full hands; extract RGB+2Dseg for the other 14 categories
+(~1-2h, +~60G); verify hand color (0,128,0) on non-furniture; verb
+survey → user approves → sweep (~6-9k calls, 6-10h at 14 workers).
+
+**Hard-won ops lessons this arc:** (a) RunPod CPU pods via runpodctl
+are ALWAYS 2 vCPU/4GB with a 4GB cgroup cap — the "crashloops" were
+container OOM from 12-24 codex app-servers; bigger pods ONLY via REST:
+POST rest.runpod.io/v1/pods with vcpuCount (apikey in
+~/.runpod/config.toml, single-quoted TOML); cpu3c = ~2GB/vCPU. (b)
+codex app-server needs CLI >= ~0.15x — the Mac's mise 0.135 fails every
+turn with status='failed'; standalone binaries from GitHub releases
+work (musl for pods, aarch64-apple-darwin for Mac). (c) NEVER run many
+codex workers on the user's Mac — 8 workers lagged the machine badly
+(user displeased); pod-only from now on. (d) pkill/pgrep self-match:
+any ssh command CONTAINING the pattern string kills/matches itself —
+always bracket-trick every pattern incl. 'codex app-server'. (e) local
+scratchpad (venv, binaries, data) is WIPED on session restart; only
+volume copies survive. (f) prepare (decode) and consume (VLM) phases
+must not share a small pod's CPUs.
+
 ## HOI4D 2D training line: FIRST RUN COMPLETE (2026-09-01 overnight)
 
 The g17_2d_dct recipe from scratch on real HOI4D hand video

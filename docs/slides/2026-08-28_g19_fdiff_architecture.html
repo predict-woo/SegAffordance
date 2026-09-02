@@ -1,0 +1,252 @@
+<meta charset="utf-8">
+<title>g19_fdiff Architecture</title>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: "base",
+    themeVariables: {
+      fontSize: "14px",
+      fontFamily: "-apple-system, Segoe UI, Helvetica, Arial, sans-serif",
+      primaryColor: "#ffffff",
+      primaryBorderColor: "#94a3b8",
+      lineColor: "#64748b",
+      clusterBkg: "#f8fafc",
+      clusterBorder: "#cbd5e1"
+    },
+    flowchart: { curve: "basis", nodeSpacing: 30, rankSpacing: 42 }
+  });
+</script>
+<style>
+  body { background: #f6f7f9; color: #1c2230; margin: 0;
+         font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 32px 24px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  .sub { color: #5b6575; margin: 0 0 20px; }
+  .diagram { background: #ffffff; border: 1px solid #d6dbe4; border-radius: 12px;
+             padding: 18px 10px; overflow-x: auto; }
+  pre.mermaid { margin: 0; display: flex; justify-content: center; }
+  .note { font-size: 13.5px; color: #5b6575; background: #ffffff;
+          border-left: 3px solid #d6dbe4; padding: 10px 14px;
+          border-radius: 0 8px 8px 0; margin-top: 22px; }
+  code { font: 13px ui-monospace, "SF Mono", Menlo, monospace;
+         background: rgba(0,0,0,0.05); border-radius: 4px; padding: 0 4px; }
+</style>
+
+<div class="wrap">
+  <h1>g19_fdiff — model structure</h1>
+  <p class="sub">Best-articulation checkpoint (<code>20260821_sf3d_g19_fdiff</code>, MA 29.9,
+     traj_dir 96.1). Frozen DINOv3 trunk + text-gated FPN + transformer decoder, g17 split
+     articulation heads, plain 20-point trajectory head trained under the gen-19
+     first-difference losses. Class: <code>model/segmenter.py:CRIS</code>.</p>
+
+  <div class="diagram">
+<pre class="mermaid">
+flowchart TB
+
+subgraph IN[" Inputs "]
+  direction LR
+  rgb["RGB<br/>3×512×512"]
+  dep["Depth<br/>1×512×512"]
+  txt["Text prompt<br/>77 tokens"]
+end
+
+subgraph ENC[" Encoders (frozen ❄) "]
+  direction LR
+  dino["DINOv3 ViT-L/16 ❄<br/>+ pyramid adapter<br/>v2 512@/8 · v3 1024@/16 · v4 1024@/32"]
+  dentxt["dino.txt text encoder ❄<br/>words 77×2048 · state 2048"]
+  denc["DepthEncoder (conv)<br/>128@/8 · 256@/16"]
+end
+
+subgraph FUSE[" Fusion & decoding "]
+  fpn["Text-gated FPN<br/>[640,1280,1024] → fq 512@/16"]
+  dec["Transformer decoder<br/>3 layers · 8 heads · d=512 · FFN 1024<br/>fq queries ⨯ word tokens (2048→512)"]
+  proj["Projector (dyn. conv, text-conditioned)<br/>3 maps @ /4"]
+end
+
+subgraph MAPS[" Dense outputs "]
+  direction LR
+  maskmap["Mask logits"]
+  pmap["Point heatmap<br/>→ soft-argmax point_uv"]
+  omap["Origin heatmap<br/>→ soft-argmax origin_uv"]
+end
+
+cond["Shared condition vector — 3588-d<br/>mask-pooled fq′ 512 ‖ global v4 1024 ‖ text state 2048 ‖ point_uv ‖ origin_uv<br/>(pooling: GT mask @ train, predicted @ inference)"]
+
+subgraph HEADS[" MLP heads (hidden 256) "]
+  direction LR
+  subgraph MOTION[" MotionMLP — split (g17) "]
+    direction TB
+    mtrunk["shared trunk<br/>3588→256→256"]
+    mrot["motion_head_rot<br/>Linear 256→3 + sigmoid<br/>hinge axis"]
+    mtrans["motion_head_trans<br/>Linear 256→3 + sigmoid<br/>slide direction"]
+    mtype["type head<br/>Linear 256→2<br/>revolute / prismatic"]
+    mtrunk --> mrot & mtrans & mtype
+    mtype -. "routes: GT @ train<br/>predicted @ inference" .-> mrot
+    mtype -.-> mtrans
+  end
+  traj["TrajectoryMLP — plain<br/>20×3 relative displacements<br/>no DCT · no cumsum · K=1"]
+  zp["z_p point depth<br/>+ grid_sample(fq′, point_uv)"]
+  zq["z_q origin depth<br/>+ grid_sample(fq′, origin_uv)"]
+end
+
+p3d["3D interaction point<br/>lift(point_uv, z_p, K)"]
+o3d["3D joint origin<br/>lift(origin_uv, z_q, K)"]
+
+subgraph LOSS[" Losses (g19_fdiff weights) "]
+  direction LR
+  lmask["mask DiceBCE ·5<br/>point BCE ·5 + coord ·5<br/>origin BCE ·5"]
+  lart["axis 1−cos ·5<br/>type CE ·5<br/>3D point ·5 · 3D origin ·5"]
+  ltraj["trajectory norm-L2 ·5<br/>fdiff: velocity 1.0<br/>angle 1−cos ·5 · length L1 ·5"]
+  lpp["L_pp consistency ·1<br/>articulation ↔ trajectory<br/>(normalized, no dir term)"]
+end
+
+rgb --> dino
+dep --> denc
+txt --> dentxt
+dino --> fpn
+denc --> fpn
+dentxt -- "state (gates)" --> fpn
+fpn --> dec
+dentxt -- "word tokens" --> dec
+dec --> proj
+proj --> maskmap & pmap & omap
+dec -- "fq′" --> cond
+pmap --> cond
+omap --> cond
+maskmap -. "pooling mask" .-> cond
+cond --> mtrunk
+cond --> traj & zp & zq
+zp --> p3d
+zq --> o3d
+maskmap --> lmask
+pmap --> lmask
+omap --> lmask
+mrot --> lart
+mtrans --> lart
+mtype --> lart
+p3d --> lart
+o3d --> lart
+traj --> ltraj
+mrot --> lpp
+mtrans --> lpp
+traj --> lpp
+o3d --> lpp
+p3d --> lpp
+
+classDef enc fill:#eaf1fe,stroke:#2563eb,color:#1c2230;
+classDef fuse fill:#f3edfd,stroke:#7c3aed,color:#1c2230;
+classDef map fill:#e6f7f4,stroke:#0d9488,color:#1c2230;
+classDef head fill:#fdf3e3,stroke:#d97706,color:#1c2230;
+classDef loss fill:#fdeaea,stroke:#dc2626,color:#1c2230;
+classDef condc fill:#eef0f3,stroke:#374151,color:#1c2230;
+classDef inc fill:#ffffff,stroke:#94a3b8,color:#1c2230;
+
+class rgb,dep,txt inc;
+class dino,dentxt,denc enc;
+class fpn,dec,proj fuse;
+class maskmap,pmap,omap,p3d,o3d map;
+class cond condc;
+class mtrunk,mrot,mtrans,mtype,traj,zp,zq head;
+class lmask,lart,ltraj,lpp loss;
+</pre>
+  </div>
+
+  <p class="note"><b>What makes it g19_fdiff:</b> the architecture is exactly the g17 recipe
+  (DINOv3@512 + split axis heads + heatmap-lift 3D) with an <i>unchanged</i> plain trajectory
+  head — the generation's change is purely the loss: the three first-difference terms on the
+  trajectory segments (velocity / segment-angle / segment-length). Trainable parameters are
+  everything outside the two frozen towers: depth encoder, FPN, decoder, projector, word_proj,
+  and the five MLP heads. Still the best-articulation checkpoint (MA 29.9); the closed-form
+  variant below showed the trajectory machinery can be replaced by two Gram quadratics
+  at MA 29.19.</p>
+
+  <h1 style="margin-top:48px; font-size:22px;">Closed-form variant — what changes</h1>
+  <p class="sub"><code>20260828_sf3d_closedform</code> (MA 29.19, origin record 0.250).
+     Everything from the inputs down to the shared condition vector is <b>identical</b> — the
+     diagram below starts there. The trajectory head and every loss that touched a trajectory
+     are removed; in their place, one closed-form loss on the articulation predictions themselves
+     (<code>model/losses/geometric.py:closed_form_screw_loss</code>).</p>
+
+  <div class="diagram">
+<pre class="mermaid">
+flowchart TB
+
+cond2["Shared condition vector — 3588-d<br/>(unchanged, same upstream as above)"]
+
+subgraph HEADS2[" MLP heads "]
+  direction LR
+  subgraph MOTION2[" MotionMLP — split (unchanged) "]
+    direction TB
+    mtrunk2["shared trunk"]
+    mrot2["motion_head_rot"]
+    mtrans2["motion_head_trans"]
+    mtype2["type head"]
+    mtrunk2 --> mrot2 & mtrans2 & mtype2
+  end
+  zp2["z_p point depth<br/>(unchanged)"]
+  zq2["z_q origin depth<br/>(unchanged)"]
+  trajX["TrajectoryMLP<br/>✕ REMOVED<br/>(no curve tensor, −0 params at inference:<br/>it was a leaf)"]
+end
+
+p3d2["3D interaction point"]
+o3d2["3D joint origin"]
+gt2["GT articulation<br/>type* · axis n̂* · origin q* · start p₀*"]
+
+subgraph LOSS2[" Losses "]
+  direction LR
+  lkeep2["per-branch losses<br/>mask · point · origin maps<br/>axis 1−cos · type CE · 3D point/origin<br/>(all unchanged, same weights)"]
+  lcf["CLOSED-FORM SCREW LOSS ★<br/>L_cf position ·5 + L_cf derivative ·5<br/>Gram quadratics on radial/tangential residuals<br/>GT-type-routed, per-row normalized"]
+  ltrajX["trajectory norm-L2 + fdiff trio<br/>✕ REMOVED"]
+  lppX["L_pp consistency<br/>✕ REMOVED"]
+end
+
+cond2 --> mtrunk2
+cond2 --> zp2 & zq2
+zp2 --> p3d2
+zq2 --> o3d2
+mrot2 --> lkeep2
+mtrans2 --> lkeep2
+mtype2 --> lkeep2
+p3d2 --> lkeep2
+o3d2 --> lkeep2
+mrot2 == "n̂ (rot rows)" ==> lcf
+mtrans2 == "d̂ (trans rows)" ==> lcf
+o3d2 == "q (lever arm)" ==> lcf
+p3d2 == "p₀ (lever arm)" ==> lcf
+gt2 --> lcf
+
+classDef head fill:#fdf3e3,stroke:#d97706,color:#1c2230;
+classDef loss fill:#fdeaea,stroke:#dc2626,color:#1c2230;
+classDef condc fill:#eef0f3,stroke:#374151,color:#1c2230;
+classDef map fill:#e6f7f4,stroke:#0d9488,color:#1c2230;
+classDef gtc fill:#ffffff,stroke:#94a3b8,color:#1c2230;
+classDef newloss fill:#e8f6ec,stroke:#16a34a,stroke-width:2.5px,color:#14532d;
+classDef ghost fill:#f3f4f6,stroke:#9ca3af,stroke-dasharray:6 4,color:#9ca3af;
+
+class mtrunk2,mrot2,mtrans2,mtype2,zp2,zq2 head;
+class lkeep2 loss;
+class lcf newloss;
+class trajX,ltrajX,lppX ghost;
+class cond2 condc;
+class p3d2,o3d2 map;
+class gt2 gtc;
+</pre>
+  </div>
+
+  <p class="note"><b>The closed-form loss</b> is the N→∞ limit of "decode the screw curve from
+  the predicted articulation, compare to the GT curve" — the integrals collapse so no curve is
+  ever built. Two residual vectors per revolute row, computed from the predicted axis n̂,
+  origin q, and 3D point p₀ against their GT counterparts: radial
+  <b>Δr = r − r*</b> with r = (I − n̂n̂ᵀ)(p₀ − q), and tangential <b>Δt = t − t*</b> with
+  t = n̂ × r (the sign carrier). Then, each normalized by the GT curve's own magnitude:</p>
+  <p class="note" style="font: 13px ui-monospace, 'SF Mono', Menlo, monospace;">
+  position&nbsp;(L²):&nbsp;&nbsp;[(3π/4 − 2)‖Δr‖² + (π/4)‖Δt‖² − Δr·Δt] / [(π − 2)‖r*‖²]<br/>
+  derivative&nbsp;(H¹):&nbsp;[(π/4)(‖Δr‖² + ‖Δt‖²) − Δr·Δt] / [(π/2)‖r*‖²]<br/>
+  prismatic rows (both terms):&nbsp;‖d̂ − d̂*‖² = 2(1 − cos∠)</p>
+  <p class="note"><b>Net effect:</b> zero added parameters, zero trajectory machinery — yet
+  MA 20.4 → 29.19 over the same architecture without the loss (arm B), 0.7 shy of g19_fdiff's
+  29.9, and a new origin record (0.250 vs 0.257). The entire benefit of trajectory co-training,
+  distilled into two named quadratics on the articulation heads. Trade-off: concedes
+  matched-axis sharpness (22.3° vs 17.9° for the sampled fdiff decode).</p>
+</div>

@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Closed-Form Family</title>
+<style>
+  :root {
+    --ink: #1a1d23; --muted: #5b6472; --faint: #8b93a1;
+    --paper: #fbfaf7; --card: #ffffff; --line: #e3e0d8;
+    --gray: #9aa1ac;   /* arm B / baselines */
+    --orange: #e07a2f; /* closedform pair */
+    --blue: #3d6fb4;   /* cf_noaxis */
+    --green: #3e8e5f;  /* cf_h1only */
+    --red: #c04f4f;
+    --accent: #7a4fc0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font: 16px/1.65 "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    padding: 48px 20px 96px;
+  }
+  main { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 34px; line-height: 1.2; letter-spacing: -0.5px; }
+  .sub { color: var(--muted); margin: 10px 0 6px; font-size: 17px; }
+  .meta { color: var(--faint); font-size: 13px; margin-bottom: 40px; }
+  h2 { font-size: 22px; margin: 56px 0 14px; letter-spacing: -0.3px; }
+  h2 .step { display: inline-block; background: var(--ink); color: var(--paper);
+    font-size: 12px; font-weight: 700; border-radius: 999px; padding: 2px 10px;
+    vertical-align: 3px; margin-right: 10px; letter-spacing: 0.5px; }
+  p { margin: 12px 0; }
+  em { font-style: italic; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 22px 26px; margin: 20px 0; }
+  .figure { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px 18px 8px; margin: 22px 0; overflow-x: auto; }
+  .figure svg { display: block; margin: 0 auto; }
+  .cap { color: var(--muted); font-size: 13.5px; line-height: 1.5; padding: 10px 6px 8px;
+    border-top: 1px dashed var(--line); margin-top: 12px; }
+  .verdict { border-left: 4px solid var(--accent); background: #f5f1fb; border-radius: 6px;
+    padding: 16px 20px; margin: 22px 0; }
+  .dead { border-left: 4px solid var(--red); background: #fbf1f1; border-radius: 6px;
+    padding: 14px 20px; margin: 18px 0; }
+  .alive { border-left: 4px solid var(--green); background: #f0f7f2; border-radius: 6px;
+    padding: 14px 20px; margin: 18px 0; }
+  code { font: 13px/1.5 "SF Mono", ui-monospace, Menlo, monospace;
+    background: #f1efe9; border-radius: 4px; padding: 1px 5px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; margin: 14px 0; }
+  th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .win { font-weight: 700; }
+  .svg-label { font: 12.5px "Avenir Next", system-ui, sans-serif; fill: var(--muted); }
+  .svg-num   { font: 700 13px "Avenir Next", system-ui, sans-serif; fill: var(--ink); }
+  .svg-title { font: 600 13.5px "Avenir Next", system-ui, sans-serif; fill: var(--ink); }
+  .svg-note  { font: italic 12px "Avenir Next", system-ui, sans-serif; fill: var(--faint); }
+  .chk { text-align: center; font-size: 16px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>The closed-form family: subtracting our way to a record</h1>
+<p class="sub">The continuous trajectory loss has exactly two terms. We ran the pair, then removed
+one thing at a time — and the <em>smallest</em> configuration set the all-time articulation
+record. This page explains what the terms are, what each one turned out to do, and why
+removing one helped.</p>
+<p class="meta">SegAffordance · experiments of 2026-08-28 → 29 · full numbers in
+<code>experiments/INDEX.md</code> and per-experiment <code>notes.md</code> · theory:
+<code>docs/slides/2026-08-28_continuous_trajectory_loss.html</code></p>
+
+<!-- ================================================================ -->
+<h2><span class="step">1</span>What the closed form actually is</h2>
+
+<p>Trajectory co-training helps articulation because of <em>loss geometry</em> (the mechanism
+study's verdict). Taking that seriously, we computed the N&rarr;&infin; limit of "decode the screw
+curve from the predicted articulation, compare to GT": the integrals collapse into
+<strong>two named quadratics</strong> on the articulation heads — no trajectory head, no sampled
+points, zero parameters. Those two terms are the whole closed form:</p>
+
+<div class="figure">
+<svg width="800" height="240" viewBox="0 0 800 240">
+  <!-- position panel -->
+  <text x="105" y="24" class="svg-title">position term (L&sup2;)</text>
+  <text x="105" y="42" class="svg-label">how far apart are the two curves?</text>
+  <path d="M 40 180 Q 110 80 220 100" fill="none" stroke="#1a1d23" stroke-width="2.5"/>
+  <path d="M 40 190 Q 130 130 230 150" fill="none" stroke="#e07a2f" stroke-width="2.5" stroke-dasharray="6 4"/>
+  <g stroke="#c04f4f" stroke-width="1.3">
+    <line x1="95" y1="122" x2="103" y2="158"/>
+    <line x1="150" y1="103" x2="160" y2="139"/>
+    <line x1="205" y1="99"  x2="215" y2="146"/>
+  </g>
+  <text x="40" y="215" class="svg-note">pointwise gap, integrated over the sweep</text>
+  <text x="40" y="170" class="svg-label" fill="#1a1d23">GT</text>
+  <text x="238" y="155" class="svg-label" fill="#e07a2f">pred</text>
+
+  <!-- derivative panel -->
+  <text x="430" y="24" class="svg-title">derivative term (H&sup1;)</text>
+  <text x="430" y="42" class="svg-label">do the curves MOVE the same way?</text>
+  <path d="M 370 180 Q 440 80 550 100" fill="none" stroke="#1a1d23" stroke-width="2.5"/>
+  <path d="M 372 176 Q 450 90 545 130" fill="none" stroke="#3e8e5f" stroke-width="2.5" stroke-dasharray="6 4"/>
+  <g stroke-width="1.6" fill="none">
+    <line x1="430" y1="112" x2="466" y2="96"  stroke="#1a1d23" marker-end="url(#ah-k)"/>
+    <line x1="438" y1="122" x2="472" y2="114" stroke="#3e8e5f" marker-end="url(#ah-g)"/>
+    <line x1="500" y1="98"  x2="538" y2="94"  stroke="#1a1d23" marker-end="url(#ah-k)"/>
+    <line x1="498" y1="118" x2="534" y2="124" stroke="#3e8e5f" marker-end="url(#ah-g)"/>
+  </g>
+  <text x="370" y="215" class="svg-note">velocity mismatch, integrated over the sweep</text>
+
+  <!-- formulas card -->
+  <rect x="620" y="55" width="165" height="130" rx="8" fill="#f1efe9"/>
+  <text x="632" y="80" class="svg-label">both reduce to</text>
+  <text x="632" y="102" class="svg-num">Gram quadratics in</text>
+  <text x="632" y="122" class="svg-num">&Delta;r (radial) and</text>
+  <text x="632" y="142" class="svg-num">&Delta;t (tangential,</text>
+  <text x="632" y="162" class="svg-num">carries the SIGN)</text>
+
+  <defs>
+    <marker id="ah-k" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+      <path d="M0,0 L7,3.5 L0,7 z" fill="#1a1d23"/></marker>
+    <marker id="ah-g" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+      <path d="M0,0 L7,3.5 L0,7 z" fill="#3e8e5f"/></marker>
+  </defs>
+</svg>
+<div class="cap">The two closed-form terms. Position compares the curves' <em>places</em>;
+derivative (H&sup1;) compares their <em>motions</em>. Config knobs:
+<code>closed_form_trajectory_weight</code> (position) and
+<code>closed_form_velocity_weight</code> (derivative). The H&sup1; term is exactly the
+N&rarr;&infin; limit of the fdiff family's velocity loss — that is the sense in which
+"H&sup1;-only" = "the closed-form fdiff". On prismatic rows BOTH terms collapse to
+2(1&minus;cos) on the slide direction — the sign-aware axis loss itself.</div>
+</div>
+
+<p>Alongside these, the classical per-branch losses stay on — in particular the direct
+<strong>axis 1&minus;cos</strong> term (<code>vae_weight</code>) and the 3D
+<strong>origin/point</strong> losses. Those three knobs — position, derivative, axis anchor —
+are what the three runs below toggle.</p>
+
+<!-- ================================================================ -->
+<h2><span class="step">2</span>Three runs, one knob apart each</h2>
+
+<div class="figure">
+<table>
+  <tr><th>run</th>
+      <th style="color:#e07a2f">position L&sup2;</th>
+      <th style="color:#3e8e5f">derivative H&sup1;</th>
+      <th style="color:#7a4fc0">axis 1&minus;cos</th>
+      <th>traj head + fdiff + L_pp</th></tr>
+  <tr><td>arm B <span style="color:var(--faint)">(reference: nothing)</span></td>
+      <td class="chk">—</td><td class="chk">—</td><td class="chk">✓ 0.5</td><td class="chk">—</td></tr>
+  <tr><td><code>closedform</code> <span style="color:var(--faint)">(the pair)</span></td>
+      <td class="chk">✓ 0.5</td><td class="chk">✓ 0.5</td><td class="chk">✓ 0.5</td><td class="chk">—</td></tr>
+  <tr><td><code>cf_noaxis</code> <span style="color:var(--faint)">(pair, anchor removed)</span></td>
+      <td class="chk">✓ 0.5</td><td class="chk">✓ 0.5</td><td class="chk">—</td><td class="chk">—</td></tr>
+  <tr><td><code>cf_h1only</code> <span style="color:var(--faint)">(derivative only)</span></td>
+      <td class="chk">—</td><td class="chk">✓ 1.0</td><td class="chk">✓ 0.5</td><td class="chk">—</td></tr>
+  <tr><td>g19_fdiff <span style="color:var(--faint)">(old record, full apparatus)</span></td>
+      <td class="chk">—</td><td class="chk">—</td><td class="chk">✓ 0.5</td><td class="chk">✓</td></tr>
+</table>
+<div class="cap">The design: <code>cf_noaxis</code> asks "is the direct axis loss even
+necessary?" (an identifiability proof said its zero isn't); <code>cf_h1only</code> asks
+"how much is the derivative term alone?" — the closed-form counterpart of fdiff supervision.
+Note both experiments <em>remove</em> terms; nothing new was added anywhere.</div>
+</div>
+
+<!-- ================================================================ -->
+<h2><span class="step">3</span>The result: less is more</h2>
+
+<div class="figure">
+<svg width="800" height="270" viewBox="0 0 800 270">
+  <text x="20" y="22" class="svg-title">pass_rate_ma (type correct AND axis within 10&deg;) — higher is better</text>
+  <!-- scale: MA 18 -> x 140, MA 32 -> x 760 ; 44.29 px per MA -->
+  <g>
+    <!-- arm B -->
+    <text x="130" y="66" text-anchor="end" class="svg-label">arm B (no cf at all)</text>
+    <rect x="140" y="52" width="106" height="20" rx="4" fill="#9aa1ac"/>
+    <text x="254" y="67" class="svg-num">20.4</text>
+    <!-- cf_noaxis -->
+    <text x="130" y="106" text-anchor="end" class="svg-label">cf_noaxis (pair, no anchor)</text>
+    <rect x="140" y="92" width="430" height="20" rx="4" fill="#3d6fb4"/>
+    <text x="578" y="107" class="svg-num">27.71</text>
+    <!-- closedform -->
+    <text x="130" y="146" text-anchor="end" class="svg-label">closedform (the pair)</text>
+    <rect x="140" y="132" width="496" height="20" rx="4" fill="#e07a2f"/>
+    <text x="644" y="147" class="svg-num">29.19</text>
+    <!-- g19_fdiff -->
+    <text x="130" y="186" text-anchor="end" class="svg-label">g19_fdiff (old record, full apparatus)</text>
+    <rect x="140" y="172" width="528" height="20" rx="4" fill="#9aa1ac"/>
+    <text x="676" y="187" class="svg-num">29.91</text>
+    <!-- cf_h1only -->
+    <text x="130" y="226" text-anchor="end" class="svg-label">cf_h1only (derivative only)</text>
+    <rect x="140" y="212" width="560" height="20" rx="4" fill="#3e8e5f"/>
+    <text x="708" y="227" class="svg-num win">30.64</text>
+  </g>
+  <line x1="140" y1="40" x2="140" y2="245" stroke="#e3e0d8"/>
+  <text x="140" y="260" class="svg-note">MA 18</text>
+  <text x="700" y="260" class="svg-note">MA 31</text>
+</svg>
+<div class="cap">MA on the 5,088-row test split. The derivative-only arm beats the pair it was
+carved out of (+1.45) and the all-time record that needed the entire trajectory apparatus
+(+0.73) — with a single quadratic loss term and zero trajectory machinery.</div>
+</div>
+
+<table>
+  <tr><th>metric</th><th>closedform<br>(pos+der)</th><th>cf_noaxis<br>(no anchor)</th>
+      <th>cf_h1only<br>(der only)</th><th>g19_fdiff<br>(old record)</th></tr>
+  <tr><td>MA / signed</td><td class="num">29.19 / 28.89</td><td class="num">27.71 / 27.26</td>
+      <td class="num win">30.64 / 30.11</td><td class="num">29.91 / 29.56</td></tr>
+  <tr><td>axis matched / all</td><td class="num">22.3&deg; / 26.8&deg;</td><td class="num">17.6&deg; / 26.4&deg;</td>
+      <td class="num win">16.6&deg; / 24.5&deg;</td><td class="num">17.3&deg; / 25.7&deg;</td></tr>
+  <tr><td>flips all / rot</td><td class="num">10.7 / <span class="win">13.7</span></td><td class="num">10.5 / 15.9</td>
+      <td class="num"><span class="win">9.8</span> / 15.4</td><td class="num">12.2 / 15.2</td></tr>
+  <tr><td>origin (m)</td><td class="num win">0.250</td><td class="num">0.253</td>
+      <td class="num">0.254</td><td class="num">0.296</td></tr>
+  <tr><td>mIoU / PDet</td><td class="num">0.258 / 20.1</td><td class="num">0.263 / 20.8</td>
+      <td class="num win">0.266 / 21.8</td><td class="num">0.250 / 18.0</td></tr>
+</table>
+
+<!-- ================================================================ -->
+<h2><span class="step">4</span>Why did removing a term help? The job map</h2>
+
+<p>The three runs triangulate what each loss term is actually <em>for</em> — each job is read
+off the metric that moves when that term is toggled:</p>
+
+<div class="figure">
+<svg width="800" height="250" viewBox="0 0 800 250">
+  <!-- H1 -->
+  <rect x="30" y="30" width="230" height="170" rx="10" fill="#f0f7f2" stroke="#3e8e5f" stroke-width="1.5"/>
+  <text x="50" y="60" class="svg-title" fill="#3e8e5f">derivative H&sup1;</text>
+  <text x="50" y="86" class="svg-num">job: SHAPE of motion</text>
+  <text x="50" y="110" class="svg-label">carries the discriminative</text>
+  <text x="50" y="128" class="svg-label">signal: matched 16.6&deg;,</text>
+  <text x="50" y="146" class="svg-label">all-axis 24.5&deg; (best ever),</text>
+  <text x="50" y="164" class="svg-label">gentlest on masks</text>
+  <text x="50" y="188" class="svg-note">keep, at full weight</text>
+
+  <!-- anchor -->
+  <rect x="285" y="30" width="230" height="170" rx="10" fill="#f5f1fb" stroke="#7a4fc0" stroke-width="1.5"/>
+  <text x="305" y="60" class="svg-title" fill="#7a4fc0">axis 1&minus;cos anchor</text>
+  <text x="305" y="86" class="svg-num">job: revolute SIGN</text>
+  <text x="305" y="110" class="svg-label">drop it and rot flips rise</text>
+  <text x="305" y="128" class="svg-label">13.7 &rarr; 15.9 (cf_noaxis) —</text>
+  <text x="305" y="146" class="svg-label">the scale-free term that</text>
+  <text x="305" y="164" class="svg-label">escapes the antipode</text>
+  <text x="305" y="188" class="svg-note">keep (cheap, decoupled)</text>
+
+  <!-- position -->
+  <rect x="540" y="30" width="230" height="170" rx="10" fill="#fbf1f1" stroke="#c04f4f" stroke-width="1.5"/>
+  <text x="560" y="60" class="svg-title" fill="#c04f4f">position L&sup2;</text>
+  <text x="560" y="86" class="svg-num">job: ~4 mm of origin</text>
+  <text x="560" y="110" class="svg-label">only term anchoring absolute</text>
+  <text x="560" y="128" class="svg-label">lever placement (0.250 vs</text>
+  <text x="560" y="146" class="svg-label">0.254) — but costs 1.45 MA</text>
+  <text x="560" y="164" class="svg-label">and blurs matched axis</text>
+  <text x="560" y="188" class="svg-note">deadweight for MA; sweep small w</text>
+</svg>
+<div class="cap">Each removal experiment isolates one term's contribution. The surprising part:
+position and derivative are not additive — the position gradient partially <em>re-blurs</em>
+what H&sup1; sharpens (closedform's matched axis was 22.3&deg; vs 16.6&deg; without it),
+because place-matching tolerates axis error whenever origin error compensates, while
+motion-matching does not.</div>
+</div>
+
+<div class="verdict">
+<strong>The story in one sentence:</strong> the whole benefit of trajectory supervision
+distills into <em>match the motion, not the place</em> — one H&sup1; quadratic on the
+articulation heads (plus the classical sign anchor) now beats every trajectory-head recipe
+we ever ran, with the best masks of any trajectory-supervised arm as a side effect.
+</div>
+
+<div class="dead">
+<strong>What died:</strong> "the position term is the important half" (it was the MA
+deadweight); "the direct axis loss might be redundant" (provably identifiable without it,
+but its sign-anchoring is worth 1.5 MA — cf_noaxis).
+</div>
+
+<div class="alive">
+<strong>What's open (parked, not commissioned):</strong> a small position weight (0.1–0.2)
+to chase the MA record and the 0.250 origin record in one run; the Gram/&Theta; sweep;
+H&sup1;-only + DCT head as the distilled gen-22 (masks); a seed replicate of the record;
+the angle-term hybrid (sampled, no closed form exists) for the last of the matched-axis gap.
+</div>
+
+<p class="meta" style="margin-top:40px">Checkpoints: cf_h1only best-epoch29-valloss1.1303
+(volume) · runs 20260828_sf3d_{closedform, cf_noaxis, cf_h1only} · loss:
+<code>model/losses/geometric.py:closed_form_screw_loss</code>, 18 locked tests.</p>
+
+</main>
+</body>
+</html>

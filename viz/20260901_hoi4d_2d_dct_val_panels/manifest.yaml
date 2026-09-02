@@ -1,8 +1,8 @@
 command: tools/hoi4d_vis_2d_panels.py --config config/hoi4d_train_runpod_2d_dct.yaml
   --ckpt experiments/20260901_hoi4d_2d_dct/checkpoints/best-epoch28-valloss0.3584.ckpt
   --out viz/20260901_hoi4d_2d_dct_val_panels --num 12
-tool_commit: f1d35f9
-generated: '2026-09-01T07:35:16+00:00'
+tool_commit: a846770
+generated: '2026-09-01T08:06:07+00:00'
 argv:
 - tools/hoi4d_vis_2d_panels.py
 - --config
