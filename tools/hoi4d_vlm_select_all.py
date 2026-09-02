@@ -168,7 +168,9 @@ def main():
     selections = json.loads(sel_path.read_text()) if sel_path.exists() else {}
     print("resuming with", len(selections), "existing selections", flush=True)
 
-    seqs = sorted(p.name for p in hands.iterdir() if p.is_dir())
+    # consume mode never touches the raw-data dirs (may run off-pod)
+    seqs = (sorted(p.name for p in hands.iterdir() if p.is_dir())
+            if not args.consume_jobs else [])
     jobs = queue.Queue()
     lock = threading.Lock()
     prep_done = threading.Event()
