@@ -132,7 +132,8 @@ def vlm_worker(jobs, selections, args, lock, prep_done):
             col = num_to_col.get(int(answer)) if answer.isdigit() else None
             color = list(col) if col is not None else None
         rec = {"color": color, "answer": answer, "event": job["event"],
-               "f0": job["f0"], "f1": job["f1"]}
+               "f0": job["f0"], "f1": job["f1"],
+               "raw": (reply or "")[:160]}
         with lock:
             selections[job["key"]] = rec
             n = len(selections)
