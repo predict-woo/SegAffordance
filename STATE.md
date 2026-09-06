@@ -299,12 +299,14 @@ all). Done: depth extracted for all 2,973 seqs on probe16 (note: GNU tar
 `-C` must precede the member pattern — the first attempt extracted into
 cwd; HOI4D volume briefly hit quota; raw depth tar parts (143 GB) and the
 per-frame LMDB deleted, volume now ~311/500 GB); `run_rebuild_v2d.sh`
-building `/workspace/hoi4d_processed_2d_v2d` (depth for all categories)
-→ to replace `datasets/hoi4d_processed_2d_v2` on the main volume. New
+built `/workspace/hoi4d_processed_2d_v2d` (3,084 records, depth for all
+categories, window enumeration now FROZEN to the sweep verb set — the
+09:16 one-per-window build had off-by-one windows after cut/binding
+windows, ~12 C18 records affected) → now IS `datasets/hoi4d_processed_2d_v2`
+on the main volume (old build kept as `hoi4d_processed_2d_v2_nodepth`). New
 loss option `trajectory_proj_anchor: gt_point` (TEACHER FORCING = GT 2D
 first point lifted with input depth; constant anchor; `depth_anchor_source`
-likewise; test metric follows) — smoke-tested. Arms queued for pod B
-(still UP): `lr3e5_depth` (reference), `tf`, `fullfix` (plain head +
+likewise; test metric follows) — smoke-tested. Arms RUNNING on pod B since 19:50 UTC (queue log sweep_queue_c.log, then test passes, FINAL_DONE): `lr3e5_depth` (reference), `tf`, `fullfix` (plain head +
 unnormalized proj MSE) — configs `config/hoi4d_v2_{lr3e5_depth,tf,fullfix}.yaml`,
 dirs `experiments/20260907_hoi4d_2d_v2_*`. User: SF3D-init line NOT wanted.
 **Main volume RESIZED to 1,500 GB (user, 2026-09-06).**
