@@ -288,6 +288,24 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
+## OVERNIGHT 2026-09-06→07 (user asleep): two SF3D 3D-DCT post-training runs from HOI4D
+
+HOI4D depth-complete arms DONE and scored (110 held-out objects): dct_baseline
+0.720 mIoU / 86.5 PDet / shape 0.0379; baseline (plain head) 0.716 / 88.2 /
+0.0398; teacher_forcing 0.727 / 88.0 / 0.0377 — a statistical tie; DCT
+kept, teacher forcing = legitimate alternative to detach. Pod B deleted.
+RUNNING: `20260907_sf3d_g19_dct_ft_hoi4d` (g19_dct recipe, full SF3D v3,
+init dct_baseline best-epoch90) on pod C (jtto59pz4pjimb, from 21:38 UTC,
+~5 h + test) and `20260907_sf3d_g19_dct_ft_hoi4d_tf` (init teacher_forcing
+best-epoch88) on pod A (kku2vv165h75c3, from 21:52 UTC). Baseline to beat:
+20260821_sf3d_g19_dct from scratch (val 0.9652 @ ep20, mIoU 0.2685, PDet
+21.72, roughness 0.0090). Background waiters fetch test.log + metrics.csv
+to the Mac and DELETE each pod when its run + test pass finish (markers
+SF3D_FT_DONE in sweep_queue_c2.log, SF3D_FT_TF_DONE in sweep_queue_a3.log
+on the volume). If this session dies: results live on the volume under
+experiments/<id>/logs/test.log; pods must be deleted by hand
+(`runpodctl get pod`). probe16 + dev pod stopped. Volume: main 1.5 TB.
+
 ## IN FLIGHT 2026-09-06 evening: teacher-forced anchor vs fullfix on depth-complete HOI4D v2
 
 Findings: (1) HOI4D's `trajectory_3d_camera_coords` (WiLoR joints_3d_cam)
