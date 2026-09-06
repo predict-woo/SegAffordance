@@ -10,7 +10,7 @@
 seed_everything: 42
 
 model:
-  finetune_from_path: "/workspace/SegAffordance/experiments/20260906_hoi4d_2d_v2_e100_lr3e5/checkpoints/best-epoch77-valloss0.3518.ckpt"   # HOI4D v2 sweep winner (2D-DCT, real hand video) -> full-SF3D 3D-DCT post-training
+  finetune_from_path: "/workspace/SegAffordance/experiments/20260907_hoi4d_2d_v2_dct_baseline/checkpoints/best-epoch90-valloss0.3662.ckpt"   # HOI4D v2 sweep winner (2D-DCT, real hand video) -> full-SF3D 3D-DCT post-training
   # gen-7: CLIP FROZEN (user decision). Watch item: the gen-5 frozen run
   # had the mask regression, and gen-7 leans on masks harder than any
   # generation (heatmaps share the projector with the mask channel).
