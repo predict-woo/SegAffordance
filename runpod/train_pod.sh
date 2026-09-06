@@ -38,6 +38,11 @@ GPUS=(
   # fit the 512-stack batch. The gen-13+ stack needs PRO 6000 class only —
   # poll creates until 6000 stock lands instead of falling back.
 )
+# Small-LMDB jobs (HOI4D v2: 446 MB total, batch 64 @ 512 px needs ~40 GB)
+# may also run on 48 GB cards. Opt in per launch: TRAIN_GPUS_48GB=1.
+if [ "${TRAIN_GPUS_48GB:-0}" = "1" ]; then
+  GPUS+=("NVIDIA RTX 6000 Ada Generation" "NVIDIA L40S" "NVIDIA A40" "NVIDIA RTX A6000")
+fi
 
 pod_id() {
   runpodctl pod list 2>/dev/null | python3 -c "
