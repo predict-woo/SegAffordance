@@ -1,6 +1,6 @@
-# HOI4D v2: sweep winner (e100_lr3e5) + TEACHER-FORCED projection anchor — generated 2026-09-07.
+# HOI4D v2 `dct_baseline`: sweep-winner recipe (DCT head, normalized projection loss, DETACHED predicted-point/input-depth anchor) on the depth-complete data — 2026-09-07.
 # HOI4D v2 sweep arm `e100_lr3e5` — generated 2026-09-06 from hoi4d_train_runpod_2d_dct_v2.yaml: epochs 100, lr 3e-05, milestones [80, 92], batch 64. Data: 3,075 one-per-window records (datasets/hoi4d_processed_2d_v2), ~41 steps/epoch at batch 64.
-# 20260907_hoi4d_2d_v2_tf: v1 with VLM-SELECTED moving-part masks
+# 20260907_hoi4d_2d_v2_dct_baseline: v1 with VLM-SELECTED moving-part masks
 # (tools/hoi4d_vlm_select_all.py, gpt-5.6-luna effort high, user-approved
 # pilot 2026-09-02; v1's motion-energy pick chose the HAND in ~57% of
 # records). Rebuilt LMDBs at hoi4d_processed_2d_v2; NONE/ERROR windows
@@ -108,8 +108,6 @@ model:
     trajectory_proj_normalized: true
     depth_anchor_weight: 0.5       # GT-free z_p tether: z_p vs input depth at detached point_uv
     trajectory_proj_detach_anchor: true # ARM A: the anchor gradient path severed; normalization KEPT
-    trajectory_proj_anchor: "gt_point"   # TEACHER FORCING: anchor = GT 2D first point lifted with the input depth (constant, no grad path)
-    depth_anchor_source: "gt_point"     # z_p tether at the GT 2D first point
     trajectory_proj_energy_floor: 0.0025 # (5% of image)^2 — first-launch ratio spikes fix
     p_rev_balance_weight: 0.5      # anti-collapse batch prior (first launch: gate died in 1 epoch)
     p_rev_balance_target: 0.225    # rot fraction of the key set (13297/59174)
@@ -145,7 +143,7 @@ trainer:
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        dirpath: "/workspace/SegAffordance/experiments/20260907_hoi4d_2d_v2_tf/checkpoints"
+        dirpath: "/workspace/SegAffordance/experiments/20260907_hoi4d_2d_v2_dct_baseline/checkpoints"
         monitor: "val/loss_total"
         mode: "min"
         save_top_k: 1
@@ -155,7 +153,7 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: "/workspace/SegAffordance/experiments/20260907_hoi4d_2d_v2_tf/logs"
+      save_dir: "/workspace/SegAffordance/experiments/20260907_hoi4d_2d_v2_dct_baseline/logs"
       name: "csv"
   log_every_n_steps: 10
 

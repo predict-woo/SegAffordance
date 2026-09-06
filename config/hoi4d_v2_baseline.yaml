@@ -1,6 +1,6 @@
-# HOI4D v2 sweep winner (e100_lr3e5) re-run on the DEPTH-COMPLETE rebuild (all categories carry sensor depth, so the projection term covers every window) — reference arm for the tf / fullfix comparison, 2026-09-07.
+# HOI4D v2 `baseline`: PLAIN 2D trajectory head (no DCT basis), normalized projection loss, detached anchor — one change vs dct_baseline — 2026-09-07.
 # HOI4D v2 sweep arm `e100_lr3e5` — generated 2026-09-06 from hoi4d_train_runpod_2d_dct_v2.yaml: epochs 100, lr 3e-05, milestones [80, 92], batch 64. Data: 3,075 one-per-window records (datasets/hoi4d_processed_2d_v2), ~41 steps/epoch at batch 64.
-# 20260907_hoi4d_2d_v2_lr3e5_depth: v1 with VLM-SELECTED moving-part masks
+# 20260907_hoi4d_2d_v2_baseline: v1 with VLM-SELECTED moving-part masks
 # (tools/hoi4d_vlm_select_all.py, gpt-5.6-luna effort high, user-approved
 # pilot 2026-09-02; v1's motion-energy pick chose the HAND in ~57% of
 # records). Rebuilt LMDBs at hoi4d_processed_2d_v2; NONE/ERROR windows
@@ -53,7 +53,7 @@ model:
     # delta-cumsum off (the two gates are mutually exclusive, asserted).
     trajectory_delta_cumsum: false  # g8: Euler-style RELATIVE direct readout (no cumsum, no absolute)
     trajectory_absolute: false
-    trajectory_dct_coeffs: 6       # 2D+DCT arm: smooth basis on the 2D-only path
+    trajectory_dct_coeffs: 0       # 2D+DCT arm: smooth basis on the 2D-only path
     twist_num_hypotheses: 1        # WTA off — single articulation output
     point_prediction_3d: false     # gen-7: 2D heatmap machinery back on
     use_origin_head: false         # replaced by the origin heatmap + z_q lift
@@ -143,7 +143,7 @@ trainer:
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        dirpath: "/workspace/SegAffordance/experiments/20260907_hoi4d_2d_v2_lr3e5_depth/checkpoints"
+        dirpath: "/workspace/SegAffordance/experiments/20260907_hoi4d_2d_v2_baseline/checkpoints"
         monitor: "val/loss_total"
         mode: "min"
         save_top_k: 1
@@ -153,7 +153,7 @@ trainer:
   logger:
     class_path: pytorch_lightning.loggers.CSVLogger
     init_args:
-      save_dir: "/workspace/SegAffordance/experiments/20260907_hoi4d_2d_v2_lr3e5_depth/logs"
+      save_dir: "/workspace/SegAffordance/experiments/20260907_hoi4d_2d_v2_baseline/logs"
       name: "csv"
   log_every_n_steps: 10
 
