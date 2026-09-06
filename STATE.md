@@ -288,11 +288,28 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
+## IN FLIGHT 2026-09-06 11:11 UTC: HOI4D v2 hyper-parameter sweep (user-commissioned)
+
+Training pod `segaffordance-hoi4d-b` (id t4axmfby8k5pnt, RTX PRO 6000
+Workstation 96GB, $2.19/hr, alias segaff-hoi4d-b; loaded clocks 2.9 GHz =
+healthy) runs `runpod/sweep_queue.sh` with arms base → e100 → e100_lr3e5 →
+e100_ft (configs `config/hoi4d_v2_sweep_*.yaml`, dirs
+`experiments/20260906_hoi4d_2d_v2_<arm>/`; queue log
+`/workspace/SegAffordance/sweep_queue_b.log`, per-arm `logs/train.log`).
+Remaining arms e100_lr3e6 / e100_bs32 / e200 wait for a second pod
+(`hoi4d-a` create is being polled — first hoi4d-a pod never booted and
+was deleted) or run on B afterwards. ~41 steps/epoch at batch 64; expect
+~1 h per 100-epoch arm. Selection: val/loss_total + the test-pass metrics
+(mIoU/PDet/point/traj shape) of the best few; the winner becomes the v2
+recipe. Sweep files were scp'd onto the volume through pod B (the mirror
+is dormant — dev pod and probe16 STOPPED, probe16's codex auth WIPED).
+NOTE: two stopped dev-pod entries exist (0dguj91q3tmy5c and
+v0clt0iywmvoc5) — one is stale; check which `dev.sh` uses and delete the
+other.
+
 ## DONE OVERNIGHT 2026-09-06: full-package VLM sweep v2 (terra) + HOI4D 2D LMDB v2
 
-**Nothing running.** `segaff-probe16` still UP ($0.48/hr; codex auth still at
-/root/.codex — wipe + stop/delete pod pending user). Results on the HOI4D
-volume:
+Results on the HOI4D volume:
 - `/workspace/vlm_select_v2/selections.json`: 12,890 windows — 12,639
   answered by **gpt-5.6-terra** (24 workers, fast tier, 109 min, ONE
   attempt, 0 ERROR / 0 UNPARSED / 0 missing DESC): 9,813 single-part,
