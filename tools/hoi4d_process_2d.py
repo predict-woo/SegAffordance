@@ -14,24 +14,31 @@ Emits records readable by datasets/scenefun3d.py:SF3DDataset unmodified:
                split_dataset_by_scene keeps an object in one split)
   frames.lmdb  {"jpeg", "depth_png" (16-bit mm), "orig_size"} at --size
 
-Sample construction: one record per stride-2 frame inside an open/close
-action window with a right-hand WiLoR detection and >= --min-future
-detected wrist frames remaining in the window. The mask is the 2Dseg
-color whose area changes most over the window (the moving part — color
-indices are per-part, not per-role; verified on the kitted sequences,
-notes 2026-08-31). The 2D trajectory is the wrist track (pixels) from
-the sample frame to the window end; the 3D trajectory field is filled
-with WiLoR joints_3d_cam wrist (REAL xy / NOISY z — placeholder for the
-reader's non-empty requirement; every 3D loss is off in the 2D recipe).
-Type labels (C4=trans drawer, C6=rot safe door) are written for EVAL
-only. Mask coords are thinned to one representative per --size grid
-cell to keep records small; the reader's scatter reconstruction is
-unaffected at training resolution.
+Sample construction (v2, 2026-09-06, all 16 categories): ONE record per
+interaction window (collaborator CSV windows, KEEP_VERBS) at the window's
+first frame with a WiLoR detection of the window's hand (the side with
+more detections), carrying the FULL hand trajectory of the window (SF3D
+semantics: the image shows the object in its start state; >= 5 detected
+frames required). `--per-frame` restores the v1 sampling (a record every
+2nd frame with the remaining trajectory). The
+mask is the 2Dseg class chosen per window by the VLM sweep
+(--selections; single-candidate windows are forced, NONE dropped) — the
+palette index is per-part, not per-role, but stable within a video
+(verified 2026-09-06). Without --selections the old motion-energy
+heuristic runs (v1 behaviour, known-bad: ~57% hand masks). The 2D
+trajectory is the MIDDLE-KNUCKLE (MANO joint 9) track in pixels from the
+sample frame to the window end; the 3D field is the same joint from
+joints_3d_cam (placeholder — every 3D loss is off in the 2D recipe).
+Description = the VLM's DESC field when present, else a category/verb
+template. motion_info is a content-free stub (2D-only: no motion
+supervision). Mask coords are thinned to one representative per --size
+grid cell; the reader's scatter reconstruction is unaffected.
 
-Run on the extraction pod:
+Run on the HOI4D-volume pod:
   python3 tools/hoi4d_process_2d.py --ext-root /workspace/ext \
-      --hands-root /workspace/hands/all_354_furniture_hands \
-      --out /workspace/hoi4d_processed_2d [--limit N] [--size 512]
+      --hands-root /workspace/hands2973/hands \
+      --selections /workspace/vlm_select_v2/selections.json \
+      --out /workspace/hoi4d_processed_2d_v2 [--limit N] [--size 512]
 """
 
 import argparse
@@ -47,10 +54,60 @@ FPS = 15.0
 INTERACTION_EVENTS = {"open", "close", "pull", "push", "pullout", "pushin"}
 PART_COLORS = [(0, 0, 128), (0, 128, 0), (0, 128, 128), (128, 0, 0),
                (128, 128, 0), (128, 0, 128), (0, 0, 64), (64, 0, 0)]
+HAND_COLOR = (0, 128, 0)          # palette index 2 = primary hand, every seq
+ANCHOR_JOINT = 9                  # MANO middle-finger MCP (verified 2026-09-06)
+MIN_WINDOW_FRAMES = 6
+
+# Official fine-grained verbs kept as interaction windows (user-approved
+# 2026-09-06 after the verb survey). Dropped: rest / Reachout / Stop /
+# Grasp / go / Lookaround (no manipulation), carry / Carrywithbothhands
+# (hand path dominated by the person walking), and — after the v2 review —
+# cut / paper-cut / binding (the VLM split between the tool and the
+# material being cut/stapled; dropped rather than fixed) and Pickup /
+# putdown (75% of windows but short, near-static lifts — "nothing
+# interesting to train on", user 2026-09-06).
+KEEP_VERBS = {
+    "open", "close", "Press", "push", "pull", "turn&on&the&switch",   # articulated
+    "dump",                                                           # pouring
+}
+# trajectory sanity (v2 review: 0.2% of records had a WiLoR outlier —
+# knuckle far from the mask or jumping between frames)
+MAX_START_TO_MASK_PX = 300.0
+MAX_FRAME_JUMP_PX = 300.0
+VERB_PHRASE = {"turn&on&the&switch": "switch on", "paper-cut": "cut with",
+               "binding": "staple with", "Pickup": "pick up", "putdown": "put down",
+               "Press": "press", "dump": "pour from"}
+CATEGORY_NAMES = {
+    "C1": "toy car", "C2": "mug", "C3": "laptop", "C4": "storage furniture",
+    "C5": "bottle", "C6": "safe", "C7": "bowl", "C8": "bucket", "C9": "scissors",
+    "C11": "pliers", "C12": "kettle", "C13": "knife", "C14": "trash can",
+    "C17": "lamp", "C18": "stapler", "C20": "chair",
+}
+
 
 def seq_to_relpath(seq: str) -> str:
     cam, h, c, n, s, room, t = seq.split("_")
     return f"{cam}/{h}/{c}/{n}/{s}/{room}/{t}"
+
+
+def load_segments_csv(path: Path) -> dict:
+    """Collaborator's hoi4d_action_segments.csv -> {seq: [(verb, f0, f1)]}
+    with KEEP_VERBS filtering; frames are already 0-based 15 fps."""
+    import csv
+    out = {}
+    with open(path) as fh:
+        for r in csv.DictReader(fh):
+            if r["event"] not in KEEP_VERBS:
+                continue
+            f0 = max(0, int(r["start_frame_15fps"]))
+            f1 = min(299, int(r["end_frame_15fps"]))
+            if f1 - f0 >= MIN_WINDOW_FRAMES:
+                out.setdefault(r["sequence_id"], []).append((r["event"], f0, f1))
+    return out
+
+
+def template_description(cat: str, verb: str) -> str:
+    return f"{VERB_PHRASE.get(verb, verb)} the {CATEGORY_NAMES.get(cat, 'object')}"
 
 
 def load_windows(action_json: Path):
@@ -205,7 +262,9 @@ def read_video_frames(path: Path, wanted: set, raw: bool = False):
 
 
 def process_sequence(seq: str, ext: Path, hands_root: Path, size: int,
-                     selections: dict | None = None):
+                     selections: dict | None = None,
+                     segments: dict | None = None,
+                     per_frame: bool = False):
     rel = seq_to_relpath(seq)
     cat = seq.split("_")[2]
     ann = ext / "HOI4D_annotations" / rel
@@ -225,30 +284,53 @@ def process_sequence(seq: str, ext: Path, hands_root: Path, size: int,
         mask_dir = ann / "2Dseg" / "shift_mask"
     if not mask_dir.exists():
         return None, "missing-2dseg"
-    windows, time_scale = load_windows(action)
-    if time_scale != 1.0:
-        print(f"  {seq}: action time scale {time_scale:g}", flush=True)
+    if segments is not None and seq in segments:
+        windows = segments[seq]
+    else:
+        # fallback for sequences absent from the collaborator CSV (the one
+        # such seq, ZY20210800003_H3_C3_N44_S284_s01_T2, ships an EMPTY
+        # action file upstream -> no windows)
+        try:
+            windows, time_scale = load_windows(action)
+        except (KeyError, ValueError):
+            return None, "no-windows"
+        if time_scale != 1.0:
+            print(f"  {seq}: action time scale {time_scale:g}", flush=True)
     if not windows:
         return None, "no-windows"
 
     h = np.load(hands_npz)
-    right = h["is_right"] == 1
-    fr0 = h["frame_number"][right].astype(int) - 1          # -> 0-based
-    j2d = h["joints_2d"][right][:, 0, :]                    # wrist px
-    j3c = h["joints_3d_cam"][right][:, 0, :]
-    order = np.argsort(fr0)
-    fr0, j2d, j3c = fr0[order], j2d[order], j3c[order]
-    frame_to_i = {int(f): i for i, f in enumerate(fr0)}     # last det wins
     K = np.load(intr).astype(np.float32)
+    sides = {}
+    for name, flag in (("right", 1), ("left", 0)):
+        sel = h["is_right"] == flag
+        fr0 = h["frame_number"][sel].astype(int) - 1        # -> 0-based
+        j2d = h["joints_2d"][sel][:, ANCHOR_JOINT, :]        # knuckle px
+        j3c = h["joints_3d_cam"][sel][:, ANCHOR_JOINT, :]
+        order = np.argsort(fr0)
+        fr0, j2d, j3c = fr0[order], j2d[order], j3c[order]
+        sides[name] = (j2d, j3c, {int(f): i for i, f in enumerate(fr0)})
 
     samples = []
     needed_frames = set()
     for wi, (event, f0, f1) in enumerate(windows):
+        # per-window hand: the VLM's HAND field when it names a side that
+        # WiLoR actually detected in the window, else the side with more
+        # detections
+        ndet = {s: sum(f in sides[s][2] for f in range(f0, f1 + 1)) for s in sides}
+        hand = max(ndet, key=ndet.get)
+        vlm_hand = (selections or {}).get(f"{seq}|{wi}", {}).get("hand")
+        if vlm_hand in ndet and ndet[vlm_hand] >= 5:
+            hand = vlm_hand
+        j2d, j3c, frame_to_i = sides[hand]
         if selections is not None:
             # VLM-chosen part (tools/hoi4d_vlm_select_all.py); windows the
             # VLM declined (NONE/ERROR) are dropped rather than guessed.
             sel = selections.get(f"{seq}|{wi}")
-            col = tuple(sel["color"]) if sel and sel.get("color") else None
+            # v2 records carry "colors" (several parts = whole object for
+            # pick/put-down); v1 records only "color".
+            cols = (sel.get("colors") or ([sel["color"]] if sel.get("color") else [])) if sel else []
+            col = [tuple(c) for c in cols] or None
         else:
             det = [f for f in range(f0, f1 + 1) if f in frame_to_i]
             probe = det[:: max(1, len(det) // 5)][:5]
@@ -257,12 +339,19 @@ def process_sequence(seq: str, ext: Path, hands_root: Path, size: int,
                                exclude=hand_colors(mask_dir, wrists))
         if col is None:
             continue
+        desc = (sel.get("desc") if selections is not None and sel else None) \
+            or template_description(cat, event)
         wf = [f for f in range(f0, f1 + 1) if f in frame_to_i]
-        for f in wf[::2]:
+        # ONE sample per window (user decision 2026-09-06, SF3D semantics:
+        # the frame shows the object in its start state and carries the
+        # FULL hand trajectory of the window). --per-frame restores the
+        # v1 stride-2 suffix sampling.
+        starts = wf[::2] if per_frame else wf[:1]
+        for f in starts:
             future = [g for g in wf if g >= f]
             if len(future) < 5:
                 continue
-            samples.append((wi, event, f, future, col))
+            samples.append((wi, event, f, future, col, hand, desc, j2d, j3c, frame_to_i))
             needed_frames.add(f)
     if not samples:
         return None, "no-samples"
@@ -273,13 +362,17 @@ def process_sequence(seq: str, ext: Path, hands_root: Path, size: int,
 
     cam, hh, c, n, s, room, t = seq.split("_")
     records, frames = {}, {}
-    for wi, event, f, future, col in samples:
+    for wi, event, f, future, col, hand, desc, j2d, j3c, frame_to_i in samples:
         if f not in rgb:
             continue
         m = cv2.imread(str(mask_dir / f"{f:05d}.png"))
         if m is None:
             continue
-        coords = thin_coords((m == col).all(-1), size)
+        cols = col if isinstance(col, list) else [col]
+        part = np.zeros(m.shape[:2], bool)
+        for part_col in cols:
+            part |= (m == part_col).all(-1)
+        coords = thin_coords(part, size)
         if coords is None or len(coords) < 50:
             continue
         dep = depth.get(f)
@@ -294,26 +387,32 @@ def process_sequence(seq: str, ext: Path, hands_root: Path, size: int,
             )
         key = f"{cam}_{hh}_{c}_{n}/{s}_{room}_{t}_w{wi}_f{f:03d}"
         idxs = [frame_to_i[g] for g in future]
+        tr = j2d[idxs]
+        if (np.sqrt(((coords[:, ::-1] - tr[0]) ** 2).sum(1)).min() > MAX_START_TO_MASK_PX
+                or (len(tr) > 1 and np.sqrt((np.diff(tr, axis=0) ** 2).sum(1)).max() > MAX_FRAME_JUMP_PX)):
+            continue                      # WiLoR outlier (see constants above)
         records[key] = {
             "rgb_image_path": key,
             "mask_coordinates_yx": coords.tolist(),
-            "description": description_for(cat, event),
+            "description": desc,
             "camera_intrinsics": K.tolist(),
+            # 2D-only training carries NO motion supervision (user decision
+            # 2026-09-06); the reader indexes this key unconditionally, so
+            # a content-free stub stays.
             "motion_info": {
                 "frame_specific_motion_data": {
                     "motion_origin_2d_image_coords": [0.0, 0.0],
                     "motion_dir_3d_camera_coords": [0.0, 0.0, 0.0],
                     "motion_origin_3d_camera_coords": [0.0, 0.0, 0.0],
                 },
-                "original_motion_data": {
-                    "motion_type": "trans" if cat == "C4" else "rot",
-                },
+                "original_motion_data": {"motion_type": "trans"},
             },
             "trajectory_3d_camera_coords": j3c[idxs].tolist(),
             "trajectory_2d_image_coords": j2d[idxs].tolist(),
             "trajectory_2d_valid": [True] * len(idxs),
             "hoi4d": {"seq": seq, "event": event, "window": wi,
-                      "category": cat, "wrist_frame_0based": f},
+                      "category": cat, "frame_0based": f, "hand": hand,
+                      "anchor_joint": ANCHOR_JOINT},
         }
         frames[key] = encode_frame(rgb[f], dep_u16, size)
     if not records:
@@ -321,27 +420,79 @@ def process_sequence(seq: str, ext: Path, hands_root: Path, size: int,
     return (records, frames), "ok"
 
 
+def merge_shards(out: Path, size: int):
+    """Copy every record of <out>/shard_*/{data,frames}.lmdb into
+    <out>/{data,frames}.lmdb (skips each shard's __metadata__)."""
+    import lmdb
+    env_d = lmdb.open(str(out / "data.lmdb"), map_size=1 << 38)
+    env_f = lmdb.open(str(out / "frames.lmdb"), map_size=1 << 40)
+    n = 0
+    for d in sorted(out.glob("shard_*")):
+        for name, env in (("data.lmdb", env_d), ("frames.lmdb", env_f)):
+            src = lmdb.open(str(d / name), readonly=True, lock=False)
+            with src.begin() as rt, env.begin(write=True) as wt:
+                for k, v in rt.cursor():
+                    if k == b"__metadata__":
+                        continue
+                    wt.put(k, v)
+                    if name == "data.lmdb":
+                        n += 1
+            src.close()
+        print(f"merged {d.name}: total records {n}", flush=True)
+    with env_f.begin(write=True) as txn:
+        txn.put(b"__metadata__", pickle.dumps(
+            {"entries": n, "depth_size": size, "jpeg_quality": 92,
+             "source": "hoi4d_process_2d"}, protocol=4))
+    print("MERGE DONE", n, "records", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ext-root", required=True)
-    ap.add_argument("--hands-root", required=True)
+    ap.add_argument("--ext-root", default=None, help="required unless --merge-shards")
+    ap.add_argument("--hands-root", default=None, help="required unless --merge-shards")
     ap.add_argument("--out", required=True)
     ap.add_argument("--size", type=int, default=512)
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--selections", default=None,
                     help="selections.json from hoi4d_vlm_select_all.py")
+    ap.add_argument("--segments-csv", default=None,
+                    help="collaborator hoi4d_action_segments.csv (default: "
+                         "<hands-root>/../hoi4d_action_segments.csv); JSON "
+                         "action files are the fallback per sequence")
+    ap.add_argument("--shard", default=None,
+                    help="'i/n': process seqs[i::n] into --out (run n "
+                         "processes with --out <root>/shard_i, then --merge-shards)")
+    ap.add_argument("--merge-shards", action="store_true",
+                    help="merge <out>/shard_*/{data,frames}.lmdb into <out>/ and exit")
+    ap.add_argument("--per-frame", action="store_true",
+                    help="v1 sampling: a record every 2nd frame of the window "
+                         "with the remaining trajectory (default: ONE record per "
+                         "window at its first frame with the full trajectory)")
     args = ap.parse_args()
 
     import lmdb
+    if args.merge_shards:
+        merge_shards(Path(args.out), args.size)
+        return
+    if not (args.ext_root and args.hands_root):
+        ap.error("--ext-root and --hands-root are required")
     selections = None
     if args.selections:
         selections = json.load(open(args.selections))
         print("using", len(selections), "VLM selections", flush=True)
     ext, hands_root = Path(args.ext_root), Path(args.hands_root)
+    seg_csv = Path(args.segments_csv) if args.segments_csv \
+        else hands_root.parent / "hoi4d_action_segments.csv"
+    segments = load_segments_csv(seg_csv) if seg_csv.exists() else None
+    print("segments csv:", seg_csv if segments is not None else "NONE (json fallback)",
+          "windows:", sum(len(v) for v in (segments or {}).values()), flush=True)
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
     seqs = sorted(p.name for p in hands_root.iterdir() if p.is_dir())
     if args.limit:
         seqs = seqs[: args.limit]
+    if args.shard:
+        i, n = (int(x) for x in args.shard.split("/"))
+        seqs = seqs[i::n]
 
     env_d = lmdb.open(str(out / "data.lmdb"), map_size=1 << 36)
     env_f = lmdb.open(str(out / "frames.lmdb"), map_size=1 << 38)
@@ -349,7 +500,9 @@ def main():
     for i, seq in enumerate(seqs):
         try:
             got, status = process_sequence(seq, ext, hands_root, args.size,
-                                           selections=selections)
+                                           selections=selections,
+                                           segments=segments,
+                                           per_frame=args.per_frame)
         except Exception as e:  # keep going; report at the end
             got, status = None, f"error:{type(e).__name__}"
         stats[status] = stats.get(status, 0) + 1

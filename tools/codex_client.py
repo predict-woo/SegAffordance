@@ -28,14 +28,20 @@ class CodexError(RuntimeError):
 class CodexClient:
     def __init__(self, model: str | None = None, effort: str | None = None,
                  cwd: str | None = None,
-                 codex_bin: str = "codex", timeout: float = 240.0):
+                 codex_bin: str = "codex", timeout: float = 240.0,
+                 service_tier: str | None = None):
         self.model = model
         self.effort = effort
         self.cwd = cwd
         self.timeout = timeout
         self._id = 0
+        cmd = [codex_bin, "app-server"]
+        if service_tier:
+            # "priority" = Codex "Fast" mode (1.5x speed, more quota use);
+            # a config override, not a thread/turn param.
+            cmd += ["-c", f'service_tier="{service_tier}"']
         self._proc = subprocess.Popen(
-            [codex_bin, "app-server"],
+            cmd,
             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, bufsize=1,
         )

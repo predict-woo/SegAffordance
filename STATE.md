@@ -288,6 +288,75 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
+## DONE OVERNIGHT 2026-09-06: full-package VLM sweep v2 (terra) + HOI4D 2D LMDB v2
+
+**Nothing running.** `segaff-probe16` still UP ($0.48/hr; codex auth still at
+/root/.codex — wipe + stop/delete pod pending user). Results on the HOI4D
+volume:
+- `/workspace/vlm_select_v2/selections.json`: 12,890 windows — 12,639
+  answered by **gpt-5.6-terra** (24 workers, fast tier, 109 min, ONE
+  attempt, 0 ERROR / 0 UNPARSED / 0 missing DESC): 9,813 single-part,
+  2,719 multi-part, 107 NONE (77 of them single-candidate: 40 Pickup, 36
+  binding, 31 putdown — worth a look), + 251 pre-filed NONE (no object
+  mask). hand: 10,991 right / 905 left / 743 both (advisory; builder trusts
+  WiLoR when they disagree). Luna's 1,574 partial answers kept in
+  selections_luna_partial.json (terra won the head-to-head: hand 87% vs 62%
+  WiLoR-agreement, safe-door miss fixed, whole-object multi-part answers).
+- **SAMPLING CHANGED 2026-09-06 (user): ONE record per window** at the
+  window's first frame with the FULL hand trajectory (SF3D semantics — the
+  frame shows the object in its start state; v1's stride-2 "remaining
+  trajectory" suffix sampling was NOT the SF3D convention and is now only
+  behind `--per-frame`). Rebuilt into `/workspace/hoi4d_processed_2d_v2/`
+  (09:30 UTC, 14 min) with 12,046 records = windows, then **Pickup/putdown
+  REMOVED in place (user: "nothing interesting to train on")** → **FINAL:
+  3,075 records** = open 1,181, close 1,039, dump 240, push 178, Press 171,
+  pull 165, switch 101; categories TrashCan 770, Safe 581, StorageFurniture
+  520, Lamp 378, ToyCar 331, Laptop 232, Bucket 99, Kettle 92, Mug 31,
+  Bottle 27, Stapler 12, Scissors 1, Pliers 1 (Bowl/Knife/Chair gone);
+  732 object instances, 1,116 seqs; 40/40 randomly sampled records
+  reviewed correct (viz/20260906_hoi4d_v2_lmdb_sample). KEEP_VERBS in the
+  builder matches. **Compacted copy (446 MB) transferred to the MAIN volume
+  at `/workspace/datasets/hoi4d_processed_2d_v2/` (md5-verified); dev-pod
+  fast_dev_run with the v2 config PASSED** (3,075 keys, scene split 622
+  train / 110 val objects at 0.15, finite losses; batch 64 OOMs on the
+  24 GB dev GPU — A100 for real runs). Dev pod RUNNING, mirror live again.
+  Still before training: retune schedule for 3k samples (v1 was sized for
+  15.6k), recipe/init decision, experiment dir + INDEX. The per-frame build was
+  moved to `/workspace/hoi4d_processed_2d_v2_perframe/` (125,166 records
+  after pruning: removed cut/paper-cut/binding — 1,873, VLM split tool vs
+  material — and WiLoR trajectory outliers — 1,124; start >300 px from mask
+  or per-frame jump >300 px, jump p99 = 128 px). Filters live in the
+  builder (KEEP_VERBS, MAX_*_PX) so rebuilds reproduce them. 2,942 seqs ok / 29 no-samples / 1
+  missing-2dseg / 1 empty-action seq; 1,460 object instances (split key);
+  all 16 categories; verbs: putdown 59.3k, Pickup 25.1k, open 15.7k, close
+  14.1k, dump 4.2k, push 2.9k, pull 2.8k, Press 691, switch 377 (putdown >>
+  Pickup because Pickup windows average 13.9 frames vs 27). traj len
+  5/16/108, ~2.4k unique descriptions. Review panels + findings in
+  viz/20260906_hoi4d_v2_lmdb_sample/README.md: part-motion and whole-object
+  picks all correct in ~44 inspected multi-candidate records; residual
+  error rate not measured precisely (95% bound ≈ 7%, likely a few %). Old v1 set (`hoi4d_processed_2d`, 15.6k furniture
+  records) untouched. Training NOT commissioned. NOTE the v2 config
+  (`config/hoi4d_train_runpod_2d_dct_v2.yaml`) expects
+  `/workspace/datasets/hoi4d_processed_2d_v2` on the MAIN volume, while the
+  build lives on the HOI4D volume (`/workspace/hoi4d_processed_2d_v2`, 16G)
+  — copy across (a pod can mount only one volume; go via scp/rsync between
+  pods or a tar over the network) before any training run. Decisions today: verb set =
+open/close/Press/push/pull/switch + dump/paper-cut/binding/cut +
+Pickup/putdown (carry dropped); windows from collaborator CSV; anchor =
+MANO joint 9 (verified visually); hand = VLM HAND field if WiLoR has >=5
+dets on that side else most-detected side; motion_info = stub; multi-number
+ANSWER unioned. Survey facts: 2Dseg index 2 = hand always, other indices
+per-part and STABLE within a video but anonymous across videos; rigid
+categories mostly single-class (ToyCar always); Bucket/Chair/Pliers/
+Scissors/Laptop/Lamp/Safe/TrashCan/Stapler/Furniture are part-segmented;
+second hand / unrelated objects can appear under other indices. All
+2,973 seqs extracted (RGB + 2Dseg + action) under /workspace/ext; full
+hands package at /workspace/hands2973. Code: tools/hoi4d_vlm_select_all.py
+(v2 composite, 3-field prompt, shards), tools/hoi4d_process_2d.py (CSV
+windows, knuckle, hand policy, colors union, shards/merge),
+tools/codex_client.py (service_tier) — UNCOMMITTED as of this note.
+Training NOT commissioned.
+
 ## COMPACTION SNAPSHOT 2 (2026-09-03) — VLM mask-selection saga + full-package plan
 
 **IN FLIGHT: nothing running.** The VLM sweep is PAUSED at user request.

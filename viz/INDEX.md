@@ -8,6 +8,9 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
 |---|---|---|
+| [20260906_hoi4d_v2_lmdb_sample](20260906_hoi4d_v2_lmdb_sample/README.md) | 16 random records (one per category) from the rebuilt HOI4D 2D LMDB v2: VLM masks, knuckle trajectories, VLM descriptions | `tools/hoi4d_process_2d.py` output, scratchpad renderer |
+| [20260906_hoi4d_vlm_v2_composites](20260906_hoi4d_vlm_v2_composites/README.md) | the exact Set-of-Mark composite the full-package VLM sweep sends per window (zoomed bottom row, outlined + numbered parts, leader lines) | `tools/hoi4d_vlm_select_all.py --prepare-only` |
+| [20260906_hoi4d_drawer_inout_samples](20260906_hoi4d_drawer_inout_samples/README.md) | HOI4D rigid-object "in/out of the drawer" clips: drawer already open (no open/close), 2Dseg = object + hand only — rigid categories are single-candidate | throwaway `drawer_samples.py` on segaff-probe16 |
 | [20260825_toy_traj_mechanism](20260825_toy_traj_mechanism/README.md) | toy probes: both losses saddle at the antipode, angular wins head-to-head, shared-trunk miniature NULL — the real transfer needs the vision trunk | `tools/toy_traj_mechanism.py` |
 | [20260822_sf3d_g17_2d_dct_vs_g17_panels](20260822_sf3d_g17_2d_dct_vs_g17_panels/README.md) | best 2D arm vs 3D — 2D-DCT trajectories smooth and glued to GT tracks, masks at the 3D level; articulation overlays garbage (unsupervised) | `tools/sf3d_vis_predictions.py` |
 | [20260822_sf3d_g19_smoothness_panels](20260822_sf3d_g19_smoothness_panels/README.md) | smoothness fix 3-way — g17 jitter vs g19-dct ordered smooth arcs vs g19-fdiff tight-direction arcs | `tools/sf3d_vis_predictions.py` |
