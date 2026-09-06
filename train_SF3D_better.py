@@ -617,6 +617,17 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                     _img_size[i:i + 1].float().to(_dev),
                 )
                 _uv = outputs.point_uv[i:i + 1].detach().float()
+                # anchor as the model was trained (loss_params.trajectory_proj_anchor):
+                # input-depth lift of point_uv, or the GT first point (teacher forcing)
+                _gt_anchor = (
+                    getattr(self.loss_params, "trajectory_proj_anchor", "pred_depth") == "gt_point"
+                )
+                if _gt_anchor:
+                    # GT 2D first point (normalised) lifted with the input depth
+                    _uv = (
+                        _trajectory_2d_extras[0][i:i + 1, 0, :].float()
+                        / _img_size[i:i + 1].float().clamp(min=1.0)
+                    ).to(_dev)
                 _grid = (_uv * 2.0 - 1.0).view(1, 1, 1, 2)
                 _z = F.grid_sample(
                     depth[i:i + 1].float().to(_dev), _grid, align_corners=False

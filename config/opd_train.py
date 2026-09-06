@@ -295,6 +295,19 @@ class LossParams:
     # The un-detached gradient through grid_sample at depth edges collapsed
     # the shared trunk (masks/heatmaps) in the first g17-2d runs.
     trajectory_proj_detach_anchor: bool = False
+    # 2026-09-07 (HOI4D v2): where the projection loss anchors the predicted
+    # 3D trajectory. "pred_depth" = point_uv lifted with the INPUT depth
+    # (the g17-2d chain; needs a depth map — rows without one are skipped);
+    # "gt_point" = TEACHER FORCING: the GT 2D track's first point lifted
+    # with the input depth there — a constant, so no gradient can reach the
+    # point head / trunk (detach becomes moot). Still needs a depth map:
+    # HOI4D's stored 3D track is a scale-less WiLoR placeholder (z ~25 m vs
+    # 0.7 m sensor, 2026-09-07), so it cannot serve as the anchor.
+    trajectory_proj_anchor: str = "pred_depth"
+    # z_p tether target pixel: "input" = the detached predicted point_uv;
+    # "gt_point" = the GT 2D first point (pairs with the teacher-forced
+    # anchor). Both sample the input depth; rows with no depth are skipped.
+    depth_anchor_source: str = "input"
     # 2026-08-22: gen-19 fdiff losses ported to uv-space for the 2D-only
     # arms — segment vectors of the PROJECTED curve vs the GT 2D track
     # (both-endpoints-valid segments only). Same conventions as the 3D

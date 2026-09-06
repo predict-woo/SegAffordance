@@ -1179,12 +1179,18 @@ class TrajectoryProjectionLoss(nn.Module):
         self, weight: float, near_plane: float = 0.05, normalized: bool = False,
         energy_floor: float = 1e-4, detach_anchor: bool = False,
         fdiff_velocity_weight: float = 0.0, fdiff_angle_weight: float = 0.0,
-        fdiff_length_weight: float = 0.0,
+        fdiff_length_weight: float = 0.0, anchor_source: str = "pred_depth",
     ):
         super().__init__()
         self.weight = weight
         self.near_plane = near_plane
         self.energy_floor = energy_floor
+        # "pred_depth": point_uv lifted with the input depth (g17-2d chain).
+        # "gt_point": teacher forcing — anchor at targets.trajectory[:, 0]
+        # (GT camera-frame first point); constant, depth-free (2026-09-07).
+        if anchor_source not in ("pred_depth", "gt_point"):
+            raise ValueError(f"anchor_source must be pred_depth|gt_point, got {anchor_source}")
+        self.anchor_source = anchor_source
         # 2026-08-22: the gen-19 first-difference losses ported to uv-space
         # for the 2D-only arms — segment vectors of the PROJECTED predicted
         # curve vs the GT 2D track (velocity = mean L2 of the diff
@@ -1227,9 +1233,9 @@ class TrajectoryProjectionLoss(nn.Module):
             or targets.camera_intrinsic is None
             or targets.img_size is None
             or depth is None
-            # This loss lifts point_uv to 3D, so the 3D point mode
-            # (point_uv None) cannot run it — no-op there as well.
-            or outputs.point_uv is None
+            # The pred_depth chain lifts point_uv to 3D, so the 3D point
+            # mode (point_uv None) cannot run it — no-op there as well.
+            or (self.anchor_source == "pred_depth" and outputs.point_uv is None)
         ):
             # mask_logits, not point_uv: always present in every mode.
             return self._zero(outputs.mask_logits), {}
@@ -1239,17 +1245,32 @@ class TrajectoryProjectionLoss(nn.Module):
             K_norm = normalized_intrinsics(
                 targets.camera_intrinsic.to(device), targets.img_size.to(device)
             )
-            coords = outputs.point_uv.float()
-            if self.detach_anchor:
-                coords = coords.detach()
-            grid = (coords * 2.0 - 1.0).view(-1, 1, 1, 2)
-            z = F.grid_sample(
-                depth.to(device).float(), grid, align_corners=False
-            ).view(-1)
-            anchor = backproject_points(K_norm, coords, z)
-            if self.detach_anchor:
-                anchor = anchor.detach()
-            anchor_ok = z > 1e-3
+            if self.anchor_source == "gt_point":
+                # Teacher forcing: the GT 2D track's first point lifted with
+                # the INPUT depth there — no grad path by construction. (NOT
+                # targets.trajectory[:, 0]: HOI4D's stored 3D track is a
+                # scale-less WiLoR placeholder, z ~25 m vs 0.7 m sensor.)
+                uv0 = targets.trajectory_2d[:, 0, :].to(device).float()
+                grid = (uv0 * 2.0 - 1.0).view(-1, 1, 1, 2)
+                z = F.grid_sample(
+                    depth.to(device).float(), grid, align_corners=False
+                ).view(-1)
+                anchor = backproject_points(K_norm, uv0, z).detach()
+                anchor_ok = z > 1e-3
+                if targets.trajectory_2d_valid is not None:
+                    anchor_ok = anchor_ok & targets.trajectory_2d_valid[:, 0].to(device).bool()
+            else:
+                coords = outputs.point_uv.float()
+                if self.detach_anchor:
+                    coords = coords.detach()
+                grid = (coords * 2.0 - 1.0).view(-1, 1, 1, 2)
+                z = F.grid_sample(
+                    depth.to(device).float(), grid, align_corners=False
+                ).view(-1)
+                anchor = backproject_points(K_norm, coords, z)
+                if self.detach_anchor:
+                    anchor = anchor.detach()
+                anchor_ok = z > 1e-3
 
             traj_abs = anchor.unsqueeze(1) + outputs.trajectory_pred.float()
             in_front = traj_abs[..., 2] > self.near_plane

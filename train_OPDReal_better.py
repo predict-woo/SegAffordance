@@ -109,6 +109,9 @@ class OPDRealTrainingModule(pl.LightningModule):
             fdiff_length_weight=getattr(
                 self.loss_params, "proj_fdiff_length_weight", 0.0
             ),
+            anchor_source=getattr(
+                self.loss_params, "trajectory_proj_anchor", "pred_depth"
+            ),
         )
         self.twist_loss = TwistLoss(
             weight=getattr(self.loss_params, "twist_weight", 0.5),
@@ -731,13 +734,24 @@ class OPDRealTrainingModule(pl.LightningModule):
         # point's depth vs the INPUT depth at a DETACHED point_uv (the
         # tether teaches the lift, not the heatmap; depth holes masked).
         _da_w = getattr(self.loss_params, "depth_anchor_weight", 0.0)
+        _da_src = getattr(self.loss_params, "depth_anchor_source", "input")
         if (
             _da_w > 0.0
             and outputs.point_3d_pred is not None
-            and outputs.point_uv is not None
             and depth is not None
+            and (
+                (_da_src == "gt_point" and targets.trajectory_2d is not None)
+                or (_da_src == "input" and outputs.point_uv is not None)
+            )
         ):
-            _grid = (outputs.point_uv.detach().float() * 2.0 - 1.0).view(-1, 1, 1, 2)
+            if _da_src == "gt_point":
+                # 2026-09-07 teacher-forced arm: tether z_p to the input
+                # depth at the GT 2D first point (the stored 3D track's z is
+                # a scale-less placeholder on HOI4D)
+                _uv0 = targets.trajectory_2d[:, 0, :].float().to(depth.device)
+                _grid = (_uv0 * 2.0 - 1.0).view(-1, 1, 1, 2)
+            else:
+                _grid = (outputs.point_uv.detach().float() * 2.0 - 1.0).view(-1, 1, 1, 2)
             _z_in = F.grid_sample(
                 depth.float(), _grid, align_corners=False
             ).view(-1)
