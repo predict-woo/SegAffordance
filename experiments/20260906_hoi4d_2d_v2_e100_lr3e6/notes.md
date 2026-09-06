@@ -4,4 +4,4 @@
 
 **Recipe:** otherwise identical to 20260901_hoi4d_2d_dct (config.yaml here).
 
-**Result:** (pending)
+**Result:** best val/loss_total **0.4384** (epoch 70); test pass on the 110 held-out objects (= val split): mIoU **0.521**, PDet **61.3**, point err 0.0268, traj proj-2D shape 0.0379, traj_dir acc 50.2 (chance — as in v1, direction does not emerge from hand tracks). lower LR is strictly worse. Checkpoint: the single best-*.ckpt (others pruned; volume-quota incident 2026-09-06). Sweep table: STATE.md / INDEX.md.

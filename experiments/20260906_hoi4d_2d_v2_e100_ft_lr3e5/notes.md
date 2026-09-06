@@ -4,4 +4,4 @@
 
 **Recipe:** otherwise identical to 20260901_hoi4d_2d_dct (config.yaml here).
 
-**Result:** (pending)
+**Result:** CANCELLED at epoch 1 (user: SF3D-initialized line not wanted); no checkpoint kept.

@@ -288,24 +288,54 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
-## IN FLIGHT 2026-09-06 11:11 UTC: HOI4D v2 hyper-parameter sweep (user-commissioned)
+## VOLUME QUOTA HIT + TRIM (2026-09-06)
 
-Training pod `segaffordance-hoi4d-b` (id t4axmfby8k5pnt, RTX PRO 6000
-Workstation 96GB, $2.19/hr, alias segaff-hoi4d-b; loaded clocks 2.9 GHz =
-healthy) runs `runpod/sweep_queue.sh` with arms base → e100 → e100_lr3e5 →
-e100_ft (configs `config/hoi4d_v2_sweep_*.yaml`, dirs
-`experiments/20260906_hoi4d_2d_v2_<arm>/`; queue log
-`/workspace/SegAffordance/sweep_queue_b.log`, per-arm `logs/train.log`).
-Remaining arms e100_lr3e6 / e100_bs32 / e200 wait for a second pod
-(`hoi4d-a` create is being polled — first hoi4d-a pod never booted and
-was deleted) or run on B afterwards. ~41 steps/epoch at batch 64; expect
-~1 h per 100-epoch arm. Selection: val/loss_total + the test-pass metrics
-(mIoU/PDet/point/traj shape) of the best few; the winner becomes the v2
-recipe. Sweep files were scp'd onto the volume through pod B (the mirror
-is dormant — dev pod and probe16 STOPPED, probe16's codex auth WIPED).
-NOTE: two stopped dev-pod entries exist (0dguj91q3tmy5c and
-v0clt0iywmvoc5) — one is stale; check which `dev.sh` uses and delete the
-other.
+At 13:45 UTC the main volume (1 TB) hit "Disk quota exceeded" (sweep
+checkpoints, 16.6 GB/arm) and silently killed both training pods' jobs for
+2 h. Fix: `runpod/sweep_queue.sh` now keeps ONLY the best checkpoint per
+arm; remaining arm configs use save_top_k 1. Then, user-approved, EVERY
+finished experiment was trimmed to its single best-valloss checkpoint
+(23 dirs, **284 GB freed**; experiments/ 523 → 239 GB; volume ~562/1000 GB).
+Kept files match the "Current best checkpoints" table below. Dirs with only
+a last.ckpt (opdreal_frozenclip, sf3d_twist_clip, hoi4d_2d_dct_v2 stub)
+untouched. Lesson: 4.3 GB per ckpt × save_top_k 3 + last — never leave
+that default on for sweeps.
+
+## HOI4D v2 HYPER-PARAMETER SWEEP COMPLETE (2026-09-06 18:30 UTC)
+
+**Winner (from scratch, user wants no SF3D-init line): `e100_lr3e5`** =
+v1 recipe with lr 3e-5 (milestones 80/92), 100 epochs, batch 64 —
+held-out (110 objects) mIoU 0.694 / PDet 86.7 / point 0.0148 / traj shape
+0.0329, val 0.3518 @ ep 77; checkpoint
+`experiments/20260906_hoi4d_2d_v2_e100_lr3e5/checkpoints/best-epoch77-valloss0.3518.ckpt`;
+config `config/hoi4d_v2_sweep_e100_lr3e5.yaml`. Panels:
+viz/20260906_hoi4d_v2_lr3e5_val_panels.
+
+| arm | val | mIoU | PDet | point | shape |
+|---|---|---|---|---|---|
+| base (v1: 30 ep, lr 1e-5) | 0.391 | 0.551 | 68.0 | 0.0240 | 0.0369 |
+| e100 | 0.386 | 0.626 | 78.7 | 0.0185 | 0.0346 |
+| e100_lr3e6 | 0.438 | 0.521 | 61.3 | 0.0268 | 0.0379 |
+| **e100_lr3e5** | **0.352** | **0.694** | **86.7** | **0.0148** | **0.0329** |
+| e100_lr6e5 | 0.355 | 0.674 | 84.8 | 0.0161 | 0.0345 |
+| e100_lr1e4 | 0.354 | 0.702 | 86.7 | 0.0156 | 0.0331 |
+| e100_bs32 | 0.358 | 0.688 | 86.3 | 0.0153 | 0.0332 |
+| e200 | 0.368 | 0.656 | 82.2 | 0.0167 | 0.0331 |
+| e100_ft (SF3D init) | 0.364 | 0.690 | 85.2 | 0.0179 | 0.0330 |
+
+Findings: LR is the lever — 3e-5…1e-4 all reach the same ~0.35 val floor
+(1e-5 stalls at ~0.39, 3e-6 worse); reached by ep 20–40, later epochs are
+noise/overfit (train 0.15 vs val 0.40 at lr 1e-5/100 ep); batch 32 ≈ more
+updates ≈ same effect; 200 epochs confirms the horizon. traj_dir acc at
+chance for every arm (as v1). SF3D init helps at low LR but less than LR;
+the combination arm e100_ft_lr3e5 was CANCELLED at ep 1 (user).
+Ops: 10 arms on two RTX PRO 6000 pods (~$35 incl. 2 h lost to the quota
+incident). Pod A deleted; **pod B (segaff-hoi4d-b, $2.19/hr) still UP** for
+optional extra visualizations — delete when done. Dev pod + probe16
+stopped (two stopped dev-pod entries exist: 0dguj91q3tmy5c and
+v0clt0iywmvoc5 — one is stale; check which `dev.sh` uses, delete the
+other). The mirror is dormant: sweep configs/notes reached the volume by
+scp; Mac-side commits are ahead of the volume's repo copy.
 
 ## DONE OVERNIGHT 2026-09-06: full-package VLM sweep v2 (terra) + HOI4D 2D LMDB v2
 

@@ -1,0 +1,15 @@
+command: tools/hoi4d_vis_2d_panels.py --config config/hoi4d_v2_sweep_e100_lr3e5.yaml
+  --ckpt experiments/20260906_hoi4d_2d_v2_e100_lr3e5/checkpoints/best-epoch77-valloss0.3518.ckpt
+  --out viz/20260906_hoi4d_v2_lr3e5_val_panels --num 16
+tool_commit: f54f3b4
+generated: '2026-09-06T18:20:01+00:00'
+argv:
+- tools/hoi4d_vis_2d_panels.py
+- --config
+- config/hoi4d_v2_sweep_e100_lr3e5.yaml
+- --ckpt
+- experiments/20260906_hoi4d_2d_v2_e100_lr3e5/checkpoints/best-epoch77-valloss0.3518.ckpt
+- --out
+- viz/20260906_hoi4d_v2_lr3e5_val_panels
+- --num
+- '16'
