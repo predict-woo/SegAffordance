@@ -70,6 +70,12 @@ KEEP_VERBS = {
     "open", "close", "Press", "push", "pull", "turn&on&the&switch",   # articulated
     "dump",                                                           # pouring
 }
+# The verb set the 2026-09-06 VLM sweep ENUMERATED windows with. Window
+# indices in selections.json ("<seq>|<wi>") are positions in THIS list, so
+# it is FROZEN: windows are always enumerated with SWEEP_VERBS and then
+# filtered by KEEP_VERBS (a 2026-09-06 rebuild that enumerated with the
+# reduced set mis-assigned masks — caught by the event check below).
+SWEEP_VERBS = KEEP_VERBS | {"paper-cut", "binding", "cut", "Pickup", "putdown"}
 # trajectory sanity (v2 review: 0.2% of records had a WiLoR outlier —
 # knuckle far from the mask or jumping between frames)
 MAX_START_TO_MASK_PX = 300.0
@@ -92,12 +98,14 @@ def seq_to_relpath(seq: str) -> str:
 
 def load_segments_csv(path: Path) -> dict:
     """Collaborator's hoi4d_action_segments.csv -> {seq: [(verb, f0, f1)]}
-    with KEEP_VERBS filtering; frames are already 0-based 15 fps."""
+    enumerated with SWEEP_VERBS (index-stable vs selections.json); the
+    KEEP_VERBS filter is applied per window in process_sequence. Frames are
+    already 0-based 15 fps."""
     import csv
     out = {}
     with open(path) as fh:
         for r in csv.DictReader(fh):
-            if r["event"] not in KEEP_VERBS:
+            if r["event"] not in SWEEP_VERBS:
                 continue
             f0 = max(0, int(r["start_frame_15fps"]))
             f1 = min(299, int(r["end_frame_15fps"]))
@@ -314,6 +322,14 @@ def process_sequence(seq: str, ext: Path, hands_root: Path, size: int,
     samples = []
     needed_frames = set()
     for wi, (event, f0, f1) in enumerate(windows):
+        if event not in KEEP_VERBS:
+            continue
+        if selections is not None and f"{seq}|{wi}" in selections:
+            sel_event = selections[f"{seq}|{wi}"].get("event")
+            if sel_event is not None and sel_event != event:
+                raise RuntimeError(
+                    f"{seq} window {wi}: selection event {sel_event!r} != CSV "
+                    f"event {event!r} — window enumeration drifted from the sweep")
         # per-window hand: the VLM's HAND field when it names a side that
         # WiLoR actually detected in the window, else the side with more
         # detections

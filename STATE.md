@@ -288,6 +288,27 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
+## IN FLIGHT 2026-09-06 evening: teacher-forced anchor vs fullfix on depth-complete HOI4D v2
+
+Findings: (1) HOI4D's `trajectory_3d_camera_coords` (WiLoR joints_3d_cam)
+is SCALE-LESS — z ~25 m vs 0.7 m sensor, ~230 px reprojection error —
+never use it as geometry; (2) the pred_depth projection anchor skips rows
+without depth (`anchor_ok = z > 1e-3`), and v2 had depth only for C4/C6,
+so the SWEEP'S TRAJECTORY TERM TRAINED ON FURNITURE ONLY (masks/points on
+all). Done: depth extracted for all 2,973 seqs on probe16 (note: GNU tar
+`-C` must precede the member pattern — the first attempt extracted into
+cwd; HOI4D volume briefly hit quota; raw depth tar parts (143 GB) and the
+per-frame LMDB deleted, volume now ~311/500 GB); `run_rebuild_v2d.sh`
+building `/workspace/hoi4d_processed_2d_v2d` (depth for all categories)
+→ to replace `datasets/hoi4d_processed_2d_v2` on the main volume. New
+loss option `trajectory_proj_anchor: gt_point` (TEACHER FORCING = GT 2D
+first point lifted with input depth; constant anchor; `depth_anchor_source`
+likewise; test metric follows) — smoke-tested. Arms queued for pod B
+(still UP): `lr3e5_depth` (reference), `tf`, `fullfix` (plain head +
+unnormalized proj MSE) — configs `config/hoi4d_v2_{lr3e5_depth,tf,fullfix}.yaml`,
+dirs `experiments/20260907_hoi4d_2d_v2_*`. User: SF3D-init line NOT wanted.
+**Main volume RESIZED to 1,500 GB (user, 2026-09-06).**
+
 ## VOLUME QUOTA HIT + TRIM (2026-09-06)
 
 At 13:45 UTC the main volume (1 TB) hit "Disk quota exceeded" (sweep
