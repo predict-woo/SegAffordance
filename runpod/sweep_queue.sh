@@ -34,6 +34,15 @@ for arm in "$@"; do
     --config "$cfg" --data.lmdb_path /dev/shm/data.lmdb --data.frame_cache_path /dev/shm/frames.lmdb \
     > "experiments/${exp}/logs/train.log" 2>&1
   echo "=== END ${exp} exit=$? $(date)"
-  ls "experiments/${exp}/checkpoints/" | grep best- | sed 's/.*valloss\([0-9.]*\)\.ckpt/\1 &/' | sort -g | head -1
+  # Keep ONLY the best checkpoint: 4.3 GB per file, and 7 arms x (3 best +
+  # last) blew the 1 TB volume quota on 2026-09-06 (both pods' jobs died
+  # silently at "Disk quota exceeded").
+  best=$(ls "experiments/${exp}/checkpoints/" | grep best- | sed 's/.*valloss\([0-9.]*\)\.ckpt/\1 &/' | sort -g | head -1 | cut -d' ' -f2)
+  if [ -n "$best" ]; then
+    for f in experiments/${exp}/checkpoints/*.ckpt; do
+      [ "$(basename "$f")" = "$best" ] || rm -f "$f"
+    done
+    echo "$best"
+  fi
 done
 echo "QUEUE_DONE $(date)"
