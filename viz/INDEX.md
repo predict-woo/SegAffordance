@@ -8,6 +8,7 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
 |---|---|---|
+| [20260907_epic_visor_propagate](20260907_epic_visor_propagate/README.md) | VISOR polygon -> contact-onset frame via SAM2 video propagation on 4 EPIC videos: sample panels + sparse-to-sparse validation (IoU 0.77-0.85 mean; lows = VISOR door/interior inconsistency, one real failure on a 90-deg door swing) | `tools/epic_visor_propagate.py`, dataset audit |
 | [20260907_epic_visor_masks](20260907_epic_visor_masks/README.md) | EPIC VISOR sparse masks on 22 of our fixture interactions (nearest frame to contact onset): moving-part semantics for drawers/doors, cupboard inconsistent; coverage 500/1,305 in-window | scratchpad `visor_coverage.py` + `visor_viz.py`, dataset audit |
 | [20260906_hoi4d_v2_lr3e5_val_panels](20260906_hoi4d_v2_lr3e5_val_panels/README.md) | sweep winner e100_lr3e5 on held-out furniture: masks on the right part, knuckle point, trajectories follow GT direction/extent | `tools/hoi4d_vis_2d_panels.py` |
 | [20260906_hoi4d_v2_lmdb_sample](20260906_hoi4d_v2_lmdb_sample/README.md) | 16 random records (one per category) from the rebuilt HOI4D 2D LMDB v2: VLM masks, knuckle trajectories, VLM descriptions | `tools/hoi4d_process_2d.py` output, scratchpad renderer |
