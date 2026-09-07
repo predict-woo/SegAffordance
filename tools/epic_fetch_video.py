@@ -14,13 +14,27 @@ from concurrent.futures import ThreadPoolExecutor
 D55 = "https://data.bris.ac.uk/datasets/3h91syskeag572hl6tvuovwv4d/videos/train"
 DEXT = "https://data.bris.ac.uk/datasets/2g1n6qdydwa9u22shpxqzp0t8m"
 
-def url_for(vid):
-    p, n = vid.split("_")
-    return f"{DEXT}/{p}/videos/{vid}.MP4" if len(n) == 3 else f"{D55}/{p}/{vid}.MP4"
+D55_TEST = "https://data.bris.ac.uk/datasets/3h91syskeag572hl6tvuovwv4d/videos/test"
 
-def total_size(url):
+def candidates(vid):
+    p, n = vid.split("_")
+    if len(n) == 3: return [f"{DEXT}/{p}/videos/{vid}.MP4"]
+    return [f"{D55}/{p}/{vid}.MP4", f"{D55_TEST}/{p}/{vid}.MP4"]  # EPIC-55 test-split videos live under videos/test/
+
+def head_size(url):
     req = urllib.request.Request(url, method="HEAD")
-    with urllib.request.urlopen(req, timeout=60) as r: return int(r.headers["Content-Length"])
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r: return int(r.headers["Content-Length"])
+    except urllib.error.HTTPError as e:
+        if e.code == 404: return None
+        raise
+
+def url_for(vid):
+    for u in candidates(vid):
+        if head_size(u) is not None: return u
+    raise FileNotFoundError(f"{vid}: not found at any of {candidates(vid)}")
+
+def total_size(url): return head_size(url)
 
 def fetch_range(url, a, b, path, tries=5):
     for _ in range(tries):
