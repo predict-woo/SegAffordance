@@ -46,10 +46,11 @@ def main():
         try:
             sp, on = hit["epic_frame"], o["onset"]; split = o["split"]
             anns = sparse_anns(vid, split, hit["image"]); fx = [x for x in anns if x["name"] in hit["fixture"]]
-            seed = poly_mask([x["segments"] for x in fx])
+            K0 = intr[vid]; seed = poly_mask([x["segments"] for x in fx], size=(int(K0["width"]), int(K0["height"])))
             lo, hi = min(sp, on), max(sp, on); shutil.rmtree(fd, ignore_errors=True); extract(vid, lo, hi, fd)
             masks = propagate(predictor, fd, seed, reverse=(sp > on)); m_on, m_seed = masks[-1], masks[0]
             r = narr[nid]; K = intr[vid]; fx_, fy_, cx, cy = (float(K[k]) for k in ("fx", "fy", "cx", "cy"))
+            Wv, Hv = int(K["width"]), int(K["height"])  # per-video resolution (P12 is not 1080p)
             z = np.load(f"{PKG}/trajectories/{vid}/{nid}.npz")
             sides = [s for s in ("left", "right") if f"{s}_joints3d" in z.files]
             side = r["sides"] if r["sides"] in sides else (sides[0] if sides else None)
@@ -62,21 +63,23 @@ def main():
             # QA panel at half resolution
             im_sp = Image.open(f"{fd}/{(sp - lo) + 1:05d}.jpg").convert("RGBA"); im_on = Image.open(f"{od}/onset.jpg").convert("RGBA")
             def overlay(im, m, col):
-                arr = np.zeros((H, W, 4), np.uint8); arr[m] = (*col, 110); return Image.alpha_composite(im, Image.fromarray(arr))
+                arr = np.zeros((m.shape[0], m.shape[1], 4), np.uint8); arr[m] = (*col, 110)
+                ov = Image.fromarray(arr).resize(im.size) if Image.fromarray(arr).size != im.size else Image.fromarray(arr)
+                return Image.alpha_composite(im, ov)
             L = overlay(im_sp, seed, (255, 40, 40)); Rr = overlay(im_on, m_on, (40, 255, 40)); d = ImageDraw.Draw(Rr)
             pts = [tuple(p) for p in uv if np.all(np.isfinite(p))]
             if len(pts) > 1: d.line(pts, fill=(0, 220, 255, 255), width=5)
             if pts: d.ellipse([pts[0][0] - 12, pts[0][1] - 12, pts[0][0] + 12, pts[0][1] + 12], fill=(0, 220, 255, 255))
-            pan = Image.new("RGBA", (2 * W, H + 70), (20, 20, 20, 255)); pan.paste(L, (0, 70)); pan.paste(Rr, (W, 70))
+            Wp, Hp = L.size; pan = Image.new("RGBA", (2 * Wp, Hp + 70), (20, 20, 20, 255)); pan.paste(L, (0, 70)); pan.paste(Rr, (Wp, 70))
             ImageDraw.Draw(pan).text((10, 10), f"{nid} '{r['narration']}' side={r['sides']}  VISOR {sp} -> onset {on} (d={sp-on:+d})  area x{area_ratio:.2f}  seedIoU {iou(m_seed, seed):.2f}  fixture={hit['fixture']}", fill=(255, 255, 255, 255), font=font)
-            pan.convert("RGB").resize((W, (H + 70) // 2)).save(f"{od}/panel.jpg", quality=80)
+            pan.convert("RGB").resize((Wp, (Hp + 70) // 2)).save(f"{od}/panel.jpg", quality=80)
             meta = {"video_id": vid, "narration_id": nid, "narration": r["narration"], "verb": o["verb"], "noun": o["noun"],
                     "sides": r["sides"], "side_used": side, "scale_regime": r["scale_regime"], "onset": on, "sparse_frame": sp,
                     "d": sp - on, "span": o["span"], "window": o["window"], "visor_image": hit["image"], "visor_split": split,
                     "fixture_names": hit["fixture"], "hand_in_contact_with_fixture": hit["hand_in_contact_with_fixture"],
                     "seed_area_px": int(seed.sum()), "onset_area_px": int(m_on.sum()), "area_ratio": area_ratio,
                     "seed_iou": iou(m_seed, seed), "grid_fps": grid_fps(vid),
-                    "intrinsics": {k: float(K[k]) for k in ("fx", "fy", "cx", "cy")}, "width": W, "height": H,
+                    "intrinsics": {k: float(K[k]) for k in ("fx", "fy", "cx", "cy")}, "width": Wv, "height": Hv, "frame_size": list(im_on.size),
                     "knuckle_uv_onset": [float(pts[0][0]), float(pts[0][1])] if pts else None, "n_traj": int(len(J)),
                     "seconds": round(time.time() - t0, 1)}
             json.dump(meta, open(f"{od}/meta.json.tmp", "w"), indent=1); os.replace(f"{od}/meta.json.tmp", f"{od}/meta.json")  # atomic

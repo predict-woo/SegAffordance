@@ -26,8 +26,8 @@ def extract(vid, a, b, dst):
                     "-vf", f"fps={fps:g}", "-frames:v", str(b - a + 1), "-q:v", "2", f"{dst}/%05d.jpg"], check=True)
     n = len(os.listdir(dst)); assert n == b - a + 1, (vid, a, b, n)
 
-def poly_mask(segs):
-    m = Image.new("L", (W, H), 0); d = ImageDraw.Draw(m)
+def poly_mask(segs, size=(W, H)):
+    m = Image.new("L", size, 0); d = ImageDraw.Draw(m)
     for seg in segs:
         for poly in seg:
             if len(poly) >= 3: d.polygon([tuple(p) for p in poly], fill=255)
