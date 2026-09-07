@@ -289,6 +289,29 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
+## IN FLIGHT 2026-09-08 00:45 local: EPIC/VISOR PRODUCTION RUN (user asleep, "expect it finished")
+
+Two shards over the 115 VISOR-covered videos: shard 0 on the dev pod
+(`segaff-dev`, log /workspace/epic_shard0.log), shard 1 on pod B
+`segaffordance-epic-b` (PRO 4000, $0.57/hr, id br1pbudv1uzu4l, alias
+segaff-epic-b, log /workspace/epic_shard1.log). Driver
+`tools/epic_pipeline_shard.sh i 2`: per video chunked fetch (16 ranges,
+`tools/epic_fetch_video.py`, timeout 45 min x2) -> `tools/epic_visor_
+propagate_batch.py` (SAM2 propagation of the nearest VISOR fixture mask to
+the contact onset for every interaction with |d|<=60; 2-6 s each; timeout
+90 min) -> video deleted. Work items: /workspace/datasets/epic_processed_2d/
+work/<narration_id>/{onset.jpg,mask.png,meta.json,panel.jpg};
+_video_done/<vid> markers (resumable), _failed/<nid> tracebacks. Smoke test
+P28_103: 15/15 OK. Babysitter monitor (scratchpad epic_watch.sh) reports
+every 10 min, alerts on stalls/failures. WHEN BOTH SHARDS FINISH: build the
+LMDB on the dev pod — `python tools/epic_process_2d.py --work
+/workspace/datasets/epic_processed_2d/work --out /workspace/datasets/
+epic_processed_2d` (|d|<=30, area-ratio 0.35-2.5, HOI4D outlier rules;
+depth = ZEROS, hand z kept in the record) — render a 20-record viz sample,
+reader smoke test, DELETE POD B, update this section + INDEX. Pod E
+(`segaffordance-sf3d-e`) is still on the second plain-init SF3D arm
+(`..._ft_hoi4d_tf_plain`), watcher fetches + deletes it.
+
 ## EPIC prep — SAM2 propagation of VISOR masks VALIDATED (2026-09-08 ~00:30 local)
 
 User decision: drop the ~800 non-VISOR interactions for now; masks = VISOR
