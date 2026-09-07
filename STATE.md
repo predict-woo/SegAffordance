@@ -67,7 +67,8 @@ silent mid-run deaths with truncated ~4.35G ckpts = volume quota.
 
 | role | experiment | checkpoint |
 |---|---|---|
-| **best articulation (3D)** | 20260828_sf3d_cf_h1only | best-epoch29-valloss1.1303 — MA 30.64/signed 30.11 + all-axis 24.5° + flips-all 9.8 (ALL RECORDS), NO trajectory head (H1 quadratic + axis anchor only) |
+| **best MA (3D), single seed** | 20260907_sf3d_g19_dct_ft_hoi4d_tf | best-epoch25-valloss0.9794 — MA **31.13**/signed 30.80 + PDet **23.27** + roughness 0.0079 (records); g19_dct recipe initialized from HOI4D v2 teacher_forcing; axis 28.0°/matched 19.7°, type 91.9 (worse than cf_h1only) |
+| best articulation (3D), all-round | 20260828_sf3d_cf_h1only | best-epoch29-valloss1.1303 — MA 30.64/signed 30.11 + all-axis 24.5° + flips-all 9.8, NO trajectory head (H1 quadratic + axis anchor only) |
 | **best origin** | 20260828_sf3d_closedform | best-epoch22-valloss1.1792 — origin 0.250 (record), MA 29.19 with NO trajectory head (closed-form pos+der quadratics) |
 | prev best articulation | 20260821_sf3d_g19_fdiff | best-epoch29-valloss1.1780 — MA 29.9, traj_dir 96.1/0.819 (traj records stand) |
 | **best axis precision (3D)** | 20260825_sf3d_fdiff_dir | best-epoch24-valloss1.2487 — matched 14.62°, rot flips 11.24 (both records) |
