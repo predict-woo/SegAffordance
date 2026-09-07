@@ -289,6 +289,32 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
+## EPIC-KITCHENS prep — VISOR mask audit DONE (2026-09-07 ~22:30 local)
+
+User scope: VISOR-covered interactions only (the ~800 without VISOR are
+DROPPED for now); depth: model change to make it optional, later. Data on
+the main volume: `/workspace/datasets/visor/` = sparse annotation JSONs
+(158 videos, 833 MB), dense interpolation zips for our 118 overlapping
+videos (8.7 GB, `interpolations/`), frame_mapping.json, `coverage.json`
+(sparse hits per interaction), `coverage_dense.json` + `dense_out/`
+(exact-onset polygons). Viz: `viz/20260907_epic_visor_masks/`.
+Numbers (1,305 ok interactions): 532 in VISOR videos; **500 have a
+fixture mask on a sparse frame inside the window** (473 with the hand
+annotated in contact); nearest sparse frame exactly at onset 9, ±15: 273,
+±30: 422; before-or-at onset within 30 frames: 166. **Dense
+interpolations give an exact-onset fixture mask for only 73** (VISOR
+filters interpolations to entities present in both endpoints) — the dense
+route is dead. Mask semantics: drawers + fridge/freezer/oven/dishwasher/
+microwave/room doors = the moving part (tight polygons, hand cut out);
+cupboard/cabinet inconsistent (door vs whole carcass). Open decision: how
+to put the mask on the onset frame — (a) SAM2 propagation of the nearest
+sparse mask to the onset (≤30 frames for 422), (b) re-anchor the record to
+the sparse frame (collaborator has the EPIC-Fields poses), (c) accept
+d≤0 frames only (166). Ops lessons: dev-pod cgroup is 31 GB (host shows
+125); never parse zips from the FUSE mount (stage to /dev/shm or NVMe);
+multiprocessing.Pool hung + OOM — per-video xargs workers with streaming
+raw_decode worked (scratchpad visor_coverage_dense.py).
+
 ## DONE 2026-09-07 19:10 local: cross-eval — SF3D-trained checkpoints on the HOI4D held-out split
 
 `experiments/20260907_xeval_sf3d_on_hoi4d` (dev pod, HOI4D teacher_forcing
