@@ -46,7 +46,10 @@ def main():
         try:
             sp, on = hit["epic_frame"], o["onset"]; split = o["split"]
             anns = sparse_anns(vid, split, hit["image"]); fx = [x for x in anns if x["name"] in hit["fixture"]]
-            K0 = intr[vid]; seed = poly_mask([x["segments"] for x in fx], size=(int(K0["width"]), int(K0["height"])))
+            K0 = intr[vid]; Wv0, Hv0 = int(K0["width"]), int(K0["height"])
+            seed = poly_mask([x["segments"] for x in fx])  # VISOR polygons are ALWAYS in 1920x1080 space (checked P12: 720p video, 1080p polygons)
+            if (Wv0, Hv0) != (W, H):  # resize the seed to the video's frame size (nearest)
+                seed = np.array(Image.fromarray(seed.astype(np.uint8) * 255).resize((Wv0, Hv0), Image.NEAREST)) > 127
             lo, hi = min(sp, on), max(sp, on); shutil.rmtree(fd, ignore_errors=True); extract(vid, lo, hi, fd)
             masks = propagate(predictor, fd, seed, reverse=(sp > on)); m_on, m_seed = masks[-1], masks[0]
             r = narr[nid]; K = intr[vid]; fx_, fy_, cx, cy = (float(K[k]) for k in ("fx", "fy", "cx", "cy"))
