@@ -28,7 +28,9 @@ polygon: red = GT only, green = propagated only, yellow = overlap.
 | P28_103 (50 fps) | mean 0.81, min 0.55 | 3 near-perfect (0.98-1.00); the low ones are VISOR labelling the opened door + interior while SAM2 keeps the door |
 | P04_05 | mean 0.77, min 0.15 | 4 at 0.93-0.98; cupboard 0.70 (interior added by VISOR); dishwasher 0.15 = REAL failure: door swings 90 deg to horizontal over 40 frames, SAM2 keeps only the front edge |
 | P22_07 | mean 0.85, min 0.55 | 4 at 0.96-1.00; the two lows are a motion-blurred seed where VISOR's "cupboard" = whole carcass + doors |
-| P01_09 | (pending) | |
+| P01_09 (12.5 GB video) | mean 0.91, min 0.83 | drawer 0.97, cupboards 0.83 / 0.92, ovens 0.89 / 0.94 / 0.94; 6 samples at offsets 0..4 frames all clean (one x1.41 = drawer front no longer occluded by the arm at onset) |
+
+**Overall:** 24 validation round trips, mean IoU 0.84, 17 of 24 at 0.83+.
 
 **Interpretation.** Propagation over the onset offsets we need (median ~15
 frames, mostly toward the closed state) is clean in every sample: tight

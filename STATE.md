@@ -289,6 +289,29 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
+## EPIC prep — SAM2 propagation of VISOR masks VALIDATED (2026-09-08 ~00:30 local)
+
+User decision: drop the ~800 non-VISOR interactions for now; masks = VISOR
+polygon on the nearest sparse frame propagated to the contact onset with
+SAM2 (video predictor, hiera-large; installed in the dev pod's /opt/venv
+via `uv pip`, ckpt /workspace/models/sam2.1_hiera_large.pt). Test on 4
+videos (P28_103, P04_05, P22_07, P01_09; full-HD MP4s at
+/workspace/datasets/epic_videos/, 6-13 GB each): 18 sample propagations
+onto the onset (offsets -15..+17) all clean; 24 sparse-to-sparse validation
+round trips (gaps 15-40 frames) mean IoU 0.84, lows = VISOR's door-vs-
+door+interior inconsistency (SAM2 keeps the moving part) plus ONE real
+failure (dishwasher door swinging 90 deg over 40 frames, IoU 0.15 — flag
+area-ratio outliers). Batch: viz/20260907_epic_visor_propagate (README has
+the table). Tools committed: tools/epic_visor_{coverage,coverage_dense,
+viz,propagate}.py, tools/epic_visor_fetch_{ann,interp}.sh,
+tools/epic_fetch_video.py (chunked range download: 36 MB/s vs 2.7 single
+stream; the HF mirror a1raman/epic_kitchens_100 is slower from EU-RO-1).
+NEXT: the production pipeline on the user's separate pod/volume —
+per-video: chunked fetch -> cut onset/window frames -> propagate the
+VISOR mask for every covered interaction (~420 with |d|<=30) -> LMDB
+records (RGB 512, mask, knuckle trajectory, intrinsics, narration); depth
+still open (user: make the model's depth input optional later).
+
 ## EPIC-KITCHENS prep — VISOR mask audit DONE (2026-09-07 ~22:30 local)
 
 User scope: VISOR-covered interactions only (the ~800 without VISOR are
