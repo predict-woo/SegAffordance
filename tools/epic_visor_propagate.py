@@ -22,7 +22,7 @@ def extract(vid, a, b, dst):
     """frames a..b (EPIC annotation numbering, 1-based) -> dst/00000.jpg ..."""
     os.makedirs(dst, exist_ok=True); fps = grid_fps(vid)
     t0 = (a - 1) / fps
-    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-ss", f"{t0:.6f}", "-i", f"{VID}/{vid}.MP4",
+    subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-ss", f"{t0:.6f}", "-i", f"{VID}/{vid}.MP4",
                     "-vf", f"fps={fps:g}", "-frames:v", str(b - a + 1), "-q:v", "2", f"{dst}/%05d.jpg"], check=True)
     n = len(os.listdir(dst)); assert n == b - a + 1, (vid, a, b, n)
 

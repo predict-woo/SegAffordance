@@ -3,7 +3,8 @@
 # coverage.json, sorted): chunked fetch -> SAM2 propagation work items ->
 # delete the video (unless KEEP_VIDEOS=1). Resumable: finished videos are
 # skipped via <out>/_video_done/<vid>. Every step is under `timeout` so a
-# stall cannot hang the shard. Log markers: "=== VIDEO", FETCH_FAIL,
+# stall cannot hang the shard. Children get stdin from /dev/null — ffmpeg
+# otherwise reads the video list off the loop's stdin (bit us 2026-09-08). Log markers: "=== VIDEO", FETCH_FAIL,
 # PROP_FAIL, SHARD_DONE.
 #   bash tools/epic_pipeline_shard.sh <i> <n> [out_dir]
 set -u
@@ -24,11 +25,11 @@ while read -r vid; do
   echo "=== VIDEO $vid start $(date +%H:%M:%S)"
   ok=0
   for attempt in 1 2; do
-    if timeout 2700 $PY tools/epic_fetch_video.py "$vid" "$VIDS" --chunks 16; then ok=1; break; fi
+    if timeout 2700 $PY tools/epic_fetch_video.py "$vid" "$VIDS" --chunks 16 < /dev/null; then ok=1; break; fi
     echo "fetch attempt $attempt failed for $vid"; sleep 30
   done
   [ $ok = 1 ] || { echo "FETCH_FAIL $vid $(date +%H:%M:%S)"; rm -f "$VIDS/$vid.MP4"*; continue; }
-  if timeout 5400 $PY tools/epic_visor_propagate_batch.py --video "$vid" --out "$OUT" --max-d 60; then
+  if timeout 5400 $PY tools/epic_visor_propagate_batch.py --video "$vid" --out "$OUT" --max-d 60 < /dev/null; then
     echo "=== VIDEO $vid done $(date +%H:%M:%S)"
   else
     echo "PROP_FAIL $vid exit=$? $(date +%H:%M:%S)"
