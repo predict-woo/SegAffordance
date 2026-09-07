@@ -288,7 +288,30 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
-## OVERNIGHT 2026-09-06→07 (user asleep): two SF3D 3D-DCT post-training runs from HOI4D
+## DONE 2026-09-07 ~02:00 UTC: SF3D 3D-DCT post-training from HOI4D — NEW MA RECORD
+
+**Nothing running; all training pods deleted; probe16 + dev pod stopped.**
+Two g19_dct-recipe runs (full SF3D v3, 30 ep) initialized from HOI4D v2
+depth-complete checkpoints, test protocol = 5,088 as always:
+
+| run | init | val | MA / signed | PDet / mIoU | axis all / matched | flips | type | origin | rough |
+|---|---|---|---|---|---|---|---|---|---|
+| 20260821_sf3d_g19_dct (scratch) | — | 0.9652 | 25.98 / 25.83 | 21.72 / 0.2685 | 25.3 / 18.2 | 9.98 | 95.1 | 0.276 | 0.0090 |
+| 20260907_sf3d_g19_dct_ft_hoi4d | dct_baseline | 1.0097 | 29.76 / 29.44 | 18.28 / 0.240 | 31.0 / 22.9 | 12.2 | 91.5 | 0.269 | 0.0081 |
+| **20260907_sf3d_g19_dct_ft_hoi4d_tf** | teacher_forcing | 0.9794 | **31.13 / 30.80** | **23.27** / 0.2664 | 28.0 / 19.7 | 12.4 | 91.9 | 0.293 | **0.0079** |
+
+**MA 31.13 = new all-time record** (prev cf_h1only 30.64 / signed 30.11) on
+the plain g19_dct recipe, plus a PDet record (23.27 vs g21's 23.21) and
+best DCT roughness — paid with worse axis precision (+2.7° all / +1.5°
+matched), flips, type (−3.2) and origin. HOI4D init from dct_baseline
+gets the MA gain but LOSES masks (PDet −3.4); the teacher_forcing init is
+strictly better. Single seeds — the natural follow-ups: repeat with a
+second seed; ft from teacher_forcing + the fdiff/dir 3D losses (the axis
+-precision recipes); a shorter LR schedule (val already best at ep 25).
+Ops: pods A/B/C deleted automatically after fetch; test logs + metrics in
+each experiment dir (committed). Cost today ≈ $55 across 6 pod-instances.
+
+## (superseded) OVERNIGHT 2026-09-06→07 (user asleep): two SF3D 3D-DCT post-training runs from HOI4D
 
 HOI4D depth-complete arms DONE and scored (110 held-out objects): dct_baseline
 0.720 mIoU / 86.5 PDet / shape 0.0379; baseline (plain head) 0.716 / 88.2 /
