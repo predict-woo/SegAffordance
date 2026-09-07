@@ -31,7 +31,10 @@ def main():
     print(f"{vid}: {len(items)} interactions (|d|<={a.max_d}) of {len(cov)} with hits", flush=True)
     narr = {r["narration_id"]: r for r in csv.DictReader(open(f"{PKG}/epic_interaction_index.csv"))}
     intr = {r["video_id"]: r for r in csv.DictReader(open(f"{PKG}/camera_intrinsics.csv"))}
-    todo = [(o, h) for o, h in items if not os.path.exists(f"{a.out}/{o['narration_id']}/meta.json")]
+    def done(nid):
+        try: json.load(open(f"{a.out}/{nid}/meta.json")); return True
+        except Exception: return False
+    todo = [(o, h) for o, h in items if not done(o["narration_id"])]
     if not todo:
         os.makedirs(f"{a.out}/_video_done", exist_ok=True); open(f"{a.out}/_video_done/{vid}", "w").write("ok\n"); print("VIDEO_DONE", vid, "(nothing to do)"); return
     from sam2.build_sam import build_sam2_video_predictor
@@ -76,7 +79,7 @@ def main():
                     "intrinsics": {k: float(K[k]) for k in ("fx", "fy", "cx", "cy")}, "width": W, "height": H,
                     "knuckle_uv_onset": [float(pts[0][0]), float(pts[0][1])] if pts else None, "n_traj": int(len(J)),
                     "seconds": round(time.time() - t0, 1)}
-            json.dump(meta, open(f"{od}/meta.json", "w"), indent=1)
+            json.dump(meta, open(f"{od}/meta.json.tmp", "w"), indent=1); os.replace(f"{od}/meta.json.tmp", f"{od}/meta.json")  # atomic
             n_ok += 1; print(f"OK {nid} d={sp-on:+d} area x{area_ratio:.2f} {meta['seconds']}s", flush=True)
         except Exception as e:
             n_fail += 1; print(f"FAIL {nid}: {type(e).__name__}: {e}", flush=True); traceback.print_exc()
