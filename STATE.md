@@ -3,7 +3,7 @@
 **The single source of truth for "where is this project right now".**
 Update this document at every experiment wrap, decision, or infra change —
 it is the first thing a fresh/compacted session should read. Keep entries
-terse; details live in the linked specs/notes. Last update: 2026-09-01.
+terse; details live in the linked specs/notes. Last update: 2026-09-07.
 
 ## COMPACTION SNAPSHOT (2026-08-28) — read this first after context loss
 
@@ -288,6 +288,32 @@ quadratic outperforms the fdiff trio in the no-head setting); concedes
 matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
+
+## DONE 2026-09-07 17:30 local: HOI4D v2 2x2 grid complete (plain + teacher forcing)
+
+**Nothing running; pod D deleted 17:27 local; dev pod + probe16 stopped.**
+Last cell `20260907_hoi4d_2d_v2_teacher_forcing_plain` (plain head +
+GT-anchored projection): val 0.3460 @ ep 81, held-out mIoU 0.708 / PDet
+86.7 / shape 0.0413 — the WORST of the four. Full grid (mIoU / PDet /
+shape, 110 objects, single seed): dct_baseline 0.720/86.5/0.0379,
+baseline 0.716/88.2/0.0398, teacher_forcing 0.727/88.0/0.0377,
+teacher_forcing_plain 0.708/86.7/0.0413. The GT anchor helps only with
+the DCT basis; **DCT + teacher forcing is the HOI4D recipe** (and its
+checkpoint is the init behind the SF3D MA record below).
+
+**NEXT (user, 2026-09-07 evening): EPIC-KITCHENS hand data.** Package
+`/workspace/datasets/epic_hands_package.zip` (11 MB, unpacked beside it;
+collaborator branch jiaqchen-epic-hand, 2026-09-01): 1,305 open/close
+fixture interactions in 340 videos (888 metric "grip" regime), 21-joint
+WiLoR tracks in the onset-frame camera at 1920x1080 intrinsics, narration
++ verb/noun + side + span/window. Missing vs the HOI4D record: RGB (must
+stream full-HD mp4s per video — pre-extracted rgb_frames are 456x256),
+moving-part mask (VISOR object-level masks on sparse frames; coverage of
+our onset frames UNMEASURED — fetch VISOR JSONs first; fallback = SAM
+candidates at the onset knuckle + set-of-mark VLM like HOI4D), depth
+(none in EPIC; model fuses a depth input — needs monocular metric depth
+scale-aligned to the WiLoR hand z, user decision pending). EPIC-Fields
+and EPIC-Sounds: not needed. HOI4D volume KEPT (user, $35/mo).
 
 ## DONE 2026-09-07 ~02:00 UTC: SF3D 3D-DCT post-training from HOI4D — NEW MA RECORD
 
