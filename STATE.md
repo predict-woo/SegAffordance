@@ -289,6 +289,16 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
+## DONE 2026-09-07 19:10 local: cross-eval — SF3D-trained checkpoints on the HOI4D held-out split
+
+`experiments/20260907_xeval_sf3d_on_hoi4d` (dev pod, HOI4D teacher_forcing
+config). mIoU / PDet: pure SF3D g19_dct 0.044 / 0.2; post-trained from
+dct_baseline 0.131 / 2.4; from teacher_forcing 0.113 / 2.0; HOI4D-only
+teacher_forcing 0.727 / 88.0. Pure SF3D has ZERO transfer to hand video;
+30 SF3D epochs FORGET HOI4D almost completely. HOI4D pretraining is a
+better init for SF3D, not a two-domain model (mixed-domain training would
+be the route to one). Dev pod left RUNNING (user policy).
+
 ## IN FLIGHT 2026-09-07 ~18:15 local: SF3D g19_dct post-training from the PLAIN HOI4D arms
 
 User-commissioned: the same g19_dct post-training as ft_hoi4d / ft_hoi4d_tf,
