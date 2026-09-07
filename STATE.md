@@ -289,6 +289,25 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
+## IN FLIGHT 2026-09-07 ~18:15 local: SF3D g19_dct post-training from the PLAIN HOI4D arms
+
+User-commissioned: the same g19_dct post-training as ft_hoi4d / ft_hoi4d_tf,
+initialized from `20260907_hoi4d_2d_v2_baseline` (-> exp
+`20260907_sf3d_g19_dct_ft_hoi4d_plain`) and from
+`…_teacher_forcing_plain` (-> `…_ft_hoi4d_tf_plain`). Plain 20-point head
+has no DCT counterpart: `load_finetune_weights` is name+shape filtered, so
+only the trajectory head's output projection re-inits. Configs + notes
+committed (8387a2a; the baseline ckpt name is resolved on the pod at launch
+and copied back). PRO 6000 stock was EMPTY on both SKUs at 18:05 — a
+persistent Monitor (`sf3d_plain_ft_driver.sh` in the scratchpad) retries
+`train_pod.sh create sf3d-e` every 5 min, then ships configs + the pod
+script `run_sf3d_plain_ft.sh` (dev-pod sync is DOWN, so files go by scp),
+runs both arms back-to-back via sweep_queue + test pass, fetches
+test.log/metrics.csv per arm, deletes the pod on SF3D_PLAIN_ALL_DONE.
+Expected ~2.5 h per arm once a pod boots. If the monitor is gone after a
+restart: `runpodctl pod list` (running pods only), ssh alias segaff-sf3d-e,
+log /workspace/SegAffordance/sf3d_plain_ft.log.
+
 ## DONE 2026-09-07 17:30 local: HOI4D v2 2x2 grid complete (plain + teacher forcing)
 
 **Nothing running; pod D deleted 17:27 local; dev pod + probe16 stopped.**
