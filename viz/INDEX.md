@@ -8,6 +8,7 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
 |---|---|---|
+| [20260908_arctic_builder_test](20260908_arctic_builder_test/README.md) | ARCTIC record builder test: rendered moving-part masks from GT mesh poses, hinge origins, re-anchored knuckle tracks on 8 strokes (box/laptop/microwave) | `tools/arctic_process_2d.py --viz` |
 | [20260908_epic_v1_random20_half](20260908_epic_v1_random20_half/README.md) | REVERTED half-span variant (353 records, median 12 stored points): 20 uniform-random records + QA panels | `tools/epic_lmdb_sample.py --uniform --work` |
 | [20260908_epic_v1_random20](20260908_epic_v1_random20/README.md) | CURRENT EPIC 2D build (359 records, full narrated-span trajectories; reader resamples to 20 points): 20 uniform-random records + SAM2 QA panels, masks on the moving part 19/20 | `tools/epic_lmdb_sample.py --uniform --work` |
 | [20260908_epic_v1_lmdb_sample](20260908_epic_v1_lmdb_sample/README.md) | 20 random records from the EPIC/VISOR 2D LMDB v1 (326 records): propagated masks on the moving part in 17/20 (rest = VISOR whole-cupboard/window semantics), knuckle trajectories, EPIC narrations | `tools/epic_lmdb_sample.py` |
