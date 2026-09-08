@@ -289,6 +289,48 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
+## IN FLIGHT 2026-09-09 ~02:00 local: RGB-only + scale-free trajectory head — code LANDED, fresh chain launched (user asleep)
+
+User decisions (2026-09-09): NO depth anywhere (all datasets, `use_depth:
+false` + `load_depth: false`, no partial-depth/dropout modes); the 2D path
+does not learn scale. Spec `docs/superpowers/specs/2026-09-09-rgb-only-
+scale-free-trajectory-design.md`, plan in docs/superpowers/plans/,
+explainers `docs/slides/2026-09-09_*explainer.html` (model structure /
+the anchor / scale factorisation / the encoder input). Why: the 2D
+recipe's projection loss sampled the INPUT depth map at the GT first
+pixel for its metric anchor and silently dropped rows with z=0 —
+measured 2026-09-09: ARCTIC 523/2559 (20%) rows kept, EPIC 0/359. What
+landed (commits f6536b3, cc3c20a): `TrajectoryProjectionLoss(anchor_source=
+"unit")` (GT first pixel at depth 1, no depth map — exactly invariant to
+z0 when the head predicts Δ̃ = Δ/z0); `model_params.trajectory_scale_free`
++ `loss_params.trajectory_scale_source` (unit | gt_z0) +
+`config.test_trajectory_scale` (pred_z_p | gt_z0 | unit) with
+`trajectory_scale_factor`/`apply_trajectory_scale` in
+model/losses/geometric.py, applied right after the forward in
+`_common_step` and the SF3D `test_step` (proj2d diag lifts with the same
+scale); `SF3DDataset(load_depth=False)` (zeros, no decode);
+`finetune_slice_input_channels` loader rule (depth ckpt -> RGB-only model
+= the "concat zeros" model; off by default); viz tools honour the flag.
+Tests `tests/test_scale_free_trajectory.py` (11) + regressions green on
+the dev pod; fast_dev_run smoke passed for HOI4D/EPIC/ARCTIC/SF3D
+`config/*_rgb_scalefree*.yaml`, SF3D test ran with pred_z_p and gt_z0.
+**Chain (user: "plain teacher forcing pipeline"):** pod A `segaffordance-
+rgbsf-a` runs `run_rgb_scalefree_chain.sh` = `20260909_hoi4d_2d_v2_rgb_
+scalefree` (teacher_forcing_PLAIN recipe, RGB-only, unit anchor; 100 ep)
+-> test -> `20260909_sf3d_g19_dct_rgb_scalefree_ft_hoi4d` (g19_dct 30 ep,
+scale gt_z0 at train, z_p at test; also tested with gt_z0 = oracle scale
+-> logs/test_gt_z0.log); pod B `segaffordance-rgbsf-b` runs the scratch
+arm `20260909_sf3d_g19_dct_rgb_scalefree` (depth ablation vs 25.98).
+Comparison rows: tf_plain init (depth) MA 30.62 / PDet 20.03 / mIoU
+0.2555; record tf (DCT) 31.13 / 23.27. Mac-side drivers in the session
+scratchpad (`rgb_pod_launch.sh`, `rgb_pod_watch.sh`); on-pod logs
+`/workspace/SegAffordance/rgb_scalefree_{chain,scratch}.log`. Pods are
+deleted by the watcher on CHAIN_DONE — VERIFY with `runpodctl pod list`.
+Existing checkpoints are NOT inits for the new convention (heads in
+metres, FPN expects depth channels). TODO after the runs: notes/INDEX,
+viz batches (`hoi4d_vis_2d_panels.py`, `sf3d_vis_predictions.py` vs the
+tf_plain depth model), EPIC/ARCTIC first training runs.
+
 ## DONE 2026-09-08 ~21:45 local: ARCTIC 2D dataset v1 BUILT (GT masks + GT articulation axes)
 
 **`/workspace/datasets/arctic_processed_2d/`** — **2,559 records** (rebuilt after the stroke-splitter fix: strokes end at the
