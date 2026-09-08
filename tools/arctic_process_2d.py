@@ -92,13 +92,21 @@ def rasterize(uv, z, F, face_top, W, H, scale, bias=0.012):
     depth = np.minimum(zt, zb); depth[~np.isfinite(depth)] = 0
     return top, depth
 
-def strokes_of(arti_rad, min_deg, min_frames):
+def strokes_of(arti_rad, min_deg, min_frames, max_pause=5):
+    """Single articulation strokes: maximal runs of same-sign angular velocity (5-frame smoothed,
+    dead zone 0.15 deg/frame), where motionless gaps longer than `max_pause` frames END a stroke and
+    leading/trailing motionless frames are trimmed (the first version absorbed the rest phase after
+    a close — up to ~90 frames of the hand wandering — into the stroke, user-spotted 2026-09-08)."""
     a = np.degrees(arti_rad.astype(float)); k = 5; s = np.convolve(a, np.ones(k) / k, mode="same"); v = np.gradient(s)
-    sign = np.sign(v); sign[np.abs(v) < 0.15] = 0; out = []; i = 0
-    while i < len(a):
+    sign = np.sign(v); sign[np.abs(v) < 0.15] = 0; out = []; i = 0; n = len(a)
+    while i < n:
         if sign[i] == 0: i += 1; continue
-        j = i
-        while j + 1 < len(a) and (sign[j + 1] == sign[i] or sign[j + 1] == 0): j += 1
+        j = i; last_moving = i
+        while j + 1 < n:
+            if sign[j + 1] == sign[i]: j += 1; last_moving = j
+            elif sign[j + 1] == 0 and (j + 1 - last_moving) <= max_pause: j += 1
+            else: break
+        j = last_moving
         if abs(s[j] - s[i]) >= min_deg and j - i >= min_frames: out.append((i, j, float(s[i]), float(s[j])))
         i = j + 1
     return out
