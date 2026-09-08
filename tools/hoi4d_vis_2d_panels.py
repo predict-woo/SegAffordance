@@ -117,9 +117,15 @@ def main():
             K_n = normalized_intrinsics(
                 it[11].unsqueeze(0).cuda(), it[8].unsqueeze(0).cuda())
             uv = out.point_uv.detach().float()
-            grid = (uv * 2.0 - 1.0).view(-1, 1, 1, 2)
-            z = F.grid_sample(it[1].unsqueeze(0).cuda().float(), grid,
-                              align_corners=False).view(-1)
+            if getattr(mp, "trajectory_scale_free", False):
+                # Scale-free head (2026-09-09): Δ̃ is in units of the anchor
+                # depth, so the predicted point at depth 1 is the anchor —
+                # the projection is what the "unit" loss sees.
+                z = torch.ones(uv.shape[0], device=uv.device)
+            else:
+                grid = (uv * 2.0 - 1.0).view(-1, 1, 1, 2)
+                z = F.grid_sample(it[1].unsqueeze(0).cuda().float(), grid,
+                                  align_corners=False).view(-1)
             anchor = backproject_points(K_n, uv, z)
             curve = anchor.unsqueeze(1) + out.trajectory_pred.detach().float()
             proj = project_points(K_n, curve)[0].cpu().numpy()  # uv in [0,1]

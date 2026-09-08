@@ -58,7 +58,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.opd_train import ModelParams
 from viz_manifest import write_manifest
 from datasets.scenefun3d import SF3DDataset, get_default_transforms, split_dataset_by_scene
-from model.losses.geometric import backproject_points, normalized_intrinsics, project_points
+from model.losses.geometric import (
+    apply_trajectory_scale, backproject_points, normalized_intrinsics, project_points,
+    trajectory_scale_factor,
+)
 from model.losses.twist import decode_twist, screw_orbit
 from model.segmenter import CRIS
 
@@ -282,6 +285,11 @@ def main():
                 out = model(img_t[None].to(device), depth_t[None].to(device),
                             word, None, None, None, None,
                             K_norm.to(device).float())
+                # Scale-free head (2026-09-09): Δ̃ -> metres with the
+                # model's own z_p, exactly as the test step does.
+                if getattr(mp, "trajectory_scale_free", False):
+                    out = apply_trajectory_scale(
+                        out, trajectory_scale_factor("pred_z_p", out, None))
             p = frame.copy()
             if not args.traj_only:
                 pm = torch.sigmoid(out.mask_logits)[0, 0].cpu()
