@@ -11,7 +11,7 @@ One record per single articulation STROKE (monotone run of the 1-DoF angle,
   trajectory   middle-knuckle (OpenPose-21 joint 9) of the hand nearest the moving part at the
                stroke start, over the stroke, re-anchored from the package's onset camera into the
                stroke-start ego camera (world-fixed), 3D metres + distorted 2D pixels
-  motion_info  REAL articulation GT: revolute axis = object rotation applied to canonical z,
+  motion_info  REAL articulation GT: revolute axis = object rotation applied to canonical -z,
                origin = object translation, both in the stroke-start camera (+ 2D origin)
   description  template "<open|close> the <object> <part>" (open = |angle| increasing)
 Keys "<subject>_<object>/<seq>_s<k>_f<frame>" (scene prefix = subject+object instance,
@@ -51,9 +51,12 @@ def load_mesh(obj):
 def pose_object(V, parts, row):
     """ARCTIC 7-D pose row [angle, rotvec(3), trans_mm(3)] -> world-space vertices (m) + axis/origin."""
     ang, rv, tr = float(row[0]), np.asarray(row[1:4], np.float64), np.asarray(row[4:7], np.float64) / 1000.0
-    Rz = cv2.Rodrigues(np.array([0, 0, ang]))[0]; Rg = cv2.Rodrigues(rv)[0]
+    # The moving part rotates by -angle about canonical +z (verified 2026-09-08 against the collaborator's
+    # fingertip-to-moving-part distances: -angle reproduces them to ~0.3 cm, +angle is off by up to 14 cm).
+    Rz = cv2.Rodrigues(np.array([0, 0, -ang]))[0]; Rg = cv2.Rodrigues(rv)[0]
     Vp = V.copy(); Vp[parts == 1] = Vp[parts == 1] @ Rz.T
-    return Vp @ Rg.T + tr, Rg @ np.array([0.0, 0.0, 1.0]), tr
+    axis = Rg @ np.array([0.0, 0.0, -1.0])  # so that increasing angle = right-hand rotation about `axis`
+    return Vp @ Rg.T + tr, axis, tr
 
 def project(Xc, K, dist):
     """camera-space points (N,3) -> distorted pixels (N,2); points behind the camera -> nan"""
