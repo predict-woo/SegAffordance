@@ -118,9 +118,10 @@ def process_seq(args):
     for k, (i, j, d0, d1) in enumerate(strokes_of(z["arti_rad"], a["min_deg"], a["min_frames"])):
         f0 = int(frames[i]); img_p = f"{img_dir}/{f0 + offset:05d}.jpg"
         if not os.path.exists(img_p): stats["skip:no_image"] += 1; continue
-        # hand nearest the moving part at the stroke start
+        # hand nearest the moving part over the WHOLE stroke (median fingertip distance): the nearest hand
+        # at the first frame alone sometimes picked the hand holding the base (laptop close, 2026-09-08)
         sides = [s for s in ("left", "right") if f"{s}_joints3d_onset" in z.files]
-        side = min(sides, key=lambda s: float(z[f"{s}_dist_to_moving_part"][i]))
+        side = min(sides, key=lambda s: float(np.median(z[f"{s}_dist_to_moving_part"][i:j + 1])))
         J_on = z[f"{side}_joints3d_onset"][i:j + 1, ANCHOR_JOINT, :].astype(np.float64)  # onset-camera metres
         J_w = (e2w_on[:3, :3] @ J_on.T).T + e2w_on[:3, 3]
         R0, T0 = Rk[f0], Tk[f0]; J_c = (R0 @ J_w.T).T + T0  # stroke-start camera
