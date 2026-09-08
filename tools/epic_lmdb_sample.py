@@ -1,4 +1,4 @@
-"""Render a review sheet of random records from an EPIC 2D LMDB
+"""Render a review sheet of random records from an EPIC or ARCTIC 2D LMDB
 (tools/epic_process_2d.py output): stored 512x512 frame, stored mask coords
 (red), 2D knuckle trajectory (green; cyan = onset, magenta = end), header =
 noun / verb / hand / d / T, second line = description.
@@ -20,7 +20,8 @@ def main():
     # stratify by noun so rare fixtures show up
     bynoun = {}
     with env.begin() as t:
-        for k in keys: bynoun.setdefault(pickle.loads(t.get(k))["epic"]["noun"], []).append(k)
+        for k in keys:
+            r = pickle.loads(t.get(k)); e = r.get("epic") or r.get("arctic"); bynoun.setdefault(e.get("noun") or e.get("object"), []).append(k)
     picks = []
     nouns = sorted(bynoun, key=lambda n: -len(bynoun[n]))
     if a.uniform: picks = random.sample(keys, min(a.n, len(keys)))
@@ -41,12 +42,17 @@ def main():
             pts = [(int(x * sx), int(y * sy)) for x, y in r["trajectory_2d_image_coords"]]
             for p, q in zip(pts, pts[1:]): cv2.line(im, p, q, (0, 255, 0), 2)
             cv2.circle(im, pts[0], 5, (255, 255, 0), -1); cv2.circle(im, pts[-1], 5, (255, 0, 255), -1)
-            e = r["epic"]; cv2.rectangle(im, (0, 0), (S, 40), (0, 0, 0), -1)
-            cv2.putText(im, f"{e['noun']} {e['verb']} {e['hand']} d={e['d']:+d} T={len(pts)} {e['scale_regime']}", (4, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+            e = r.get("epic") or r.get("arctic"); cv2.rectangle(im, (0, 0), (S, 40), (0, 0, 0), -1)
+            if "noun" in e: hdr = f"{e['noun']} {e['verb']} {e['hand']} d={e['d']:+d} T={len(pts)} {e['scale_regime']}"
+            else: hdr = f"{e['object']} {e['verb']} {e['hand']} {e['angle_start_deg']:.0f}->{e['angle_end_deg']:.0f}deg T={len(pts)}"
+            cv2.putText(im, hdr, (4, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+            mi = r.get("motion_info", {}).get("frame_specific_motion_data", {}); o2 = mi.get("motion_origin_2d_image_coords")
+            if o2 and (o2[0] or o2[1]): cv2.circle(im, (int(o2[0] * sx), int(o2[1] * sy)), 5, (0, 165, 255), -1)  # hinge origin
             cv2.putText(im, f"{k.decode()}  '{r['description'][:30]}'", (4, 33), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 255, 255), 1)
             tiles.append(im); manifest.append(k.decode())
             if a.work:
                 import shutil; nid = k.decode().split("/")[1]
+                if "epic" not in r: continue
                 src = f"{a.work}/{nid}/panel.jpg"
                 if os.path.exists(src): shutil.copy(src, f"{a.out}/panel_{len(manifest):02d}_{e['noun'].replace(':', '-')}_{nid}.jpg")
     cols = 4; rows = [np.hstack(tiles[i:i + cols]) for i in range(0, len(tiles) - len(tiles) % cols, cols)]
