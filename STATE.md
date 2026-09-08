@@ -289,6 +289,21 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
+## DONE 2026-09-08 ~03:40 local: SF3D post-training from ALL FOUR HOI4D arms — table complete
+
+| init (HOI4D v2 arm) | MA / signed | PDet / mIoU | rough | axis all / matched |
+|---|---|---|---|---|
+| scratch g19_dct | 25.98 / 25.83 | 21.72 / 0.2685 | 0.0090 | 25.3 / 18.2 |
+| dct_baseline (DCT, detach) | 29.76 / 29.44 | 18.28 / 0.240 | 0.0081 | 31.0 / 22.9 |
+| **teacher_forcing (DCT, GT anchor)** | **31.13 / 30.80** | **23.27** / 0.266 | 0.0079 | 28.0 / 19.7 |
+| baseline (plain, detach) | 27.14 / 27.06 | 17.65 / 0.231 | 0.0083 | 27.8 / 16.4 |
+| teacher_forcing_plain (plain, GT anchor) | 30.62 / 30.31 | 20.03 / 0.256 | 0.0079 | 28.0 / 20.0 |
+
+Every HOI4D init raises MA; the teacher-forced arms transfer far better
+than the detach arms on both heads (masks included), and the DCT head adds
+on top. All single seeds. Pod E deleted automatically. **No pods running
+except the dev pod.**
+
 ## DONE 2026-09-08 ~03:10 local: EPIC/VISOR 2D dataset v1 BUILT (overnight production run)
 
 **`/workspace/datasets/epic_processed_2d/`** (main volume): `data.lmdb` +
