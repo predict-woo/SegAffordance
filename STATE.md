@@ -307,7 +307,7 @@ except the dev pod.**
 ## DONE 2026-09-08 ~03:10 local: EPIC/VISOR 2D dataset v1 BUILT (overnight production run)
 
 **`/workspace/datasets/epic_processed_2d/`** (main volume): `data.lmdb` +
-`frames.lmdb` — **353 records** (rebuilt ~04:40: trajectories keep the FIRST HALF of onset..span_end + 4 frames, `--traj-frac 0.5`, median 12 points; the collaborator's tracks run 90 frames past the action, and even the full span was 'still too long' for the user; earlier builds: 326 uncut, 359 full-span), SF3D reader format (same as HOI4D v2:
+`frames.lmdb` — **359 records** (FINAL for now, rebuilt ~04:55: trajectories = the full narrated action, onset..span_end + 4 frames, `--traj-frac 1.0`; stored length 5-86 stride-2 samples, median 20 — the READER resamples every trajectory to 20 points with linspace (scenefun3d.py ~l.732), so stored length only sets the time span. The collaborator's raw tracks ran 90 frames past the action (326-record uncut build had wandering tails); a half-span build (353, median 12) was tried and REVERTED by the user), SF3D reader format (same as HOI4D v2:
 512x512 frame, thinned mask coords, 2D knuckle trajectory in pixels,
 placeholder 3D, intrinsics, description = EPIC narration, motion stub);
 keys `<video_id>/<narration_id>` (scene = kitchen video). **Depth = zeros**
@@ -315,12 +315,12 @@ keys `<video_id>/<narration_id>` (scene = kitchen video). **Depth = zeros**
 model's depth input must be made optional before training on it (user
 parked this). `work/` (605 MB) = the 478 SAM2-propagated items (onset.jpg
 full-res, mask.png, meta.json, panel.jpg QA) for every VISOR-covered
-interaction with |d| <= 60; `build_stats.json`. Filters to 353: |d| <= 30
-(-56), area-ratio 0.35-2.5 (-36), start > 300 px from mask (-9), frame-jump
-(-3), < 5 points after the half cut (-21). Per noun: drawer 166, fridge 74,
-cupboard 56, oven 25, dishwasher 8, others 24. Review sheet
-`viz/20260908_epic_v1_random20_half` (current: masks on the moving part
-20/20, short strokes); `..._random20` (full-span) and `..._lmdb_sample`
+interaction with |d| <= 60; `build_stats.json`. Filters to 359: |d| <= 30
+(-56), area-ratio 0.35-2.5 (-36), start > 300 px from mask (-14), frame-jump
+(-9), < 5 points (-4). Per noun: drawer 170, fridge 73, cupboard 58, oven
+24, dishwasher 9, others 25. Review sheet `viz/20260908_epic_v1_random20`
+(this build: masks on the moving part 19/20, the miss = VISOR whole-cupboard
+label); `..._random20_half` (reverted half-span) and `..._lmdb_sample`
 (uncut) are superseded. Reader smoke test passed
 (`config/epic_v1_smoke.yaml` fast_dev_run: 326 read, kitchen split, one
 train+val step). Run facts: 115 videos (~700 GB streamed, deleted after

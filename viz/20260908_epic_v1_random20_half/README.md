@@ -1,4 +1,4 @@
-# EPIC/VISOR 2D LMDB v1 — 20 uniform random records, HALF-SPAN trajectories (current build)
+# EPIC/VISOR 2D LMDB v1 — 20 uniform random records, HALF-SPAN trajectories — REVERTED (user 2026-09-08: keep the full span); the current build is the 359-record full-span one in `20260908_epic_v1_random20`
 
 Build: `/workspace/datasets/epic_processed_2d/` rebuilt 2026-09-08 ~04:40
 local, `tools/epic_process_2d.py` defaults: trajectories keep the FIRST HALF
