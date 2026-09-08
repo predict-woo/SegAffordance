@@ -37,8 +37,8 @@ def main():
                     help="cut the knuckle track at the narrated action's span_end (default; the collaborator's tracks run "
                          "90 frames past it and include the hand leaving for the next task) or keep the full window")
     ap.add_argument("--traj-end-margin", type=int, default=4, help="frames kept after span_end (stride is 2)")
-    ap.add_argument("--traj-frac", type=float, default=0.5,
-                    help="keep only this fraction of the onset..span_end interval (user 2026-09-08: full spans still too long; 0.5 = first half of the action)")
+    ap.add_argument("--traj-frac", type=float, default=1.0,
+                    help="keep only this fraction of the onset..span_end interval (1.0 = the full narrated action, the chosen default; 0.5 was tried and reverted 2026-09-08)")
     a = ap.parse_args()
     import lmdb
     os.makedirs(a.out, exist_ok=True)
