@@ -8,6 +8,7 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
 |---|---|---|
+| [20260908_epic_v1_random20_half](20260908_epic_v1_random20_half/README.md) | CURRENT EPIC 2D build (353 records, half-span trajectories): 20 uniform-random records + QA panels, masks on the moving part 20/20, short strokes | `tools/epic_lmdb_sample.py --uniform --work` |
 | [20260908_epic_v1_random20](20260908_epic_v1_random20/README.md) | 20 uniform-random EPIC 2D records (359-record build with span-cut trajectories) + their SAM2 QA panels: masks on the moving part 19/20, trajectories are short open/close strokes | `tools/epic_lmdb_sample.py --uniform --work` |
 | [20260908_epic_v1_lmdb_sample](20260908_epic_v1_lmdb_sample/README.md) | 20 random records from the EPIC/VISOR 2D LMDB v1 (326 records): propagated masks on the moving part in 17/20 (rest = VISOR whole-cupboard/window semantics), knuckle trajectories, EPIC narrations | `tools/epic_lmdb_sample.py` |
 | [20260907_epic_visor_propagate](20260907_epic_visor_propagate/README.md) | VISOR polygon -> contact-onset frame via SAM2 video propagation on 4 EPIC videos: sample panels + sparse-to-sparse validation (IoU 0.77-0.85 mean; lows = VISOR door/interior inconsistency, one real failure on a 90-deg door swing) | `tools/epic_visor_propagate.py`, dataset audit |

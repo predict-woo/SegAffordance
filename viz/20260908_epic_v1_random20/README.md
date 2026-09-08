@@ -1,4 +1,4 @@
-# EPIC/VISOR 2D LMDB v1 — 20 UNIFORM random records + their QA panels
+# EPIC/VISOR 2D LMDB v1 — 20 UNIFORM random records + their QA panels — full-span build (359), SUPERSEDED by `20260908_epic_v1_random20_half` (half-span, 353)
 
 Build: `/workspace/datasets/epic_processed_2d/` rebuilt 2026-09-08 ~04:10
 local with `tools/epic_process_2d.py` (**359 records**; knuckle trajectories
