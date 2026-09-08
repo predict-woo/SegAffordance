@@ -37,6 +37,8 @@ def main():
                     help="cut the knuckle track at the narrated action's span_end (default; the collaborator's tracks run "
                          "90 frames past it and include the hand leaving for the next task) or keep the full window")
     ap.add_argument("--traj-end-margin", type=int, default=4, help="frames kept after span_end (stride is 2)")
+    ap.add_argument("--traj-frac", type=float, default=0.5,
+                    help="keep only this fraction of the onset..span_end interval (user 2026-09-08: full spans still too long; 0.5 = first half of the action)")
     a = ap.parse_args()
     import lmdb
     os.makedirs(a.out, exist_ok=True)
@@ -54,7 +56,9 @@ def main():
         K = m["intrinsics"]; fx, fy, cx, cy = K["fx"], K["fy"], K["cx"], K["cy"]
         uv = np.stack([fx * J[:, 0] / J[:, 2] + cx, fy * J[:, 1] / J[:, 2] + cy], 1)
         valid = np.isfinite(uv).all(1) & (J[:, 2] > 1e-3)
-        if a.traj_end == "span": valid &= frames <= (m["span"][1] + a.traj_end_margin)
+        if a.traj_end == "span":
+            end = m["onset"] + a.traj_frac * (m["span"][1] - m["onset"]) + a.traj_end_margin if a.traj_frac < 1 else m["span"][1] + a.traj_end_margin
+            valid &= frames <= end
         keep = np.nonzero(valid)[0]
         if len(keep) < 5: bump("skip:short_traj"); continue
         uv, J3, fr = uv[keep], J[keep], frames[keep]
@@ -80,7 +84,7 @@ def main():
                      "hand": side, "scale_regime": m["scale_regime"], "onset_frame": m["onset"], "visor_frame": m["sparse_frame"],
                      "d": m["d"], "traj_frames": fr.tolist(), "hand_z_onset_m": float(J3[0, 2]), "area_ratio": m["area_ratio"],
                      "fixture_names": m["fixture_names"], "anchor_joint": ANCHOR_JOINT, "depth": "none (zeros)",
-                     "traj_end": a.traj_end, "span_end": m["span"][1]},
+                     "traj_end": a.traj_end, "traj_frac": a.traj_frac, "span_end": m["span"][1]},
         }
         dep = np.zeros(bgr.shape[:2], np.uint16)
         with env_d.begin(write=True) as txn: txn.put(key.encode(), pickle.dumps(rec, protocol=4))
