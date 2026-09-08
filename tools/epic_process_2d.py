@@ -33,6 +33,10 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--work", required=True); ap.add_argument("--out", required=True)
     ap.add_argument("--size", type=int, default=512); ap.add_argument("--max-d", type=int, default=30)
     ap.add_argument("--min-area-ratio", type=float, default=0.35); ap.add_argument("--max-area-ratio", type=float, default=2.5)
+    ap.add_argument("--traj-end", choices=["span", "window"], default="span",
+                    help="cut the knuckle track at the narrated action's span_end (default; the collaborator's tracks run "
+                         "90 frames past it and include the hand leaving for the next task) or keep the full window")
+    ap.add_argument("--traj-end-margin", type=int, default=4, help="frames kept after span_end (stride is 2)")
     a = ap.parse_args()
     import lmdb
     os.makedirs(a.out, exist_ok=True)
@@ -50,6 +54,7 @@ def main():
         K = m["intrinsics"]; fx, fy, cx, cy = K["fx"], K["fy"], K["cx"], K["cy"]
         uv = np.stack([fx * J[:, 0] / J[:, 2] + cx, fy * J[:, 1] / J[:, 2] + cy], 1)
         valid = np.isfinite(uv).all(1) & (J[:, 2] > 1e-3)
+        if a.traj_end == "span": valid &= frames <= (m["span"][1] + a.traj_end_margin)
         keep = np.nonzero(valid)[0]
         if len(keep) < 5: bump("skip:short_traj"); continue
         uv, J3, fr = uv[keep], J[keep], frames[keep]
@@ -74,7 +79,8 @@ def main():
             "epic": {"video_id": m["video_id"], "narration_id": nid, "verb": m["verb"], "noun": m["noun"], "sides": m["sides"],
                      "hand": side, "scale_regime": m["scale_regime"], "onset_frame": m["onset"], "visor_frame": m["sparse_frame"],
                      "d": m["d"], "traj_frames": fr.tolist(), "hand_z_onset_m": float(J3[0, 2]), "area_ratio": m["area_ratio"],
-                     "fixture_names": m["fixture_names"], "anchor_joint": ANCHOR_JOINT, "depth": "none (zeros)"},
+                     "fixture_names": m["fixture_names"], "anchor_joint": ANCHOR_JOINT, "depth": "none (zeros)",
+                     "traj_end": a.traj_end, "span_end": m["span"][1]},
         }
         dep = np.zeros(bgr.shape[:2], np.uint16)
         with env_d.begin(write=True) as txn: txn.put(key.encode(), pickle.dumps(rec, protocol=4))
