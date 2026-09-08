@@ -289,6 +289,39 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
+## IN FLIGHT 2026-09-08 ~17:00 local: ARCTIC 2D dataset (GT masks/axes) — image fetch + build
+
+Collaborator package `/workspace/datasets/arctic_gt_package/` (239 "use"
+sequences, 9 subjects, 11 hinged handheld objects; both hands' 21 joints in
+the onset ego camera, per-frame articulation angle, contact hand; README
+inside). ARCTIC's own data: NOT on the server before today; now
+`/workspace/datasets/arctic/{meta,raw_seqs}` (object meshes + per-frame
+object pose/ego camera, downloaded with the user's ARCTIC account —
+credentials only in the dev pod's /root/.arctic_env, NOT in the repo; ask
+the user to rotate the password) and `arctic/images/<sid>/<seq>/0/` = the
+EGO VIEW ONLY, pulled out of the per-sequence 2.6 GB zips by HTTP byte
+ranges (`tools/arctic_fetch_ego.py`; ~78 GB total; the MPI server
+rate-limits an IP with 403 for ~5 min after bursts — the fetcher backs
+off). Fetch running on the dev pod (log /workspace/arctic_fetch.log), then a
+resume pass, then `tools/arctic_process_2d.py` builds
+`/workspace/datasets/arctic_processed_2d` (monitor chain armed; log
+/workspace/arctic_build.log; sample sheet viz/20260908_arctic_v1_lmdb_sample).
+Builder (validated on 6 sequences, 52 records): one record per single
+articulation STROKE (monotone angle run >= 10 deg, >= 10 frames; ~2,800
+across the set), image = ego frame at the stroke start, mask = the moving
+("top") part rendered from mesh.obj with the GT pose (part labels derived
+geometrically — parts.json does not index the raw vertex order; separate
+top/bottom z-buffers with 12 mm tolerance because closed lids penetrate
+the base in the fits; hands NOT removed), depth = object-only render,
+trajectory = knuckle of the hand nearest the moving part re-anchored into
+the stroke-start ego camera (world-fixed), motion_info = REAL revolute axis
+(object rotation of canonical z through the object origin) — so ARCTIC can
+carry 3D articulation supervision, unlike HOI4D/EPIC. Outlier thresholds
+scaled by focal length (fx 2414 vs HOI4D ~1000); strokes whose hand starts
+outside the frame are dropped. Descriptions: template "open/close the
+<object> <part>" (no narrations in ARCTIC). Test panels showed correct
+lid/door masks and hinge origins.
+
 ## DONE 2026-09-08 ~03:40 local: SF3D post-training from ALL FOUR HOI4D arms — table complete
 
 | init (HOI4D v2 arm) | MA / signed | PDet / mIoU | rough | axis all / matched |
