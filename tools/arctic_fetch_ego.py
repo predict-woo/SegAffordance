@@ -26,7 +26,7 @@ def session():
     if not s.cookies: raise RuntimeError("login gave no session cookie — credentials?")
     return s
 
-def get_range(s, url, a, b, tries=5):
+def get_range(s, url, a, b, tries=8):
     for t in range(tries):
         try:
             r = s.get(url, headers={"Range": f"bytes={a}-{b}"}, timeout=600, stream=True)
@@ -34,6 +34,8 @@ def get_range(s, url, a, b, tries=5):
                 data = r.content
                 if len(data) == b - a + 1: return data
             elif r.status_code == 401: raise RuntimeError("401 — login lost")
+            elif r.status_code == 403:  # MPI rate-limits an IP for ~5 min after a burst of requests
+                print("403 from the MPI server — backing off 5 min", flush=True); time.sleep(300); continue
         except (requests.RequestException,) as e:
             err = e
         time.sleep(2 * (t + 1))
@@ -41,8 +43,9 @@ def get_range(s, url, a, b, tries=5):
 
 def central_directory(s, url):
     total = None
-    for t in range(6):  # the server occasionally answers the first ranged GET with a 302/200 — retry
+    for t in range(8):  # the server occasionally answers the first ranged GET with a 302/200 — retry; 403 = rate limit
         head = s.get(url, headers={"Range": "bytes=0-0"}, timeout=60, stream=True); head.close()
+        if head.status_code == 403: print("403 (size probe) — backing off 5 min", flush=True); time.sleep(300); continue
         if head.status_code == 206 and "Content-Range" in head.headers: total = int(head.headers["Content-Range"].split("/")[1]); break
         if head.status_code == 200 and "Content-Length" in head.headers and int(head.headers["Content-Length"]) > 1 << 20:
             total = int(head.headers["Content-Length"]); break
