@@ -289,38 +289,40 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
-## IN FLIGHT 2026-09-08 ~17:00 local: ARCTIC 2D dataset (GT masks/axes) — image fetch + build
+## DONE 2026-09-08 ~20:10 local: ARCTIC 2D dataset v1 BUILT (GT masks + GT articulation axes)
 
-Collaborator package `/workspace/datasets/arctic_gt_package/` (239 "use"
-sequences, 9 subjects, 11 hinged handheld objects; both hands' 21 joints in
-the onset ego camera, per-frame articulation angle, contact hand; README
-inside). ARCTIC's own data: NOT on the server before today; now
-`/workspace/datasets/arctic/{meta,raw_seqs}` (object meshes + per-frame
-object pose/ego camera, downloaded with the user's ARCTIC account —
-credentials only in the dev pod's /root/.arctic_env, NOT in the repo; ask
-the user to rotate the password) and `arctic/images/<sid>/<seq>/0/` = the
-EGO VIEW ONLY, pulled out of the per-sequence 2.6 GB zips by HTTP byte
-ranges (`tools/arctic_fetch_ego.py`; ~78 GB total; the MPI server
-rate-limits an IP with 403 for ~5 min after bursts — the fetcher backs
-off). Fetch running on the dev pod (log /workspace/arctic_fetch.log), then a
-resume pass, then `tools/arctic_process_2d.py` builds
-`/workspace/datasets/arctic_processed_2d` (monitor chain armed; log
-/workspace/arctic_build.log; sample sheet viz/20260908_arctic_v1_lmdb_sample).
-Builder (validated on 6 sequences, 52 records): one record per single
-articulation STROKE (monotone angle run >= 10 deg, >= 10 frames; ~2,800
-across the set), image = ego frame at the stroke start, mask = the moving
-("top") part rendered from mesh.obj with the GT pose (part labels derived
-geometrically — parts.json does not index the raw vertex order; separate
-top/bottom z-buffers with 12 mm tolerance because closed lids penetrate
-the base in the fits; hands NOT removed), depth = object-only render,
-trajectory = knuckle of the hand nearest the moving part re-anchored into
-the stroke-start ego camera (world-fixed), motion_info = REAL revolute axis
-(object rotation of canonical z through the object origin) — so ARCTIC can
-carry 3D articulation supervision, unlike HOI4D/EPIC. Outlier thresholds
-scaled by focal length (fx 2414 vs HOI4D ~1000); strokes whose hand starts
-outside the frame are dropped. Descriptions: template "open/close the
-<object> <part>" (no narrations in ARCTIC). Test panels showed correct
-lid/door masks and hinge origins.
+**`/workspace/datasets/arctic_processed_2d/`** — **2,633 records** (331 MB +
+171 MB), SF3D reader format, one record per single articulation STROKE
+(monotone angle run >= 10 deg, >= 10 frames) of 238 of the 239 "use"
+sequences (s01_box_use_01's ego frames never downloaded — the MPI server
+rate-limited the pod for the rest of the day; user: drop it for now).
+Keys `<subject>_<object>/<seq>_s<k>_f<frame>`. Per object: espresso 338,
+scissors 320, capsule machine 292, mixer 262, waffle iron 259, microwave
+254, notebook 235, ketchup 219, phone 196, laptop 152, box 106. Drops:
+hand outside the frame at the stroke start 118, no image 12, frame jump
+12, far-from-mask 15, tiny mask 8. What is DIFFERENT from HOI4D/EPIC:
+mask = the moving part RENDERED from ARCTIC's dense per-part meshes with
+the mocap GT pose (pixel-accurate; hands NOT cut out), depth = object-only
+render (mm), `motion_info` = REAL revolute axis + origin in the camera
+(type "rot") -> 3D articulation supervision is possible on this set;
+description = template "open/close the <object> <part>". Conventions
+verified the hard way: the moving part rotates by -angle about canonical
++z (checked against the collaborator's fingertip-to-part distances; the
++angle build looked fine on closed lids and was wrong on open ones — user
+caught it), ego camera X_cam = R X_world + T, object translations in mm,
+image index = frame + 1. Hand = the one with the smaller MEDIAN fingertip
+distance to the moving part over the stroke. Outlier thresholds scaled by
+fx (2414). Review: `viz/20260908_arctic_v1_lmdb_sample` (24 uniform
+random records) + `viz/20260908_arctic_builder_test` (panels). Reader
+smoke test (`config/arctic_v1_smoke.yaml`, fast_dev_run) passed.
+Inputs on the volume: `arctic_gt_package/` (collaborator), `arctic/{meta,
+raw_seqs}`, `arctic/images/<sid>/<seq>/0/` (60 GB, ego view only via
+`tools/arctic_fetch_ego.py` byte-range reads of the per-sequence zips —
+the MPI server 403-blocks an IP for 5+ min after bursts; credentials in
+the dev pod's /root/.arctic_env only — ASK THE USER TO ROTATE THE
+PASSWORD). Builder: `tools/arctic_process_2d.py` (~6 s per stroke on the
+dense meshes; 25 min on 12 workers). Open: the s01_box_use_01 gap; hands
+in masks; the model's depth input (object-only depth here, zeros on EPIC).
 
 ## DONE 2026-09-08 ~03:40 local: SF3D post-training from ALL FOUR HOI4D arms — table complete
 
