@@ -289,28 +289,34 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
-## IN FLIGHT 2026-09-08 00:45 local: EPIC/VISOR PRODUCTION RUN (user asleep, "expect it finished")
+## DONE 2026-09-08 ~03:10 local: EPIC/VISOR 2D dataset v1 BUILT (overnight production run)
 
-Two shards over the 115 VISOR-covered videos: shard 0 on the dev pod
-(`segaff-dev`, log /workspace/epic_shard0.log), shard 1 on pod B
-`segaffordance-epic-b` (PRO 4000, $0.57/hr, id br1pbudv1uzu4l, alias
-segaff-epic-b, log /workspace/epic_shard1.log). Driver
-`tools/epic_pipeline_shard.sh i 2`: per video chunked fetch (16 ranges,
-`tools/epic_fetch_video.py`, timeout 45 min x2) -> `tools/epic_visor_
-propagate_batch.py` (SAM2 propagation of the nearest VISOR fixture mask to
-the contact onset for every interaction with |d|<=60; 2-6 s each; timeout
-90 min) -> video deleted. Work items: /workspace/datasets/epic_processed_2d/
-work/<narration_id>/{onset.jpg,mask.png,meta.json,panel.jpg};
-_video_done/<vid> markers (resumable), _failed/<nid> tracebacks. Smoke test
-P28_103: 15/15 OK. Babysitter monitor (scratchpad epic_watch.sh) reports
-every 10 min, alerts on stalls/failures. WHEN BOTH SHARDS FINISH: build the
-LMDB on the dev pod — `python tools/epic_process_2d.py --work
-/workspace/datasets/epic_processed_2d/work --out /workspace/datasets/
-epic_processed_2d` (|d|<=30, area-ratio 0.35-2.5, HOI4D outlier rules;
-depth = ZEROS, hand z kept in the record) — render a 20-record viz sample,
-reader smoke test, DELETE POD B, update this section + INDEX. Pod E
-(`segaffordance-sf3d-e`) is still on the second plain-init SF3D arm
-(`..._ft_hoi4d_tf_plain`), watcher fetches + deletes it.
+**`/workspace/datasets/epic_processed_2d/`** (main volume): `data.lmdb` +
+`frames.lmdb` — **326 records**, SF3D reader format (same as HOI4D v2:
+512x512 frame, thinned mask coords, 2D knuckle trajectory in pixels,
+placeholder 3D, intrinsics, description = EPIC narration, motion stub);
+keys `<video_id>/<narration_id>` (scene = kitchen video). **Depth = zeros**
+(EPIC has none; `epic.hand_z_onset_m` keeps the WiLoR hand depth) — the
+model's depth input must be made optional before training on it (user
+parked this). `work/` (605 MB) = the 478 SAM2-propagated items (onset.jpg
+full-res, mask.png, meta.json, panel.jpg QA) for every VISOR-covered
+interaction with |d| <= 60; `build_stats.json`. Filters to 326: |d| <= 30
+(-56), area-ratio 0.35-2.5 (-36), frame-jump > 300 px (-43), start > 300 px
+from mask (-15), < 5 points (-2). Per noun: drawer 161, fridge 64,
+cupboard 49, oven 21, dishwasher 9, others 22. Review sheet
+`viz/20260908_epic_v1_lmdb_sample` (17/20 masks = moving part; the rest are
+VISOR whole-cupboard/window semantics). Reader smoke test passed
+(`config/epic_v1_smoke.yaml` fast_dev_run: 326 read, kitchen split, one
+train+val step). Run facts: 115 videos (~700 GB streamed, deleted after
+use; `epic_videos/` empty), 2 pods (dev + PRO 4000 pod B, deleted), 1 h 50
+min wall-clock, 3.8 s per item; bugs fixed on the way (numpy float in
+JSON, ffmpeg eating the shard's stdin, EPIC-55 test-split videos under
+`videos/test/`, P12 videos are 720p while VISOR polygons stay 1080p).
+Tools: `tools/epic_pipeline_shard.sh`, `epic_fetch_video.py`,
+`epic_visor_propagate_batch.py`, `epic_process_2d.py`, `epic_lmdb_sample.py`.
+Open: depth-optional model; a |d| <= 60 build is one command if more data
+is wanted (478 items); the 800 non-VISOR interactions remain dropped;
+cupboard whole-carcass masks (~49 records) unreviewed individually.
 
 ## EPIC prep — SAM2 propagation of VISOR masks VALIDATED (2026-09-08 ~00:30 local)
 
