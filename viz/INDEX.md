@@ -8,7 +8,8 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
 |---|---|---|
-| [20260908_arctic_v1_lmdb_sample](20260908_arctic_v1_lmdb_sample/README.md) | 24 uniform-random records of the ARCTIC 2D LMDB v1 (2,633 strokes, 238 sequences): rendered GT moving-part masks 24/24, hinge origins, knuckle tracks | `tools/epic_lmdb_sample.py --uniform` |
+| [20260908_arctic_v1_random24b](20260908_arctic_v1_random24b/README.md) | second random draw (seed 17) of the rebuilt ARCTIC 2D LMDB v1 (2,559 strokes): masks 24/24 on the moving part, single-arc trajectories | `tools/epic_lmdb_sample.py --uniform` |
+| [20260908_arctic_v1_lmdb_sample](20260908_arctic_v1_lmdb_sample/README.md) | 24 uniform-random records of the ARCTIC 2D LMDB v1 (2,559 strokes, 238 sequences, stroke-splitter fix): rendered GT moving-part masks 24/24, hinge origins, single-arc knuckle tracks | `tools/epic_lmdb_sample.py --uniform` |
 | [20260908_arctic_builder_test](20260908_arctic_builder_test/README.md) | ARCTIC record builder test: rendered moving-part masks from GT mesh poses, hinge origins, re-anchored knuckle tracks on 8 strokes (box/laptop/microwave) | `tools/arctic_process_2d.py --viz` |
 | [20260908_epic_v1_random20_half](20260908_epic_v1_random20_half/README.md) | REVERTED half-span variant (353 records, median 12 stored points): 20 uniform-random records + QA panels | `tools/epic_lmdb_sample.py --uniform --work` |
 | [20260908_epic_v1_random20](20260908_epic_v1_random20/README.md) | CURRENT EPIC 2D build (359 records, full narrated-span trajectories; reader resamples to 20 points): 20 uniform-random records + SAM2 QA panels, masks on the moving part 19/20 | `tools/epic_lmdb_sample.py --uniform --work` |

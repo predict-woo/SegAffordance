@@ -289,18 +289,19 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
-## DONE 2026-09-08 ~20:10 local: ARCTIC 2D dataset v1 BUILT (GT masks + GT articulation axes)
+## DONE 2026-09-08 ~21:45 local: ARCTIC 2D dataset v1 BUILT (GT masks + GT articulation axes)
 
-**`/workspace/datasets/arctic_processed_2d/`** — **2,633 records** (331 MB +
-171 MB), SF3D reader format, one record per single articulation STROKE
+**`/workspace/datasets/arctic_processed_2d/`** — **2,559 records** (rebuilt after the stroke-splitter fix: strokes end at the
+last moving frame, pauses > 5 frames break them — the first build (2,633)
+absorbed rest phases into strokes; median stroke 22 frames, p90 38), SF3D reader format, one record per single articulation STROKE
 (monotone angle run >= 10 deg, >= 10 frames) of 238 of the 239 "use"
 sequences (s01_box_use_01's ego frames never downloaded — the MPI server
 rate-limited the pod for the rest of the day; user: drop it for now).
-Keys `<subject>_<object>/<seq>_s<k>_f<frame>`. Per object: espresso 338,
-scissors 320, capsule machine 292, mixer 262, waffle iron 259, microwave
-254, notebook 235, ketchup 219, phone 196, laptop 152, box 106. Drops:
-hand outside the frame at the stroke start 118, no image 12, frame jump
-12, far-from-mask 15, tiny mask 8. What is DIFFERENT from HOI4D/EPIC:
+Keys `<subject>_<object>/<seq>_s<k>_f<frame>`. Per object: espresso 332,
+capsule machine 283, scissors 274, mixer 264, waffle iron 260, microwave
+258, notebook 237, ketchup 211, phone 191, laptop 145, box 104. Drops:
+hand outside the frame at the stroke start 130, no image 12, tiny mask 6,
+far-from-mask 5, frame jump 3. What is DIFFERENT from HOI4D/EPIC:
 mask = the moving part RENDERED from ARCTIC's dense per-part meshes with
 the mocap GT pose (pixel-accurate; hands NOT cut out), depth = object-only
 render (mm), `motion_info` = REAL revolute axis + origin in the camera
@@ -312,8 +313,9 @@ verified the hard way: the moving part rotates by -angle about canonical
 caught it), ego camera X_cam = R X_world + T, object translations in mm,
 image index = frame + 1. Hand = the one with the smaller MEDIAN fingertip
 distance to the moving part over the stroke. Outlier thresholds scaled by
-fx (2414). Review: `viz/20260908_arctic_v1_lmdb_sample` (24 uniform
-random records) + `viz/20260908_arctic_builder_test` (panels). Reader
+fx (2414). Review: `viz/20260908_arctic_v1_lmdb_sample` + `..._random24b` (2 x 24
+uniform random records, all masks on the moving part, single-arc tracks)
++ `viz/20260908_arctic_builder_test` (panels). Reader
 smoke test (`config/arctic_v1_smoke.yaml`, fast_dev_run) passed.
 Inputs on the volume: `arctic_gt_package/` (collaborator), `arctic/{meta,
 raw_seqs}`, `arctic/images/<sid>/<seq>/0/` (60 GB, ego view only via
