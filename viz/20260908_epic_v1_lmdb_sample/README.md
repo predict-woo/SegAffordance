@@ -1,4 +1,6 @@
-# EPIC/VISOR 2D LMDB v1 — 20 random records (stratified by fixture noun)
+# EPIC/VISOR 2D LMDB v1 — 20 random records (stratified by fixture noun) — PRE span-cut build (326 records)
+
+**Superseded** by `20260908_epic_v1_random20` (359-record rebuild with trajectories cut at the narrated span end; the loops seen here are the trailing hand motion).
 
 `records_sample.jpg`: 20 records from `/workspace/datasets/epic_processed_2d/`
 (main volume; 326 records, built 2026-09-08 ~03:00 local by
