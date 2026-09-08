@@ -10,7 +10,10 @@ import cv2, numpy as np
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--lmdb", required=True); ap.add_argument("--out", required=True)
-    ap.add_argument("--n", type=int, default=20); ap.add_argument("--seed", type=int, default=3); a = ap.parse_args()
+    ap.add_argument("--n", type=int, default=20); ap.add_argument("--seed", type=int, default=3)
+    ap.add_argument("--uniform", action="store_true", help="plain random sample instead of stratified by noun")
+    ap.add_argument("--work", default=None, help="work dir: copy each sampled record's QA panel.jpg into --out")
+    a = ap.parse_args()
     random.seed(a.seed); os.makedirs(a.out, exist_ok=True)
     env = lmdb.open(f"{a.lmdb}/data.lmdb", readonly=True, lock=False); envf = lmdb.open(f"{a.lmdb}/frames.lmdb", readonly=True, lock=False)
     with env.begin() as t: keys = [k for k, _ in t.cursor()]
@@ -20,6 +23,7 @@ def main():
         for k in keys: bynoun.setdefault(pickle.loads(t.get(k))["epic"]["noun"], []).append(k)
     picks = []
     nouns = sorted(bynoun, key=lambda n: -len(bynoun[n]))
+    if a.uniform: picks = random.sample(keys, min(a.n, len(keys)))
     while len(picks) < min(a.n, len(keys)):
         for n in nouns:
             if len(picks) >= a.n: break
@@ -41,6 +45,10 @@ def main():
             cv2.putText(im, f"{e['noun']} {e['verb']} {e['hand']} d={e['d']:+d} T={len(pts)} {e['scale_regime']}", (4, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
             cv2.putText(im, f"{k.decode()}  '{r['description'][:30]}'", (4, 33), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 255, 255), 1)
             tiles.append(im); manifest.append(k.decode())
+            if a.work:
+                import shutil; nid = k.decode().split("/")[1]
+                src = f"{a.work}/{nid}/panel.jpg"
+                if os.path.exists(src): shutil.copy(src, f"{a.out}/panel_{len(manifest):02d}_{e['noun'].replace(':', '-')}_{nid}.jpg")
     cols = 4; rows = [np.hstack(tiles[i:i + cols]) for i in range(0, len(tiles) - len(tiles) % cols, cols)]
     if len(tiles) % cols: last = tiles[-(len(tiles) % cols):]; last += [np.zeros_like(tiles[0])] * (cols - len(last)); rows.append(np.hstack(last))
     cv2.imwrite(f"{a.out}/records_sample.jpg", np.vstack(rows), [cv2.IMWRITE_JPEG_QUALITY, 85])
