@@ -138,12 +138,16 @@ def process_seq(args):
         coords = thin_coords(mask, a["size"])
         if coords is None or len(coords) < 50: stats["skip:small_mask"] += 1; continue
         uvk, Jk, frk = uv[ok], J_c[ok], frames[i:j + 1][ok]
+        if not (0 <= uvk[0][0] < W and 0 <= uvk[0][1] < H): stats["skip:hand_out_of_frame"] += 1; continue
+        # HOI4D's 300 px rule was set at fx ~ 1000 px; ARCTIC's ego camera has fx ~ 2400 (2800 px wide),
+        # so the same metric slack is ~2.4x more pixels — scale by focal length, not image width.
+        px_scale = float(K[0, 0]) / 1000.0
         d_start = float(np.sqrt(((coords[:, ::-1] - uvk[0]) ** 2).sum(1)).min())
-        if d_start > MAX_START_TO_MASK_PX * (W / 1920):
+        if d_start > MAX_START_TO_MASK_PX * px_scale:
             stats["skip:start_far_from_mask"] += 1
             if a.get("debug"): print(f"  far: {seq} stroke {k} f{f0} hand={side} d_start={d_start:.0f}px dist_to_part={float(z[f'{side}_dist_to_moving_part'][i])*100:.1f}cm uv0={uvk[0].round()} in_frame={(0<=uvk[0][0]<W) and (0<=uvk[0][1]<H)}", flush=True)
             continue
-        if len(uvk) > 1 and np.sqrt((np.diff(uvk, axis=0) ** 2).sum(1)).max() > MAX_FRAME_JUMP_PX * (W / 1920): stats["skip:frame_jump"] += 1; continue
+        if len(uvk) > 1 and np.sqrt((np.diff(uvk, axis=0) ** 2).sum(1)).max() > MAX_FRAME_JUMP_PX * px_scale: stats["skip:frame_jump"] += 1; continue
         verb = "open" if abs(d1) > abs(d0) else "close"
         desc = f"{verb} the {OBJ_WORD.get(obj, obj)} {PART_WORD.get(meta['articulation'], 'part')}"
         org2d = project(org_c[None], K, dist)[0]
