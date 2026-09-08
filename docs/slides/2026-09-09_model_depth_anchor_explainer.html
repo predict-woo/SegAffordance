@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model structure, depth, and the anchor</title>
+<style>
+  :root {
+    --ink: #1a1d23; --muted: #5b6472; --faint: #8b93a1;
+    --paper: #fbfaf7; --card: #ffffff; --line: #e3e0d8;
+    --accent: #7a4fc0; --orange: #e07a2f; --blue: #3d6fb4; --green: #3e8e5f; --red: #c8443c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink);
+    font: 16px/1.7 "Avenir Next", "Segoe UI", system-ui, sans-serif; padding: 48px 20px 96px; }
+  main { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 32px; line-height: 1.2; letter-spacing: -0.5px; }
+  .sub { color: var(--muted); margin: 10px 0 6px; font-size: 17px; }
+  .meta { color: var(--faint); font-size: 13px; margin-bottom: 40px; }
+  h2 { font-size: 21px; margin: 52px 0 12px; letter-spacing: -0.3px; }
+  h2 .n { display: inline-block; background: var(--ink); color: var(--paper); font-size: 12px; font-weight: 700;
+    border-radius: 999px; padding: 2px 10px; vertical-align: 3px; margin-right: 10px; }
+  p { margin: 12px 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 20px 26px; margin: 20px 0; }
+  .verdict { border-left: 4px solid var(--accent); background: #f5f1fb; border-radius: 6px; padding: 16px 20px; margin: 22px 0; }
+  .aside { border-left: 4px solid var(--green); background: #f0f7f2; border-radius: 6px; padding: 14px 20px; margin: 18px 0; font-size: 15px; }
+  .caveat { border-left: 4px solid var(--orange); background: #fdf3ec; border-radius: 6px; padding: 14px 20px; margin: 18px 0; font-size: 15px; }
+  code { font: 13px/1.5 "SF Mono", ui-monospace, Menlo, monospace; background: #f1efe9; padding: 1px 5px; border-radius: 4px; }
+  svg { display: block; max-width: 100%; height: auto; margin: 10px auto; }
+  .cap { color: var(--muted); font-size: 14px; text-align: center; margin: 4px 0 18px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 15px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  .k { font-weight: 600; }
+  .txt { font: 13px "Avenir Next", "Segoe UI", system-ui, sans-serif; }
+  .mono { font: 12px "SF Mono", ui-monospace, Menlo, monospace; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Model structure, depth, and the anchor</h1>
+<p class="sub">What the network computes, where the input depth map is used, and why a missing depth map removes the trajectory supervision.</p>
+<p class="meta">2026-09-09 · code as of commit 5584f92 · files: model/segmenter.py, model/losses/geometric.py (TrajectoryProjectionLoss), train_OPDReal_better.py (z_p tether)</p>
+
+<h2><span class="n">1</span>The network, end to end</h2>
+
+<p>The model takes an RGB image, a depth map and a text description, and predicts four things about the described part: its mask, its interaction point, its articulation (type, axis, origin), and a trajectory of the interaction point. Depth enters exactly once, in the box drawn orange.</p>
+
+<svg viewBox="0 0 860 470" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5b6472"/></marker>
+  </defs>
+  <g class="txt" font-size="13">
+  <!-- inputs -->
+  <rect x="20" y="40" width="120" height="44" rx="8" fill="#e8eef8" stroke="#3d6fb4"/>
+  <text x="80" y="58" text-anchor="middle">RGB image</text><text x="80" y="74" text-anchor="middle" fill="#5b6472">3×512×512</text>
+  <rect x="20" y="120" width="120" height="44" rx="8" fill="#fdf3ec" stroke="#e07a2f"/>
+  <text x="80" y="138" text-anchor="middle">Depth map</text><text x="80" y="154" text-anchor="middle" fill="#5b6472">1×512×512, metres</text>
+  <rect x="20" y="200" width="120" height="44" rx="8" fill="#eef5f0" stroke="#3e8e5f"/>
+  <text x="80" y="218" text-anchor="middle">Text</text><text x="80" y="234" text-anchor="middle" fill="#5b6472">"open the drawer"</text>
+
+  <!-- encoders -->
+  <rect x="190" y="40" width="130" height="44" rx="8" fill="#fff" stroke="#3d6fb4"/>
+  <text x="255" y="58" text-anchor="middle">Backbone</text><text x="255" y="74" text-anchor="middle" fill="#5b6472">DINOv3 / CLIP</text>
+  <rect x="190" y="120" width="130" height="44" rx="8" fill="#fff" stroke="#e07a2f"/>
+  <text x="255" y="138" text-anchor="middle">DepthEncoder</text><text x="255" y="154" text-anchor="middle" fill="#5b6472">4 small convs</text>
+  <rect x="190" y="200" width="130" height="44" rx="8" fill="#fff" stroke="#3e8e5f"/>
+  <text x="255" y="58" text-anchor="middle"></text>
+  <text x="255" y="218" text-anchor="middle">Text encoder</text><text x="255" y="234" text-anchor="middle" fill="#5b6472">word tokens + state</text>
+
+  <line x1="140" y1="62" x2="190" y2="62" stroke="#5b6472" marker-end="url(#ar)"/>
+  <line x1="140" y1="142" x2="190" y2="142" stroke="#5b6472" marker-end="url(#ar)"/>
+  <line x1="140" y1="222" x2="190" y2="222" stroke="#5b6472" marker-end="url(#ar)"/>
+
+  <!-- concat -->
+  <rect x="370" y="60" width="110" height="80" rx="8" fill="#fff" stroke="#7a4fc0"/>
+  <text x="425" y="86" text-anchor="middle">concat</text>
+  <text x="425" y="104" text-anchor="middle" fill="#5b6472">RGB feats ‖</text>
+  <text x="425" y="120" text-anchor="middle" fill="#e07a2f">depth feats</text>
+  <line x1="320" y1="62" x2="370" y2="85" stroke="#5b6472" marker-end="url(#ar)"/>
+  <line x1="320" y1="142" x2="370" y2="118" stroke="#e07a2f" marker-end="url(#ar)"/>
+
+  <!-- FPN + decoder -->
+  <rect x="530" y="60" width="120" height="80" rx="8" fill="#fff" stroke="#7a4fc0"/>
+  <text x="590" y="88" text-anchor="middle">FPN neck</text>
+  <text x="590" y="106" text-anchor="middle" fill="#5b6472">+ text gating</text>
+  <text x="590" y="124" text-anchor="middle" fill="#5b6472">→ fq (H/16)</text>
+  <line x1="480" y1="100" x2="530" y2="100" stroke="#5b6472" marker-end="url(#ar)"/>
+  <line x1="320" y1="222" x2="590" y2="222" stroke="#3e8e5f"/>
+  <line x1="590" y1="222" x2="590" y2="140" stroke="#3e8e5f" marker-end="url(#ar)"/>
+
+  <rect x="700" y="60" width="140" height="80" rx="8" fill="#fff" stroke="#7a4fc0"/>
+  <text x="770" y="88" text-anchor="middle">Transformer decoder</text>
+  <text x="770" y="106" text-anchor="middle" fill="#5b6472">queries × word tokens</text>
+  <text x="770" y="124" text-anchor="middle" fill="#5b6472">→ projector</text>
+  <line x1="650" y1="100" x2="700" y2="100" stroke="#5b6472" marker-end="url(#ar)"/>
+
+  <!-- dense outputs -->
+  <rect x="530" y="290" width="150" height="70" rx="8" fill="#f5f1fb" stroke="#7a4fc0"/>
+  <text x="605" y="312" text-anchor="middle" font-weight="600">Dense outputs</text>
+  <text x="605" y="330" text-anchor="middle" fill="#5b6472">mask logits</text>
+  <text x="605" y="346" text-anchor="middle" fill="#5b6472">point heatmap → point_uv</text>
+  <line x1="770" y1="140" x2="770" y2="200" stroke="#5b6472"/>
+  <line x1="770" y1="200" x2="605" y2="200" stroke="#5b6472"/>
+  <line x1="605" y1="200" x2="605" y2="290" stroke="#5b6472" marker-end="url(#ar)"/>
+
+  <!-- condition vector -->
+  <rect x="700" y="290" width="140" height="70" rx="8" fill="#f5f1fb" stroke="#7a4fc0"/>
+  <text x="770" y="312" text-anchor="middle" font-weight="600">Condition vector</text>
+  <text x="770" y="330" text-anchor="middle" fill="#5b6472">pooled feats ‖ point_uv</text>
+  <text x="770" y="346" text-anchor="middle" fill="#5b6472">‖ origin_uv ‖ type emb</text>
+  <line x1="770" y1="200" x2="770" y2="290" stroke="#5b6472" marker-end="url(#ar)"/>
+
+  <!-- heads -->
+  <rect x="380" y="400" width="130" height="52" rx="8" fill="#fff" stroke="#c8443c"/>
+  <text x="445" y="421" text-anchor="middle" font-weight="600">Trajectory head</text>
+  <text x="445" y="439" text-anchor="middle" fill="#5b6472">N×3 RELATIVE offsets</text>
+  <rect x="530" y="400" width="130" height="52" rx="8" fill="#fff" stroke="#5b6472"/>
+  <text x="595" y="421" text-anchor="middle" font-weight="600">Articulation heads</text>
+  <text x="595" y="439" text-anchor="middle" fill="#5b6472">type, axis, origin, z_q</text>
+  <rect x="680" y="400" width="160" height="52" rx="8" fill="#fff" stroke="#e07a2f"/>
+  <text x="760" y="421" text-anchor="middle" font-weight="600">z_p head</text>
+  <text x="760" y="439" text-anchor="middle" fill="#5b6472">metric depth of point_uv</text>
+  <line x1="770" y1="360" x2="445" y2="400" stroke="#5b6472" marker-end="url(#ar)"/>
+  <line x1="770" y1="360" x2="595" y2="400" stroke="#5b6472" marker-end="url(#ar)"/>
+  <line x1="770" y1="360" x2="760" y2="400" stroke="#5b6472" marker-end="url(#ar)"/>
+  <text x="70" y="420" fill="#c8443c" font-weight="600">The trajectory is predicted</text>
+  <text x="70" y="438" fill="#c8443c" font-weight="600">relative to its first point.</text>
+  <text x="70" y="456" fill="#5b6472">It has no absolute position of its own.</text>
+  </g>
+</svg>
+<p class="cap">Figure 1. Forward pass. Depth features are concatenated into the two finest FPN levels; everything downstream sees a mixed RGB+depth feature map, never the raw depth again.</p>
+
+<div class="aside">The trajectory head outputs offsets: point 0 is always (0,0,0) and the other points say how far the interaction point moves, in metres, in camera coordinates. Where that curve actually sits in 3D is not part of the prediction. That missing starting position is what the code calls the <b>anchor</b>.</div>
+
+<h2><span class="n">2</span>How the 2D recipe supervises the 3D trajectory</h2>
+
+<p>HOI4D, EPIC and ARCTIC provide a 2D hand track in pixels, not a 3D curve. The loss therefore has to compare a 3D prediction with a 2D observation, and it does that by projecting the prediction into the image. But a relative curve cannot be projected: to project a 3D point you need its absolute position, so the loss first has to place the curve somewhere.</p>
+
+<svg viewBox="0 0 860 300" xmlns="http://www.w3.org/2000/svg">
+  <g class="txt" font-size="13">
+  <rect x="20" y="110" width="150" height="70" rx="8" fill="#fff" stroke="#c8443c"/>
+  <text x="95" y="135" text-anchor="middle">relative trajectory</text>
+  <text x="95" y="153" text-anchor="middle" fill="#5b6472">(0,0,0), Δ₁, Δ₂ … Δₙ</text>
+  <text x="95" y="169" text-anchor="middle" fill="#5b6472">from the head</text>
+
+  <rect x="20" y="210" width="150" height="70" rx="8" fill="#fdf3ec" stroke="#e07a2f"/>
+  <text x="95" y="235" text-anchor="middle" font-weight="600">anchor  a = (x,y,z)</text>
+  <text x="95" y="253" text-anchor="middle" fill="#5b6472">absolute 3D position</text>
+  <text x="95" y="269" text-anchor="middle" fill="#5b6472">of the first point</text>
+
+  <text x="215" y="200" font-size="26" fill="#5b6472">+</text>
+  <line x1="170" y1="145" x2="260" y2="180" stroke="#5b6472" marker-end="url(#ar)"/>
+  <line x1="170" y1="245" x2="260" y2="210" stroke="#5b6472" marker-end="url(#ar)"/>
+
+  <rect x="260" y="160" width="150" height="70" rx="8" fill="#fff" stroke="#5b6472"/>
+  <text x="335" y="185" text-anchor="middle">absolute 3D curve</text>
+  <text x="335" y="203" text-anchor="middle" fill="#5b6472">Pₖ = a + Δₖ</text>
+  <text x="335" y="219" text-anchor="middle" fill="#5b6472">camera frame, metres</text>
+
+  <line x1="410" y1="195" x2="470" y2="195" stroke="#5b6472" marker-end="url(#ar)"/>
+  <rect x="470" y="160" width="130" height="70" rx="8" fill="#fff" stroke="#5b6472"/>
+  <text x="535" y="185" text-anchor="middle">project with K</text>
+  <text x="535" y="203" text-anchor="middle" fill="#5b6472">u = fx·X/Z + cx</text>
+  <text x="535" y="219" text-anchor="middle" fill="#5b6472">v = fy·Y/Z + cy</text>
+
+  <line x1="600" y1="195" x2="660" y2="195" stroke="#5b6472" marker-end="url(#ar)"/>
+  <rect x="660" y="160" width="180" height="70" rx="8" fill="#eef5f0" stroke="#3e8e5f"/>
+  <text x="750" y="185" text-anchor="middle">compare, point by point,</text>
+  <text x="750" y="203" text-anchor="middle" fill="#5b6472">with the observed 2D track</text>
+  <text x="750" y="219" text-anchor="middle" fill="#5b6472">→ L_traj_proj</text>
+
+  <text x="430" y="60" text-anchor="middle" font-weight="600">Where does the anchor come from today?</text>
+  <text x="430" y="82" text-anchor="middle" fill="#5b6472">a = backproject( GT 2D first point, z = depth map sampled at that pixel )</text>
+  <text x="430" y="102" text-anchor="middle" fill="#e07a2f">→ if the depth map reads 0 there, the row is dropped and this whole chain produces no gradient.</text>
+  </g>
+</svg>
+<p class="cap">Figure 2. The projection loss. The pixel position of the anchor is known from the data (the first track point). Its depth is not in the 2D data, so the code reads it out of the input depth map.</p>
+
+<h2><span class="n">3</span>Why the anchor's depth matters so much</h2>
+
+<p>Perspective projection collapses scale: a 10 cm motion at half a metre and a 20 cm motion at one metre draw the same 2D track. So the anchor's depth is what tells the network how big, in metres, its predicted offsets have to be. Without it the loss can only teach the shape of the curve, not its size, and the metric trajectory that SF3D later needs is undefined.</p>
+
+<svg viewBox="0 0 860 300" xmlns="http://www.w3.org/2000/svg">
+  <g class="txt" font-size="13">
+  <!-- camera -->
+  <polygon points="40,150 90,120 90,180" fill="#e8eef8" stroke="#3d6fb4"/>
+  <text x="65" y="205" text-anchor="middle">camera</text>
+  <!-- image plane -->
+  <line x1="150" y1="60" x2="150" y2="240" stroke="#5b6472" stroke-dasharray="4 3"/>
+  <text x="150" y="258" text-anchor="middle" fill="#5b6472">image plane</text>
+  <!-- observed 2D track on plane -->
+  <line x1="150" y1="135" x2="150" y2="165" stroke="#3e8e5f" stroke-width="5"/>
+  <text x="165" y="128" fill="#3e8e5f">observed 2D track (30 px)</text>
+  <!-- rays -->
+  <line x1="90" y1="150" x2="820" y2="60" stroke="#8b93a1" stroke-dasharray="3 3"/>
+  <line x1="90" y1="150" x2="820" y2="240" stroke="#8b93a1" stroke-dasharray="3 3"/>
+  <!-- candidate curves -->
+  <line x1="300" y1="124" x2="300" y2="176" stroke="#c8443c" stroke-width="4"/>
+  <text x="300" y="112" text-anchor="middle" fill="#c8443c">z = 0.5 m → 8 cm</text>
+  <line x1="500" y1="99" x2="500" y2="201" stroke="#c8443c" stroke-width="4"/>
+  <text x="500" y="87" text-anchor="middle" fill="#c8443c">z = 1.0 m → 16 cm</text>
+  <line x1="700" y1="74" x2="700" y2="226" stroke="#c8443c" stroke-width="4"/>
+  <text x="700" y="62" text-anchor="middle" fill="#c8443c">z = 1.5 m → 24 cm</text>
+  <text x="500" y="285" text-anchor="middle" fill="#5b6472">All three 3D motions project onto the same 2D track. Only the anchor depth picks one.</text>
+  </g>
+</svg>
+<p class="cap">Figure 3. Scale ambiguity of a 2D track. The anchor depth z fixes which of the red curves the prediction is compared against, and therefore what "correct" offsets are in metres.</p>
+
+<div class="card">
+<p class="k">The same depth sample feeds a second term.</p>
+<p>The z_p head predicts the metric depth of the interaction point, so the model can lift its own 2D point to 3D at test time. On the 2D recipe nothing supervises z_p directly, so a tether loss pulls z_p towards the input depth map sampled at the same first track point (<code>depth_anchor_weight</code>). That tether goes silent in exactly the same situations as the projection loss.</p>
+</div>
+
+<h2><span class="n">4</span>What the depth maps of the four datasets look like at the anchor pixel</h2>
+
+<table>
+<tr><th>dataset</th><th>depth map</th><th>value at the first track point</th><th>rows that keep trajectory supervision</th></tr>
+<tr><td>SF3D</td><td>rendered from the laser scan, full scene</td><td>the element's surface depth</td><td>all (except scan holes)</td></tr>
+<tr><td>HOI4D</td><td>sensor depth, full scene</td><td>the hand or the object it touches</td><td>~all (sensor holes only)</td></tr>
+<tr><td>ARCTIC</td><td>rendered from the object mesh only; 0 everywhere else (8% of the image is object)</td><td>0 whenever the knuckle pixel is off the object silhouette</td><td><span style="color:var(--red)">523 / 2559 (20%)</span></td></tr>
+<tr><td>EPIC</td><td>none, stored as all zeros</td><td>always 0</td><td><span style="color:var(--red)">0 / 359</span></td></tr>
+</table>
+
+<svg viewBox="0 0 860 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="txt" font-size="13">
+  <!-- ARCTIC panel -->
+  <rect x="40" y="30" width="340" height="190" rx="6" fill="#1a1d23"/>
+  <text x="210" y="20" text-anchor="middle" font-weight="600">ARCTIC depth map (object-only render)</text>
+  <!-- object: a laptop-ish blob -->
+  <path d="M150,150 L270,140 L280,90 L165,95 Z" fill="#7a8fb4"/>
+  <rect x="140" y="150" width="150" height="25" fill="#5f739a"/>
+  <text x="215" y="123" text-anchor="middle" fill="#fff">valid depth</text>
+  <!-- hand track -->
+  <circle cx="110" cy="120" r="6" fill="#3e8e5f"/>
+  <path d="M110,120 Q140,95 175,105" stroke="#3e8e5f" stroke-width="2" fill="none"/>
+  <text x="60" y="108" fill="#3e8e5f">knuckle at t=0</text>
+  <text x="60" y="200" fill="#e07a2f">depth here = 0 → row dropped</text>
+  <line x1="110" y1="126" x2="110" y2="185" stroke="#e07a2f" stroke-dasharray="3 3"/>
+
+  <!-- EPIC panel -->
+  <rect x="480" y="30" width="340" height="190" rx="6" fill="#1a1d23"/>
+  <text x="650" y="20" text-anchor="middle" font-weight="600">EPIC depth map</text>
+  <text x="650" y="120" text-anchor="middle" fill="#8b93a1" font-size="16">all zeros</text>
+  <circle cx="560" cy="150" r="6" fill="#3e8e5f"/>
+  <path d="M560,150 Q620,120 700,130" stroke="#3e8e5f" stroke-width="2" fill="none"/>
+  <text x="540" y="200" fill="#e07a2f">every row dropped</text>
+  </g>
+</svg>
+<p class="cap">Figure 4. The 2D track starts at the hand's middle knuckle. On ARCTIC the object is rendered but the hand is not, so the knuckle usually lands on a zero pixel even though the object is right there. On EPIC there is nothing to sample.</p>
+
+<div class="caveat">So the symptom of "no depth" is not a crash and not a bad number. Training runs, the mask and heatmap losses work normally, and the trajectory head quietly receives no gradient from 80% of ARCTIC and 100% of EPIC. The DepthEncoder itself also sees a map it has never seen in training (all zeros), but that is the smaller of the two problems.</div>
+
+<h2><span class="n">5</span>What "depth optional" has to cover</h2>
+
+<table>
+<tr><th>consumer</th><th>what it needs</th><th>proposal</th></tr>
+<tr><td>DepthEncoder (Figure 1, orange)</td><td>a map it has learned to interpret, including "absent"</td><td>add a validity channel and randomly blank the depth of some SF3D/HOI4D batches during training (modality dropout), so the network learns both modes; old checkpoints still load</td></tr>
+<tr><td>anchor of the projection loss (Figure 2)</td><td>one metric z at the first track point</td><td>fallback chain: input depth map if valid → the record's own GT 3D z (exact for ARCTIC mocap and SF3D, plausible for EPIC grip records) → the model's z_p, detached</td></tr>
+<tr><td>z_p tether</td><td>a metric target for z_p</td><td>same chain minus the last step (z_p cannot tether itself)</td></tr>
+<tr><td>test metrics (3D origin error, 2D reprojection decomposition)</td><td>a lift depth</td><td>same chain, so ARCTIC's 3D metrics are computed from its exact anchors</td></tr>
+</table>
+
+<div class="verdict"><b>In one sentence:</b> the input depth map is used both as a feature and as the single number that turns a pixel-space track into a metre-space target; making depth optional means giving the network a way to say "absent" for the first role and a fallback source of that one number for the second.</div>
+
+<p class="meta" style="margin-top:40px">Numbers measured 2026-09-09 on the pod: ARCTIC median GT z at the first point 0.53 m (map agrees where valid, 0.51 m); EPIC WiLoR z median 0.70 m, 278 grip / 81 rotation-only records.</p>
+
+</main>
+</body>
+</html>

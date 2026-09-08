@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scale-free 2D pretraining, scale from 3D</title>
+<style>
+  :root { --ink:#1a1d23; --muted:#5b6472; --faint:#8b93a1; --paper:#fbfaf7; --card:#fff; --line:#e3e0d8;
+    --accent:#7a4fc0; --orange:#e07a2f; --blue:#3d6fb4; --green:#3e8e5f; --red:#c8443c; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--paper); color:var(--ink); font:16px/1.7 "Avenir Next","Segoe UI",system-ui,sans-serif; padding:48px 20px 96px; }
+  main { max-width:860px; margin:0 auto; }
+  h1 { font-size:32px; line-height:1.2; letter-spacing:-.5px; }
+  .sub { color:var(--muted); margin:10px 0 40px; font-size:17px; }
+  h2 { font-size:21px; margin:52px 0 12px; }
+  h2 .n { display:inline-block; background:var(--ink); color:var(--paper); font-size:12px; font-weight:700; border-radius:999px; padding:2px 10px; vertical-align:3px; margin-right:10px; }
+  p { margin:12px 0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:20px 26px; margin:20px 0; }
+  .verdict { border-left:4px solid var(--accent); background:#f5f1fb; border-radius:6px; padding:16px 20px; margin:22px 0; }
+  .aside { border-left:4px solid var(--green); background:#f0f7f2; border-radius:6px; padding:14px 20px; margin:18px 0; font-size:15px; }
+  .caveat { border-left:4px solid var(--orange); background:#fdf3ec; border-radius:6px; padding:14px 20px; margin:18px 0; font-size:15px; }
+  code { font:13px/1.5 "SF Mono",ui-monospace,Menlo,monospace; background:#f1efe9; padding:1px 5px; border-radius:4px; }
+  .eq { font:17px/1.9 "Avenir Next","Segoe UI",system-ui,sans-serif; text-align:center; margin:14px 0; }
+  svg { display:block; max-width:100%; height:auto; margin:10px auto; }
+  .cap { color:var(--muted); font-size:14px; text-align:center; margin:4px 0 18px; }
+  table { border-collapse:collapse; width:100%; margin:14px 0; font-size:15px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; font-size:13px; text-transform:uppercase; letter-spacing:.04em; }
+  td.num { font-variant-numeric:tabular-nums; }
+  .txt { font:13px "Avenir Next","Segoe UI",system-ui,sans-serif; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Scale-free 2D pretraining, scale from 3D</h1>
+<p class="sub">How to let the 2D datasets teach the <i>shape</i> of a trajectory without ever knowing depth, and let the 3D stage add the <i>size</i> afterwards as one number.</p>
+
+<h2><span class="n">1</span>The one fact everything rests on</h2>
+
+<p>Take an interaction point at depth z₀ in front of the camera, and a motion Δ in metres. The camera sees the motion as roughly Δ/z₀: a 10 cm pull at half a metre looks the same as a 20 cm pull at one metre. The projection formula makes this exact: scaling the whole 3D scene by any factor leaves the image unchanged.</p>
+
+<svg viewBox="0 0 860 260" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5b6472"/></marker></defs>
+  <g class="txt" font-size="13">
+  <polygon points="40,130 90,100 90,160" fill="#e8eef8" stroke="#3d6fb4"/>
+  <text x="65" y="185" text-anchor="middle">camera</text>
+  <line x1="150" y1="40" x2="150" y2="220" stroke="#5b6472" stroke-dasharray="4 3"/>
+  <line x1="150" y1="115" x2="150" y2="145" stroke="#3e8e5f" stroke-width="5"/>
+  <text x="160" y="105" fill="#3e8e5f">one 2D track</text>
+  <line x1="90" y1="130" x2="820" y2="40" stroke="#8b93a1" stroke-dasharray="3 3"/>
+  <line x1="90" y1="130" x2="820" y2="220" stroke="#8b93a1" stroke-dasharray="3 3"/>
+  <line x1="300" y1="104" x2="300" y2="156" stroke="#c8443c" stroke-width="4"/>
+  <text x="300" y="92" text-anchor="middle" fill="#c8443c">z₀ = 0.5 m, Δ = 0.10 m</text>
+  <line x1="500" y1="79" x2="500" y2="181" stroke="#c8443c" stroke-width="4"/>
+  <text x="500" y="67" text-anchor="middle" fill="#c8443c">z₀ = 1.0 m, Δ = 0.20 m</text>
+  <line x1="700" y1="54" x2="700" y2="206" stroke="#c8443c" stroke-width="4"/>
+  <text x="700" y="42" text-anchor="middle" fill="#c8443c">z₀ = 1.5 m, Δ = 0.30 m</text>
+  <text x="500" y="245" text-anchor="middle" fill="#5b6472">Δ / z₀ = 0.20 for all three. That ratio is the only thing the image can tell you.</text>
+  </g>
+</svg>
+<p class="cap">Figure 1. Three metric motions, one image track. They differ in Δ and z₀ but share Δ/z₀.</p>
+
+<div class="verdict">So there are two separate quantities hiding inside "the trajectory": a <b>shape</b> Δ̃ = Δ/z₀ that the image determines completely, and a <b>scale</b> z₀ that the image cannot determine at all. Today the head predicts their product Δ, which is why the loss has to be handed z₀ from a depth map. The idea is to predict them separately.</div>
+
+<h2><span class="n">2</span>Today: the head predicts metres, so the loss needs a depth</h2>
+
+<svg viewBox="0 0 860 200" xmlns="http://www.w3.org/2000/svg">
+  <g class="txt" font-size="13">
+  <rect x="20" y="70" width="150" height="60" rx="8" fill="#fff" stroke="#c8443c"/>
+  <text x="95" y="95" text-anchor="middle" font-weight="600">trajectory head</text>
+  <text x="95" y="113" text-anchor="middle" fill="#5b6472">Δₖ in metres</text>
+  <line x1="170" y1="100" x2="240" y2="100" stroke="#5b6472" marker-end="url(#ar)"/>
+  <rect x="240" y="55" width="190" height="90" rx="8" fill="#fdf3ec" stroke="#e07a2f"/>
+  <text x="335" y="80" text-anchor="middle" font-weight="600">place at the anchor</text>
+  <text x="335" y="100" text-anchor="middle" fill="#5b6472">Pₖ = z₀·r + Δₖ</text>
+  <text x="335" y="120" text-anchor="middle" fill="#e07a2f">z₀ read from the depth map</text>
+  <text x="335" y="136" text-anchor="middle" fill="#e07a2f">→ zero on EPIC, 80% zero on ARCTIC</text>
+  <line x1="430" y1="100" x2="500" y2="100" stroke="#5b6472" marker-end="url(#ar)"/>
+  <rect x="500" y="70" width="120" height="60" rx="8" fill="#fff" stroke="#5b6472"/>
+  <text x="560" y="95" text-anchor="middle">project</text>
+  <text x="560" y="113" text-anchor="middle" fill="#5b6472">Pₖ → pixels</text>
+  <line x1="620" y1="100" x2="690" y2="100" stroke="#5b6472" marker-end="url(#ar)"/>
+  <rect x="690" y="70" width="150" height="60" rx="8" fill="#eef5f0" stroke="#3e8e5f"/>
+  <text x="765" y="95" text-anchor="middle">compare with the</text>
+  <text x="765" y="113" text-anchor="middle">observed 2D track</text>
+  </g>
+</svg>
+<p class="cap">Figure 2. The current chain. The metric head output only becomes projectable once z₀ is known, and z₀ comes from the depth map.</p>
+
+<h2><span class="n">3</span>Proposed: the head predicts the shape, the anchor sits at depth 1</h2>
+
+<p>Write the absolute curve as z₀·(r + Δₖ/z₀). Projecting z₀·(something) gives the same pixels as projecting (something). So if the head outputs Δ̃ₖ = Δₖ/z₀ directly, the loss can build the curve r + Δ̃ₖ, which is the same scene shrunk to anchor depth 1, and project that. No z₀ appears anywhere.</p>
+
+<svg viewBox="0 0 860 200" xmlns="http://www.w3.org/2000/svg">
+  <g class="txt" font-size="13">
+  <rect x="20" y="70" width="150" height="60" rx="8" fill="#fff" stroke="#c8443c"/>
+  <text x="95" y="95" text-anchor="middle" font-weight="600">trajectory head</text>
+  <text x="95" y="113" text-anchor="middle" fill="#5b6472">Δ̃ₖ, dimensionless</text>
+  <line x1="170" y1="100" x2="240" y2="100" stroke="#5b6472" marker-end="url(#ar)"/>
+  <rect x="240" y="55" width="190" height="90" rx="8" fill="#eef5f0" stroke="#3e8e5f"/>
+  <text x="335" y="80" text-anchor="middle" font-weight="600">place at unit depth</text>
+  <text x="335" y="100" text-anchor="middle" fill="#5b6472">P̃ₖ = r + Δ̃ₖ</text>
+  <text x="335" y="120" text-anchor="middle" fill="#3e8e5f">r = ray through the GT first pixel</text>
+  <text x="335" y="136" text-anchor="middle" fill="#3e8e5f">no depth map, no dropped rows</text>
+  <line x1="430" y1="100" x2="500" y2="100" stroke="#5b6472" marker-end="url(#ar)"/>
+  <rect x="500" y="70" width="120" height="60" rx="8" fill="#fff" stroke="#5b6472"/>
+  <text x="560" y="95" text-anchor="middle">project</text>
+  <text x="560" y="113" text-anchor="middle" fill="#5b6472">same pixels as before</text>
+  <line x1="620" y1="100" x2="690" y2="100" stroke="#5b6472" marker-end="url(#ar)"/>
+  <rect x="690" y="70" width="150" height="60" rx="8" fill="#eef5f0" stroke="#3e8e5f"/>
+  <text x="765" y="95" text-anchor="middle">compare with the</text>
+  <text x="765" y="113" text-anchor="middle">observed 2D track</text>
+  </g>
+</svg>
+<p class="cap">Figure 3. The 2D path after the change. The anchor's pixel is known from the data; its depth is fixed to 1 by convention. EPIC and ARCTIC supervise every record.</p>
+
+<div class="card">
+<p><b>Worked example.</b> A drawer pull seen head-on. The hand starts at pixel (300, 260) and ends at (300, 320) in a 512-pixel image with f = 500 px. The 2D track says the point moved 60 px.</p>
+<table>
+<tr><th>quantity</th><th>if the true depth were 0.5 m</th><th>if it were 1.0 m</th><th>what the 2D loss sees</th></tr>
+<tr><td>metric motion Δ</td><td class="num">0.06 m</td><td class="num">0.12 m</td><td>cannot tell</td></tr>
+<tr><td>shape Δ̃ = Δ/z₀</td><td class="num">0.12</td><td class="num">0.12</td><td><b>0.12, fully determined</b></td></tr>
+<tr><td>predicted pixels from r + Δ̃</td><td class="num">60 px</td><td class="num">60 px</td><td>matches the track</td></tr>
+</table>
+<p>The head learns to output 0.12 for this image, whichever kitchen it came from. That is a statement about the image, not about the room.</p>
+</div>
+
+<h2><span class="n">4</span>Where the metres come back</h2>
+
+<p>Everything downstream that wants metric trajectories, the 3D trajectory loss on SF3D, the closed-form quadratics, the articulation consistency terms, the DCT head, the MA metric, keeps working unchanged. It just receives z₀·Δ̃ instead of Δ, where z₀ is supplied by whoever knows it:</p>
+
+<svg viewBox="0 0 860 300" xmlns="http://www.w3.org/2000/svg">
+  <g class="txt" font-size="13">
+  <rect x="20" y="120" width="150" height="60" rx="8" fill="#fff" stroke="#c8443c"/>
+  <text x="95" y="145" text-anchor="middle" font-weight="600">trajectory head</text>
+  <text x="95" y="163" text-anchor="middle" fill="#5b6472">Δ̃ₖ (shape)</text>
+  <line x1="170" y1="150" x2="250" y2="150" stroke="#5b6472" marker-end="url(#ar)"/>
+  <circle cx="290" cy="150" r="26" fill="#f5f1fb" stroke="#7a4fc0"/>
+  <text x="290" y="156" text-anchor="middle" font-size="22">×</text>
+  <line x1="316" y1="150" x2="400" y2="150" stroke="#5b6472" marker-end="url(#ar)"/>
+  <rect x="400" y="120" width="170" height="60" rx="8" fill="#fff" stroke="#5b6472"/>
+  <text x="485" y="145" text-anchor="middle" font-weight="600">metric trajectory</text>
+  <text x="485" y="163" text-anchor="middle" fill="#5b6472">Δₖ = z₀ · Δ̃ₖ</text>
+  <line x1="570" y1="150" x2="650" y2="150" stroke="#5b6472" marker-end="url(#ar)"/>
+  <rect x="650" y="105" width="190" height="90" rx="8" fill="#fff" stroke="#5b6472"/>
+  <text x="745" y="130" text-anchor="middle" font-weight="600">all existing 3D losses</text>
+  <text x="745" y="150" text-anchor="middle" fill="#5b6472">and metrics, untouched</text>
+  <text x="745" y="168" text-anchor="middle" fill="#5b6472">(trajectory, closed-form,</text>
+  <text x="745" y="184" text-anchor="middle" fill="#5b6472">articulation, MA)</text>
+
+  <!-- scale sources -->
+  <rect x="180" y="20" width="220" height="60" rx="8" fill="#fdf3ec" stroke="#e07a2f"/>
+  <text x="290" y="42" text-anchor="middle" font-weight="600">z₀, the scale</text>
+  <text x="290" y="60" text-anchor="middle" fill="#5b6472">one scalar per sample</text>
+  <line x1="290" y1="80" x2="290" y2="124" stroke="#e07a2f" marker-end="url(#ar)"/>
+
+  <text x="60" y="235" font-weight="600">where z₀ comes from:</text>
+  <text x="60" y="256" fill="#5b6472">• 2D pretraining (HOI4D, EPIC, ARCTIC 2D): z₀ = 1, nothing needed</text>
+  <text x="60" y="276" fill="#5b6472">• 3D training (SF3D, ARCTIC 3D): GT depth of the first point, exactly the teacher-forcing recipe that already transfers best</text>
+  <text x="60" y="296" fill="#5b6472">• test time: the z_p head (already exists, already supervised on SF3D), or the input depth if there is one</text>
+  </g>
+</svg>
+<p class="cap">Figure 4. One multiply separates the two roles. The shape is trained wherever there are 2D tracks; the scalar is trained wherever there is depth.</p>
+
+<div class="aside"><b>Why this is more than a workaround.</b> An RGB network cannot see metres; it can see Δ/z₀. Asking the head for metric offsets was asking it to also guess depth, which is why the recipe had to feed it depth through the anchor. Asking it for Δ/z₀ is asking for what is actually in the picture. The one number it cannot see, z₀, is handled by the one head built for depth.</div>
+
+<h2><span class="n">5</span>What changes, concretely</h2>
+
+<table>
+<tr><th>piece</th><th>today</th><th>after</th></tr>
+<tr><td>trajectory head output</td><td>Δ in metres</td><td>Δ̃ = Δ/z₀, dimensionless</td></tr>
+<tr><td>projection loss anchor</td><td>GT first pixel lifted with the depth map; zero depth drops the row</td><td>GT first pixel at depth 1; never drops a row</td></tr>
+<tr><td>3D losses on SF3D</td><td>on Δ</td><td>on z₀·Δ̃ with z₀ = GT first-point depth; formulas unchanged</td></tr>
+<tr><td>z_p depth tether</td><td>z_p vs depth map on every dataset</td><td>only where a depth target exists (SF3D, ARCTIC via mocap z); off on EPIC</td></tr>
+<tr><td>unit-bearing constants on the 2D path</td><td>near plane 0.05 m, radius floor 0.10 m</td><td>fractions of anchor depth (0.05, ~0.15)</td></tr>
+<tr><td>MA at test</td><td>one number</td><td>two: oracle scale (GT z₀, measures shape) and predicted scale (z_p, the real number)</td></tr>
+<tr><td>existing checkpoints</td><td>heads in metres</td><td>HOI4D arms and the HOI4D→SF3D post-training rerun under the new convention (about an hour per HOI4D arm plus the 30-epoch SF3D runs)</td></tr>
+</table>
+
+<div class="caveat"><b>Not covered by this.</b> The DepthEncoder still receives a depth map as an input feature. This change removes depth from the <i>loss</i>; removing it from the <i>input</i> is the separate modality-dropout or RGB-only decision. The two are independent, and this change is what makes an RGB-only model possible at all, since the loss no longer needs a depth map either.</div>
+
+</main>
+</body>
+</html>

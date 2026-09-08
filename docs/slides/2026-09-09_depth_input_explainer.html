@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The depth map as an input feature</title>
+<style>
+  :root { --ink:#1a1d23; --muted:#5b6472; --faint:#8b93a1; --paper:#fbfaf7; --card:#fff; --line:#e3e0d8;
+    --accent:#7a4fc0; --orange:#e07a2f; --blue:#3d6fb4; --green:#3e8e5f; --red:#c8443c; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--paper); color:var(--ink); font:16px/1.7 "Avenir Next","Segoe UI",system-ui,sans-serif; padding:48px 20px 96px; }
+  main { max-width:860px; margin:0 auto; }
+  h1 { font-size:32px; line-height:1.2; letter-spacing:-.5px; }
+  .sub { color:var(--muted); margin:10px 0 40px; font-size:17px; }
+  h2 { font-size:21px; margin:52px 0 12px; }
+  h2 .n { display:inline-block; background:var(--ink); color:var(--paper); font-size:12px; font-weight:700; border-radius:999px; padding:2px 10px; vertical-align:3px; margin-right:10px; }
+  p { margin:12px 0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:20px 26px; margin:20px 0; }
+  .verdict { border-left:4px solid var(--accent); background:#f5f1fb; border-radius:6px; padding:16px 20px; margin:22px 0; }
+  .aside { border-left:4px solid var(--green); background:#f0f7f2; border-radius:6px; padding:14px 20px; margin:18px 0; font-size:15px; }
+  .caveat { border-left:4px solid var(--orange); background:#fdf3ec; border-radius:6px; padding:14px 20px; margin:18px 0; font-size:15px; }
+  code { font:13px/1.5 "SF Mono",ui-monospace,Menlo,monospace; background:#f1efe9; padding:1px 5px; border-radius:4px; }
+  svg { display:block; max-width:100%; height:auto; margin:10px auto; }
+  .cap { color:var(--muted); font-size:14px; text-align:center; margin:4px 0 18px; }
+  table { border-collapse:collapse; width:100%; margin:14px 0; font-size:15px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; font-size:13px; text-transform:uppercase; letter-spacing:.04em; }
+  .txt { font:13px "Avenir Next","Segoe UI",system-ui,sans-serif; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>The depth map as an input feature</h1>
+<p class="sub">The second, independent place depth is used: not in any loss, but as something the network looks at. What it sees today, why "no depth" is a problem there too, and the three ways to handle it.</p>
+
+<h2><span class="n">1</span>What the encoder does with the depth map</h2>
+
+<p>The depth map is a 512×512 image of metres. A small stack of four convolutions (about 0.5 M parameters, next to the frozen 300 M backbone) turns it into two feature maps, and those are glued channel-wise onto the backbone's RGB features before the FPN. From that point on there is no "depth" and no "RGB" any more, only a mixed feature map that the decoder, the mask, the heatmap and every head read.</p>
+
+<svg viewBox="0 0 860 300" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5b6472"/></marker></defs>
+  <g class="txt" font-size="13">
+  <rect x="20" y="40" width="130" height="50" rx="8" fill="#e8eef8" stroke="#3d6fb4"/>
+  <text x="85" y="61" text-anchor="middle">RGB 3×512×512</text><text x="85" y="79" text-anchor="middle" fill="#5b6472">normalised</text>
+  <rect x="20" y="200" width="130" height="50" rx="8" fill="#fdf3ec" stroke="#e07a2f"/>
+  <text x="85" y="221" text-anchor="middle">depth 1×512×512</text><text x="85" y="239" text-anchor="middle" fill="#5b6472">raw metres, 0 = hole</text>
+
+  <rect x="200" y="30" width="150" height="70" rx="8" fill="#fff" stroke="#3d6fb4"/>
+  <text x="275" y="55" text-anchor="middle">DINOv3 backbone</text><text x="275" y="73" text-anchor="middle" fill="#5b6472">frozen, ~300 M</text>
+  <text x="275" y="91" text-anchor="middle" fill="#5b6472">→ 512 ch @ H/8, 1024 @ H/16</text>
+  <rect x="200" y="190" width="150" height="70" rx="8" fill="#fff" stroke="#e07a2f"/>
+  <text x="275" y="215" text-anchor="middle">DepthEncoder</text><text x="275" y="233" text-anchor="middle" fill="#5b6472">4 convs, ~0.5 M</text>
+  <text x="275" y="251" text-anchor="middle" fill="#5b6472">→ 128 ch @ H/8, 256 @ H/16</text>
+  <line x1="150" y1="65" x2="200" y2="65" stroke="#5b6472" marker-end="url(#ar)"/>
+  <line x1="150" y1="225" x2="200" y2="225" stroke="#5b6472" marker-end="url(#ar)"/>
+
+  <!-- concat -->
+  <rect x="420" y="100" width="170" height="100" rx="8" fill="#f5f1fb" stroke="#7a4fc0"/>
+  <text x="505" y="125" text-anchor="middle" font-weight="600">channel concat</text>
+  <text x="505" y="147" text-anchor="middle" fill="#5b6472">H/8:  512 + <tspan fill="#e07a2f">128</tspan> = 640</text>
+  <text x="505" y="167" text-anchor="middle" fill="#5b6472">H/16: 1024 + <tspan fill="#e07a2f">256</tspan> = 1280</text>
+  <text x="505" y="187" text-anchor="middle" fill="#5b6472">H/32: 1024 (RGB only)</text>
+  <line x1="350" y1="65" x2="420" y2="125" stroke="#3d6fb4" marker-end="url(#ar)"/>
+  <line x1="350" y1="225" x2="420" y2="175" stroke="#e07a2f" marker-end="url(#ar)"/>
+
+  <line x1="590" y1="150" x2="660" y2="150" stroke="#5b6472" marker-end="url(#ar)"/>
+  <rect x="660" y="110" width="180" height="80" rx="8" fill="#fff" stroke="#5b6472"/>
+  <text x="750" y="135" text-anchor="middle">FPN → decoder → heads</text>
+  <text x="750" y="155" text-anchor="middle" fill="#5b6472">the FPN's first convs expect</text>
+  <text x="750" y="173" text-anchor="middle" fill="#5b6472">640 and 1280 input channels</text>
+  </g>
+</svg>
+<p class="cap">Figure 1. The fusion point. The FPN's first convolutions were built and trained for 640- and 1280-channel inputs, which is why the depth branch cannot simply be unplugged from an existing checkpoint.</p>
+
+<h2><span class="n">2</span>What the encoder has actually seen</h2>
+
+<table>
+<tr><th>dataset</th><th>depth map given to the encoder</th><th>zeros in it</th></tr>
+<tr><td>SF3D</td><td>rendered from the laser scan, full scene, 0.3 to ~5 m</td><td>small scan holes</td></tr>
+<tr><td>HOI4D</td><td>sensor depth, full scene</td><td>sensor holes, edges, reflective surfaces</td></tr>
+<tr><td>ARCTIC</td><td>only the object rendered, ~8% of pixels</td><td><span style="color:var(--red)">92% of the image</span></td></tr>
+<tr><td>EPIC</td><td>nothing</td><td><span style="color:var(--red)">100%</span></td></tr>
+</table>
+
+<svg viewBox="0 0 860 230" xmlns="http://www.w3.org/2000/svg">
+  <g class="txt" font-size="13">
+  <!-- SF3D -->
+  <text x="120" y="20" text-anchor="middle" font-weight="600">SF3D / HOI4D</text>
+  <rect x="30" y="30" width="180" height="150" rx="6" fill="#4b5f8a"/>
+  <rect x="30" y="30" width="180" height="60" fill="#6f84b0"/>
+  <rect x="60" y="100" width="70" height="60" fill="#8ea3cc"/>
+  <rect x="150" y="80" width="40" height="80" fill="#3a4a70"/>
+  <circle cx="110" cy="150" r="5" fill="#1a1d23"/><circle cx="175" cy="60" r="4" fill="#1a1d23"/>
+  <text x="120" y="200" text-anchor="middle" fill="#5b6472">dense metres, a few holes</text>
+  <!-- ARCTIC -->
+  <text x="430" y="20" text-anchor="middle" font-weight="600">ARCTIC</text>
+  <rect x="340" y="30" width="180" height="150" rx="6" fill="#1a1d23"/>
+  <path d="M400,140 L470,133 L478,95 L410,100 Z" fill="#8ea3cc"/>
+  <rect x="395" y="140" width="85" height="18" fill="#6f84b0"/>
+  <text x="430" y="200" text-anchor="middle" fill="#5b6472">one floating object, black elsewhere</text>
+  <!-- EPIC -->
+  <text x="740" y="20" text-anchor="middle" font-weight="600">EPIC</text>
+  <rect x="650" y="30" width="180" height="150" rx="6" fill="#1a1d23"/>
+  <text x="740" y="110" text-anchor="middle" fill="#8b93a1" font-size="16">all zeros</text>
+  <text x="740" y="200" text-anchor="middle" fill="#5b6472">nothing</text>
+  </g>
+</svg>
+<p class="cap">Figure 2. The encoder was trained on the left kind of map. The other two are inputs it has never been shown; the network does not know that "black" means "unknown" rather than "zero metres away".</p>
+
+<div class="caveat">This is why the loss fix alone is not enough. Even with a scale-free 2D loss that never reads the depth map, the forward pass still pushes the EPIC and ARCTIC maps through the encoder, and the features it produces from a black image are noise the decoder has been trained to trust. The best case is that the network learns to ignore them on those datasets; the likely case is degraded masks and heatmaps, and a model that behaves differently with and without depth without anyone having decided that.</div>
+
+<h2><span class="n">3</span>Three ways to handle the input side</h2>
+
+<div class="card">
+<p><b>Option A: modality dropout (recommended).</b> Keep the encoder. Give it a second input channel that is 1 where the depth is valid and 0 where it is not, so "absent" is an explicit signal instead of a suspicious reading. Then, during training on the datasets that have depth, blank the whole map for a random fraction of samples (say a third). The network is forced to solve the task both ways and learns what to do when the validity channel is all zero.</p>
+<svg viewBox="0 0 860 150" xmlns="http://www.w3.org/2000/svg">
+  <g class="txt" font-size="13">
+  <rect x="30" y="30" width="200" height="90" rx="8" fill="#fdf3ec" stroke="#e07a2f"/>
+  <text x="130" y="55" text-anchor="middle" font-weight="600">encoder input, 2 channels</text>
+  <text x="130" y="78" text-anchor="middle" fill="#5b6472">ch 0: depth in metres (0 if none)</text>
+  <text x="130" y="98" text-anchor="middle" fill="#5b6472">ch 1: validity, 1 where depth &gt; 0</text>
+  <text x="300" y="60" font-weight="600">per training sample with depth:</text>
+  <text x="300" y="82" fill="#5b6472">with prob 1−p: pass the real map, validity = 1 on the measured pixels</text>
+  <text x="300" y="102" fill="#5b6472">with prob p:   pass zeros, validity = 0 everywhere  ← this is what EPIC looks like</text>
+  </g>
+</svg>
+<p><b>Checkpoint compatibility.</b> The only weight whose shape changes is the encoder's first convolution, 1 input channel becoming 2. Pad it with a zero-initialised second channel and every existing checkpoint loads and behaves exactly as before on the first step. The record recipe survives.</p>
+<p><b>Cost.</b> One fine-tune of the record checkpoint with dropout on. It also produces, for free, the first measurement of how much depth is worth: evaluate SF3D with the real maps, then again with blanked maps, and the gap is the price of missing depth.</p>
+</div>
+
+<div class="card">
+<p><b>Option B: an RGB-only model.</b> Set the existing <code>use_depth: false</code> flag. The encoder disappears and the FPN's first convolutions are rebuilt for 512 and 1024 input channels. Cleanest possible model, and no dataset is ever out of distribution.</p>
+<p><b>Cost.</b> Those FPN convolutions cannot be loaded from any existing checkpoint, so the chain that produced the record, HOI4D pretraining then SF3D post-training, has to be rerun from scratch under this flag. This is the proper depth ablation, and nobody has run it yet, so it is worth doing once regardless. It just should not be the thing that gates EPIC and ARCTIC training.</p>
+</div>
+
+<div class="card">
+<p><b>Option C: estimate the depth.</b> Run a monocular metric depth estimator on the EPIC onset frames, and composite ARCTIC's rendered object onto an estimated background. The model stays exactly as it is.</p>
+<p><b>Cost.</b> A permanent domain gap between estimated and sensor depth, a new preprocessing dependency on every future dataset, and the model still cannot be run on a bare RGB image at test time. Useful as a fallback experiment, not as the design.</p>
+</div>
+
+<h2><span class="n">4</span>How the two halves fit together</h2>
+
+<table>
+<tr><th>role of depth</th><th>problem on EPIC / ARCTIC</th><th>fix</th><th>independent?</th></tr>
+<tr><td>number in the 2D loss (the anchor)</td><td>rows silently dropped, no trajectory gradient</td><td>scale-free head: Δ̃ = Δ/z₀, anchor at unit depth</td><td rowspan="2">yes: either can be done without the other, but only both together give a model that runs on RGB alone</td></tr>
+<tr><td>input feature (the encoder)</td><td>features from a map the encoder never saw</td><td>validity channel + modality dropout</td></tr>
+</table>
+
+<div class="verdict"><b>Suggested order.</b> Do the loss half first, since it is what unlocks the trajectory supervision on the new datasets. Then fine-tune the record checkpoint with modality dropout, which is cheap and keeps everything loadable. Run the RGB-only ablation once, later, to know what depth was buying.</div>
+
+</main>
+</body>
+</html>

@@ -20,7 +20,9 @@ from model.losses import TwistLoss, build_geometric_loss
 from model.losses.geometric import (
     ScrewConsistencyLoss,
     TrajectoryProjectionLoss,
+    apply_trajectory_scale,
     normalized_intrinsics,
+    trajectory_scale_factor,
 )
 from model.losses.split import axis_direction_loss, origin_canonical_loss, project_q_star
 from model.segmenter import CRIS
@@ -31,6 +33,22 @@ torch.set_float32_matmul_precision("high")
 
 warnings.filterwarnings("ignore")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+
+def slice_input_channels(weight: torch.Tensor, target: torch.Tensor) -> typing.Optional[torch.Tensor]:
+    """Leading-columns slice of a conv weight whose ONLY mismatch with
+    ``target`` is more input channels (dim 1). Used to load a depth-fused
+    FPN checkpoint into a use_depth=false model: the fusion concat is
+    [rgb, depth], so the first target.shape[1] columns are the RGB ones and
+    the result equals feeding zeros for the depth channels. None when the
+    rule does not apply (then the key is skipped as before)."""
+    if weight.dim() != 4 or target.dim() != 4:
+        return None
+    if weight.shape[0] != target.shape[0] or weight.shape[2:] != target.shape[2:]:
+        return None
+    if weight.shape[1] <= target.shape[1]:
+        return None
+    return weight[:, : target.shape[1]].clone()
 
 
 # --- PyTorch Lightning Module for OPDReal --- #
@@ -207,6 +225,19 @@ class OPDRealTrainingModule(pl.LightningModule):
             img, depth, tokenized_words, mask_gt, point_gt_norm, motion_gt,
             motion_type_input, K_norm,
         )
+        # Scale-free head (2026-09-09 spec): the head emits Δ̃ = Δ / z0; put
+        # the metric scale back BEFORE any loss reads trajectory_pred. "unit"
+        # (2D datasets) is a no-op; "gt_z0" (SF3D) multiplies by the GT
+        # first-point depth — a constant, so the normalized trajectory loss
+        # is exactly the normalized loss on the dimensionless target.
+        if getattr(self.model_params, "trajectory_scale_free", False):
+            outputs = apply_trajectory_scale(
+                outputs,
+                trajectory_scale_factor(
+                    getattr(self.loss_params, "trajectory_scale_source", "unit"),
+                    outputs, targets,
+                ),
+            )
         mask_pred_logits = outputs.mask_logits
         point_pred_logits = outputs.point_logits
         point_uv = outputs.point_uv
@@ -1647,11 +1678,22 @@ class OPDRealTrainingModule(pl.LightningModule):
         model_state_dict = self.model.state_dict()
 
         # Filter out unnecessary keys and load only matching ones
-        pretrained_dict = {
-            k: v
-            for k, v in state_dict.items()
-            if k in model_state_dict and v.size() == model_state_dict[k].size()
-        }
+        slice_in = getattr(self.model_params, "finetune_slice_input_channels", False)
+        pretrained_dict = {}
+        sliced_keys = []
+        for k, v in state_dict.items():
+            if k not in model_state_dict:
+                continue
+            tgt = model_state_dict[k]
+            if v.size() == tgt.size():
+                pretrained_dict[k] = v
+            elif slice_in:
+                s = slice_input_channels(v, tgt)
+                if s is not None:
+                    pretrained_dict[k] = s
+                    sliced_keys.append(f"{k} {tuple(v.shape)} -> {tuple(tgt.shape)}")
+        if sliced_keys:
+            print(f"✂️  Sliced input channels (finetune_slice_input_channels): {sliced_keys}")
 
         if not pretrained_dict:
             print("⚠️ Warning: No matching keys found in the pretrained model.")

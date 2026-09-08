@@ -60,6 +60,7 @@ class SF3DDataset(Dataset):
         point_source: str = "motion_origin",
         frame_cache_path: Optional[str] = None,
         fast_pipeline: bool = False,
+        load_depth: bool = True,
     ):
         """
         Args:
@@ -160,6 +161,10 @@ class SF3DDataset(Dataset):
         # diff ~0.005 normalized), so runs that must stay exactly comparable
         # to pre-2026-08 checkpoints keep this off. Requires frame_cache_path.
         self.fast_pipeline = fast_pipeline
+        # RGB-only runs (2026-09-09 spec): skip the depth PNG decode and emit
+        # a zero (1, H, W) map in the tuple slot — the batch layout is
+        # unchanged and nothing downstream needs a None check.
+        self.load_depth = load_depth
         if fast_pipeline and frame_cache_path is None:
             raise ValueError("fast_pipeline=True requires frame_cache_path")
         self._mask_bufs: Dict[Tuple[int, int], np.ndarray] = {}
@@ -505,7 +510,9 @@ class SF3DDataset(Dataset):
         depth_image_filename = item_data.get("depth_image_path")
         depth_pil = None
         depth_image_tensor = None
-        if frame_blob is not None:
+        if not self.load_depth:
+            depth_image_tensor = torch.zeros((1, target_h, target_w), dtype=torch.float32)
+        elif frame_blob is not None:
             depth_np_uint16 = cv2.imdecode(
                 np.frombuffer(frame_blob["depth_png"], np.uint8),
                 cv2.IMREAD_UNCHANGED,

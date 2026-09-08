@@ -349,6 +349,50 @@ def backproject_points(K_norm: torch.Tensor, uv: torch.Tensor, depth: torch.Tens
     return rays * depth.unsqueeze(-1)
 
 
+def trajectory_scale_factor(source: str, outputs, targets) -> typing.Optional[torch.Tensor]:
+    """(B,) multiplier that turns the scale-free trajectory head's output
+    (Δ̃ = Δ / z0, offsets in units of the anchor depth — spec 2026-09-09)
+    into metres, or None for "no multiply".
+
+    "unit"     -> None. 2D datasets (HOI4D / EPIC / ARCTIC): the projection
+                  loss anchors at depth 1, so Δ̃ is compared as is.
+    "gt_z0"    -> targets.trajectory[:, 0, 2]: the GT depth of the first
+                  point (SF3D train/val — teacher forcing of ONE scalar).
+    "pred_z_p" -> outputs.point_3d_pred[:, 2], detached: the model's own z_p
+                  lift (test time; needs predict_point_depth + intrinsics).
+    """
+    if source == "unit":
+        return None
+    if source == "gt_z0":
+        if targets.trajectory is None:
+            raise ValueError(
+                "trajectory_scale_source='gt_z0' needs a 3D GT trajectory in the "
+                "batch — use 'unit' on 2D datasets"
+            )
+        return targets.trajectory[:, 0, 2].float()
+    if source == "pred_z_p":
+        if outputs.point_3d_pred is None:
+            raise ValueError(
+                "trajectory scale 'pred_z_p' needs point_3d_pred "
+                "(predict_point_depth + intrinsics in the batch)"
+            )
+        return outputs.point_3d_pred[:, 2].detach().float()
+    raise ValueError(f"unknown trajectory scale source {source!r} (unit|gt_z0|pred_z_p)")
+
+
+def apply_trajectory_scale(outputs, scale: typing.Optional[torch.Tensor]):
+    """Multiply outputs.trajectory_pred (B, N, 3) and trajectory_hyps
+    (B, K, N, 3) by a per-row scale. In place on the dataclass; returns it.
+    No-op for scale None or a model without a trajectory head."""
+    if scale is None or outputs.trajectory_pred is None:
+        return outputs
+    s = scale.to(outputs.trajectory_pred.device, outputs.trajectory_pred.dtype).view(-1, 1, 1)
+    outputs.trajectory_pred = outputs.trajectory_pred * s
+    if outputs.trajectory_hyps is not None:
+        outputs.trajectory_hyps = outputs.trajectory_hyps * s.unsqueeze(1)
+    return outputs
+
+
 def _point_to_polyline_distance(
     points: torch.Tensor,
     polyline: torch.Tensor,
@@ -1157,6 +1201,10 @@ class TrajectoryProjectionLoss(nn.Module):
     """Predicted 3D trajectory, projected into the image, vs the observed
     2D track — the data term of 2D-only pretraining.
 
+    With ``anchor_source="unit"`` the anchor is the GT first pixel at depth 1
+    and no depth map is read (scale-free 2D recipe, 2026-09-09: the head
+    predicts offsets in units of the anchor depth).
+
     The absolute predicted curve is anchor + trajectory_pred, where the
     anchor is the model's own interaction point lifted with the INPUT depth
     map (the same prediction-side anchoring as the screw self term — no GT
@@ -1186,10 +1234,16 @@ class TrajectoryProjectionLoss(nn.Module):
         self.near_plane = near_plane
         self.energy_floor = energy_floor
         # "pred_depth": point_uv lifted with the input depth (g17-2d chain).
-        # "gt_point": teacher forcing — anchor at targets.trajectory[:, 0]
-        # (GT camera-frame first point); constant, depth-free (2026-09-07).
-        if anchor_source not in ("pred_depth", "gt_point"):
-            raise ValueError(f"anchor_source must be pred_depth|gt_point, got {anchor_source}")
+        # "gt_point": teacher forcing — the GT 2D first point lifted with the
+        # input depth there; constant (2026-09-07). Still needs a depth map.
+        # "unit" (2026-09-09 scale-free spec): the GT 2D first point at depth
+        # EXACTLY 1 — no depth map at all. Projection ignores a global
+        # rescale of (anchor, curve), so with the head predicting
+        # Δ̃ = Δ / z0 this is the same loss as gt_point for every z0; the
+        # unknown metric scale is factored out and supplied by the 3D stage
+        # (trajectory_scale_factor / apply_trajectory_scale in this module).
+        if anchor_source not in ("pred_depth", "gt_point", "unit"):
+            raise ValueError(f"anchor_source must be pred_depth|gt_point|unit, got {anchor_source}")
         self.anchor_source = anchor_source
         # 2026-08-22: the gen-19 first-difference losses ported to uv-space
         # for the 2D-only arms — segment vectors of the PROJECTED predicted
@@ -1232,7 +1286,7 @@ class TrajectoryProjectionLoss(nn.Module):
             or targets.trajectory_2d is None
             or targets.camera_intrinsic is None
             or targets.img_size is None
-            or depth is None
+            or (depth is None and self.anchor_source != "unit")
             # The pred_depth chain lifts point_uv to 3D, so the 3D point
             # mode (point_uv None) cannot run it — no-op there as well.
             or (self.anchor_source == "pred_depth" and outputs.point_uv is None)
@@ -1245,7 +1299,17 @@ class TrajectoryProjectionLoss(nn.Module):
             K_norm = normalized_intrinsics(
                 targets.camera_intrinsic.to(device), targets.img_size.to(device)
             )
-            if self.anchor_source == "gt_point":
+            if self.anchor_source == "unit":
+                # Scale-free (2026-09-09): the GT 2D first point at depth 1.
+                # No depth map, no gradient path, no dropped rows beyond an
+                # invalid first track point.
+                uv0 = targets.trajectory_2d[:, 0, :].to(device).float()
+                z = torch.ones(uv0.shape[0], device=device, dtype=torch.float32)
+                anchor = backproject_points(K_norm, uv0, z).detach()
+                anchor_ok = torch.ones(uv0.shape[0], device=device, dtype=torch.bool)
+                if targets.trajectory_2d_valid is not None:
+                    anchor_ok = anchor_ok & targets.trajectory_2d_valid[:, 0].to(device).bool()
+            elif self.anchor_source == "gt_point":
                 # Teacher forcing: the GT 2D track's first point lifted with
                 # the INPUT depth there — no grad path by construction. (NOT
                 # targets.trajectory[:, 0]: HOI4D's stored 3D track is a

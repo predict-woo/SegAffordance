@@ -30,6 +30,7 @@ class SF3DDataModule(pl.LightningDataModule):
         return_trajectory_2d: bool = False,
         frame_cache_path: Optional[str] = None,
         fast_pipeline: bool = False,
+        load_depth: bool = True,
         min_revolute_radius: float = 0.0,
         min_mask_area_frac: float = 0.0,
         edge_margin_frac: float = 0.0,
@@ -60,6 +61,8 @@ class SF3DDataModule(pl.LightningDataModule):
         # cv2-only decode + uint8 RGB (GPU-normalized in the model) + reused
         # mask buffers: ~5x cheaper per sample. See SF3DDataset.fast_pipeline.
         self.fast_pipeline = fast_pipeline
+        # RGB-only runs: no depth decode (see SF3DDataset.load_depth).
+        self.load_depth = load_depth
         # Drop knob/dial-class revolute records (element-to-axis distance
         # below this, metres). See SF3DDataset.min_revolute_radius.
         self.min_revolute_radius = min_revolute_radius
@@ -108,6 +111,7 @@ class SF3DDataModule(pl.LightningDataModule):
                     return_trajectory_2d=self.return_trajectory_2d,
                     frame_cache_path=self.frame_cache_path,
                     fast_pipeline=self.fast_pipeline,
+                    load_depth=self.load_depth,
                     min_revolute_radius=self.min_revolute_radius,
                     min_mask_area_frac=self.min_mask_area_frac,
                     edge_margin_frac=self.edge_margin_frac,

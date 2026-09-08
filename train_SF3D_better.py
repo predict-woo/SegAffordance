@@ -13,10 +13,13 @@ from config.opd_train import Config, LossParams, ModelParams, OptimizerParams
 from datasets.scenefun3d_datamodule import SF3DDataModule
 from model.losses import decode_twist, point_to_line_distance
 from model.losses.geometric import (
+    apply_trajectory_scale,
     backproject_points,
     normalized_intrinsics,
     project_points,
+    trajectory_scale_factor,
 )
+from model.targets import StepTargets
 from model.losses.split import perpendicular_foot
 from model.segmenter import CRIS
 from train_OPDReal_better import OPDRealTrainingModule
@@ -333,7 +336,7 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                 _img_size,
                 rgb_image_filenames,
             ) = batch
-            motion_origin_3d_gt, intrinsic_matrix = None, None
+            motion_origin_3d_gt, intrinsic_matrix, trajectory_gt = None, None, None
 
         tokenized_words = self.model.tokenize(
             list(word_str_list), self.model_params.word_len
@@ -354,6 +357,16 @@ class SF3DTrainingModule(OPDRealTrainingModule):
             outputs = self(
                 img, depth, tokenized_words, None, None, None, None, K_norm
             )
+        # Scale-free head: metres = scale * Δ̃ (config.test_trajectory_scale:
+        # the model's own z_p by default; "gt_z0" = oracle scale). Kept for
+        # the proj2d diagnostic below, whose anchor must use the SAME scale.
+        _traj_scale = None
+        if getattr(self.model_params, "trajectory_scale_free", False):
+            _traj_scale = trajectory_scale_factor(
+                getattr(self.config, "test_trajectory_scale", "pred_z_p"),
+                outputs, StepTargets(trajectory=trajectory_gt),
+            )
+            outputs = apply_trajectory_scale(outputs, _traj_scale)
         mask_pred_logits = outputs.mask_logits
         point_pred_logits = outputs.point_logits
         point_uv = outputs.point_uv
@@ -628,10 +641,16 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                         _trajectory_2d_extras[0][i:i + 1, 0, :].float()
                         / _img_size[i:i + 1].float().clamp(min=1.0)
                     ).to(_dev)
-                _grid = (_uv * 2.0 - 1.0).view(1, 1, 1, 2)
-                _z = F.grid_sample(
-                    depth[i:i + 1].float().to(_dev), _grid, align_corners=False
-                ).view(1)
+                if _traj_scale is not None:
+                    # Scale-free: lift the anchor with the scale applied to
+                    # the curve (projection is invariant to the joint rescale,
+                    # so this equals the unit-anchor projection of Δ̃).
+                    _z = _traj_scale[i:i + 1].to(_dev)
+                else:
+                    _grid = (_uv * 2.0 - 1.0).view(1, 1, 1, 2)
+                    _z = F.grid_sample(
+                        depth[i:i + 1].float().to(_dev), _grid, align_corners=False
+                    ).view(1)
                 if float(_z) > 1e-3:
                     _anchor = backproject_points(_K_n, _uv, _z)
                     _curve = (

@@ -113,6 +113,19 @@ class ModelParams:
     # the 20 points by a fixed IDCT buffer. 0 = legacy direct readout.
     # Incompatible with trajectory_delta_cumsum.
     trajectory_dct_coeffs: int = 0
+    # 2026-09-09 (RGB-only / scale-free spec): the trajectory head predicts
+    # Δ̃ = Δ / z0 — offsets in units of the anchor depth — instead of metres.
+    # The head is unchanged; the trainers multiply trajectory_pred by a
+    # per-sample scale right after the forward (loss_params.
+    # trajectory_scale_source at train/val, config.test_trajectory_scale at
+    # test). Pair with loss_params.trajectory_proj_anchor "unit".
+    trajectory_scale_free: bool = False
+    # load_finetune_weights: when a checkpoint conv weight has MORE input
+    # channels than the model's (a depth-fused FPN checkpoint into a
+    # use_depth=false model), load its leading model-sized slice. The
+    # concat order is [rgb, depth], so this is exactly the "concatenate
+    # zeros for the depth channels" model. Off = such keys stay re-init.
+    finetune_slice_input_channels: bool = False
     motion_type_input_dropout: float = 0.5
     # K > 1: winner-takes-all articulation hypotheses — TwistMLP emits K
     # (twist, logit) pairs and TrajectoryMLP K matching trajectories; one
@@ -308,6 +321,10 @@ class LossParams:
     # "gt_point" = the GT 2D first point (pairs with the teacher-forced
     # anchor). Both sample the input depth; rows with no depth are skipped.
     depth_anchor_source: str = "input"
+    # 2026-09-09 scale-free head: train/val multiplier applied to
+    # trajectory_pred. "unit" = none (2D datasets); "gt_z0" = the GT first-
+    # point depth (SF3D). See model.losses.geometric.trajectory_scale_factor.
+    trajectory_scale_source: str = "unit"
     # 2026-08-22: gen-19 fdiff losses ported to uv-space for the 2D-only
     # arms — segment vectors of the PROJECTED curve vs the GT 2D track
     # (both-endpoints-valid segments only). Same conventions as the 3D
@@ -351,6 +368,10 @@ class Config:
     test_motion_threshold_deg: float = 10.0
     test_iou_threshold: float = 0.5
     test_pred_threshold: float = 0.5
+    # 2026-09-09 scale-free head: test-time multiplier for trajectory_pred.
+    # "pred_z_p" = the model's own z_p (the deployable number); "gt_z0" =
+    # oracle scale (shape-only metrics); "unit" = none (2D datasets).
+    test_trajectory_scale: str = "pred_z_p"
     # Which IoU metric to use for matching: "mask" or "bbox"
     test_match_metric: str = "mask"
     # Control logging of test metrics to external loggers like W&B
