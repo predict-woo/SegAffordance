@@ -5,7 +5,7 @@ One record per single articulation STROKE (monotone run of the 1-DoF angle,
 >= --min-deg and >= --min-frames long) inside a "use" sequence:
   image        the ego frame at the stroke start (2800x2000 or portrait), resized to --size
   mask         the MOVING part ("top" in ARCTIC's templates) rendered with the GT object
-               pose at the stroke start: z-buffer of top+bottom (mesh.obj + parts.json), pixels
+               pose at the stroke start: z-buffer of the dense top.obj + bottom.obj, pixels
                whose nearest surface is the top part; hands are NOT rendered (no MANO models)
   depth        z-buffer depth of the object only (mm; 0 elsewhere) — best available, no scene depth
   trajectory   middle-knuckle (OpenPose-21 joint 9) of the hand nearest the moving part at the
@@ -38,19 +38,14 @@ def read_obj(path):
     return np.array(V, np.float64), np.array(F, np.int64)
 
 def load_mesh(obj):
-    """Simplified mesh (mesh.obj, mm -> m) with per-vertex part labels derived GEOMETRICALLY:
-    nearest vertex of the dense top.obj vs bottom.obj (parts.json does not index the raw
-    mesh.obj vertex order — it gave whole-body 'top' for the microwave, 2026-09-08)."""
+    """ARCTIC's dense PER-PART meshes (top.obj = moving part, bottom.obj = base; mm -> m), concatenated
+    with unambiguous per-vertex/per-face labels. (The simplified mesh.obj + a vertex labelling produced
+    faces straddling the hinge whose vertices rotate differently -> triangles smeared across the base.)"""
     d = f"{ROOT}/meta/object_vtemplates/{obj}"
-    V, F = read_obj(f"{d}/mesh.obj"); Vt, _ = read_obj(f"{d}/top.obj"); Vb, _ = read_obj(f"{d}/bottom.obj")
-    def nearest_d2(P, Q, chunk=512):
-        out = np.empty(len(P))
-        for i in range(0, len(P), chunk):
-            out[i:i + chunk] = ((P[i:i + chunk, None, :] - Q[None, :, :]) ** 2).sum(-1).min(1)
-        return out
-    parts = (nearest_d2(V, Vt) < nearest_d2(V, Vb)).astype(np.int64)  # 1 = top (moving)
-    V = V / 1000.0
-    face_top = parts[F].sum(1) >= 2
+    Vt, Ft = read_obj(f"{d}/top.obj"); Vb, Fb = read_obj(f"{d}/bottom.obj")
+    V = np.concatenate([Vt, Vb]) / 1000.0; F = np.concatenate([Ft, Fb + len(Vt)])
+    parts = np.concatenate([np.ones(len(Vt), np.int64), np.zeros(len(Vb), np.int64)])
+    face_top = np.concatenate([np.ones(len(Ft), bool), np.zeros(len(Fb), bool)])
     return V, F, parts, face_top
 
 def pose_object(V, parts, row):
