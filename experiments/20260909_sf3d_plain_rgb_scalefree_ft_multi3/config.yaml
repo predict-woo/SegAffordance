@@ -10,7 +10,7 @@
 seed_everything: 42
 
 model:
-  finetune_from_path: "/workspace/SegAffordance/experiments/20260909_multi3_rgb_scalefree/checkpoints/FILL_IN_BEST.ckpt"   # multi3 rgb_scalefree arm best (resolved by run_multi3_post_chain.sh)
+  finetune_from_path: "/workspace/SegAffordance/experiments/20260909_multi3_rgb_scalefree/checkpoints/best-epoch06-valloss0.3901.ckpt"   # multi3 rgb_scalefree arm best (resolved by run_multi3_post_chain.sh)
   # gen-7: CLIP FROZEN (user decision). Watch item: the gen-5 frozen run
   # had the mask regression, and gen-7 leans on masks harder than any
   # generation (heatmaps share the projector with the mask channel).

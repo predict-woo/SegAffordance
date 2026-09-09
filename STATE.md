@@ -68,7 +68,8 @@ silent mid-run deaths with truncated ~4.35G ckpts = volume quota.
 | role | experiment | checkpoint |
 |---|---|---|
 | **best MA (3D), single seed** | 20260907_sf3d_g19_dct_ft_hoi4d_tf | best-epoch25-valloss0.9794 — MA **31.13**/signed 30.80 + PDet **23.27** + roughness 0.0079 (records); g19_dct recipe initialized from HOI4D v2 teacher_forcing; axis 28.0°/matched 19.7°, type 91.9 (worse than cf_h1only) |
-| **best RGB-ONLY (no depth anywhere), scale-free head** | 20260909_sf3d_g19_dct_rgb_scalefree_ft_hoi4d | best-epoch24-valloss1.0483 — MA 30.07 / PDet 22.35 / mIoU 0.2660 / axis 26.9°; g19_dct recipe from the RGB-only HOI4D arm (20260909_hoi4d_2d_v2_rgb_scalefree best-epoch83). THE model for the multi-dataset line (user: no depth) |
+| **best RGB-ONLY (no depth anywhere), scale-free head, MA** | 20260909_sf3d_plain_rgb_scalefree_ft_multi3 | best-epoch19-valloss1.0953 — MA **31.01** / PDet 22.72 / mIoU 0.2625 / axis 27.3° (matched 20.8°); PLAIN head, post-trained from the multi-source 2D arm (20260909_multi3_rgb_scalefree ep-6), nothing re-initialised. Jittery sweeps (roughness 0.068). THE model for the multi-dataset line (user: no depth, plain heads) |
+| best RGB-only, smooth (DCT) | 20260909_sf3d_g19_dct_rgb_scalefree_ft_hoi4d | best-epoch24-valloss1.0483 — MA 30.07 / PDet 22.35 / mIoU 0.2660 / roughness 0.0089; g19_dct recipe from the RGB-only HOI4D arm (trajectory readout re-initialised at the hand-over) |
 | best articulation (3D), all-round | 20260828_sf3d_cf_h1only | best-epoch29-valloss1.1303 — MA 30.64/signed 30.11 + all-axis 24.5° + flips-all 9.8, NO trajectory head (H1 quadratic + axis anchor only) |
 | **best origin** | 20260828_sf3d_closedform | best-epoch22-valloss1.1792 — origin 0.250 (record), MA 29.19 with NO trajectory head (closed-form pos+der quadratics) |
 | prev best articulation | 20260821_sf3d_g19_fdiff | best-epoch29-valloss1.1780 — MA 29.9, traj_dir 96.1/0.819 (traj records stand) |
@@ -361,14 +362,21 @@ EPIC/ARCTIC masks on the right part, the type gate self-organised on EPIC
 (p_rev ~0.9 doors / ~0.4 drawers), trajectories short/jittery on the two
 new sources. NOTE: `config/{epic,arctic}_v1_rgb_scalefree.yaml` switched
 to the plain head (they were DCT-6 from the smoke configs; the multi3 ckpt
-could not load into them). **Phase 2 chained on the same pod** (`run_multi3_post_chain.sh`,
-log `multi3_post_chain.log`, started 12:09 local, waits for
-MULTI3_TEST_DONE): `20260909_sf3d_plain_rgb_scalefree_ft_multi3` = SF3D
-post-training with the PLAIN head (`trajectory_dct_coeffs 0`, so the multi3
-checkpoint loads 1:1 — user, after learning the DCT post-training
-re-initialised the plain readout's last layer), then test pred_z_p +
-gt_z0. The watcher deletes the pod on CHAIN2_DONE (~19:30 local) — VERIFY
-with the pod list.
+could not load into them). **DONE 2026-09-09 17:50 local: `20260909_sf3d_plain_rgb_scalefree_ft_multi3`**
+(pod C phase 2, 3 h 47 min; pod deleted, verified): SF3D post-training
+with the PLAIN head (`trajectory_dct_coeffs 0`, loader: all weights loaded
+— nothing re-initialised; user decision after learning the DCT
+post-training had re-initialised the plain readout's last layer) from the
+multi3 epoch-6 checkpoint. Test: **MA 31.01** / signed 30.17, PDet 22.72,
+mIoU 0.2625, axis 27.3° / matched 20.8°, origin 0.317, roughness 0.068 —
+the best RGB-only MA, 0.1 below the depth record (31.13); vs the RGB DCT
+arm from the HOI4D-only init (30.07 / 22.35 / 0.266): +0.9 MA, better
+matched axis, 2 cm worse origin. Plain-head cost = jittery sweeps
+(roughness 0.068 vs 0.009). Init and head changed together — the control
+(plain post-training from the HOI4D-only arm) is not run. Panels
+`viz/20260909_sf3d_plain_ft_multi3_panels`. Every scale-free arm's two
+test passes (pred_z_p / gt_z0) are identical — no test metric reads the
+trajectory scale.
 **Next candidates:** the DCT teacher-forcing HOI4D arm under the new
 recipe as the SF3D init (depth counterpart = the 31.13 record); EPIC and
 ARCTIC first runs (`config/{epic,arctic}_v1_rgb_scalefree.yaml`, smoke-
