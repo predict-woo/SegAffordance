@@ -348,6 +348,13 @@ zoom and flip). `config/multi3_rgb_scalefree.yaml` has it ON with per-source `hf
 HOI4D 0.0 (user: no mirror there — 86 texts say "right drawer" etc.),
 EPIC/ARCTIC 0.5; `flip_text: skip` as a second guard. The SF3D
 datamodule is NOT touched (user: augmentation is for the 2D sources only).
+**IN FLIGHT 2026-09-09 11:12 local: `20260909_multi3_rgb_scalefree`** on
+pod C `segaffordance-rgbsf-c` (`run_multi3_chain.sh`, log
+`/workspace/SegAffordance/multi3_chain.log`; LMDBs staged in /dev/shm via
+a pod-local config copy): HOI4D + EPIC + ARCTIC, plain-TF RGB-only
+scale-free recipe, augmentation x8 = 41,288 samples/epoch (user: "40000
+samples"), 30 ep, milestones [24, 28]. Then test on the 841-record val
+union. Watcher deletes the pod on CHAIN_DONE — VERIFY with the pod list.
 **Next candidates:** the DCT teacher-forcing HOI4D arm under the new
 recipe as the SF3D init (depth counterpart = the 31.13 record); EPIC and
 ARCTIC first runs (`config/{epic,arctic}_v1_rgb_scalefree.yaml`, smoke-
