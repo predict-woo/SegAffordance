@@ -381,7 +381,10 @@ trajectory scale.
 sweeps `knowledge/2026-09-10_*` — DCT is the human-motion standard, the
 egocentric/point-track fields use temporal decoders or physical decoders;
 synthesis + ranked alternatives in `knowledge/2026-09-10_2d_trajectory_head_synthesis.md`).
-**IN FLIGHT 2026-09-10 ~19:30 local: pod D `segaffordance-rgbsf-d`**
+**IN FLIGHT 2026-09-10 19:25 local: pod D2 `segaffordance-rgbsf-d2`** (pod D
+`eq0rjf9wpbpcc8` was a POWER-CAPPED LEMON — 555 MHz at 600 W, 0.62 it/s vs
+~1.8 — deleted after 1.5 epochs, user-approved; the launch driver now
+probes clocks once the GPU is busy and prints LEMON_CLOCKS / CLOCKS_OK)
 (`run_multi3dct_chain.sh`, log `multi3dct_chain.log`):
 `20260910_multi3_dct_rgb_scalefree` = the multi3 recipe with the DCT-6 head,
 12 ep / milestones [9, 11] (the plain run peaked at ep 6 of 30) -> union +
