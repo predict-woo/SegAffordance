@@ -1,0 +1,25 @@
+command: tools/sf3d_vis_predictions.py --model plain_ft_multi3 config/sf3d_train_runpod_plain_rgb_scalefree_ft_multi3.yaml
+  experiments/20260909_sf3d_plain_rgb_scalefree_ft_multi3/checkpoints/best-epoch19-valloss1.0953.ckpt
+  --model dct_ft_hoi4d_rgb config/sf3d_train_runpod_g19_dct_rgb_scalefree_ft_hoi4d.yaml
+  experiments/20260909_sf3d_g19_dct_rgb_scalefree_ft_hoi4d/checkpoints/best-epoch24-valloss1.0483.ckpt
+  --model depth_tf_plain config/sf3d_train_runpod_g19_dct_ft_hoi4d_tf_plain.yaml experiments/20260907_sf3d_g19_dct_ft_hoi4d_tf_plain/checkpoints/best-epoch25-valloss0.9768.ckpt
+  --data-root /workspace/datasets/sf3d_processed_v3 --frame-cache-path /workspace/datasets/sf3d_frames_512.lmdb
+  --input-size 512 --key-cache /workspace/cache/sf3d_v2_keys_cutoff05_minrad010_maskfrac0010_edge05.pkl
+  --min-revolute-radius 0.10 --min-mask-area-frac 0.001 --edge-margin-frac 0.05 --num
+  16 --seed 42421 --out viz/20260909_sf3d_plain_ft_multi3_panels
+tool_commit: a77a55b
+generated: '2026-09-09T15:53:05+00:00'
+models:
+- name: plain_ft_multi3
+  config: config/sf3d_train_runpod_plain_rgb_scalefree_ft_multi3.yaml
+  ckpt: experiments/20260909_sf3d_plain_rgb_scalefree_ft_multi3/checkpoints/best-epoch19-valloss1.0953.ckpt
+- name: dct_ft_hoi4d_rgb
+  config: config/sf3d_train_runpod_g19_dct_rgb_scalefree_ft_hoi4d.yaml
+  ckpt: experiments/20260909_sf3d_g19_dct_rgb_scalefree_ft_hoi4d/checkpoints/best-epoch24-valloss1.0483.ckpt
+- name: depth_tf_plain
+  config: config/sf3d_train_runpod_g19_dct_ft_hoi4d_tf_plain.yaml
+  ckpt: experiments/20260907_sf3d_g19_dct_ft_hoi4d_tf_plain/checkpoints/best-epoch25-valloss0.9768.ckpt
+num: 16
+seed: 42421
+data_root: /workspace/datasets/sf3d_processed_v3
+key_cache: /workspace/cache/sf3d_v2_keys_cutoff05_minrad010_maskfrac0010_edge05.pkl
