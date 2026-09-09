@@ -67,7 +67,8 @@ silent mid-run deaths with truncated ~4.35G ckpts = volume quota.
 
 | role | experiment | checkpoint |
 |---|---|---|
-| **best MA (3D), single seed — NO DEPTH, JOINT 2D+3D** | 20260910_joint4_dct_rgb_scalefree | best-epoch12-sf3dval0.9688 — MA **31.41**/signed 30.15 + mIoU **0.2738** (records) + traj_dir 96.4 (ties record) + PDet 22.72 + roughness 0.0090; RGB-only scale-free DCT-6 model trained jointly on SF3D + HOI4D + EPIC + ARCTIC (source-homogeneous batches, lr 2e-5, 20 ep); the SAME checkpoint keeps HOI4D 0.676 mIoU / 85 PDet. Axis 26.1°/20.1°, origin 0.327 |
+| **best MA (3D), single seed — NO DEPTH, DCT chain** | 20260910_sf3d_g19_dct_rgb_scalefree_ft_multi3dct | best-epoch24-valloss1.0178 — MA **32.80**/signed **32.43** (records by +1.7), origin 0.256 (0.006 off the record), point3d 0.248, rot flips 9.83 (= record), roughness 0.0081; RGB-only scale-free DCT-6 model, SF3D post-training from the multi3 DCT 2D arm (DCT at both stages, nothing re-initialised). PDet 20.7 / mIoU 0.254 (lowest of the recent arms) |
+| **best masks / detection / direction + multi-source, NO DEPTH, JOINT 2D+3D** | 20260910_joint4_dct_rgb_scalefree | best-epoch12-sf3dval0.9688 — MA **31.41**/signed 30.15 + mIoU **0.2738** (records) + traj_dir 96.4 (ties record) + PDet 22.72 + roughness 0.0090; RGB-only scale-free DCT-6 model trained jointly on SF3D + HOI4D + EPIC + ARCTIC (source-homogeneous batches, lr 2e-5, 20 ep); the SAME checkpoint keeps HOI4D 0.676 mIoU / 85 PDet. Axis 26.1°/20.1°, origin 0.327 |
 | best MA with depth (prev record) | 20260907_sf3d_g19_dct_ft_hoi4d_tf | best-epoch25-valloss0.9794 — MA **31.13**/signed 30.80 + PDet **23.27** + roughness 0.0079 (records); g19_dct recipe initialized from HOI4D v2 teacher_forcing; axis 28.0°/matched 19.7°, type 91.9 (worse than cf_h1only) |
 | **best RGB-ONLY (no depth anywhere), scale-free head, MA** | 20260909_sf3d_plain_rgb_scalefree_ft_multi3 | best-epoch19-valloss1.0953 — MA **31.01** / PDet 22.72 / mIoU 0.2625 / axis 27.3° (matched 20.8°); PLAIN head, post-trained from the multi-source 2D arm (20260909_multi3_rgb_scalefree ep-6), nothing re-initialised. Jittery sweeps (roughness 0.068). THE model for the multi-dataset line (user: no depth, plain heads) |
 | best RGB-only, smooth (DCT) | 20260909_sf3d_g19_dct_rgb_scalefree_ft_hoi4d | best-epoch24-valloss1.0483 — MA 30.07 / PDet 22.35 / mIoU 0.2660 / roughness 0.0089; g19_dct recipe from the RGB-only HOI4D arm (trajectory readout re-initialised at the hand-over) |
@@ -382,7 +383,7 @@ trajectory scale.
 sweeps `knowledge/2026-09-10_*` — DCT is the human-motion standard, the
 egocentric/point-track fields use temporal decoders or physical decoders;
 synthesis + ranked alternatives in `knowledge/2026-09-10_2d_trajectory_head_synthesis.md`).
-**IN FLIGHT 2026-09-10 19:25 local: pod D2 `segaffordance-rgbsf-d2`** (pod D
+**DONE 2026-09-11 00:15 local — DCT CHAIN: MA 32.80 / signed 32.43 = NEW ALL-TIME RECORDS (+1.7 over the depth record, no depth), origin 0.256, flips 9.83, lowest RGB trajectory val 0.421; masks/PDet 0.254/20.7 (the joint model owns those). Details experiments/20260910_sf3d_g19_dct_rgb_scalefree_ft_multi3dct/notes.md. Was: IN FLIGHT 19:25 pod D2 `segaffordance-rgbsf-d2`** (pod D
 `eq0rjf9wpbpcc8` was a POWER-CAPPED LEMON — 555 MHz at 600 W, 0.62 it/s vs
 ~1.8 — deleted after 1.5 epochs, user-approved; the launch driver now
 probes clocks once the GPU is busy and prints LEMON_CLOCKS / CLOCKS_OK)
