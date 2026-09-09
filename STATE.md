@@ -67,7 +67,8 @@ silent mid-run deaths with truncated ~4.35G ckpts = volume quota.
 
 | role | experiment | checkpoint |
 |---|---|---|
-| **best MA (3D), single seed** | 20260907_sf3d_g19_dct_ft_hoi4d_tf | best-epoch25-valloss0.9794 — MA **31.13**/signed 30.80 + PDet **23.27** + roughness 0.0079 (records); g19_dct recipe initialized from HOI4D v2 teacher_forcing; axis 28.0°/matched 19.7°, type 91.9 (worse than cf_h1only) |
+| **best MA (3D), single seed — NO DEPTH, JOINT 2D+3D** | 20260910_joint4_dct_rgb_scalefree | best-epoch12-sf3dval0.9688 — MA **31.41**/signed 30.15 + mIoU **0.2738** (records) + traj_dir 96.4 (ties record) + PDet 22.72 + roughness 0.0090; RGB-only scale-free DCT-6 model trained jointly on SF3D + HOI4D + EPIC + ARCTIC (source-homogeneous batches, lr 2e-5, 20 ep); the SAME checkpoint keeps HOI4D 0.676 mIoU / 85 PDet. Axis 26.1°/20.1°, origin 0.327 |
+| best MA with depth (prev record) | 20260907_sf3d_g19_dct_ft_hoi4d_tf | best-epoch25-valloss0.9794 — MA **31.13**/signed 30.80 + PDet **23.27** + roughness 0.0079 (records); g19_dct recipe initialized from HOI4D v2 teacher_forcing; axis 28.0°/matched 19.7°, type 91.9 (worse than cf_h1only) |
 | **best RGB-ONLY (no depth anywhere), scale-free head, MA** | 20260909_sf3d_plain_rgb_scalefree_ft_multi3 | best-epoch19-valloss1.0953 — MA **31.01** / PDet 22.72 / mIoU 0.2625 / axis 27.3° (matched 20.8°); PLAIN head, post-trained from the multi-source 2D arm (20260909_multi3_rgb_scalefree ep-6), nothing re-initialised. Jittery sweeps (roughness 0.068). THE model for the multi-dataset line (user: no depth, plain heads) |
 | best RGB-only, smooth (DCT) | 20260909_sf3d_g19_dct_rgb_scalefree_ft_hoi4d | best-epoch24-valloss1.0483 — MA 30.07 / PDet 22.35 / mIoU 0.2660 / roughness 0.0089; g19_dct recipe from the RGB-only HOI4D arm (trajectory readout re-initialised at the hand-over) |
 | best articulation (3D), all-round | 20260828_sf3d_cf_h1only | best-epoch29-valloss1.1303 — MA 30.64/signed 30.11 + all-axis 24.5° + flips-all 9.8, NO trajectory head (H1 quadratic + axis anchor only) |
@@ -393,8 +394,7 @@ SF3D DCT post-training from it (DCT at both stages, nothing re-initialised)
 -> tests pred_z_p / gt_z0. Watcher deletes the pod on CHAIN_DONE — VERIFY.
 Comparison rows: plain multi3 2D (HOI4D 0.754 / 91.9 / 0.0355) and the
 plain SF3D post-training (MA 31.01 / PDet 22.72 / mIoU 0.2625, rough 0.068).
-**JOINT 2D+3D TRAINING LANDED (2026-09-10 ~21:30) + IN FLIGHT on pod E
-`segaffordance-rgbsf-e`** (`run_joint4_chain.sh`, log `joint4_chain.log`):
+**JOINT 2D+3D TRAINING LANDED (2026-09-10 ~21:30) — RUN DONE 00:10 (pod E deleted, verified): MA 31.41 = NEW ALL-TIME RECORD with no depth, mIoU record 0.2738, traj_dir 96.4; same ckpt keeps HOI4D 0.676/85.2 (the chain forgets it); EPIC/ARCTIC overfit at x10 (val rising from ep 3) -> next = balance sweep (hand repeat 4-6) + seeds + lr 1e-5/3e-5. Details: experiments/20260910_joint4_dct_rgb_scalefree/notes.md.** Original entry: (`run_joint4_chain.sh`, log `joint4_chain.log`):
 `20260910_joint4_dct_rgb_scalefree` = SF3D + HOI4D + EPIC + ARCTIC in one
 seeded stream of SOURCE-HOMOGENEOUS batches (user design). Code:
 `datasets/multisource_datamodule.py` (`SourceSpec` filters / `augment` /
