@@ -1,0 +1,10 @@
+command: tools/hoi4d_predict_articulation.py --model joint4_dct config/sf3d_train_runpod_g19_dct_rgb_scalefree.yaml
+  experiments/20260910_joint4_dct_rgb_scalefree/checkpoints/best-epoch12-sf3dval0.9688.ckpt
+  --out viz/20260911_hoi4d_laptop_joint_only --num 12 --category C3 --split val --seed
+  1
+tool_commit: 07e3672
+generated: '2026-09-09T22:40:03+00:00'
+models:
+- name: joint4_dct
+  config: config/sf3d_train_runpod_g19_dct_rgb_scalefree.yaml
+  ckpt: experiments/20260910_joint4_dct_rgb_scalefree/checkpoints/best-epoch12-sf3dval0.9688.ckpt
