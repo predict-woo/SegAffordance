@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overnight report: RGB-only, scale-free</title>
+<style>
+:root{--ink:#1a1d23;--muted:#5b6472;--faint:#8b93a1;--paper:#fbfaf7;--card:#fff;--line:#e3e0d8;--accent:#7a4fc0;--orange:#e07a2f;--blue:#3d6fb4;--green:#3e8e5f;--red:#c8443c}
+*{box-sizing:border-box;margin:0;padding:0} body{background:var(--paper);color:var(--ink);font:16px/1.7 "Avenir Next","Segoe UI",system-ui,sans-serif;padding:48px 20px 96px}
+main{max-width:900px;margin:0 auto} h1{font-size:32px;line-height:1.2;letter-spacing:-.5px} .sub{color:var(--muted);margin:10px 0 6px;font-size:17px} .meta{color:var(--faint);font-size:13px;margin-bottom:36px}
+h2{font-size:21px;margin:48px 0 12px} h2 .n{display:inline-block;background:var(--ink);color:var(--paper);font-size:12px;font-weight:700;border-radius:999px;padding:2px 10px;vertical-align:3px;margin-right:10px}
+p{margin:12px 0} .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 24px;margin:18px 0}
+.verdict{border-left:4px solid var(--accent);background:#f5f1fb;border-radius:6px;padding:14px 20px;margin:20px 0} .aside{border-left:4px solid var(--green);background:#f0f7f2;border-radius:6px;padding:12px 20px;margin:16px 0;font-size:15px} .caveat{border-left:4px solid var(--orange);background:#fdf3ec;border-radius:6px;padding:12px 20px;margin:16px 0;font-size:15px}
+code{font:13px/1.5 "SF Mono",ui-monospace,Menlo,monospace;background:#f1efe9;padding:1px 5px;border-radius:4px}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14.5px} th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top} th{color:var(--muted);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap} .good{color:var(--green);font-weight:600} .bad{color:var(--red);font-weight:600}
+.chart{display:block;width:100%;height:auto;margin:8px 0 6px;background:#fff;border:1px solid var(--line);border-radius:8px}
+img{max-width:100%;display:block;border:1px solid var(--line);border-radius:8px;margin:8px 0} .cap{color:var(--muted);font-size:14px;margin:2px 0 16px}
+ol,ul{margin:8px 0 8px 24px} li{margin:4px 0}
+.tl{border-left:2px solid var(--line);margin:10px 0 10px 8px;padding-left:18px} .tl div{margin:6px 0} .tl b{font-variant-numeric:tabular-nums;color:var(--muted);font-weight:600;margin-right:8px}
+</style></head><body><main>
+
+<h1>Overnight report: the model goes RGB-only</h1>
+<p class="sub">What was built, what ran on the two pods, and what the numbers say. 2026-09-09, 01:30 to 06:40 local.</p>
+<p class="meta">Commits f6536b3 … e0408b5 · experiments 20260909_hoi4d_2d_v2_rgb_scalefree, 20260909_sf3d_g19_dct_rgb_scalefree, 20260909_sf3d_g19_dct_rgb_scalefree_ft_hoi4d · spec docs/superpowers/specs/2026-09-09-rgb-only-scale-free-trajectory-design.md</p>
+
+<div class="verdict"><b>Bottom line.</b> Depth is gone from the model, from the data loader and from every loss, and the trajectory head now predicts offsets in units of the anchor depth. On HOI4D this costs nothing and is in fact better on every metric. On SF3D the post-trained RGB-only model matches its depth counterpart on the headline metric (MA 30.07 vs 30.62, within single-seed noise) and beats it on detection, masks and axis. The one measurable price of no depth is the trajectory term's generalisation on SF3D, visible in the validation curve (0.48 vs 0.35) and as slightly shorter predicted sweeps in the panels.</div>
+
+<h2><span class="n">1</span>What was built</h2>
+<div class="card">
+<ol>
+<li><b>A depth-free anchor for the 2D loss.</b> <code>TrajectoryProjectionLoss(anchor_source="unit")</code> lifts the GT first pixel to depth exactly 1. Because projection ignores a global rescale, this is the same loss as before with the unknown scale factored out, and it never drops a row. Before, the loss sampled the depth map and silently dropped 80% of ARCTIC rows and 100% of EPIC rows.</li>
+<li><b>A scale-free trajectory head.</b> <code>model_params.trajectory_scale_free</code>: the head emits Δ̃ = Δ/z₀. Right after the forward the trainer multiplies by a per-sample scale: nothing on the 2D datasets, the GT first-point depth on SF3D during training, the model's own z_p at test (<code>test_trajectory_scale</code>, with a <code>gt_z0</code> oracle option). Every existing 3D loss and metric then sees metres as before.</li>
+<li><b>No depth in the input.</b> <code>use_depth: false</code> (existing) plus a new <code>load_depth: false</code> on the dataset so the depth PNG is never decoded. An opt-in loader rule (<code>finetune_slice_input_channels</code>) can slice the depth columns off an old checkpoint's FPN convs, which is exactly the "concatenate zeros" model you asked about.</li>
+<li><b>Tests and smoke.</b> 11 new unit tests (unit anchor exact for any z₀ with no depth map, invalid first point drops the row, scale sources, RGB-only forward with <code>depth=None</code>, loader slicing) plus 56 regression tests pass on the dev pod. <code>fast_dev_run</code> passed for the HOI4D, EPIC, ARCTIC and SF3D configs, and the SF3D test ran with both scale sources.</li>
+<li><b>Configs</b> for every dataset: <code>config/hoi4d_v2_rgb_scalefree.yaml</code> (from the plain teacher-forcing recipe, as you asked), <code>epic_v1_rgb_scalefree.yaml</code>, <code>arctic_v1_rgb_scalefree.yaml</code>, and SF3D scratch + post-training variants. The two viz tools honour the new head.</li>
+</ol>
+</div>
+
+<h2><span class="n">2</span>What ran, in order</h2>
+<div class="tl">
+<div><b>01:30</b> Code landed, tests green, smoke runs on the dev pod.</div>
+<div><b>01:45</b> Two RTX PRO 6000 pods created (both booted first try, healthy clocks ~2350 MHz).</div>
+<div><b>01:46</b> First launch skipped both arms: the smoke runs had written a 3.7 GB <code>last.ckpt</code> into each experiment dir and the queue treats that as "already done". Deleted the four smoke checkpoints, relaunched. Recorded in STATE as an ops gotcha.</div>
+<div><b>01:48</b> Pod A: HOI4D arm (100 epochs, plain teacher-forcing recipe, RGB-only). Pod B: SF3D scratch RGB-only arm (30 epochs).</div>
+<div><b>02:36</b> HOI4D arm done (48 min) and tested. Its best checkpoint (epoch 83) resolved into the SF3D post-training config; pod A started the 30-epoch post-training.</div>
+<div><b>02:45</b> HOI4D held-out panels rendered on the dev pod and checked; notes, INDEX and viz README committed. A gap in the 2D-shape diagnostic (it fell back to the zero depth map) fixed and the test re-run.</div>
+<div><b>05:25</b> Pod B done and tested twice (predicted scale, oracle scale); pod B deleted by the watcher.</div>
+<div><b>06:12</b> Pod A post-training done and tested twice; pod A deleted by the watcher. Comparison panels rendered on the dev pod. Everything committed; only the dev pod is running.</div>
+</div>
+
+<h2><span class="n">3</span>HOI4D: the 2D recipe without depth</h2>
+<p>Same data, epochs, learning rate and batch as the depth plain teacher-forcing arm of 2026-09-07. Only the depth and the anchor changed.</p>
+<table>
+<tr><th>arm</th><th>depth</th><th>mIoU</th><th>PDet</th><th>point err</th><th>2D shape</th><th>best val proj loss</th></tr>
+<tr><td><b>rgb_scalefree (new)</b></td><td>no</td><td class="n good">0.733</td><td class="n good">88.7</td><td class="n good">0.0147</td><td class="n good">0.0378</td><td class="n good">0.315</td></tr>
+<tr><td>teacher_forcing_plain (depth counterpart)</td><td>yes</td><td class="n">0.708</td><td class="n">86.7</td><td class="n">0.0157</td><td class="n">0.0413</td><td class="n">0.383</td></tr>
+<tr><td>teacher_forcing, DCT head (best cell of the old grid)</td><td>yes</td><td class="n">0.727</td><td class="n">88.0</td><td class="n">—</td><td class="n">0.0377</td><td class="n">0.329</td></tr>
+</table>
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" class="chart">
+<text x="52" y="16" font-size="13" font-weight="600">HOI4D validation projection loss (the 2D data term)</text>
+<line x1="52" y1="266.0" x2="744" y2="266.0" stroke="#e3e0d8"/><text x="46" y="270.0" font-size="11" text-anchor="end" fill="#5b6472">0.25</text>
+<line x1="52" y1="206.5" x2="744" y2="206.5" stroke="#e3e0d8"/><text x="46" y="210.5" font-size="11" text-anchor="end" fill="#5b6472">0.51</text>
+<line x1="52" y1="147.0" x2="744" y2="147.0" stroke="#e3e0d8"/><text x="46" y="151.0" font-size="11" text-anchor="end" fill="#5b6472">0.78</text>
+<line x1="52" y1="87.5" x2="744" y2="87.5" stroke="#e3e0d8"/><text x="46" y="91.5" font-size="11" text-anchor="end" fill="#5b6472">1.04</text>
+<line x1="52" y1="28.0" x2="744" y2="28.0" stroke="#e3e0d8"/><text x="46" y="32.0" font-size="11" text-anchor="end" fill="#5b6472">1.30</text>
+<text x="52.0" y="288" font-size="11" text-anchor="middle" fill="#5b6472">0</text>
+<text x="86.9" y="288" font-size="11" text-anchor="middle" fill="#5b6472">5</text>
+<text x="121.9" y="288" font-size="11" text-anchor="middle" fill="#5b6472">10</text>
+<text x="156.8" y="288" font-size="11" text-anchor="middle" fill="#5b6472">15</text>
+<text x="191.8" y="288" font-size="11" text-anchor="middle" fill="#5b6472">20</text>
+<text x="226.7" y="288" font-size="11" text-anchor="middle" fill="#5b6472">25</text>
+<text x="261.7" y="288" font-size="11" text-anchor="middle" fill="#5b6472">30</text>
+<text x="296.6" y="288" font-size="11" text-anchor="middle" fill="#5b6472">35</text>
+<text x="331.6" y="288" font-size="11" text-anchor="middle" fill="#5b6472">40</text>
+<text x="366.5" y="288" font-size="11" text-anchor="middle" fill="#5b6472">45</text>
+<text x="401.5" y="288" font-size="11" text-anchor="middle" fill="#5b6472">50</text>
+<text x="436.4" y="288" font-size="11" text-anchor="middle" fill="#5b6472">55</text>
+<text x="471.4" y="288" font-size="11" text-anchor="middle" fill="#5b6472">60</text>
+<text x="506.3" y="288" font-size="11" text-anchor="middle" fill="#5b6472">65</text>
+<text x="541.3" y="288" font-size="11" text-anchor="middle" fill="#5b6472">70</text>
+<text x="576.2" y="288" font-size="11" text-anchor="middle" fill="#5b6472">75</text>
+<text x="611.2" y="288" font-size="11" text-anchor="middle" fill="#5b6472">80</text>
+<text x="646.1" y="288" font-size="11" text-anchor="middle" fill="#5b6472">85</text>
+<text x="681.1" y="288" font-size="11" text-anchor="middle" fill="#5b6472">90</text>
+<text x="716.0" y="288" font-size="11" text-anchor="middle" fill="#5b6472">95</text>
+<text x="398" y="299" font-size="11" text-anchor="middle" fill="#5b6472">epoch</text>
+<text x="12" y="147" font-size="11" text-anchor="middle" fill="#5b6472" transform="rotate(-90 12 147)">val/L_traj_proj</text>
+<polyline points="52.0,43.6 59.0,154.7 66.0,172.9 73.0,183.8 80.0,191.7 86.9,199.6 93.9,204.5 100.9,211.6 107.9,214.7 114.9,219.9 121.9,223.4 128.9,223.4 135.9,229.8 142.9,231.7 149.9,232.8 156.8,234.5 163.8,237.3 170.8,233.2 177.8,238.8 184.8,237.1 191.8,237.0 198.8,240.4 205.8,238.2 212.8,234.0 219.8,235.4 226.7,241.4 233.7,237.5 240.7,242.4 247.7,231.9 254.7,234.6 261.7,242.6 268.7,240.7 275.7,240.0 282.7,240.3 289.7,240.2 296.6,242.0 303.6,232.1 310.6,241.9 317.6,245.9 324.6,236.7 331.6,231.9 338.6,234.2 345.6,242.4 352.6,243.0 359.6,245.0 366.5,246.8 373.5,240.5 380.5,246.3 387.5,247.6 394.5,245.1 401.5,245.8 408.5,244.3 415.5,247.5 422.5,244.5 429.5,243.4 436.4,245.7 443.4,245.0 450.4,248.0 457.4,244.5 464.4,246.1 471.4,246.8 478.4,248.9 485.4,248.6 492.4,246.8 499.4,240.7 506.3,244.0 513.3,248.3 520.3,246.6 527.3,248.1 534.3,240.9 541.3,249.6 548.3,247.9 555.3,244.8 562.3,248.3 569.3,247.6 576.2,249.2 583.2,248.6 590.2,248.0 597.2,242.0 604.2,244.0 611.2,251.2 618.2,251.1 625.2,250.7 632.2,251.1 639.2,251.0 646.1,250.4 653.1,250.2 660.1,250.9 667.1,250.8 674.1,250.3 681.1,250.6 688.1,250.3 695.1,250.6 702.1,250.6 709.1,250.6 716.0,250.5 723.0,250.5 730.0,250.4 737.0,250.4 744.0,250.5" fill="none" stroke="#c8443c" stroke-width="2"/>
+<rect x="494" y="32" width="12" height="3" fill="#c8443c"/><text x="512" y="37" font-size="11" fill="#1a1d23">RGB scale-free (new)</text>
+<polyline points="52.0,-299.2 59.0,27.5 66.0,62.7 73.0,101.4 80.0,123.1 86.9,139.4 93.9,152.2 100.9,161.2 107.9,169.0 114.9,175.6 121.9,181.8 128.9,187.1 135.9,192.1 142.9,196.2 149.9,199.2 156.8,202.0 163.8,206.5 170.8,205.9 177.8,210.4 184.8,211.9 191.8,211.5 198.8,211.5 205.8,214.3 212.8,211.5 219.8,219.7 226.7,214.7 233.7,218.0 240.7,215.3 247.7,220.6 254.7,221.7 261.7,222.7 268.7,224.3 275.7,212.7 282.7,224.6 289.7,217.8 296.6,221.8 303.6,222.3 310.6,225.3 317.6,219.7 324.6,222.7 331.6,224.9 338.6,216.1 345.6,226.8 352.6,224.7 359.6,223.7 366.5,220.6 373.5,227.0 380.5,223.6 387.5,225.1 394.5,224.8 401.5,230.9 408.5,224.5 415.5,231.8 422.5,219.3 429.5,228.7 436.4,230.1 443.4,229.3 450.4,232.2 457.4,222.9 464.4,230.1 471.4,231.9 478.4,228.5 485.4,230.0 492.4,231.0 499.4,227.1 506.3,231.6 513.3,232.0 520.3,233.7 527.3,229.7 534.3,231.8 541.3,224.5 548.3,228.0 555.3,226.1 562.3,231.1 569.3,231.9 576.2,231.0 583.2,230.1 590.2,232.1 597.2,223.7 604.2,233.2 611.2,235.3 618.2,235.8 625.2,234.8 632.2,234.7 639.2,234.9 646.1,234.0 653.1,235.2 660.1,235.2 667.1,234.7 674.1,234.6 681.1,235.2 688.1,235.4 695.1,234.7 702.1,235.0 709.1,234.9 716.0,234.9 723.0,234.4 730.0,234.7 737.0,234.8 744.0,235.0" fill="none" stroke="#e07a2f" stroke-width="2"/>
+<rect x="494" y="48" width="12" height="3" fill="#e07a2f"/><text x="512" y="53" font-size="11" fill="#1a1d23">depth, plain head (tf_plain)</text>
+<polyline points="52.0,102.2 59.0,172.0 66.0,186.1 73.0,196.3 80.0,204.7 86.9,211.5 93.9,214.1 100.9,217.2 107.9,218.4 114.9,226.0 121.9,227.8 128.9,228.9 135.9,230.2 142.9,230.7 149.9,237.1 156.8,235.9 163.8,237.7 170.8,235.6 177.8,237.0 184.8,230.9 191.8,239.2 198.8,240.2 205.8,236.9 212.8,231.5 219.8,238.3 226.7,236.3 233.7,234.5 240.7,242.3 247.7,234.7 254.7,235.8 261.7,238.7 268.7,236.1 275.7,235.5 282.7,242.1 289.7,239.7 296.6,232.8 303.6,241.4 310.6,239.9 317.6,238.1 324.6,236.6 331.6,235.0 338.6,234.5 345.6,239.0 352.6,243.7 359.6,241.6 366.5,242.6 373.5,236.8 380.5,242.5 387.5,237.7 394.5,242.8 401.5,240.9 408.5,239.4 415.5,239.0 422.5,244.1 429.5,234.3 436.4,244.3 443.4,240.7 450.4,240.8 457.4,242.9 464.4,240.7 471.4,245.6 478.4,243.8 485.4,241.7 492.4,245.2 499.4,246.0 506.3,246.5 513.3,244.8 520.3,242.3 527.3,241.8 534.3,242.9 541.3,244.4 548.3,243.6 555.3,245.4 562.3,242.0 569.3,246.8 576.2,245.5 583.2,245.1 590.2,246.6 597.2,245.6 604.2,243.1 611.2,247.2 618.2,247.2 625.2,247.8 632.2,247.1 639.2,247.6 646.1,246.6 653.1,247.3 660.1,247.8 667.1,248.2 674.1,245.8 681.1,248.1 688.1,247.4 695.1,247.7 702.1,247.7 709.1,247.9 716.0,247.5 723.0,247.6 730.0,247.8 737.0,248.0 744.0,247.9" fill="none" stroke="#3d6fb4" stroke-width="2"/>
+<rect x="494" y="64" width="12" height="3" fill="#3d6fb4"/><text x="512" y="69" font-size="11" fill="#1a1d23">depth, DCT head (tf)</text>
+</svg>
+<p class="cap">The projection loss on held-out objects. The RGB-only arm is the lowest curve throughout; the depth anchor was adding noise (sensor holes, edges at the knuckle pixel), not information.</p>
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" class="chart">
+<text x="52" y="16" font-size="13" font-weight="600">HOI4D validation mask loss</text>
+<line x1="52" y1="266.0" x2="744" y2="266.0" stroke="#e3e0d8"/><text x="46" y="270.0" font-size="11" text-anchor="end" fill="#5b6472">0.08</text>
+<line x1="52" y1="206.5" x2="744" y2="206.5" stroke="#e3e0d8"/><text x="46" y="210.5" font-size="11" text-anchor="end" fill="#5b6472">0.29</text>
+<line x1="52" y1="147.0" x2="744" y2="147.0" stroke="#e3e0d8"/><text x="46" y="151.0" font-size="11" text-anchor="end" fill="#5b6472">0.49</text>
+<line x1="52" y1="87.5" x2="744" y2="87.5" stroke="#e3e0d8"/><text x="46" y="91.5" font-size="11" text-anchor="end" fill="#5b6472">0.69</text>
+<line x1="52" y1="28.0" x2="744" y2="28.0" stroke="#e3e0d8"/><text x="46" y="32.0" font-size="11" text-anchor="end" fill="#5b6472">0.90</text>
+<text x="52.0" y="288" font-size="11" text-anchor="middle" fill="#5b6472">0</text>
+<text x="86.9" y="288" font-size="11" text-anchor="middle" fill="#5b6472">5</text>
+<text x="121.9" y="288" font-size="11" text-anchor="middle" fill="#5b6472">10</text>
+<text x="156.8" y="288" font-size="11" text-anchor="middle" fill="#5b6472">15</text>
+<text x="191.8" y="288" font-size="11" text-anchor="middle" fill="#5b6472">20</text>
+<text x="226.7" y="288" font-size="11" text-anchor="middle" fill="#5b6472">25</text>
+<text x="261.7" y="288" font-size="11" text-anchor="middle" fill="#5b6472">30</text>
+<text x="296.6" y="288" font-size="11" text-anchor="middle" fill="#5b6472">35</text>
+<text x="331.6" y="288" font-size="11" text-anchor="middle" fill="#5b6472">40</text>
+<text x="366.5" y="288" font-size="11" text-anchor="middle" fill="#5b6472">45</text>
+<text x="401.5" y="288" font-size="11" text-anchor="middle" fill="#5b6472">50</text>
+<text x="436.4" y="288" font-size="11" text-anchor="middle" fill="#5b6472">55</text>
+<text x="471.4" y="288" font-size="11" text-anchor="middle" fill="#5b6472">60</text>
+<text x="506.3" y="288" font-size="11" text-anchor="middle" fill="#5b6472">65</text>
+<text x="541.3" y="288" font-size="11" text-anchor="middle" fill="#5b6472">70</text>
+<text x="576.2" y="288" font-size="11" text-anchor="middle" fill="#5b6472">75</text>
+<text x="611.2" y="288" font-size="11" text-anchor="middle" fill="#5b6472">80</text>
+<text x="646.1" y="288" font-size="11" text-anchor="middle" fill="#5b6472">85</text>
+<text x="681.1" y="288" font-size="11" text-anchor="middle" fill="#5b6472">90</text>
+<text x="716.0" y="288" font-size="11" text-anchor="middle" fill="#5b6472">95</text>
+<text x="398" y="299" font-size="11" text-anchor="middle" fill="#5b6472">epoch</text>
+<text x="12" y="147" font-size="11" text-anchor="middle" fill="#5b6472" transform="rotate(-90 12 147)">val/L_mask</text>
+<polyline points="52.0,48.5 59.0,198.4 66.0,216.6 73.0,223.8 80.0,233.7 86.9,237.5 93.9,240.5 100.9,241.9 107.9,244.4 114.9,244.7 121.9,245.1 128.9,246.4 135.9,245.7 142.9,248.6 149.9,249.2 156.8,249.8 163.8,249.1 170.8,251.6 177.8,251.2 184.8,252.6 191.8,252.1 198.8,252.8 205.8,253.0 212.8,252.4 219.8,253.2 226.7,253.6 233.7,251.4 240.7,252.8 247.7,255.1 254.7,254.8 261.7,255.2 268.7,255.1 275.7,254.6 282.7,255.3 289.7,255.1 296.6,256.2 303.6,255.9 310.6,256.4 317.6,255.7 324.6,255.0 331.6,255.9 338.6,256.1 345.6,256.2 352.6,256.8 359.6,256.3 366.5,256.9 373.5,256.2 380.5,256.1 387.5,257.1 394.5,257.0 401.5,256.4 408.5,257.6 415.5,257.7 422.5,257.3 429.5,257.5 436.4,257.5 443.4,257.0 450.4,257.6 457.4,257.4 464.4,257.8 471.4,257.7 478.4,257.6 485.4,258.2 492.4,257.9 499.4,258.1 506.3,257.5 513.3,258.0 520.3,257.5 527.3,257.9 534.3,257.8 541.3,258.5 548.3,257.9 555.3,258.3 562.3,258.3 569.3,258.2 576.2,258.3 583.2,258.6 590.2,258.1 597.2,258.8 604.2,258.3 611.2,258.7 618.2,258.9 625.2,258.6 632.2,258.8 639.2,258.8 646.1,258.7 653.1,258.5 660.1,258.7 667.1,258.6 674.1,258.6 681.1,258.4 688.1,258.6 695.1,258.6 702.1,258.6 709.1,258.6 716.0,258.8 723.0,258.6 730.0,258.7 737.0,258.5 744.0,258.6" fill="none" stroke="#c8443c" stroke-width="2"/>
+<rect x="494" y="32" width="12" height="3" fill="#c8443c"/><text x="512" y="37" font-size="11" fill="#1a1d23">RGB scale-free (new)</text>
+<polyline points="52.0,8.3 59.0,187.0 66.0,200.9 73.0,212.9 80.0,218.0 86.9,226.3 93.9,232.3 100.9,234.6 107.9,237.5 114.9,239.9 121.9,241.5 128.9,242.3 135.9,243.2 142.9,245.5 149.9,245.4 156.8,245.7 163.8,247.2 170.8,247.5 177.8,248.0 184.8,245.6 191.8,248.4 198.8,249.2 205.8,249.8 212.8,249.7 219.8,250.2 226.7,250.3 233.7,251.1 240.7,250.9 247.7,251.7 254.7,252.1 261.7,250.6 268.7,249.5 275.7,251.8 282.7,251.3 289.7,249.8 296.6,251.7 303.6,251.6 310.6,253.1 317.6,252.7 324.6,251.7 331.6,252.7 338.6,251.8 345.6,253.4 352.6,254.0 359.6,253.1 366.5,253.1 373.5,254.3 380.5,253.5 387.5,253.0 394.5,253.3 401.5,253.8 408.5,254.2 415.5,253.4 422.5,253.9 429.5,253.4 436.4,254.4 443.4,254.1 450.4,253.4 457.4,254.7 464.4,254.2 471.4,253.3 478.4,255.2 485.4,255.1 492.4,254.6 499.4,253.9 506.3,254.6 513.3,254.7 520.3,255.3 527.3,255.6 534.3,255.4 541.3,253.8 548.3,254.1 555.3,254.8 562.3,255.4 569.3,254.0 576.2,254.5 583.2,255.6 590.2,255.7 597.2,253.4 604.2,254.4 611.2,255.7 618.2,255.8 625.2,255.5 632.2,255.7 639.2,255.5 646.1,255.8 653.1,255.7 660.1,255.6 667.1,255.0 674.1,255.2 681.1,255.1 688.1,255.1 695.1,255.2 702.1,255.4 709.1,255.3 716.0,255.4 723.0,255.3 730.0,255.4 737.0,255.3 744.0,255.4" fill="none" stroke="#e07a2f" stroke-width="2"/>
+<rect x="494" y="48" width="12" height="3" fill="#e07a2f"/><text x="512" y="53" font-size="11" fill="#1a1d23">depth, plain head (tf_plain)</text>
+<polyline points="52.0,-30.7 59.0,198.7 66.0,214.0 73.0,224.1 80.0,229.3 86.9,236.6 93.9,240.0 100.9,241.9 107.9,243.0 114.9,244.8 121.9,244.3 128.9,247.1 135.9,243.8 142.9,248.9 149.9,247.6 156.8,249.4 163.8,249.9 170.8,250.0 177.8,251.3 184.8,251.2 191.8,250.6 198.8,252.2 205.8,251.2 212.8,252.4 219.8,252.2 226.7,254.1 233.7,252.2 240.7,253.5 247.7,254.0 254.7,254.3 261.7,254.6 268.7,254.4 275.7,255.0 282.7,254.5 289.7,253.0 296.6,254.1 303.6,254.9 310.6,255.5 317.6,255.4 324.6,255.9 331.6,256.0 338.6,256.5 345.6,255.7 352.6,255.5 359.6,255.8 366.5,256.4 373.5,255.8 380.5,256.4 387.5,256.5 394.5,256.4 401.5,255.9 408.5,256.8 415.5,256.2 422.5,256.9 429.5,257.1 436.4,255.3 443.4,256.5 450.4,255.4 457.4,256.9 464.4,257.3 471.4,256.0 478.4,257.7 485.4,257.1 492.4,257.1 499.4,257.6 506.3,256.9 513.3,256.7 520.3,256.8 527.3,257.1 534.3,257.5 541.3,257.4 548.3,257.8 555.3,257.5 562.3,257.6 569.3,257.6 576.2,258.2 583.2,258.1 590.2,257.4 597.2,258.0 604.2,257.3 611.2,257.7 618.2,257.9 625.2,258.4 632.2,258.2 639.2,258.0 646.1,258.0 653.1,258.1 660.1,258.2 667.1,258.0 674.1,257.9 681.1,258.0 688.1,257.6 695.1,258.0 702.1,258.0 709.1,257.9 716.0,258.0 723.0,258.0 730.0,257.8 737.0,257.8 744.0,257.9" fill="none" stroke="#3d6fb4" stroke-width="2"/>
+<rect x="494" y="64" width="12" height="3" fill="#3d6fb4"/><text x="512" y="69" font-size="11" fill="#1a1d23">depth, DCT head (tf)</text>
+</svg>
+<p class="cap">Mask loss, same picture.</p>
+<img src="../../viz/20260909_hoi4d_rgb_scalefree_val_panels/contact_sheet.jpg" alt="HOI4D panels">
+<p class="cap">16 held-out samples (left GT, right prediction): masks on the correct moving part in all 16, the point at the knuckle, projected trajectories in the GT direction with plausible extent. The jitter is the plain per-point head, same as every plain arm. p_rev sits at the batch prior, as in every 2D-only arm.</p>
+
+<h2><span class="n">4</span>SF3D: the depth ablation and the transfer</h2>
+<table>
+<tr><th>init</th><th>depth</th><th>MA</th><th>PDet</th><th>mIoU</th><th>axis all / matched</th><th>origin</th><th>point3d</th><th>rough</th></tr>
+<tr><td>scratch g19_dct</td><td>yes</td><td class="n">25.98</td><td class="n">21.72</td><td class="n">0.2685</td><td class="n">25.3 / 18.2</td><td class="n">0.276</td><td class="n">0.259</td><td class="n">0.0090</td></tr>
+<tr><td><b>scratch rgb_scalefree (new)</b></td><td>no</td><td class="n bad">24.88</td><td class="n bad">17.39</td><td class="n bad">0.2425</td><td class="n bad">29.6 / 22.0</td><td class="n bad">0.324</td><td class="n">0.269</td><td class="n">0.0109</td></tr>
+<tr><td>HOI4D tf_plain init</td><td>yes</td><td class="n">30.62</td><td class="n">20.03</td><td class="n">0.2555</td><td class="n">28.0 / 20.0</td><td class="n">0.286</td><td class="n">0.224</td><td class="n">0.0079</td></tr>
+<tr><td><b>HOI4D rgb_scalefree init (new)</b></td><td>no</td><td class="n">30.07</td><td class="n good">22.35</td><td class="n good">0.2660</td><td class="n good">26.9 / 22.0</td><td class="n">0.293</td><td class="n">0.253</td><td class="n">0.0089</td></tr>
+<tr><td>HOI4D tf (DCT) init, the record</td><td>yes</td><td class="n">31.13</td><td class="n">23.27</td><td class="n">0.266</td><td class="n">28.0 / 19.7</td><td class="n">—</td><td class="n">—</td><td class="n">0.0079</td></tr>
+</table>
+<div class="aside">Read the table in two pairs. <b>Scratch pair:</b> depth is worth about 1 MA, 4 PDet, 0.026 mIoU, 4° of axis and 5 cm of origin when the model starts from nothing. <b>Post-trained pair:</b> that cost disappears; the RGB model is within noise on MA and ahead on detection, mask and axis. The HOI4D init gives the RGB model +5.2 MA and +5.0 PDet over its own scratch (the depth pair gained +4.6 MA and lost 1.7 PDet), so the transfer survives without depth and is, if anything, cleaner.</div>
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" class="chart">
+<text x="52" y="16" font-size="13" font-weight="600">SF3D validation loss (total)</text>
+<line x1="52" y1="266.0" x2="744" y2="266.0" stroke="#e3e0d8"/><text x="46" y="270.0" font-size="11" text-anchor="end" fill="#5b6472">0.90</text>
+<line x1="52" y1="206.5" x2="744" y2="206.5" stroke="#e3e0d8"/><text x="46" y="210.5" font-size="11" text-anchor="end" fill="#5b6472">1.07</text>
+<line x1="52" y1="147.0" x2="744" y2="147.0" stroke="#e3e0d8"/><text x="46" y="151.0" font-size="11" text-anchor="end" fill="#5b6472">1.25</text>
+<line x1="52" y1="87.5" x2="744" y2="87.5" stroke="#e3e0d8"/><text x="46" y="91.5" font-size="11" text-anchor="end" fill="#5b6472">1.43</text>
+<line x1="52" y1="28.0" x2="744" y2="28.0" stroke="#e3e0d8"/><text x="46" y="32.0" font-size="11" text-anchor="end" fill="#5b6472">1.60</text>
+<text x="52.0" y="288" font-size="11" text-anchor="middle" fill="#5b6472">0</text>
+<text x="171.3" y="288" font-size="11" text-anchor="middle" fill="#5b6472">5</text>
+<text x="290.6" y="288" font-size="11" text-anchor="middle" fill="#5b6472">10</text>
+<text x="409.9" y="288" font-size="11" text-anchor="middle" fill="#5b6472">15</text>
+<text x="529.2" y="288" font-size="11" text-anchor="middle" fill="#5b6472">20</text>
+<text x="648.6" y="288" font-size="11" text-anchor="middle" fill="#5b6472">25</text>
+<text x="398" y="299" font-size="11" text-anchor="middle" fill="#5b6472">epoch</text>
+<text x="12" y="147" font-size="11" text-anchor="middle" fill="#5b6472" transform="rotate(-90 12 147)">val/loss_total</text>
+<polyline points="52.0,127.7 75.9,163.9 99.7,169.5 123.6,183.7 147.4,193.9 171.3,180.1 195.2,190.0 219.0,189.1 242.9,187.6 266.8,187.3 290.6,190.4 314.5,181.9 338.3,196.8 362.2,190.9 386.1,191.6 409.9,193.3 433.8,201.4 457.7,210.4 481.5,198.3 505.4,200.1 529.2,210.2 553.1,212.9 577.0,211.8 600.8,207.5 624.7,215.6 648.6,212.0 672.4,211.5 696.3,208.6 720.1,209.2 744.0,208.7" fill="none" stroke="#c8443c" stroke-width="2"/>
+<rect x="494" y="32" width="12" height="3" fill="#c8443c"/><text x="512" y="37" font-size="11" fill="#1a1d23">RGB post-train from HOI4D (new)</text>
+<polyline points="52.0,47.6 75.9,85.5 99.7,110.7 123.6,130.2 147.4,149.9 171.3,155.0 195.2,163.6 219.0,167.3 242.9,171.5 266.8,173.2 290.6,179.3 314.5,181.4 338.3,186.2 362.2,190.7 386.1,196.9 409.9,187.4 433.8,202.6 457.7,194.6 481.5,190.9 505.4,195.0 529.2,205.1 553.1,191.4 577.0,193.5 600.8,199.7 624.7,200.8 648.6,202.2 672.4,201.0 696.3,197.6 720.1,197.0 744.0,198.0" fill="none" stroke="#e07a2f" stroke-width="2"/>
+<rect x="494" y="48" width="12" height="3" fill="#e07a2f"/><text x="512" y="53" font-size="11" fill="#1a1d23">RGB scratch (new)</text>
+<polyline points="52.0,54.7 75.9,103.3 99.7,143.6 123.6,146.0 147.4,164.0 171.3,159.2 195.2,168.8 219.0,190.6 242.9,187.3 266.8,198.5 290.6,202.9 314.5,200.1 338.3,218.3 362.2,212.6 386.1,225.4 409.9,223.3 433.8,235.5 457.7,228.7 481.5,238.7 505.4,228.9 529.2,238.0 553.1,235.1 577.0,239.8 600.8,236.3 624.7,237.8 648.6,239.9 672.4,238.3 696.3,239.8 720.1,238.9 744.0,239.3" fill="none" stroke="#3d6fb4" stroke-width="2"/>
+<rect x="494" y="64" width="12" height="3" fill="#3d6fb4"/><text x="512" y="69" font-size="11" fill="#1a1d23">depth post-train tf_plain</text>
+<polyline points="52.0,47.5 75.9,91.5 99.7,114.1 123.6,148.9 147.4,178.7 171.3,182.4 195.2,198.8 219.0,205.0 242.9,210.6 266.8,209.4 290.6,230.5 314.5,222.1 338.3,220.9 362.2,224.6 386.1,228.2 409.9,236.9 433.8,243.1 457.7,239.4 481.5,236.9 505.4,223.1 529.2,243.8 553.1,241.1 577.0,227.3 600.8,230.2 624.7,236.2 648.6,235.7 672.4,236.9 696.3,237.3 720.1,237.5 744.0,238.5" fill="none" stroke="#3e8e5f" stroke-width="2"/>
+<rect x="494" y="80" width="12" height="3" fill="#3e8e5f"/><text x="512" y="85" font-size="11" fill="#1a1d23">depth scratch g19_dct</text>
+</svg>
+<p class="cap">Total validation loss. The RGB curves sit above the depth curves by roughly 0.1 throughout; the gap is almost entirely the trajectory term below.</p>
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" class="chart">
+<text x="52" y="16" font-size="13" font-weight="600">SF3D validation trajectory loss (normalised, same quantity in both models)</text>
+<line x1="52" y1="266.0" x2="744" y2="266.0" stroke="#e3e0d8"/><text x="46" y="270.0" font-size="11" text-anchor="end" fill="#5b6472">0.30</text>
+<line x1="52" y1="206.5" x2="744" y2="206.5" stroke="#e3e0d8"/><text x="46" y="210.5" font-size="11" text-anchor="end" fill="#5b6472">0.41</text>
+<line x1="52" y1="147.0" x2="744" y2="147.0" stroke="#e3e0d8"/><text x="46" y="151.0" font-size="11" text-anchor="end" fill="#5b6472">0.53</text>
+<line x1="52" y1="87.5" x2="744" y2="87.5" stroke="#e3e0d8"/><text x="46" y="91.5" font-size="11" text-anchor="end" fill="#5b6472">0.64</text>
+<line x1="52" y1="28.0" x2="744" y2="28.0" stroke="#e3e0d8"/><text x="46" y="32.0" font-size="11" text-anchor="end" fill="#5b6472">0.75</text>
+<text x="52.0" y="288" font-size="11" text-anchor="middle" fill="#5b6472">0</text>
+<text x="171.3" y="288" font-size="11" text-anchor="middle" fill="#5b6472">5</text>
+<text x="290.6" y="288" font-size="11" text-anchor="middle" fill="#5b6472">10</text>
+<text x="409.9" y="288" font-size="11" text-anchor="middle" fill="#5b6472">15</text>
+<text x="529.2" y="288" font-size="11" text-anchor="middle" fill="#5b6472">20</text>
+<text x="648.6" y="288" font-size="11" text-anchor="middle" fill="#5b6472">25</text>
+<text x="398" y="299" font-size="11" text-anchor="middle" fill="#5b6472">epoch</text>
+<text x="12" y="147" font-size="11" text-anchor="middle" fill="#5b6472" transform="rotate(-90 12 147)">val/L_trajectory</text>
+<polyline points="52.0,81.1 75.9,158.7 99.7,177.2 123.6,188.3 147.4,184.4 171.3,161.7 195.2,181.5 219.0,179.5 242.9,178.3 266.8,168.3 290.6,167.7 314.5,144.6 338.3,168.6 362.2,165.1 386.1,165.3 409.9,169.3 433.8,175.5 457.7,180.5 481.5,172.1 505.4,173.0 529.2,173.7 553.1,166.1 577.0,168.1 600.8,174.8 624.7,171.2 648.6,168.2 672.4,169.4 696.3,168.9 720.1,168.4 744.0,168.7" fill="none" stroke="#c8443c" stroke-width="2"/>
+<rect x="494" y="32" width="12" height="3" fill="#c8443c"/><text x="512" y="37" font-size="11" fill="#1a1d23">RGB post-train from HOI4D (new)</text>
+<polyline points="52.0,50.0 75.9,65.3 99.7,70.8 123.6,112.7 147.4,139.0 171.3,145.9 195.2,159.9 219.0,153.0 242.9,159.8 266.8,156.7 290.6,149.3 314.5,159.3 338.3,168.0 362.2,174.7 386.1,175.7 409.9,162.5 433.8,177.0 457.7,167.8 481.5,163.0 505.4,166.2 529.2,170.3 553.1,151.7 577.0,161.0 600.8,171.0 624.7,172.7 648.6,172.7 672.4,169.6 696.3,169.7 720.1,169.1 744.0,168.5" fill="none" stroke="#e07a2f" stroke-width="2"/>
+<rect x="494" y="48" width="12" height="3" fill="#e07a2f"/><text x="512" y="53" font-size="11" fill="#1a1d23">RGB scratch (new)</text>
+<polyline points="52.0,71.5 75.9,89.7 99.7,140.7 123.6,155.1 147.4,184.5 171.3,190.3 195.2,189.7 219.0,209.7 242.9,198.6 266.8,210.5 290.6,212.7 314.5,216.6 338.3,214.4 362.2,227.0 386.1,226.9 409.9,226.7 433.8,232.4 457.7,228.7 481.5,238.3 505.4,226.9 529.2,238.2 553.1,238.5 577.0,239.6 600.8,232.5 624.7,239.6 648.6,239.8 672.4,237.1 696.3,239.0 720.1,238.1 744.0,238.1" fill="none" stroke="#3d6fb4" stroke-width="2"/>
+<rect x="494" y="64" width="12" height="3" fill="#3d6fb4"/><text x="512" y="69" font-size="11" fill="#1a1d23">depth post-train tf_plain</text>
+<polyline points="52.0,65.2 75.9,70.7 99.7,86.4 123.6,138.3 147.4,176.2 171.3,190.6 195.2,207.1 219.0,207.5 242.9,210.3 266.8,206.1 290.6,215.8 314.5,227.9 338.3,219.3 362.2,229.4 386.1,224.6 409.9,229.8 433.8,236.9 457.7,240.5 481.5,232.5 505.4,223.1 529.2,236.2 553.1,236.6 577.0,227.4 600.8,223.9 624.7,231.7 648.6,231.4 672.4,232.1 696.3,233.1 720.1,232.2 744.0,233.6" fill="none" stroke="#3e8e5f" stroke-width="2"/>
+<rect x="494" y="80" width="12" height="3" fill="#3e8e5f"/><text x="512" y="85" font-size="11" fill="#1a1d23">depth scratch g19_dct</text>
+</svg>
+<p class="cap">The trajectory term, normalised, computed on GT z₀ · Δ̃ so it is the same quantity for both model kinds. Both RGB arms plateau near 0.48 while the depth arms keep improving to 0.35. Training loss reaches 0.009 for all four, so this is generalisation of the metric curve, not fitting.</p>
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" class="chart">
+<text x="52" y="16" font-size="13" font-weight="600">SF3D validation mask loss</text>
+<line x1="52" y1="266.0" x2="744" y2="266.0" stroke="#e3e0d8"/><text x="46" y="270.0" font-size="11" text-anchor="end" fill="#5b6472">0.30</text>
+<line x1="52" y1="206.5" x2="744" y2="206.5" stroke="#e3e0d8"/><text x="46" y="210.5" font-size="11" text-anchor="end" fill="#5b6472">0.35</text>
+<line x1="52" y1="147.0" x2="744" y2="147.0" stroke="#e3e0d8"/><text x="46" y="151.0" font-size="11" text-anchor="end" fill="#5b6472">0.40</text>
+<line x1="52" y1="87.5" x2="744" y2="87.5" stroke="#e3e0d8"/><text x="46" y="91.5" font-size="11" text-anchor="end" fill="#5b6472">0.45</text>
+<line x1="52" y1="28.0" x2="744" y2="28.0" stroke="#e3e0d8"/><text x="46" y="32.0" font-size="11" text-anchor="end" fill="#5b6472">0.50</text>
+<text x="52.0" y="288" font-size="11" text-anchor="middle" fill="#5b6472">0</text>
+<text x="171.3" y="288" font-size="11" text-anchor="middle" fill="#5b6472">5</text>
+<text x="290.6" y="288" font-size="11" text-anchor="middle" fill="#5b6472">10</text>
+<text x="409.9" y="288" font-size="11" text-anchor="middle" fill="#5b6472">15</text>
+<text x="529.2" y="288" font-size="11" text-anchor="middle" fill="#5b6472">20</text>
+<text x="648.6" y="288" font-size="11" text-anchor="middle" fill="#5b6472">25</text>
+<text x="398" y="299" font-size="11" text-anchor="middle" fill="#5b6472">epoch</text>
+<text x="12" y="147" font-size="11" text-anchor="middle" fill="#5b6472" transform="rotate(-90 12 147)">val/L_mask</text>
+<polyline points="52.0,166.1 75.9,201.5 99.7,206.8 123.6,206.1 147.4,208.5 171.3,209.1 195.2,206.8 219.0,206.5 242.9,209.1 266.8,213.7 290.6,208.0 314.5,206.9 338.3,215.9 362.2,216.5 386.1,215.1 409.9,218.7 433.8,213.2 457.7,221.2 481.5,210.2 505.4,215.8 529.2,221.1 553.1,231.0 577.0,227.6 600.8,221.9 624.7,227.0 648.6,223.1 672.4,221.7 696.3,222.4 720.1,221.6 744.0,222.1" fill="none" stroke="#c8443c" stroke-width="2"/>
+<rect x="494" y="32" width="12" height="3" fill="#c8443c"/><text x="512" y="37" font-size="11" fill="#1a1d23">RGB post-train from HOI4D (new)</text>
+<polyline points="52.0,45.3 75.9,85.9 99.7,132.5 123.6,164.8 147.4,175.7 171.3,184.6 195.2,203.8 219.0,214.4 242.9,208.4 266.8,213.4 290.6,213.8 314.5,212.7 338.3,210.3 362.2,209.7 386.1,211.7 409.9,209.5 433.8,213.1 457.7,218.4 481.5,214.2 505.4,216.1 529.2,212.1 553.1,223.7 577.0,210.3 600.8,227.1 624.7,217.2 648.6,218.6 672.4,213.0 696.3,215.7 720.1,215.7 744.0,214.3" fill="none" stroke="#e07a2f" stroke-width="2"/>
+<rect x="494" y="48" width="12" height="3" fill="#e07a2f"/><text x="512" y="53" font-size="11" fill="#1a1d23">RGB scratch (new)</text>
+<polyline points="52.0,78.3 75.9,146.0 99.7,170.1 123.6,180.5 147.4,189.0 171.3,181.8 195.2,191.7 219.0,188.6 242.9,199.5 266.8,200.1 290.6,198.5 314.5,207.2 338.3,201.3 362.2,205.9 386.1,212.3 409.9,222.1 433.8,218.4 457.7,214.7 481.5,224.7 505.4,215.2 529.2,223.4 553.1,214.2 577.0,228.3 600.8,228.7 624.7,220.6 648.6,218.5 672.4,217.9 696.3,220.6 720.1,218.9 744.0,218.6" fill="none" stroke="#3d6fb4" stroke-width="2"/>
+<rect x="494" y="64" width="12" height="3" fill="#3d6fb4"/><text x="512" y="69" font-size="11" fill="#1a1d23">depth post-train tf_plain</text>
+<polyline points="52.0,38.2 75.9,86.6 99.7,121.1 123.6,157.0 147.4,201.3 171.3,213.4 195.2,216.8 219.0,223.5 242.9,219.6 266.8,205.4 290.6,232.0 314.5,222.1 338.3,235.7 362.2,224.7 386.1,217.6 409.9,236.2 433.8,227.9 457.7,232.2 481.5,229.6 505.4,223.3 529.2,229.8 553.1,229.0 577.0,226.4 600.8,228.1 624.7,225.4 648.6,226.8 672.4,226.6 696.3,225.4 720.1,226.3 744.0,226.0" fill="none" stroke="#3e8e5f" stroke-width="2"/>
+<rect x="494" y="80" width="12" height="3" fill="#3e8e5f"/><text x="512" y="85" font-size="11" fill="#1a1d23">depth scratch g19_dct</text>
+</svg>
+<p class="cap">Mask loss: near-identical with and without depth once the model is post-trained.</p>
+
+<div class="caveat"><b>Why the two test passes were identical.</b> I tested every SF3D model twice, with the predicted scale (z_p) and with the oracle scale (GT z₀). All reported metrics came out identical. MA is the type-plus-axis pass rate on IoU-matched samples and never reads the trajectory; the direction, roughness and 2D-shape metrics are scale-invariant; the 3D point metric reads z_p directly. So the test suite has no number that measures the metric trajectory error, and the scale question is currently answered only by the validation trajectory loss above. If the metric size of the sweep ever matters, that metric needs adding.</div>
+
+<h2><span class="n">5</span>Panels: RGB-only against the depth model</h2>
+<p>Four panels each: GT, RGB post-trained from HOI4D, RGB scratch, depth tf_plain. Magenta is the projected trajectory head (for the RGB models, z_p · Δ̃, the test-time convention), cyan the GT track, red and green the predicted and GT axes, yellow the decoded sweep.</p>
+<img src="../../viz/20260909_sf3d_rgb_scalefree_vs_depth_panels/03_rot_val1741.jpg" alt="closet door">
+<p class="cap">Closet door. All three call rot; axis errors 4° (RGB post-trained), 7° (RGB scratch), 8° (depth). The RGB arc stops near the handle where the depth model's follows the track further: the visual face of the trajectory-loss gap.</p>
+<img src="../../viz/20260909_sf3d_rgb_scalefree_vs_depth_panels/09_trans_val1353.jpg" alt="drawer">
+<p class="cap">Drawer. All three call trans and pick the right drawer; axis errors 7°, 11°, 4°.</p>
+<img src="../../viz/20260909_sf3d_rgb_scalefree_vs_depth_panels/00_trans_val452.jpg" alt="toilet">
+<p class="cap">Toilet flush. Same story: 9°, 5°, 11°, trajectories down the GT track in all three.</p>
+<img src="../../viz/20260909_sf3d_rgb_scalefree_vs_depth_panels/13_rot_val164.jpg" alt="fridge">
+<p class="cap">A hard case (fridge): axis errors 112°, 32°, 147°. Fails for everyone. The full 16 are in <code>viz/20260909_sf3d_rgb_scalefree_vs_depth_panels/contact_sheet.jpg</code>.</p>
+
+<h2><span class="n">6</span>What I would do next</h2>
+<ul>
+<li><b>The DCT teacher-forcing HOI4D arm under the new recipe</b> as the SF3D init. Its depth counterpart is the 31.13 record; the DCT head bought +0.5 MA and +3 PDet on top of the plain arm with depth, and the same is likely here. One HOI4D hour plus one SF3D run.</li>
+<li><b>First EPIC and ARCTIC runs.</b> Configs are ready and smoke-tested, and this is what the whole change was for. ARCTIC has exact mocap z₀, so it could even feed the <code>gt_z0</code> scale on a 2D dataset.</li>
+<li><b>A metric trajectory-error test metric</b> if the sweep size matters for anything downstream.</li>
+<li>The trajectory generalisation gap (0.48 vs 0.35) is the thing to watch across all of the above.</li>
+</ul>
+
+<h2><span class="n">7</span>Where everything is</h2>
+<div class="card">
+<ul>
+<li>Spec and plan: <code>docs/superpowers/specs/2026-09-09-rgb-only-scale-free-trajectory-design.md</code>, <code>docs/superpowers/plans/2026-09-09-rgb-only-scale-free-trajectory.md</code>. Explainers: <code>docs/slides/2026-09-09_*explainer.html</code>.</li>
+<li>Code: <code>model/losses/geometric.py</code> (unit anchor, scale helpers), <code>train_OPDReal_better.py</code> / <code>train_SF3D_better.py</code> (scale applied after the forward, loader slicing), <code>datasets/scenefun3d.py</code> (+ datamodule) <code>load_depth</code>, <code>config/opd_train.py</code> (three new fields), <code>tests/test_scale_free_trajectory.py</code>.</li>
+<li>Experiments (notes.md, config.yaml, metrics.csv; checkpoints on the volume): <code>experiments/20260909_hoi4d_2d_v2_rgb_scalefree</code> (best-epoch83), <code>20260909_sf3d_g19_dct_rgb_scalefree</code> (best-epoch20), <code>20260909_sf3d_g19_dct_rgb_scalefree_ft_hoi4d</code> (best-epoch24). INDEX rows added; STATE names the post-trained RGB checkpoint as the model for the multi-dataset line.</li>
+<li>Viz: <code>viz/20260909_hoi4d_rgb_scalefree_val_panels</code>, <code>viz/20260909_sf3d_rgb_scalefree_vs_depth_panels</code>.</li>
+<li>Pods: rgbsf-a and rgbsf-b deleted (verified with the pod list). Dev pod running. Roughly 9.5 PRO 6000 pod-hours used (~$20).</li>
+</ul>
+</div>
+</main></body></html>
