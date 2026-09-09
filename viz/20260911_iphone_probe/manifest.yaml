@@ -1,0 +1,22 @@
+command: tools/predict_image.py --model joint4_dct config/sf3d_train_runpod_g19_dct_rgb_scalefree.yaml
+  experiments/20260910_joint4_dct_rgb_scalefree/checkpoints/best-epoch12-sf3dval0.9688.ckpt
+  --case viz/20260911_iphone_probe/inputs/IMG_0877.jpg open closet --case viz/20260911_iphone_probe/inputs/IMG_0876.jpg
+  open door --case viz/20260911_iphone_probe/inputs/IMG_0875.jpg push chair forward
+  --case viz/20260911_iphone_probe/inputs/IMG_0874.jpg close laptop --out viz/20260911_iphone_probe
+  --f35 26
+tool_commit: 726e4a3
+generated: '2026-09-09T23:03:04+00:00'
+models:
+- name: joint4_dct
+  config: config/sf3d_train_runpod_g19_dct_rgb_scalefree.yaml
+  ckpt: experiments/20260910_joint4_dct_rgb_scalefree/checkpoints/best-epoch12-sf3dval0.9688.ckpt
+cases:
+- image: viz/20260911_iphone_probe/inputs/IMG_0877.jpg
+  prompt: open closet
+- image: viz/20260911_iphone_probe/inputs/IMG_0876.jpg
+  prompt: open door
+- image: viz/20260911_iphone_probe/inputs/IMG_0875.jpg
+  prompt: push chair forward
+- image: viz/20260911_iphone_probe/inputs/IMG_0874.jpg
+  prompt: close laptop
+f35: 26.0
