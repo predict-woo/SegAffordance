@@ -86,6 +86,32 @@ def test_repeat_duplicates_only_the_train_subset(monkeypatch):
     assert len(dm3.val_dataset) == len(dm1.val_dataset)
 
 
+def test_per_source_hflip_override_wraps_each_source_separately(monkeypatch):
+    from datasets.augment import AugmentSpec, AugmentedDataset
+    specs = [
+        SourceSpec(name="hoi4d", train_data_dir="/x/hoi4d", hflip_p=0.0),
+        SourceSpec(name="epic", train_data_dir="/x/epic"),
+    ]
+    monkeypatch.setattr(
+        MultiSourceDataModule, "_build_source",
+        lambda self, spec: _Stub(spec.name, 10, 3),
+    )
+    dm = MultiSourceDataModule(
+        sources=specs, val_split_ratio=0.2, input_size=(64, 64), batch_size_train=4,
+        batch_size_val=4, num_workers_train=0, num_workers_val=0, manual_seed=1,
+        augment=AugmentSpec(hflip_p=0.5), epoch_multiplier=2,
+    )
+    dm.setup("fit")
+    parts = dm.train_dataset.datasets  # epoch_multiplier=2 -> [concat, concat]
+    assert len(parts) == 2 and parts[0] is parts[1]
+    per_source = parts[0].datasets
+    assert all(isinstance(p, AugmentedDataset) for p in per_source)
+    assert per_source[0].spec.hflip_p == 0.0 and per_source[1].spec.hflip_p == 0.5
+    assert per_source[0].spec.crop_p == per_source[1].spec.crop_p  # only the flip differs
+    # val is never augmented
+    assert not any(isinstance(p, AugmentedDataset) for p in dm.val_dataset.datasets)
+
+
 def test_concat_and_loader_helpers():
     ds = [torch.utils.data.TensorDataset(torch.arange(3)), torch.utils.data.TensorDataset(torch.arange(3, 5))]
     cat = concat_with_repeats(ds, [2, 1])

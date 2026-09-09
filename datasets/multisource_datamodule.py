@@ -30,7 +30,7 @@ Config shape (LightningCLI, see config/multi3_rgb_scalefree.yaml):
 Entry point: train_multi_better.py (same SF3DTrainingModule; only the
 datamodule class differs — LightningCLI binds it at import time).
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import List, Optional, Tuple
 
 import pytorch_lightning as pl
@@ -56,6 +56,11 @@ class SourceSpec:
     key_cache_path: Optional[str] = None
     lmdb_path: Optional[str] = None
     repeat: int = 1
+    # Per-source override of the augmentation's horizontal-flip probability
+    # (None = the shared data.augment value). HOI4D descriptions say
+    # "right drawer" etc. (86 of 3,084 records, 2026-09-09 audit), so it
+    # runs with 0.0; EPIC/ARCTIC texts carry no orientation words.
+    hflip_p: Optional[float] = None
 
 
 def seeded_train_loader(
@@ -167,16 +172,23 @@ class MultiSourceDataModule(pl.LightningDataModule):
                 ds, val_split_ratio=self.val_split_ratio, manual_seed=self.manual_seed,
             )
             self.source_sizes[spec.name] = (len(tr), len(va))
+            aug_note = "off"
+            if self.augment is not None and self.augment.enabled:
+                # augmentation is applied PER SOURCE (train only) so a source
+                # can override parts of it — e.g. no mirror on HOI4D
+                src_aug = self.augment
+                if spec.hflip_p is not None:
+                    src_aug = replace(src_aug, hflip_p=spec.hflip_p)
+                tr = AugmentedDataset(tr, src_aug)
+                aug_note = f"on (hflip_p={src_aug.hflip_p})"
             print(
                 f"[multisource] {spec.name}: {len(ds)} records -> train {len(tr)}"
-                f"{' x' + str(spec.repeat) if spec.repeat > 1 else ''}, val {len(va)}"
+                f"{' x' + str(spec.repeat) if spec.repeat > 1 else ''}, val {len(va)}, augment {aug_note}"
             )
             train_parts.append(tr)
             val_parts.append(va)
             repeats.append(spec.repeat)
         train = concat_with_repeats(train_parts, repeats)
-        if self.augment is not None and self.augment.enabled:
-            train = AugmentedDataset(train, self.augment)
         if self.epoch_multiplier > 1:
             train = ConcatDataset([train] * self.epoch_multiplier)
         self.train_dataset = train

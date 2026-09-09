@@ -182,6 +182,7 @@ data:
       frame_cache_path: "/workspace/datasets/hoi4d_processed_2d_v2/frames.lmdb"
       key_cache_path: "/workspace/cache/hoi4d_2d_keys_v2.pkl"
       repeat: 1
+      hflip_p: 0.0                # NO mirror on HOI4D: 86 descriptions say "right drawer" etc. (user decision 2026-09-09)
     - name: epic
       train_data_dir: "/workspace/datasets/epic_processed_2d"
       frame_cache_path: "/workspace/datasets/epic_processed_2d/frames.lmdb"
@@ -208,8 +209,8 @@ data:
     blur_p: 0.15
     noise_p: 0.15
     noise_std: 6.0
-    hflip_p: 0.5
-    flip_text: "swap"           # or "skip": never flip a sample whose text says left/right
+    hflip_p: 0.5                # EPIC + ARCTIC (no orientation words in their texts); HOI4D overrides to 0.0 above
+    flip_text: "skip"           # belt and braces: never flip a sample whose text says left/right
     crop_p: 0.7
     scale_min: 0.6
     keep_margin: 0.03

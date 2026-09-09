@@ -344,7 +344,10 @@ views per record per epoch. Not included: in-plane rotation. 11 unit
 tests (projection identity under flip/crop, involution, axis convention,
 must-keep box, text swap, determinism) + `viz/20260909_augment_check`
 (real records; ARCTIC's projected 3D track stays on the 2D track after
-zoom and flip). `config/multi3_rgb_scalefree.yaml` has it ON.
+zoom and flip). `config/multi3_rgb_scalefree.yaml` has it ON with per-source `hflip_p`:
+HOI4D 0.0 (user: no mirror there — 86 texts say "right drawer" etc.),
+EPIC/ARCTIC 0.5; `flip_text: skip` as a second guard. The SF3D
+datamodule is NOT touched (user: augmentation is for the 2D sources only).
 **Next candidates:** the DCT teacher-forcing HOI4D arm under the new
 recipe as the SF3D init (depth counterpart = the 31.13 record); EPIC and
 ARCTIC first runs (`config/{epic,arctic}_v1_rgb_scalefree.yaml`, smoke-
