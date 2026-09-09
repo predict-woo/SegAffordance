@@ -354,7 +354,14 @@ pod C `segaffordance-rgbsf-c` (`run_multi3_chain.sh`, log
 a pod-local config copy): HOI4D + EPIC + ARCTIC, plain-TF RGB-only
 scale-free recipe, augmentation x8 = 41,288 samples/epoch (user: "40000
 samples"), 30 ep, milestones [24, 28]. Then test on the 841-record val
-union. Watcher deletes the pod on CHAIN_DONE — VERIFY with the pod list.
+union. **Phase 2 chained on the same pod** (`run_multi3_post_chain.sh`,
+log `multi3_post_chain.log`, started 12:09 local, waits for
+MULTI3_TEST_DONE): `20260909_sf3d_plain_rgb_scalefree_ft_multi3` = SF3D
+post-training with the PLAIN head (`trajectory_dct_coeffs 0`, so the multi3
+checkpoint loads 1:1 — user, after learning the DCT post-training
+re-initialised the plain readout's last layer), then test pred_z_p +
+gt_z0. The watcher deletes the pod on CHAIN2_DONE (~19:30 local) — VERIFY
+with the pod list.
 **Next candidates:** the DCT teacher-forcing HOI4D arm under the new
 recipe as the SF3D init (depth counterpart = the 31.13 record); EPIC and
 ARCTIC first runs (`config/{epic,arctic}_v1_rgb_scalefree.yaml`, smoke-
