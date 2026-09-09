@@ -10,7 +10,7 @@
 seed_everything: 42
 
 model:
-  finetune_from_path: "/workspace/SegAffordance/experiments/20260909_hoi4d_2d_v2_rgb_scalefree/checkpoints/FILL_IN_BEST.ckpt"   # HOI4D v2 rgb_scalefree arm (plain head, RGB-only, unit anchor) -> full-SF3D 3D-DCT post-training (traj head output layer re-init, as in the tf_plain run)
+  finetune_from_path: "/workspace/SegAffordance/experiments/20260909_hoi4d_2d_v2_rgb_scalefree/checkpoints/best-epoch83-valloss0.2993.ckpt"   # HOI4D v2 rgb_scalefree arm (plain head, RGB-only, unit anchor) -> full-SF3D 3D-DCT post-training (traj head output layer re-init, as in the tf_plain run)
   # gen-7: CLIP FROZEN (user decision). Watch item: the gen-5 frozen run
   # had the mask regression, and gen-7 leans on masks harder than any
   # generation (heatmaps share the projector with the mask channel).
