@@ -3,7 +3,7 @@
 **The single source of truth for "where is this project right now".**
 Update this document at every experiment wrap, decision, or infra change —
 it is the first thing a fresh/compacted session should read. Keep entries
-terse; details live in the linked specs/notes. Last update: 2026-09-07.
+terse; details live in the linked specs/notes. Last update: 2026-09-09.
 
 ## COMPACTION SNAPSHOT (2026-08-28) — read this first after context loss
 
@@ -68,6 +68,7 @@ silent mid-run deaths with truncated ~4.35G ckpts = volume quota.
 | role | experiment | checkpoint |
 |---|---|---|
 | **best MA (3D), single seed** | 20260907_sf3d_g19_dct_ft_hoi4d_tf | best-epoch25-valloss0.9794 — MA **31.13**/signed 30.80 + PDet **23.27** + roughness 0.0079 (records); g19_dct recipe initialized from HOI4D v2 teacher_forcing; axis 28.0°/matched 19.7°, type 91.9 (worse than cf_h1only) |
+| **best RGB-ONLY (no depth anywhere), scale-free head** | 20260909_sf3d_g19_dct_rgb_scalefree_ft_hoi4d | best-epoch24-valloss1.0483 — MA 30.07 / PDet 22.35 / mIoU 0.2660 / axis 26.9°; g19_dct recipe from the RGB-only HOI4D arm (20260909_hoi4d_2d_v2_rgb_scalefree best-epoch83). THE model for the multi-dataset line (user: no depth) |
 | best articulation (3D), all-round | 20260828_sf3d_cf_h1only | best-epoch29-valloss1.1303 — MA 30.64/signed 30.11 + all-axis 24.5° + flips-all 9.8, NO trajectory head (H1 quadratic + axis anchor only) |
 | **best origin** | 20260828_sf3d_closedform | best-epoch22-valloss1.1792 — origin 0.250 (record), MA 29.19 with NO trajectory head (closed-form pos+der quadratics) |
 | prev best articulation | 20260821_sf3d_g19_fdiff | best-epoch29-valloss1.1780 — MA 29.9, traj_dir 96.1/0.819 (traj records stand) |
@@ -289,9 +290,40 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
-## IN FLIGHT 2026-09-09 ~02:00 local: RGB-only + scale-free trajectory head — code LANDED, fresh chain launched (user asleep)
+## DONE 2026-09-09 ~06:30 local: RGB-only + scale-free trajectory head — chain complete, NO pods running
 
-User decisions (2026-09-09): NO depth anywhere (all datasets, `use_depth:
+**Results (all single seed; details in the three notes.md + INDEX):**
+
+| run | depth | held-out / test |
+|---|---|---|
+| `20260909_hoi4d_2d_v2_rgb_scalefree` (HOI4D, plain TF recipe, 48 min) | no | mIoU **0.733** / PDet **88.7** / point 0.0147 / proj-2D shape **0.0378** — beats its depth counterpart tf_plain (0.708 / 86.7 / 0.0157 / 0.0413) on every metric, ties the best grid cell |
+| `20260909_sf3d_g19_dct_rgb_scalefree` (SF3D scratch, 3.6 h) | no | MA 24.88 / PDet 17.39 / mIoU 0.2425 / axis 29.6 / origin 0.324 vs depth scratch 25.98 / 21.72 / 0.2685 / 25.3 / 0.276 — depth is worth ~1 MA, 4 PDet, 4°, 5 cm, and a third of val L_trajectory (0.35→0.47) from scratch |
+| `20260909_sf3d_g19_dct_rgb_scalefree_ft_hoi4d` (SF3D post-train from the RGB HOI4D arm, 3.6 h) | no | MA **30.07** / PDet **22.35** / mIoU **0.2660** / axis **26.9** / origin 0.293 vs depth tf_plain init 30.62 / 20.03 / 0.2555 / 28.0 / 0.286 — same MA within noise, better PDet/mIoU/axis; the HOI4D transfer fully survives (+5.2 MA over the RGB scratch). Only clear cost: val L_trajectory plateaus at 0.48 (depth: 0.35) from epoch 3 — metric-curve generalization, invisible to the reported test metrics |
+
+Verdicts: (a) on the 2D datasets depth was worth nothing — the unit
+anchor is the same projection loss with the unknown scale factored out
+and no zero-depth rows dropped; (b) on SF3D depth is worth ~1 MA / 4 PDet
+from scratch but the HOI4D init recovers it on masks/detection; (c) the
+trajectory term generalizes worse without depth (val 0.48 vs 0.35) — the
+thing to watch. Both test passes (pred_z_p vs gt_z0 oracle scale) are
+identical on every reported metric: MA is the type+axis pass rate, the
+trajectory metrics are scale-invariant, and there is NO metric-trajectory-
+error test metric — add one if the scale ever matters. Panels:
+`viz/20260909_hoi4d_rgb_scalefree_val_panels` (16/16 masks right,
+trajectories in GT direction, plain-head jitter) and
+`viz/20260909_sf3d_rgb_scalefree_vs_depth_panels` (rgb_ft | rgb_scratch |
+depth_tf_plain). Pods rgbsf-a/b deleted by the watchers (verified).
+**Ops gotcha (new):** a `fast_dev_run` smoke on the dev pod WRITES
+`experiments/<id>/checkpoints/last.ckpt` (3.7 GB) — `sweep_queue.sh`
+then SKIPS the arm as "already done" (bit both pods on the first launch;
+deleted the four smoke ckpts and relaunched). Smoke into a scratch
+experiment dir, or rm the ckpt before launching.
+**Next candidates:** the DCT teacher-forcing HOI4D arm under the new
+recipe as the SF3D init (depth counterpart = the 31.13 record); EPIC and
+ARCTIC first runs (`config/{epic,arctic}_v1_rgb_scalefree.yaml`, smoke-
+tested); ARCTIC's exact mocap z0 could feed `gt_z0` on a 2D dataset.
+
+Code/design record (kept from the in-flight entry): user decisions (2026-09-09): NO depth anywhere (all datasets, `use_depth:
 false` + `load_depth: false`, no partial-depth/dropout modes); the 2D path
 does not learn scale. Spec `docs/superpowers/specs/2026-09-09-rgb-only-
 scale-free-trajectory-design.md`, plan in docs/superpowers/plans/,
