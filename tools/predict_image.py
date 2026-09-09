@@ -42,6 +42,55 @@ from viz_manifest import write_manifest  # noqa: E402
 GREEN = (120, 255, 120)
 
 
+def draw_prediction(bgr, out, K_norm, name, ray_len=0.5, extra_lines=()):
+    """Draw one model's prediction on a copy of `bgr` (H, W, 3). Returns the panel."""
+    H, W = bgr.shape[:2]
+    p = bgr.copy()
+    pm = torch.sigmoid(out.mask_logits)[0, 0].cpu()
+    pm = torch.nn.functional.interpolate(pm[None, None], size=(H, W), mode="bilinear")[0, 0].numpy()
+    p = overlay_mask(p, (pm > 0.5).astype(np.float32), (0, 0, 230))
+    lines = [name]
+    anchor = out.point_3d_pred[0:1].cpu().float() if out.point_3d_pred is not None else None
+    if out.point_uv is not None:
+        pu = out.point_uv[0].cpu().float()
+        cv2.circle(p, (int(pu[0] * W), int(pu[1] * H)), 10, (255, 255, 255), 2, cv2.LINE_AA)
+    cls_type, p_rev = "n/a", float("nan")
+    if out.motion_type_logits is not None:
+        p_rev = float(torch.softmax(out.motion_type_logits[0].float(), -1)[1])
+        cls_type = "rot" if p_rev > 0.5 else "trans"
+    if anchor is not None and out.trajectory_pred is not None:
+        traj_abs = anchor.unsqueeze(1) + out.trajectory_pred[0:1].cpu().float()
+        tv = (traj_abs[0, :, 2] > 0.05).numpy()
+        tuv = project_points(K_norm, traj_abs)[0].clamp(-2, 3).numpy()
+        p = draw_polyline_norm(p, tuv, tv, GREEN, thickness=2)
+        p = draw_points_norm(p, tuv, tv, GREEN, radius=3)
+    d = None
+    if anchor is not None and out.motion_pred is not None:
+        d = out.motion_pred[0].cpu().float().numpy()
+        d = d / max(float(np.linalg.norm(d)), 1e-8)
+        a3 = anchor[0].numpy()
+        if cls_type == "rot" and out.origin_pred is not None:
+            q3 = out.origin_pred[0].cpu().float().numpy()
+            c3 = q3 + np.dot(a3 - q3, d) * d
+            r_vec = a3 - c3
+            if float(np.linalg.norm(r_vec)) > 1e-4:
+                th = np.linspace(0.0, math.pi / 2.0, 48)
+                arc = c3[None] + np.cos(th)[:, None] * r_vec[None] + np.sin(th)[:, None] * np.cross(d, r_vec)[None]
+                p = draw_polyline_norm(p, project_points(K_norm, torch.from_numpy(arc).float()[None])[0].clamp(-2, 3).numpy(),
+                                       arc[:, 2] > 0.05, (0, 230, 230), thickness=2)
+            p = draw_axis_3d(p, K_norm, q3, d, a3, (0, 0, 255), t0=-ray_len, t1=ray_len, thickness=3)
+            lines.append(f"rot  p_rev={p_rev:.2f}  r={float(np.linalg.norm(r_vec)):.2f}m")
+        else:
+            p = draw_axis_3d(p, K_norm, a3, d, a3, (0, 0, 255), t0=0.0, t1=ray_len, thickness=3)
+            lines.append(f"trans  p_rev={p_rev:.2f}")
+        lines.append(f"axis=({d[0]:+.2f},{d[1]:+.2f},{d[2]:+.2f})  z_p={float(anchor[0, 2]):.2f}m")
+    if out.origin_uv is not None:
+        ou = out.origin_uv[0].cpu().float()
+        cv2.circle(p, (int(ou[0] * W), int(ou[1] * H)), 7, (0, 0, 255), 2, cv2.LINE_AA)
+    lines.extend(extra_lines)
+    return put_lines(p, lines), cls_type, d
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", nargs=3, action="append", required=True, metavar=("NAME", "CONFIG", "CKPT"))
@@ -88,48 +137,8 @@ def main():
                             None, None, None, None, K_norm.to(device).float())
                 if getattr(mp, "trajectory_scale_free", False):
                     out = apply_trajectory_scale(out, trajectory_scale_factor("pred_z_p", out, None))
-            p = bgr.copy()
-            pm = torch.sigmoid(out.mask_logits)[0, 0].cpu()
-            pm = torch.nn.functional.interpolate(pm[None, None], size=(H, W), mode="bilinear")[0, 0].numpy()
-            p = overlay_mask(p, (pm > 0.5).astype(np.float32), (0, 0, 230))
-            lines = [name]
-            anchor = out.point_3d_pred[0:1].cpu().float() if out.point_3d_pred is not None else None
-            if out.point_uv is not None:
-                pu = out.point_uv[0].cpu().float()
-                cv2.circle(p, (int(pu[0] * W), int(pu[1] * H)), 10, (255, 255, 255), 2, cv2.LINE_AA)
-            cls_type, p_rev = "n/a", float("nan")
-            if out.motion_type_logits is not None:
-                p_rev = float(torch.softmax(out.motion_type_logits[0].float(), -1)[1])
-                cls_type = "rot" if p_rev > 0.5 else "trans"
-            if anchor is not None and out.trajectory_pred is not None:
-                traj_abs = anchor.unsqueeze(1) + out.trajectory_pred[0:1].cpu().float()
-                tv = (traj_abs[0, :, 2] > 0.05).numpy()
-                tuv = project_points(K_norm, traj_abs)[0].clamp(-2, 3).numpy()
-                p = draw_polyline_norm(p, tuv, tv, GREEN, thickness=2)
-                p = draw_points_norm(p, tuv, tv, GREEN, radius=3)
-            if anchor is not None and out.motion_pred is not None:
-                d = out.motion_pred[0].cpu().float().numpy()
-                d = d / max(float(np.linalg.norm(d)), 1e-8)
-                a3 = anchor[0].numpy()
-                if cls_type == "rot" and out.origin_pred is not None:
-                    q3 = out.origin_pred[0].cpu().float().numpy()
-                    c3 = q3 + np.dot(a3 - q3, d) * d
-                    r_vec = a3 - c3
-                    if float(np.linalg.norm(r_vec)) > 1e-4:
-                        th = np.linspace(0.0, math.pi / 2.0, 48)
-                        arc = c3[None] + np.cos(th)[:, None] * r_vec[None] + np.sin(th)[:, None] * np.cross(d, r_vec)[None]
-                        p = draw_polyline_norm(p, project_points(K_norm, torch.from_numpy(arc).float()[None])[0].clamp(-2, 3).numpy(),
-                                               arc[:, 2] > 0.05, (0, 230, 230), thickness=2)
-                    p = draw_axis_3d(p, K_norm, q3, d, a3, (0, 0, 255), t0=-a.ray_len, t1=a.ray_len, thickness=3)
-                    lines.append(f"rot  p_rev={p_rev:.2f}  r={float(np.linalg.norm(r_vec)):.2f}m")
-                else:
-                    p = draw_axis_3d(p, K_norm, a3, d, a3, (0, 0, 255), t0=0.0, t1=a.ray_len, thickness=3)
-                    lines.append(f"trans  p_rev={p_rev:.2f}")
-                lines.append(f"axis=({d[0]:+.2f},{d[1]:+.2f},{d[2]:+.2f})  z_p={float(anchor[0, 2]):.2f}m")
-            if out.origin_uv is not None:
-                ou = out.origin_uv[0].cpu().float()
-                cv2.circle(p, (int(ou[0] * W), int(ou[1] * H)), 7, (0, 0, 255), 2, cv2.LINE_AA)
-            panels.append(put_lines(p, lines))
+            panel, _, _ = draw_prediction(bgr, out, K_norm, name, a.ray_len)
+            panels.append(panel)
         stem = os.path.splitext(os.path.basename(path))[0]
         cv2.imwrite(f"{a.out}/{i:02d}_{stem}.png", np.hstack(panels))
         print("wrote", i, stem, "|", prompt, "|", W, "x", H)
