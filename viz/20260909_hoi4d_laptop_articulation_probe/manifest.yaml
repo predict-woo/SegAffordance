@@ -1,0 +1,14 @@
+command: tools/hoi4d_predict_articulation.py --model rgb_ft_hoi4d config/sf3d_train_runpod_g19_dct_rgb_scalefree_ft_hoi4d.yaml
+  experiments/20260909_sf3d_g19_dct_rgb_scalefree_ft_hoi4d/checkpoints/best-epoch24-valloss1.0483.ckpt
+  --model depth_tf_plain config/sf3d_train_runpod_g19_dct_ft_hoi4d_tf_plain.yaml experiments/20260907_sf3d_g19_dct_ft_hoi4d_tf_plain/checkpoints/best-epoch25-valloss0.9768.ckpt
+  --out viz/20260909_hoi4d_laptop_articulation_probe --num 8 --category C3 --split
+  val
+tool_commit: 5e41357
+generated: '2026-09-09T09:32:21+00:00'
+models:
+- name: rgb_ft_hoi4d
+  config: config/sf3d_train_runpod_g19_dct_rgb_scalefree_ft_hoi4d.yaml
+  ckpt: experiments/20260909_sf3d_g19_dct_rgb_scalefree_ft_hoi4d/checkpoints/best-epoch24-valloss1.0483.ckpt
+- name: depth_tf_plain
+  config: config/sf3d_train_runpod_g19_dct_ft_hoi4d_tf_plain.yaml
+  ckpt: experiments/20260907_sf3d_g19_dct_ft_hoi4d_tf_plain/checkpoints/best-epoch25-valloss0.9768.ckpt
