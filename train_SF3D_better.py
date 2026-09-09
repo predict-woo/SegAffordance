@@ -641,11 +641,15 @@ class SF3DTrainingModule(OPDRealTrainingModule):
                         _trajectory_2d_extras[0][i:i + 1, 0, :].float()
                         / _img_size[i:i + 1].float().clamp(min=1.0)
                     ).to(_dev)
-                if _traj_scale is not None:
+                if getattr(self.model_params, "trajectory_scale_free", False):
                     # Scale-free: lift the anchor with the scale applied to
                     # the curve (projection is invariant to the joint rescale,
-                    # so this equals the unit-anchor projection of Δ̃).
-                    _z = _traj_scale[i:i + 1].to(_dev)
+                    # so this equals the unit-anchor projection of Δ̃); with
+                    # scale "unit" (2D datasets) the anchor sits at depth 1.
+                    _z = (
+                        _traj_scale[i:i + 1].to(_dev) if _traj_scale is not None
+                        else torch.ones(1, device=_dev)
+                    )
                 else:
                     _grid = (_uv * 2.0 - 1.0).view(1, 1, 1, 2)
                     _z = F.grid_sample(
