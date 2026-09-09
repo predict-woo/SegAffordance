@@ -16,12 +16,17 @@ for arm in "$@"; do
   if [ -f "experiments/${exp}/checkpoints/last.ckpt" ]; then
     echo "=== SKIP ${exp} (last.ckpt exists) $(date)"; continue
   fi
+  # Multi-source configs (config/multi*.yaml): several LMDBs, read from the
+  # volume directly (the hand datasets are small) via train_multi_better.py;
+  # no /dev/shm staging and no lmdb_path overrides.
+  script=train_SF3D_better.py; extra="--data.lmdb_path /dev/shm/data.lmdb --data.frame_cache_path /dev/shm/frames.lmdb"
+  case "$(basename "$cfg")" in multi*) script=train_multi_better.py; extra="";; esac
   droot=$(grep -E '^\s*train_data_dir:' "$cfg" | head -1 | sed 's/.*"\(.*\)".*/\1/')
   fcache=$(grep -E '^\s*frame_cache_path:' "$cfg" | head -1 | sed 's/.*"\(.*\)".*/\1/')
   [ -z "$fcache" ] && fcache="${droot}/frames.lmdb"
   # stage the LMDBs this config names into /dev/shm (re-stage if the arm
   # points elsewhere than the previous one)
-  if [ ! -f /dev/shm/data.lmdb/data.mdb ] || [ "$(cat /dev/shm/.staged 2>/dev/null)" != "$droot|$fcache" ]; then
+  if [ -n "$extra" ] && { [ ! -f /dev/shm/data.lmdb/data.mdb ] || [ "$(cat /dev/shm/.staged 2>/dev/null)" != "$droot|$fcache" ]; }; then
     rm -rf /dev/shm/data.lmdb /dev/shm/frames.lmdb
     mkdir -p /dev/shm/data.lmdb /dev/shm/frames.lmdb
     cp "${droot}/data.lmdb/data.mdb" /dev/shm/data.lmdb/
@@ -30,8 +35,8 @@ for arm in "$@"; do
   fi
   mkdir -p "experiments/${exp}/logs" "experiments/${exp}/checkpoints"
   echo "=== START ${exp} ${cfg} $(date)"
-  HF_HOME=/root/hfcache HF_HUB_OFFLINE=1 /opt/venv/bin/python train_SF3D_better.py fit \
-    --config "$cfg" --data.lmdb_path /dev/shm/data.lmdb --data.frame_cache_path /dev/shm/frames.lmdb \
+  HF_HOME=/root/hfcache HF_HUB_OFFLINE=1 /opt/venv/bin/python $script fit \
+    --config "$cfg" $extra \
     > "experiments/${exp}/logs/train.log" 2>&1
   echo "=== END ${exp} exit=$? $(date)"
   # Keep ONLY the best checkpoint: 4.3 GB per file, and 7 arms x (3 best +

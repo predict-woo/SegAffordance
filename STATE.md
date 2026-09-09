@@ -318,6 +318,19 @@ depth_tf_plain). Pods rgbsf-a/b deleted by the watchers (verified).
 then SKIPS the arm as "already done" (bit both pods on the first launch;
 deleted the four smoke ckpts and relaunched). Smoke into a scratch
 experiment dir, or rm the ckpt before launching.
+**Multi-source datamodule LANDED (2026-09-09 ~07:30):**
+`datasets/multisource_datamodule.py` (`MultiSourceDataModule`, one
+`SF3DDataset` per source, per-source scene split with the shared seed,
+train parts concatenated with optional per-source `repeat`, training
+loader shuffled by a generator seeded with `manual_seed` so the
+interleaving is reproducible; val/test = union of the val splits), entry
+`train_multi_better.py`, config `config/multi3_rgb_scalefree.yaml` (HOI4D
+2625 + EPIC 306 + ARCTIC 2230 = 5,161 train / 841 val; the HOI4D
+rgb_scalefree recipe, 100 ep), `sweep_queue.sh` routes `multi*` configs to
+the new entry point without /dev/shm staging. 4 unit tests + fast_dev_run
+smoke green. NOT trained yet (experiment dir `20260909_multi3_rgb_scalefree`
+reserved). EPIC is 6% of an epoch at repeat 1 — raise `repeat` if it
+should count more.
 **Next candidates:** the DCT teacher-forcing HOI4D arm under the new
 recipe as the SF3D init (depth counterpart = the 31.13 record); EPIC and
 ARCTIC first runs (`config/{epic,arctic}_v1_rgb_scalefree.yaml`, smoke-

@@ -1,0 +1,205 @@
+# multi3 `rgb_scalefree` (2026-09-09): HOI4D v2 + EPIC v1 + ARCTIC v1 in ONE seeded shuffle (datasets/multisource_datamodule.py, entry train_multi_better.py) with the RGB-only scale-free 2D recipe of config/hoi4d_v2_rgb_scalefree.yaml (plain teacher-forcing head, unit anchor, no depth). Per-source scene split (15% val, seed 42), val/test = the union of the three val splits.
+# HOI4D v2 sweep arm `e100_lr3e5` — generated 2026-09-06 from hoi4d_train_runpod_2d_dct_v2.yaml: epochs 100, lr 3e-05, milestones [80, 92], batch 64. Data: 3,075 one-per-window records (datasets/hoi4d_processed_2d_v2), ~41 steps/epoch at batch 64.
+# 20260907_hoi4d_2d_v2_teacher_forcing_plain: v1 with VLM-SELECTED moving-part masks
+# (tools/hoi4d_vlm_select_all.py, gpt-5.6-luna effort high, user-approved
+# pilot 2026-09-02; v1's motion-energy pick chose the HAND in ~57% of
+# records). Rebuilt LMDBs at hoi4d_processed_2d_v2; NONE/ERROR windows
+# dropped. Otherwise identical to v1 — the g17_2d_dct recipe FROM SCRATCH on real
+# HOI4D furniture hand-video (spec docs/superpowers/specs/
+# 2026-08-31-hoi4d-2d-training-design.md). Data: 354 C4/C6 sequences ->
+# ~19k samples built by tools/hoi4d_process_2d.py (masks = per-window
+# moving-part 2Dseg; point + 2D trajectory = WiLoR wrist; depth = native
+# FFV1 16-bit; type labels EVAL-ONLY: C4=trans, C6=rot). Losses
+# unchanged from the 2D recipe: projection 0.5 + depth anchor 0.5 +
+# L_pp 0.1 + p_rev prior 0.5; all 3D-GT losses at 0. Filters zeroed:
+# SF3D's radius/edge/mask-area gates don't apply to this data (wrist
+# points may sit near edges legitimately). Scene split = physical
+# object (cam_H_C_N prefix), 15% val.
+seed_everything: 42
+
+model:
+  # gen-7: CLIP FROZEN (user decision). Watch item: the gen-5 frozen run
+  # had the mask regression, and gen-7 leans on masks harder than any
+  # generation (heatmaps share the projector with the mask channel).
+  freeze_backbone: true
+  model_params:
+    backbone: "dinov3"
+    backbone_id: "facebook/dinov3-vitl16-pretrain-lvd1689m"
+    text_source: "dinotxt"
+    dinotxt_weights: "/workspace/cache/dinov3/dinov3_vitl16_dinotxt_vision_head_and_text_encoder-a442d8f5.pth"
+    dinov3_backbone_weights: "/workspace/cache/dinov3/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth"
+    dinov3_repo_dir: "/workspace/cache/dinov3repo"
+    backbone_image_size: 512
+    clip_pretrain: "pretrain/RN50.pt" # unused by the dinov3 backbone
+    word_len: 77                     # Standard CLIP context length
+    use_depth: false                 # RGB-only (2026-09-09 spec): no DepthEncoder, the FPN sees RGB features only
+    # CVAE dropped 2026-08-03: its KLD had collapsed to ~3e-5 (posterior ==
+    # prior, z carried nothing) so it was a deterministic MLP with extra
+    # parameters and loss terms — and the multimodal output it was meant to
+    # protect (trajectory) never went through z anyway. MotionMLP predicts
+    # the same axis + type logits; L_vae degenerates to plain axis MSE.
+    # NOT resumable from use_cvae checkpoints (module names differ).
+    use_cvae: false
+    # gen-6/7: twist head off — articulation comes from the split heads.
+    use_twist_head: false
+    use_motion_head: true          # axis direction head (unchanged from gen-6)
+    split_axis_heads: true         # gen-17: motion_head_rot + motion_head_trans
+    use_motion_type_head: true     # type CE head (unchanged from gen-6)
+    use_motion_type_input: false   # hint removed — the type head predicts
+    motion_type_input_dropout: 0.5 # inert with the hint off
+    motion_type_embedding_dim: 16  # inert with the hint off
+    twist_pitch_free: false        # inert with the twist head off
+    # gen-7: trajectory is emitted as raw ABSOLUTE camera-frame points —
+    # delta-cumsum off (the two gates are mutually exclusive, asserted).
+    trajectory_delta_cumsum: false  # g8: Euler-style RELATIVE direct readout (no cumsum, no absolute)
+    trajectory_absolute: false
+    trajectory_dct_coeffs: 0       # 2D+DCT arm: smooth basis on the 2D-only path
+    trajectory_scale_free: true    # head emits Δ̃ = Δ/z0 (units of the anchor depth); no metric scale on the 2D path
+    twist_num_hypotheses: 1        # WTA off — single articulation output
+    point_prediction_3d: false     # gen-7: 2D heatmap machinery back on
+    use_origin_head: false         # replaced by the origin heatmap + z_q lift
+    use_origin_heatmap: true       # 3rd projector channel + origin_uv + z_q
+    use_origin_local_feature: true # gen-11: z_q gets the hinge-pixel sample
+    predict_point_depth: true      # z_p head — lifts point_uv to 3D
+    pool_with_predicted_mask: false # GT-mask teacher forcing at train
+    depth_feat_channels: [128, 256]
+    fpn_in: [512, 1024, 1024]      # Input channels for FPN from backbone.
+    fpn_out: [256, 512, 1024]        # Output channels for FPN layers.
+    # Decoder (Transformer)
+    num_layers: 3                    # Number of layers in Transformer decoder
+    num_head: 8                      # Number of attention heads
+    dim_ffn: 1024                    # Dimension of feed-forward network in Transformer
+    dropout: 0.2                     # Dropout rate in Transformer
+    intermediate: False              # Whether the Transformer decoder returns intermediate layer outputs
+    # Projector
+    proj_dropout: 0.25
+    # VAE for Motion Prediction
+    vae_latent_dim: 32
+    vae_hidden_dim: 256
+    # motion type
+    num_motion_types: 2
+    # NHWC conv layout + torch.compile: 845 -> 529 ms/batch on the dev GPU
+    # (1.6x; profiled 2026-08-03 — the decode-path convs/upsamples dominate
+    # the step and cuDNN's NCHW->NHWC shuffling was ~5% of GPU time).
+    # Numerically equivalent layout; compile pays ~minutes at first step.
+    channels_last: true
+    compile_model: true
+
+  loss_params:
+    # Loss functions
+    bce_weight: 0.5             # Weight for BCE loss in DiceBCELoss
+    dice_weight: 0.5            # Weight for Dice loss in DiceBCELoss
+    # loss weights
+    mask_weight: 0.5
+    point_map_weight: 0.5          # classical heatmap BCE, back on for gen-7
+    coord_weight: 0.5              # soft-argmax coord loss, back on for gen-7
+    origin_map_weight: 0.0         # 2D-only: q* projection is 3D GT
+    point_3d_weight: 0.0           # 2D-only: traj[0] is 3D GT (z_p tether replaces it)
+    vae_weight: 0.0                # 2D-only: no axis GT — L_pp is the only axis teacher
+    axis_sign_agnostic: false      # SF3D sign is canonical
+    motion_type_weight: 0.0        # 2D-only: labels reserved for eval; p_rev self-organizes
+    origin_weight: 0.0             # 2D-only: q* is 3D GT
+    trajectory_weight: 0.0         # 2D-only: 3D trajectory GT off; projection loss is the data term
+    trajectory_loss_normalized: true
+    geometric_loss: "pred_pred_art"
+    pred_pred_art_weight: 0.1      # calibrated for normalized branches (spec)
+    pred_pred_art_normalized: true   # dimensionless relative-error branches
+    pred_pred_art_radius_floor: 0.15 # 0.10 m expressed in units of anchor depth (z0 ~ 0.7 m on hand data)
+    trajectory_proj_weight: 0.5    # THE data term (normalized, gen-16 lesson in uv-space)
+    trajectory_proj_normalized: true
+    depth_anchor_weight: 0.0       # OFF: no depth map to tether z_p to (RGB-only)
+    trajectory_proj_detach_anchor: true # ARM A: the anchor gradient path severed; normalization KEPT
+    trajectory_proj_anchor: "unit"       # GT 2D first point at depth 1 — scale-free, no depth map, never drops a row
+    depth_anchor_source: "gt_point"     # z_p tether at the GT 2D first point
+    trajectory_scale_source: "unit"     # 2D dataset: no multiply (Δ̃ compared as is)
+    trajectory_proj_energy_floor: 0.0025 # (5% of image)^2 — first-launch ratio spikes fix
+    p_rev_balance_weight: 0.5      # anti-collapse batch prior (first launch: gate died in 1 epoch)
+    p_rev_balance_target: 0.225    # rot fraction of the key set (13297/59174)
+    twist_weight: 0.0              # twist machinery off
+    # loss parameters
+    point_sigma: 16.0              # 8 px at 256 = 16 px at 512 — same physical extent
+    vae_beta: 0.01                 # unused (no CVAE); kept for dataclass
+
+  optimizer_params:
+    lr: 3e-05
+    weight_decay: 0.0001
+    scheduler_milestones: [80, 92]
+    scheduler_gamma: 0.1
+
+  config:
+    log_image_interval_steps: 100
+    input_size: [512, 512]           # Image input size (height, width)
+    enable_wandb: False
+    val_vis_samples: 2
+    manual_seed: 42
+    test_trajectory_scale: "unit"    # 2D dataset: no multiply at test either (3D track is a placeholder here)
+
+trainer:
+  # 16 epochs (~6.8M samples) ≈ 2.8h at the measured rate (665 samples/s
+  # end-to-end on an RTX PRO 6000: fast_pipeline + /dev/shm LMDBs +
+  # channels_last + compile, GPU-bound with 2 ms data wait, profiled
+  # 2026-08-03; was ~272-300 samples/s ≈ 7h before the optimization pass —
+  # the pipeline alone sustains 2,780 samples/s). Extend from last.ckpt if
+  # the curves are still moving; milestones scale with the schedule.
+  max_epochs: 100
+  accelerator: "gpu"
+  devices: 1
+  precision: 16
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        dirpath: "/workspace/SegAffordance/experiments/20260909_multi3_rgb_scalefree/checkpoints"
+        monitor: "val/loss_total"
+        mode: "min"
+        save_top_k: 1
+        save_last: true
+        auto_insert_metric_name: false
+        filename: "best-epoch{epoch:02d}-valloss{val/loss_total:.4f}"
+  logger:
+    class_path: pytorch_lightning.loggers.CSVLogger
+    init_args:
+      save_dir: "/workspace/SegAffordance/experiments/20260909_multi3_rgb_scalefree/logs"
+      name: "csv"
+  log_every_n_steps: 10
+
+# sf3d_processed_v3: v2 with prismatic sweeps rescaled from 0.1 m to 0.7 m
+# (the revolute median). Same records/filters — v3 symlinks v2's frames.lmdb
+# and the key cache validates against v3's identical entry count, so both
+# cache paths below stay. Splat masks, corrected revolute arcs, 2D
+# trajectories, per-record sensor provenance (reader filters at
+# sensor_max_occluded_frac=0.5 -> 417,765 records). Warm the page cache
+# before launch (train_pod.sh does):
+#   cat /workspace/datasets/sf3d_processed_v3/data.lmdb/data.mdb > /dev/null
+# Batch size is provisional until the v2 smoke run settles throughput; keep it
+# identical across all SF3D arms when changing it.
+data:
+  # One SF3D-format LMDB per source; each is split by scene with manual_seed,
+  # then the train parts are concatenated and shuffled together (fixed seed).
+  # repeat > 1 duplicates a source's TRAIN part to rebalance (val never).
+  sources:
+    - name: hoi4d
+      train_data_dir: "/workspace/datasets/hoi4d_processed_2d_v2"
+      frame_cache_path: "/workspace/datasets/hoi4d_processed_2d_v2/frames.lmdb"
+      key_cache_path: "/workspace/cache/hoi4d_2d_keys_v2.pkl"
+      repeat: 1
+    - name: epic
+      train_data_dir: "/workspace/datasets/epic_processed_2d"
+      frame_cache_path: "/workspace/datasets/epic_processed_2d/frames.lmdb"
+      key_cache_path: "/workspace/cache/epic_2d_keys_v1.pkl"
+      repeat: 1
+    - name: arctic
+      train_data_dir: "/workspace/datasets/arctic_processed_2d"
+      frame_cache_path: "/workspace/datasets/arctic_processed_2d/frames.lmdb"
+      key_cache_path: "/workspace/cache/arctic_2d_keys_v1.pkl"
+      repeat: 1
+  return_trajectory_2d: true    # the 2D track IS the data term
+  point_source: "element"
+  fast_pipeline: true
+  load_depth: false             # RGB-only: skip the depth PNG decode
+  val_split_ratio: 0.15
+  input_size: [512, 512]
+  batch_size_train: 64
+  batch_size_val: 64
+  num_workers_train: 32
+  num_workers_val: 16
+  manual_seed: 42               # scene splits AND the train shuffle/interleaving
