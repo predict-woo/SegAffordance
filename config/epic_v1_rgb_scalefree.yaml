@@ -1,4 +1,4 @@
-# EPIC v1 `rgb_scalefree` (2026-09-09): the HOI4D rgb_scalefree recipe (DCT-6 head here, as in the smoke config) on the EPIC/VISOR 2D LMDB (359 records, no depth). Spec: docs/superpowers/specs/2026-09-09-rgb-only-scale-free-trajectory-design.md
+# EPIC v1 `rgb_scalefree` (2026-09-09): the HOI4D rgb_scalefree recipe (plain head) on the EPIC/VISOR 2D LMDB (359 records, no depth). Spec: docs/superpowers/specs/2026-09-09-rgb-only-scale-free-trajectory-design.md
 # HOI4D v2 sweep arm `e100_lr3e5` — generated 2026-09-06 from hoi4d_train_runpod_2d_dct_v2.yaml: epochs 100, lr 3e-05, milestones [80, 92], batch 64. Data: 3,075 one-per-window records (datasets/hoi4d_processed_2d_v2), ~41 steps/epoch at batch 64.
 # 20260908_epic_v1_smoke: v1 with VLM-SELECTED moving-part masks
 # (tools/hoi4d_vlm_select_all.py, gpt-5.6-luna effort high, user-approved
@@ -53,7 +53,7 @@ model:
     # delta-cumsum off (the two gates are mutually exclusive, asserted).
     trajectory_delta_cumsum: false  # g8: Euler-style RELATIVE direct readout (no cumsum, no absolute)
     trajectory_absolute: false
-    trajectory_dct_coeffs: 6       # 2D+DCT arm: smooth basis on the 2D-only path
+    trajectory_dct_coeffs: 0       # PLAIN head (2026-09-09): matches the multi3 / HOI4D rgb_scalefree recipe (was DCT-6 from the smoke config)
     trajectory_scale_free: true    # head emits Δ̃ = Δ/z0 (units of the anchor depth); no metric scale on the 2D path
     twist_num_hypotheses: 1        # WTA off — single articulation output
     point_prediction_3d: false     # gen-7: 2D heatmap machinery back on

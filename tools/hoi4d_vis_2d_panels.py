@@ -72,9 +72,13 @@ def main():
     keys = [ds.item_keys[i].decode() for i in va.indices]
     rot_idx = [j for j, k in enumerate(keys) if "_C6_" in k]
     trans_idx = [j for j, k in enumerate(keys) if "_C4_" in k]
-    picks = ([int(x) for x in rng.choice(trans_idx, args.num // 2, replace=False)]
-             + [int(x) for x in rng.choice(rot_idx, args.num - args.num // 2,
-                                           replace=False)])
+    if len(rot_idx) >= args.num // 2 and len(trans_idx) >= args.num // 2:
+        picks = ([int(x) for x in rng.choice(trans_idx, args.num // 2, replace=False)]
+                 + [int(x) for x in rng.choice(rot_idx, args.num - args.num // 2,
+                                               replace=False)])
+    else:
+        # EPIC / ARCTIC LMDBs (no HOI4D category keys): plain random picks
+        picks = [int(x) for x in rng.choice(len(keys), min(args.num, len(keys)), replace=False)]
 
     os.makedirs(args.out, exist_ok=True)
     for n, j in enumerate(picks):
