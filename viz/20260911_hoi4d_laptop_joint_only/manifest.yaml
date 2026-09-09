@@ -2,8 +2,8 @@ command: tools/hoi4d_predict_articulation.py --model joint4_dct config/sf3d_trai
   experiments/20260910_joint4_dct_rgb_scalefree/checkpoints/best-epoch12-sf3dval0.9688.ckpt
   --out viz/20260911_hoi4d_laptop_joint_only --num 12 --category C3 --split val --seed
   1 --ray-len 0.5 --scale 2
-tool_commit: 8e6eb44
-generated: '2026-09-09T22:51:24+00:00'
+tool_commit: f7e51e6
+generated: '2026-09-09T22:55:12+00:00'
 models:
 - name: joint4_dct
   config: config/sf3d_train_runpod_g19_dct_rgb_scalefree.yaml

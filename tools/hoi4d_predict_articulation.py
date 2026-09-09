@@ -131,8 +131,8 @@ def main():
                 traj_abs = anchor.unsqueeze(1) + out.trajectory_pred[0:1].cpu().float()
                 tv = (traj_abs[0, :, 2] > 0.05).numpy()
                 tuv_pred = project_points(K_norm, traj_abs)[0].clamp(-2, 3).numpy()
-                p = draw_polyline_norm(p, tuv_pred, tv, (255, 80, 0), thickness=1)   # blue (BGR), distinct from the red axis
-                p = draw_points_norm(p, tuv_pred, tv, (255, 80, 0), radius=2)
+                p = draw_polyline_norm(p, tuv_pred, tv, (120, 255, 120), thickness=1)   # light green (BGR), distinct from the red axis
+                p = draw_points_norm(p, tuv_pred, tv, (120, 255, 120), radius=2)
             if anchor is not None and out.motion_pred is not None:
                 d = out.motion_pred[0].cpu().float().numpy()
                 d = d / max(float(np.linalg.norm(d)), 1e-8)
