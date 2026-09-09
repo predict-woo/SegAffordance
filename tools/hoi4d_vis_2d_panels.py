@@ -44,12 +44,19 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--num", type=int, default=12)
     ap.add_argument("--seed", type=int, default=42421)
+    ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+                    help="override a model_params field of the config (e.g. trajectory_dct_coeffs=6 "
+                         "to render a DCT checkpoint with a plain-head single-source config)")
     args = ap.parse_args()
 
     cfg = yaml.safe_load(open(args.config))
     dcfg = cfg["data"]
-    mp = ModelParams(**{k: v for k, v in cfg["model"]["model_params"].items()
-                        if k in ModelParams.__dataclass_fields__})
+    mp_dict = {k: v for k, v in cfg["model"]["model_params"].items()
+               if k in ModelParams.__dataclass_fields__}
+    for kv in args.set:
+        k, v = kv.split("=", 1)
+        mp_dict[k] = yaml.safe_load(v)
+    mp = ModelParams(**mp_dict)
     model = CRIS(mp).cuda().eval()
     ck = torch.load(args.ckpt, map_location="cpu", weights_only=False)
     sd = {k[6:] if k.startswith("model.") else k: v
