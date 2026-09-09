@@ -35,3 +35,27 @@ localises by the handle but does not segment; laptops keep the known
 "trans" failure; chairs are out of every training distribution. Prompts
 were short ("open door") vs the datasets' fuller phrasing ("open the left
 door of the closet"), which may cost the wardrobe case.
+
+## Is the trajectory drawn correctly? (check, 2026-09-11)
+
+The predicted trajectories on the photos are short squiggles, so the drawing
+path was checked against the validated SF3D panel tool: `check_sf3d/` runs
+this tool on the EXACT val sample behind `viz/20260910_sf3d_joint4_panels/
+03_rot_val1741.jpg` (exported frame + its true intrinsics + its description).
+Both tools draw the same trajectory (a long sweep to the right of the
+handle — the joint model's 179°-flipped prediction on that sample), so the
+projection / scaling / anchoring in `predict_image.py` matches the test-time
+convention. `check_sf3d/00_sf3d_val_closet.png` is a second SF3D val frame
+(hinge and orbit sensible, trajectory a short hook).
+
+`landscape/` re-runs the four photos letterboxed onto a 4:3 landscape canvas
+(`--pad-to-landscape`; every training frame is landscape, the photos are
+portrait and were being stretched to a square). It changes little: door still
+rot 0.92 with the hinge on the right edge (r 0.55 m, z_p 1.70 m) and a short
+squiggle for the trajectory; wardrobe still handle-only, p_rev 0.41.
+
+Reading: the trajectory head generalises worst of all heads. In-domain the
+consistency loss ties it to the axis/origin heads; out of domain (new
+apartment, phone camera) the axis/orbit stay plausible on the door while the
+20-point sweep collapses to a squiggle that ignores the orbit. The mask,
+point and type heads transfer better. Not an aspect-ratio artefact.

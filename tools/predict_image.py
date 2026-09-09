@@ -50,6 +50,11 @@ def main():
     ap.add_argument("--f35", type=float, default=26.0, help="35 mm-equivalent focal length of the photos")
     ap.add_argument("--ray-len", type=float, default=0.5)
     ap.add_argument("--input-size", type=int, default=512)
+    ap.add_argument("--pad-to-landscape", action="store_true",
+                    help="letterbox a portrait photo onto a 4:3 landscape canvas (grey sides) before the 512 stretch — the "
+                         "training frames are all landscape; intrinsics shift accordingly (cx += pad)")
+    ap.add_argument("--K", nargs=4, type=float, default=None, metavar=("fx", "fy", "cx", "cy"),
+                    help="explicit intrinsics in pixels of the input image (overrides --f35); e.g. an SF3D frame's K")
     a = ap.parse_args()
     device = "cuda" if torch.cuda.is_available() else "cpu"
     models = [(n, *load_model(c, k, device)) for n, c, k in a.model]
@@ -60,8 +65,16 @@ def main():
         if bgr is None:
             raise SystemExit(f"cannot read {path}")
         H, W = bgr.shape[:2]
-        f_px = a.f35 / 36.0 * max(W, H)
-        K = torch.tensor([[f_px, 0.0, W / 2.0], [0.0, f_px, H / 2.0], [0.0, 0.0, 1.0]])
+        if a.K is not None:
+            fx, fy, cx, cy = a.K
+        else:
+            fx = fy = a.f35 / 36.0 * max(W, H); cx, cy = W / 2.0, H / 2.0
+        if a.pad_to_landscape and H > W:
+            W2 = int(round(H * 4 / 3)); pad = (W2 - W) // 2
+            canvas = np.full((H, W2, 3), 114, np.uint8); canvas[:, pad:pad + W] = bgr
+            bgr = canvas; cx += pad; W = W2
+        f_px = fx
+        K = torch.tensor([[fx, 0.0, cx], [0.0, fy, cy], [0.0, 0.0, 1.0]])
         img_size = torch.tensor([float(W), float(H)])
         K_norm = normalized_intrinsics(K[None], img_size[None])
         small = cv2.resize(bgr, (S, S), interpolation=cv2.INTER_AREA)
