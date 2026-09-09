@@ -52,6 +52,9 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--num", type=int, default=8)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--ray-len", type=float, default=0.5,
+                    help="metres of predicted axis drawn: trans = a ray of this length from the point, "
+                         "rot = +/- this length about the hinge (drawn at the predicted depth z_p)")
     a = ap.parse_args()
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -121,7 +124,7 @@ def main():
             if anchor is not None and out.trajectory_pred is not None:
                 traj_abs = anchor.unsqueeze(1) + out.trajectory_pred[0:1].cpu().float()
                 tv = (traj_abs[0, :, 2] > 0.05).numpy()
-                p = draw_points_norm(p, project_points(K_norm, traj_abs)[0].clamp(-2, 3).numpy(), tv, (255, 0, 255), radius=3)
+                p = draw_points_norm(p, project_points(K_norm, traj_abs)[0].clamp(-2, 3).numpy(), tv, (255, 80, 0), radius=3)  # blue (BGR), distinct from the red axis
             if anchor is not None and out.motion_pred is not None:
                 d = out.motion_pred[0].cpu().float().numpy()
                 d = d / max(float(np.linalg.norm(d)), 1e-8)
@@ -136,10 +139,10 @@ def main():
                         from sf3d_vis_predictions import draw_polyline_norm
                         p = draw_polyline_norm(p, project_points(K_norm, torch.from_numpy(arc).float()[None])[0].clamp(-2, 3).numpy(),
                                                arc[:, 2] > 0.05, (0, 230, 230), thickness=3)
-                    p = draw_axis_3d(p, K_norm, q3, d, a3, (0, 0, 255))
+                    p = draw_axis_3d(p, K_norm, q3, d, a3, (0, 0, 255), t0=-a.ray_len, t1=a.ray_len)
                     lines.append(f"rot  p_rev={p_rev:.2f}  r={float(np.linalg.norm(r_vec)):.2f}m")
                 else:
-                    p = draw_axis_3d(p, K_norm, a3, d, a3, (0, 0, 255), t0=0.0, t1=0.25)
+                    p = draw_axis_3d(p, K_norm, a3, d, a3, (0, 0, 255), t0=0.0, t1=a.ray_len)
                     lines.append(f"trans  p_rev={p_rev:.2f}")
                 lines.append(f"axis=({d[0]:+.2f},{d[1]:+.2f},{d[2]:+.2f})  z_p={float(anchor[0, 2]):.2f}m")
             if out.origin_uv is not None:

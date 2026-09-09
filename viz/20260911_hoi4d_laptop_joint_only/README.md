@@ -7,14 +7,14 @@ HOI4D + EPIC + ARCTIC in one stream; HOI4D laptops were seen under the 2D
 recipe only: mask, point, projected track, no articulation label).
 
 Overlays: predicted mask (red), point_uv ring, projected 3D trajectory
-(magenta, z_p-scaled), predicted axis (red: hinge line for rot, direction
+(blue, z_p-scaled), predicted axis (red: hinge line for rot, direction
 ray for trans), origin-heatmap uv (small red circle); text = type call,
 p_rev, axis direction, z_p. `contact_sheet.jpg` = all 10.
 
 Regen (dev pod): `python tools/hoi4d_predict_articulation.py --model joint4_dct
 config/sf3d_train_runpod_g19_dct_rgb_scalefree.yaml
 experiments/20260910_joint4_dct_rgb_scalefree/checkpoints/best-epoch12-sf3dval0.9688.ckpt
---out viz/20260911_hoi4d_laptop_joint_only --num 12 --category C3 --split val --seed 1`.
+--out viz/20260911_hoi4d_laptop_joint_only --num 12 --category C3 --split val --seed 1 --ray-len 0.5` (axis rays 0.5 m at the predicted depth; trajectories in blue).
 
 What it shows: lid masks in 10/10 (full lid, clean edges), the point at the
 hand on the lid rim, projected trajectories in the GT track's direction
