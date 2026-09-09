@@ -8,6 +8,7 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
 |---|---|---|
+| [20260910_sf3d_dct_chain_panels](20260910_sf3d_dct_chain_panels/README.md) | SF3D val: the DCT chain model (MA 32.80 record, no depth) vs the joint model vs depth — hinges on the GT line with the right sign (closet 5°, fridge 7° where every earlier model failed), smooth sweeps along the track; masks thinner than the joint model's | `tools/sf3d_vis_predictions.py` |
 | [20260910_sf3d_joint4_panels](20260910_sf3d_joint4_panels/README.md) | SF3D val: the joint 2D+3D model (MA 31.41 record, no depth) vs the plain chain model vs depth — smooth full-length sweeps, best masks, solves the fridge case (26°), remaining weakness = axis sign flips (closet door 179°) | `tools/sf3d_vis_predictions.py` |
 | [20260910_multi3dct_val_panels](20260910_multi3dct_val_panels/README.md) | the multi-source 2D arm with the DCT-6 head on the same 12 held-out picks per source as the plain arm: single smooth arcs where the plain head zigzagged (roughness 10x lower), masks/points equal on HOI4D, one new ARCTIC spill (waffle iron), a little more EPIC spill | `tools/hoi4d_vis_2d_panels.py --set trajectory_dct_coeffs=6` |
 | [20260909_sf3d_plain_ft_multi3_panels](20260909_sf3d_plain_ft_multi3_panels/README.md) | SF3D val: the plain-head RGB post-trained model (from multi3, MA 31.01) vs the DCT RGB arm vs depth — sweeps follow the GT track much further (jittery), axes tightest on easy cases, hinge placement the weak spot | `tools/sf3d_vis_predictions.py` |
