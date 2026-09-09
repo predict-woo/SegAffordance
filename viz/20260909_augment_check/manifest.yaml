@@ -1,0 +1,4 @@
+command: tools/augment_check.py --config config/multi3_rgb_scalefree.yaml --out viz/20260909_augment_check
+  --num 8
+tool_commit: 46e5261
+generated: '2026-09-09T08:58:02+00:00'

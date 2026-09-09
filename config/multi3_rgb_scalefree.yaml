@@ -192,6 +192,28 @@ data:
       frame_cache_path: "/workspace/datasets/arctic_processed_2d/frames.lmdb"
       key_cache_path: "/workspace/cache/arctic_2d_keys_v1.pkl"
       repeat: 1
+  # Geometry-consistent augmentation on the TRAIN stream only (datasets/
+  # augment.py): photometric jitter (RGB only), horizontal flip (2D fields,
+  # intrinsics, camera-frame 3D and left/right in the text all follow),
+  # scale+translate crop that always keeps the whole mask and the point in
+  # frame (a change of intrinsics; 3D untouched). Val/test stay raw.
+  augment:
+    enabled: true
+    brightness: 0.3
+    contrast: 0.3
+    saturation: 0.3
+    hue: 0.05
+    photometric_p: 0.8
+    gray_p: 0.05
+    blur_p: 0.15
+    noise_p: 0.15
+    noise_std: 6.0
+    hflip_p: 0.5
+    flip_text: "swap"           # or "skip": never flip a sample whose text says left/right
+    crop_p: 0.7
+    scale_min: 0.6
+    keep_margin: 0.03
+  epoch_multiplier: 1           # k > 1 = k augmented views of every record per epoch
   return_trajectory_2d: true    # the 2D track IS the data term
   point_source: "element"
   fast_pipeline: true

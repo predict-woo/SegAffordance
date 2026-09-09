@@ -37,6 +37,7 @@ import pytorch_lightning as pl
 import torch
 from torch.utils.data import ConcatDataset, DataLoader, Dataset
 
+from datasets.augment import AugmentSpec, AugmentedDataset
 from datasets.scenefun3d import (
     SF3DDataset,
     get_default_transforms,
@@ -99,8 +100,17 @@ class MultiSourceDataModule(pl.LightningDataModule):
         return_trajectory_2d: bool = True,
         fast_pipeline: bool = True,
         load_depth: bool = False,
+        augment: Optional[AugmentSpec] = None,
+        epoch_multiplier: int = 1,
     ) -> None:
+        """augment: geometry-consistent training augmentation (datasets/
+        augment.py) applied to the TRAIN stream only — val/test stay raw.
+        epoch_multiplier: k > 1 makes one epoch k passes over the (augmented)
+        train set, i.e. k distinct augmented views of every record per
+        epoch; the seeded shuffle keeps the order reproducible."""
         super().__init__()
+        if epoch_multiplier < 1:
+            raise ValueError("epoch_multiplier must be >= 1")
         if not sources:
             raise ValueError("MultiSourceDataModule needs at least one source")
         names = [s.name for s in sources]
@@ -118,6 +128,8 @@ class MultiSourceDataModule(pl.LightningDataModule):
         self.return_trajectory_2d = return_trajectory_2d
         self.fast_pipeline = fast_pipeline
         self.load_depth = load_depth
+        self.augment = augment
+        self.epoch_multiplier = epoch_multiplier
         self.train_dataset: Optional[Dataset] = None
         self.val_dataset: Optional[Dataset] = None
         # name -> (train_len, val_len), filled by setup(); handy for logs/notes
@@ -162,11 +174,18 @@ class MultiSourceDataModule(pl.LightningDataModule):
             train_parts.append(tr)
             val_parts.append(va)
             repeats.append(spec.repeat)
-        self.train_dataset = concat_with_repeats(train_parts, repeats)
+        train = concat_with_repeats(train_parts, repeats)
+        if self.augment is not None and self.augment.enabled:
+            train = AugmentedDataset(train, self.augment)
+        if self.epoch_multiplier > 1:
+            train = ConcatDataset([train] * self.epoch_multiplier)
+        self.train_dataset = train
         self.val_dataset = ConcatDataset(val_parts)
         print(
-            f"[multisource] train {len(self.train_dataset)} samples/epoch, "
-            f"val {len(self.val_dataset)}; shuffle seed {self.manual_seed}"
+            f"[multisource] train {len(self.train_dataset)} samples/epoch "
+            f"(augment={'on' if self.augment is not None and self.augment.enabled else 'off'}, "
+            f"epoch_multiplier={self.epoch_multiplier}), val {len(self.val_dataset)}; "
+            f"shuffle seed {self.manual_seed}"
         )
 
     def train_dataloader(self) -> DataLoader:

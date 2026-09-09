@@ -331,6 +331,20 @@ the new entry point without /dev/shm staging. 4 unit tests + fast_dev_run
 smoke green. NOT trained yet (experiment dir `20260909_multi3_rgb_scalefree`
 reserved). EPIC is 6% of an epoch at repeat 1 — raise `repeat` if it
 should count more.
+**Augmentation LANDED (2026-09-09 ~08:30):** `datasets/augment.py` —
+geometry-consistent, train-stream only, three families: photometric (RGB
+only), horizontal flip (2D fields, cx, camera-frame 3D x-negation, the
+axis under the right-hand rule: prismatic direction reflects, revolute
+axis reflects AND negates; left/right swapped in the text, or the flip
+skipped — `flip_text` knob), scale+translate crop that always contains
+the whole mask bbox + point + first track point (a change of intrinsics,
+3D untouched; skipped when the element fills the frame). `AugmentSpec`
+in the config's `data.augment` block, `epoch_multiplier` = k augmented
+views per record per epoch. Not included: in-plane rotation. 11 unit
+tests (projection identity under flip/crop, involution, axis convention,
+must-keep box, text swap, determinism) + `viz/20260909_augment_check`
+(real records; ARCTIC's projected 3D track stays on the 2D track after
+zoom and flip). `config/multi3_rgb_scalefree.yaml` has it ON.
 **Next candidates:** the DCT teacher-forcing HOI4D arm under the new
 recipe as the SF3D init (depth counterpart = the 31.13 record); EPIC and
 ARCTIC first runs (`config/{epic,arctic}_v1_rgb_scalefree.yaml`, smoke-
