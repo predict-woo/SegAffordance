@@ -62,7 +62,7 @@ def test_split_per_source_no_scene_leak_and_all_sources_present(monkeypatch):
     train_items = {dm.train_dataset[i] for i in range(len(dm.train_dataset))}
     val_items = {dm.val_dataset[i] for i in range(len(dm.val_dataset))}
     assert not (train_items & val_items)
-    assert {s for s, _ in train_items} == {"hoi4d", "epic", "arctic"}
+    assert {s for s, *_ in train_items} == {"hoi4d", "epic", "arctic"}
 
 
 def test_fixed_seed_gives_identical_interleaving_and_a_new_seed_changes_it(monkeypatch):
@@ -72,8 +72,8 @@ def test_fixed_seed_gives_identical_interleaving_and_a_new_seed_changes_it(monke
     assert a == b
     assert a != c
     # sources are actually mixed within the stream (not blocked by source)
-    first_batch_sources = {s for s, _ in a[:4]}
-    assert len(a) > 4 and len({s for s, _ in a}) == 3
+    first_batch_sources = {s for s, *_ in a[:4]}
+    assert len(a) > 4 and len({s for s, *_ in a}) == 3
     assert any(a[i][0] != a[i + 1][0] for i in range(len(a) - 1))
     assert isinstance(first_batch_sources, set)
 
@@ -102,14 +102,16 @@ def test_per_source_hflip_override_wraps_each_source_separately(monkeypatch):
         augment=AugmentSpec(hflip_p=0.5), epoch_multiplier=2,
     )
     dm.setup("fit")
-    parts = dm.train_dataset.datasets  # epoch_multiplier=2 -> [concat, concat]
-    assert len(parts) == 2 and parts[0] is parts[1]
-    per_source = parts[0].datasets
+    from datasets.multisource_datamodule import SourceTagDataset
+    parts = dm.train_dataset.datasets  # epoch_multiplier=2 -> each source's tagged part twice
+    assert len(parts) == 4 and parts[0] is parts[1] and parts[2] is parts[3]
+    per_source = [parts[0].base, parts[2].base]
+    assert all(isinstance(p, SourceTagDataset) for p in parts)
     assert all(isinstance(p, AugmentedDataset) for p in per_source)
     assert per_source[0].spec.hflip_p == 0.0 and per_source[1].spec.hflip_p == 0.5
     assert per_source[0].spec.crop_p == per_source[1].spec.crop_p  # only the flip differs
-    # val is never augmented
-    assert not any(isinstance(p, AugmentedDataset) for p in dm.val_dataset.datasets)
+    # val is never augmented (tagged raw subsets)
+    assert not any(isinstance(p.base, AugmentedDataset) for p in dm.val_dataset.datasets)
 
 
 def test_concat_and_loader_helpers():

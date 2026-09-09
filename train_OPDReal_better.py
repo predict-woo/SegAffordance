@@ -1,5 +1,6 @@
 import math
 import os
+import dataclasses
 import typing
 from typing import Any
 import warnings
@@ -61,7 +62,16 @@ class OPDRealTrainingModule(pl.LightningModule):
         config: Config,
         finetune_from_path: typing.Optional[str] = None,
         freeze_backbone: bool = False,
+        loss_profiles: typing.Optional[typing.Dict[str, typing.Dict[str, typing.Any]]] = None,
+        source_profiles: typing.Optional[typing.Dict[str, str]] = None,
     ):
+        """loss_profiles / source_profiles (joint 2D+3D training, 2026-09-10):
+        `loss_profiles` = {profile_name: {loss_params field: value}} — each
+        profile is `loss_params` with those fields overridden; `source_profiles`
+        = {batch source name: profile_name}. A batch tagged with a source
+        (multi-source datamodule, source-homogeneous batches) is scored with
+        its profile's weights / projection anchor / trajectory scale; untagged
+        or unmapped batches use `loss_params` as is."""
         super().__init__()
         self.save_hyperparameters()
 
@@ -70,6 +80,8 @@ class OPDRealTrainingModule(pl.LightningModule):
         self.optimizer_params = optimizer_params
         self.config = config
         self.freeze_backbone = freeze_backbone
+        self.loss_profiles = dict(loss_profiles or {})
+        self.source_profiles = dict(source_profiles or {})
 
         # Inputs are fixed-size (256², word_len 77), so autotuned cudnn
         # algorithm selection always pays for itself.
@@ -101,36 +113,23 @@ class OPDRealTrainingModule(pl.LightningModule):
         # Each variant no-ops on batches lacking the targets it needs, so OPD
         # runs are unaffected whichever is selected. gen-7's absolute
         # trajectory head changes what frame the pred-pred variant works in.
-        self.geometric_loss = build_geometric_loss(
-            self.loss_params,
-            trajectory_is_absolute=getattr(model_params, "trajectory_absolute", False),
-        )
-        # No-ops unless the model has a twist head AND the batch carries a 3D
-        # origin (SF3D), same convention as the geometric losses.
-        self.traj_projection_loss = TrajectoryProjectionLoss(
-            weight=getattr(self.loss_params, "trajectory_proj_weight", 0.0),
-            normalized=getattr(
-                self.loss_params, "trajectory_proj_normalized", False
-            ),
-            energy_floor=getattr(
-                self.loss_params, "trajectory_proj_energy_floor", 1e-4
-            ),
-            detach_anchor=getattr(
-                self.loss_params, "trajectory_proj_detach_anchor", False
-            ),
-            fdiff_velocity_weight=getattr(
-                self.loss_params, "proj_fdiff_velocity_weight", 0.0
-            ),
-            fdiff_angle_weight=getattr(
-                self.loss_params, "proj_fdiff_angle_weight", 0.0
-            ),
-            fdiff_length_weight=getattr(
-                self.loss_params, "proj_fdiff_length_weight", 0.0
-            ),
-            anchor_source=getattr(
-                self.loss_params, "trajectory_proj_anchor", "pred_depth"
-            ),
-        )
+        self.geometric_loss, self.traj_projection_loss = self._build_loss_modules(self.loss_params)
+        # Joint training: one (LossParams, geometric loss, projection loss)
+        # triple per profile, swapped in for the duration of a batch's step.
+        self._profile_params: typing.Dict[str, LossParams] = {}
+        self._profile_modules = nn.ModuleDict()
+        for pname, overrides in self.loss_profiles.items():
+            unknown = [k for k in overrides if not hasattr(self.loss_params, k)]
+            if unknown:
+                raise ValueError(f"loss profile {pname!r}: unknown loss_params fields {unknown}")
+            lp = dataclasses.replace(self.loss_params, **overrides)
+            geo, proj = self._build_loss_modules(lp)
+            self._profile_params[pname] = lp
+            self._profile_modules[f"{pname}_geometric"] = geo
+            self._profile_modules[f"{pname}_projection"] = proj
+        for src, pname in self.source_profiles.items():
+            if pname not in self._profile_params and pname != "default":
+                raise ValueError(f"source {src!r} maps to unknown loss profile {pname!r}")
         self.twist_loss = TwistLoss(
             weight=getattr(self.loss_params, "twist_weight", 0.5),
             sign_agnostic=getattr(self.loss_params, "twist_sign_agnostic", True),
@@ -172,6 +171,34 @@ class OPDRealTrainingModule(pl.LightningModule):
         self._test_debug_print_count: int = 0
         self.indices_to_visualize: typing.Optional[set] = None
 
+    def _build_loss_modules(self, lp: LossParams):
+        """The two loss modules that bake loss_params fields at construction."""
+        geometric = build_geometric_loss(
+            lp, trajectory_is_absolute=getattr(self.model_params, "trajectory_absolute", False),
+        )
+        # No-ops unless the model has a twist head AND the batch carries a 3D
+        # origin (SF3D), same convention as the geometric losses.
+        projection = TrajectoryProjectionLoss(
+            weight=getattr(lp, "trajectory_proj_weight", 0.0),
+            normalized=getattr(lp, "trajectory_proj_normalized", False),
+            energy_floor=getattr(lp, "trajectory_proj_energy_floor", 1e-4),
+            detach_anchor=getattr(lp, "trajectory_proj_detach_anchor", False),
+            fdiff_velocity_weight=getattr(lp, "proj_fdiff_velocity_weight", 0.0),
+            fdiff_angle_weight=getattr(lp, "proj_fdiff_angle_weight", 0.0),
+            fdiff_length_weight=getattr(lp, "proj_fdiff_length_weight", 0.0),
+            anchor_source=getattr(lp, "trajectory_proj_anchor", "pred_depth"),
+        )
+        return geometric, projection
+
+    def _profile_for(self, source: typing.Optional[str]) -> typing.Optional[str]:
+        """Loss profile name for a batch source; None = the default loss_params."""
+        if source is None:
+            return None
+        pname = self.source_profiles.get(source)
+        if pname is None or pname == "default" or pname not in self._profile_params:
+            return None
+        return pname
+
     def forward(
         self, img, depth, tokenized_word, mask_condition, point_condition, motion_gt,
         motion_type_input=None, intrinsics_norm=None,
@@ -183,6 +210,22 @@ class OPDRealTrainingModule(pl.LightningModule):
 
     def _common_step(self, batch, batch_idx, step_type="train"):
         img, depth, word_str_list, targets = unpack_batch(batch)
+        pname = self._profile_for(targets.source)
+        if pname is None:
+            return self._common_step_impl(img, depth, word_str_list, targets, batch_idx, step_type)
+        # Swap the batch's loss profile in for this step only: everything
+        # below reads self.loss_params / self.geometric_loss /
+        # self.traj_projection_loss, so this is the one seam.
+        saved = (self.loss_params, self.geometric_loss, self.traj_projection_loss)
+        self.loss_params = self._profile_params[pname]
+        self.geometric_loss = self._profile_modules[f"{pname}_geometric"]
+        self.traj_projection_loss = self._profile_modules[f"{pname}_projection"]
+        try:
+            return self._common_step_impl(img, depth, word_str_list, targets, batch_idx, step_type)
+        finally:
+            self.loss_params, self.geometric_loss, self.traj_projection_loss = saved
+
+    def _common_step_impl(self, img, depth, word_str_list, targets, batch_idx, step_type):
         mask_gt = targets.mask
         point_gt_norm = targets.point_norm
         motion_gt = targets.motion
@@ -845,6 +888,17 @@ class OPDRealTrainingModule(pl.LightningModule):
             logger=True,
             sync_dist=True,
         )
+        if targets.source is not None:
+            # per-source total (joint training): e.g. val/sf3d/loss_total is
+            # the checkpoint monitor of the joint configs
+            self.log(
+                f"{step_type}/{targets.source}/loss_total",
+                total_loss,
+                on_step=False,
+                on_epoch=True,
+                logger=True,
+                sync_dist=True,
+            )
         self.log(
             f"{step_type}/L_mask",
             L_mask,

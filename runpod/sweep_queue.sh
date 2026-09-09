@@ -20,7 +20,7 @@ for arm in "$@"; do
   # volume directly (the hand datasets are small) via train_multi_better.py;
   # no /dev/shm staging and no lmdb_path overrides.
   script=train_SF3D_better.py; extra="--data.lmdb_path /dev/shm/data.lmdb --data.frame_cache_path /dev/shm/frames.lmdb"
-  case "$(basename "$cfg")" in multi*) script=train_multi_better.py; extra="";; esac
+  case "$(basename "$cfg")" in multi*|joint*) script=train_multi_better.py; extra="";; esac
   droot=$(grep -E '^\s*train_data_dir:' "$cfg" | head -1 | sed 's/.*"\(.*\)".*/\1/')
   fcache=$(grep -E '^\s*frame_cache_path:' "$cfg" | head -1 | sed 's/.*"\(.*\)".*/\1/')
   [ -z "$fcache" ] && fcache="${droot}/frames.lmdb"

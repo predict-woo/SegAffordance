@@ -390,6 +390,28 @@ SF3D DCT post-training from it (DCT at both stages, nothing re-initialised)
 -> tests pred_z_p / gt_z0. Watcher deletes the pod on CHAIN_DONE — VERIFY.
 Comparison rows: plain multi3 2D (HOI4D 0.754 / 91.9 / 0.0355) and the
 plain SF3D post-training (MA 31.01 / PDet 22.72 / mIoU 0.2625, rough 0.068).
+**JOINT 2D+3D TRAINING LANDED (2026-09-10 ~21:30) + IN FLIGHT on pod E
+`segaffordance-rgbsf-e`** (`run_joint4_chain.sh`, log `joint4_chain.log`):
+`20260910_joint4_dct_rgb_scalefree` = SF3D + HOI4D + EPIC + ARCTIC in one
+seeded stream of SOURCE-HOMOGENEOUS batches (user design). Code:
+`datasets/multisource_datamodule.py` (`SourceSpec` filters / `augment` /
+`loss_profile` / per-source `val_split_ratio`; `SourceBatchSampler` — one
+source per batch, seeded order, reshuffled per epoch; `SourceTagDataset`
+appends the source name as the 16th tuple element), `model/targets.py`
+(`StepTargets.source`; 16-tuples; mixed batches rejected),
+`train_OPDReal_better.py` (`loss_profiles` = LossParams overrides per
+profile, `source_profiles` = source -> profile; `_common_step` swaps
+loss_params + projection/geometric modules for the batch; logs
+`<step>/<source>/loss_total`). Config `config/joint4_dct_rgb_scalefree.yaml`:
+base = the SF3D 3D recipe (scale gt_z0), profile "2d" = the teacher-forcing
+unit-anchor recipe; SF3D 54,086 train raw (no augmentation), hand sources
+x10 augmented (51,610) -> 105,696 samples/epoch (1,651 steps); lr 2e-5
+(FIRST GUESS — tune), 20 ep, milestones [16, 19]; monitor
+`val/sf3d/loss_total`. Tests `tests/test_joint_training.py` (+ suites, 88
+green); fast_dev_run 3 batches OK. Chain: train -> best-only -> SF3D test
+(pred_z_p + gt_z0, via the scratch DCT config) -> HOI4D/EPIC/ARCTIC tests
+(single-source configs, dct 6 override). ~16 min/epoch expected -> ~5.5 h.
+Watcher deletes the pod on CHAIN_DONE — VERIFY.
 **Next candidates:** the DCT teacher-forcing HOI4D arm under the new
 recipe as the SF3D init (depth counterpart = the 31.13 record); EPIC and
 ARCTIC first runs (`config/{epic,arctic}_v1_rgb_scalefree.yaml`, smoke-

@@ -49,6 +49,10 @@ class StepTargets:
     #: read from the depth map here, so depth-map scaling conventions (and
     #: pseudo-depth) stay out of the geometry.
     anchor_depth: Optional[torch.Tensor] = None
+    #: name of the dataset source the batch came from (multi-source
+    #: training with source-homogeneous batches; the trainer picks the loss
+    #: profile from it). None for single-source batches.
+    source: Optional[str] = None
 
 
 def unpack_batch(batch) -> Tuple[Any, Any, Any, StepTargets]:
@@ -83,6 +87,13 @@ def unpack_batch(batch) -> Tuple[Any, Any, Any, StepTargets]:
         )
         return batch.get("img"), batch.get("depth"), batch.get("word"), targets
 
+    source = None
+    if len(batch) == 16:  # 15-tuple + the source name (multi-source datamodule)
+        names = batch[15]
+        source = names[0] if isinstance(names, (list, tuple)) else str(names)
+        if isinstance(names, (list, tuple)) and any(n != source for n in names):
+            raise ValueError(f"mixed-source batch: {sorted(set(names))} — batches must be source-homogeneous")
+        batch = tuple(batch[:15])
     if len(batch) == 15:  # SF3D with 2D trajectory (return_trajectory_2d=True)
         (
             img, depth, word_str_list, mask_gt, _bbox, point_gt_norm, motion_gt,
@@ -110,6 +121,7 @@ def unpack_batch(batch) -> Tuple[Any, Any, Any, StepTargets]:
             trajectory_2d=trajectory_2d,
             trajectory_2d_valid=trajectory_2d_valid,
             anchor_depth=anchor_depth,
+            source=source,
         )
         return img, depth, word_str_list, targets
 
