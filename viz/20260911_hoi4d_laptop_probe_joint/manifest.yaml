@@ -1,0 +1,14 @@
+command: tools/hoi4d_predict_articulation.py --model joint4_dct config/sf3d_train_runpod_g19_dct_rgb_scalefree.yaml
+  experiments/20260910_joint4_dct_rgb_scalefree/checkpoints/best-epoch12-sf3dval0.9688.ckpt
+  --model dct_chain config/sf3d_train_runpod_g19_dct_rgb_scalefree_ft_multi3dct.yaml
+  experiments/20260910_sf3d_g19_dct_rgb_scalefree_ft_multi3dct/checkpoints/best-epoch24-valloss1.0178.ckpt
+  --out viz/20260911_hoi4d_laptop_probe_joint --num 8 --category C3 --split val
+tool_commit: df1ca3a
+generated: '2026-09-09T22:34:11+00:00'
+models:
+- name: joint4_dct
+  config: config/sf3d_train_runpod_g19_dct_rgb_scalefree.yaml
+  ckpt: experiments/20260910_joint4_dct_rgb_scalefree/checkpoints/best-epoch12-sf3dval0.9688.ckpt
+- name: dct_chain
+  config: config/sf3d_train_runpod_g19_dct_rgb_scalefree_ft_multi3dct.yaml
+  ckpt: experiments/20260910_sf3d_g19_dct_rgb_scalefree_ft_multi3dct/checkpoints/best-epoch24-valloss1.0178.ckpt
