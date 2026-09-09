@@ -36,7 +36,7 @@ from model.losses.geometric import (  # noqa: E402
     apply_trajectory_scale, normalized_intrinsics, project_points, trajectory_scale_factor,
 )
 from sf3d_vis_predictions import (  # noqa: E402
-    draw_axis_3d, draw_points_norm, load_model, overlay_mask, put_lines,
+    draw_axis_3d, draw_points_norm, draw_polyline_norm, load_model, overlay_mask, put_lines,
 )
 from viz_manifest import write_manifest  # noqa: E402
 
@@ -52,6 +52,8 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--num", type=int, default=8)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--scale", type=float, default=2.0,
+                    help="render the panels at this multiple of the 512-px frame (thin, sharp overlays; PNG output)")
     ap.add_argument("--ray-len", type=float, default=0.5,
                     help="metres of predicted axis drawn: trans = a ray of this length from the point, "
                          "rot = +/- this length about the hinge (drawn at the predicted depth z_p)")
@@ -89,15 +91,19 @@ def main():
         (img_t, depth_t, desc, mask_t, _bbox, point_gt, _mgt, _tgt, img_size, fname,
          _o3, K, _traj3d, traj2d_px, valid2d) = it
         W, H = float(img_size[0]), float(img_size[1])
-        S = img_t.shape[-1]
         frame = img_t.permute(1, 2, 0).numpy()[:, :, ::-1].copy()
+        if a.scale != 1.0:
+            frame = cv2.resize(frame, None, fx=a.scale, fy=a.scale, interpolation=cv2.INTER_CUBIC)
+        S = frame.shape[0]
+        gt_mask = cv2.resize(mask_t[0].numpy(), (S, S), interpolation=cv2.INTER_NEAREST)
         K_norm = normalized_intrinsics(K[None].float(), img_size[None].float())
         # GT panel
-        gt = overlay_mask(frame, mask_t[0].numpy(), (0, 200, 0))
+        gt = overlay_mask(frame, gt_mask, (0, 200, 0))
         tuv = (traj2d_px / torch.tensor([W, H])).numpy()
-        gt = draw_points_norm(gt, tuv, valid2d.numpy(), (255, 255, 0), radius=3)
+        gt = draw_polyline_norm(gt, tuv, valid2d.numpy(), (255, 255, 0), thickness=1)
+        gt = draw_points_norm(gt, tuv, valid2d.numpy(), (255, 255, 0), radius=2)
         gp = (int(point_gt[0] * S), int(point_gt[1] * S))
-        cv2.circle(gt, gp, 7, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.circle(gt, gp, 8, (255, 255, 255), 2, cv2.LINE_AA)
         gt = put_lines(gt, ["GT (HOI4D, no 3D articulation label)", desc[:44]])
         panels = [gt]
         for name, model, mp in models:
@@ -115,7 +121,7 @@ def main():
             anchor = out.point_3d_pred[0:1].cpu().float() if out.point_3d_pred is not None else None
             if out.point_uv is not None:
                 pu = out.point_uv[0].cpu().float()
-                cv2.circle(p, (int(pu[0] * S), int(pu[1] * S)), 7, (255, 255, 255), 2, cv2.LINE_AA)
+                cv2.circle(p, (int(pu[0] * S), int(pu[1] * S)), 8, (255, 255, 255), 2, cv2.LINE_AA)
             cls_type = "n/a"
             p_rev = float("nan")
             if out.motion_type_logits is not None:
@@ -124,7 +130,9 @@ def main():
             if anchor is not None and out.trajectory_pred is not None:
                 traj_abs = anchor.unsqueeze(1) + out.trajectory_pred[0:1].cpu().float()
                 tv = (traj_abs[0, :, 2] > 0.05).numpy()
-                p = draw_points_norm(p, project_points(K_norm, traj_abs)[0].clamp(-2, 3).numpy(), tv, (255, 80, 0), radius=3)  # blue (BGR), distinct from the red axis
+                tuv_pred = project_points(K_norm, traj_abs)[0].clamp(-2, 3).numpy()
+                p = draw_polyline_norm(p, tuv_pred, tv, (255, 80, 0), thickness=1)   # blue (BGR), distinct from the red axis
+                p = draw_points_norm(p, tuv_pred, tv, (255, 80, 0), radius=2)
             if anchor is not None and out.motion_pred is not None:
                 d = out.motion_pred[0].cpu().float().numpy()
                 d = d / max(float(np.linalg.norm(d)), 1e-8)
@@ -136,13 +144,12 @@ def main():
                     if float(np.linalg.norm(r_vec)) > 1e-4:
                         th = np.linspace(0.0, math.pi / 2.0, 48)
                         arc = c3[None] + np.cos(th)[:, None] * r_vec[None] + np.sin(th)[:, None] * np.cross(d, r_vec)[None]
-                        from sf3d_vis_predictions import draw_polyline_norm
                         p = draw_polyline_norm(p, project_points(K_norm, torch.from_numpy(arc).float()[None])[0].clamp(-2, 3).numpy(),
-                                               arc[:, 2] > 0.05, (0, 230, 230), thickness=3)
-                    p = draw_axis_3d(p, K_norm, q3, d, a3, (0, 0, 255), t0=-a.ray_len, t1=a.ray_len)
+                                               arc[:, 2] > 0.05, (0, 230, 230), thickness=2)
+                    p = draw_axis_3d(p, K_norm, q3, d, a3, (0, 0, 255), t0=-a.ray_len, t1=a.ray_len, thickness=2)
                     lines.append(f"rot  p_rev={p_rev:.2f}  r={float(np.linalg.norm(r_vec)):.2f}m")
                 else:
-                    p = draw_axis_3d(p, K_norm, a3, d, a3, (0, 0, 255), t0=0.0, t1=a.ray_len)
+                    p = draw_axis_3d(p, K_norm, a3, d, a3, (0, 0, 255), t0=0.0, t1=a.ray_len, thickness=2)
                     lines.append(f"trans  p_rev={p_rev:.2f}")
                 lines.append(f"axis=({d[0]:+.2f},{d[1]:+.2f},{d[2]:+.2f})  z_p={float(anchor[0, 2]):.2f}m")
             if out.origin_uv is not None:
@@ -150,7 +157,7 @@ def main():
                 cv2.circle(p, (int(ou[0] * S), int(ou[1] * S)), 5, (0, 0, 255), 2, cv2.LINE_AA)
             panels.append(put_lines(p, lines))
         key = ds.item_keys[idx].decode().replace("/", "_")
-        cv2.imwrite(f"{a.out}/{n_i:02d}_{key}.jpg", np.hstack(panels), [cv2.IMWRITE_JPEG_QUALITY, 88])
+        cv2.imwrite(f"{a.out}/{n_i:02d}_{key}.png", np.hstack(panels))  # lossless: thin overlays survive
         print("wrote", n_i, key, "|", desc)
     write_manifest(a.out, models=[{"name": n, "config": c, "ckpt": k} for n, c, k in a.model])
     print("done ->", a.out)
