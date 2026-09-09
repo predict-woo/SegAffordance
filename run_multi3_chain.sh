@@ -12,7 +12,7 @@ for d in hoi4d_processed_2d_v2 epic_processed_2d arctic_processed_2d; do
   [ -f /dev/shm/$d/data.lmdb/data.mdb ] || cp /workspace/datasets/$d/data.lmdb/data.mdb /dev/shm/$d/data.lmdb/
   [ -f /dev/shm/$d/frames.lmdb/data.mdb ] || cp /workspace/datasets/$d/frames.lmdb/data.mdb /dev/shm/$d/frames.lmdb/
 done
-sed 's#/workspace/datasets/\(hoi4d_processed_2d_v2\|epic_processed_2d\|arctic_processed_2d\)/#/dev/shm/\1/#g' $CFG > /dev/shm/multi3_local.yaml
+sed 's#/workspace/datasets/\(hoi4d_processed_2d_v2\|epic_processed_2d\|arctic_processed_2d\)#/dev/shm/\1#g' $CFG > /dev/shm/multi3_local.yaml
 grep -c "/dev/shm/" /dev/shm/multi3_local.yaml
 mkdir -p experiments/$E/logs experiments/$E/checkpoints
 echo "=== START $E $(date)"
