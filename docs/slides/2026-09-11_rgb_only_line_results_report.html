@@ -94,6 +94,24 @@ ol,ul{margin:8px 0 8px 24px} li{margin:4px 0}
 </svg>
 <p class="cap">The trajectory term alone (normalised on GT z₀ · Δ̃, the same quantity for every model). The DCT chain (0.42) is the only RGB arm that closes most of the gap to the depth model (0.35); the plain and re-initialised chains plateau near 0.48. The scale-free trajectory's generalisation on SF3D is the remaining price of no depth.</p>
 
+
+<h3>The three DCT models side by side (best per metric ★)</h3>
+<div class="wrap"><table>
+<tr><th>metric</th><th>SF3D only (scratch)</th><th>pretrain chain (multi3 DCT → SF3D DCT)</th><th>joint 2D+3D</th></tr>
+<tr><td>MA</td><td class="n">24.88</td><td class="n rec">32.80 ★</td><td class="n">31.41</td></tr>
+<tr><td>MA signed</td><td class="n">24.71</td><td class="n rec">32.43 ★</td><td class="n">30.15</td></tr>
+<tr><td>PDet</td><td class="n">17.39</td><td class="n">20.74</td><td class="n rec">22.72 ★</td></tr>
+<tr><td>mIoU</td><td class="n">0.2425</td><td class="n">0.2541</td><td class="n rec">0.2738 ★</td></tr>
+<tr><td>axis error, all</td><td class="n">29.6°</td><td class="n">28.5°</td><td class="n rec">26.1° ★</td></tr>
+<tr><td>axis error, matched</td><td class="n">22.0°</td><td class="n">20.5°</td><td class="n rec">20.1° ★</td></tr>
+<tr><td>origin error</td><td class="n">0.324 m</td><td class="n rec">0.256 m ★</td><td class="n">0.327 m</td></tr>
+<tr><td>point 3D error</td><td class="n">0.269 m</td><td class="n rec">0.248 m ★</td><td class="n">0.285 m</td></tr>
+<tr><td>rotation flip rate</td><td class="n">14.7</td><td class="n rec">9.83 ★</td><td class="n">13.6</td></tr>
+<tr><td>traj_dir accuracy</td><td class="n">92.0</td><td class="n">92.6</td><td class="n rec">96.4 ★</td></tr>
+<tr><td>roughness</td><td class="n">0.011</td><td class="n rec">0.0081 ★</td><td class="n">0.0090</td></tr>
+<tr><td>keeps HOI4D (held-out mIoU / PDet)</td><td class="n">—</td><td class="n bad">~0.12 (forgotten)</td><td class="n rec">0.676 / 85.2 ★</td></tr>
+</table></div>
+<p class="cap">Tally: chain 6, joint 6, scratch 0. The chain wins the metric-geometry heads, the joint model the dense heads, axis direction and hand-source retention.</p>
 <h3>Reading</h3>
 <ul>
 <li><b>Depth from scratch:</b> RGB scratch vs depth scratch (same DCT recipe): −1.1 MA, −4.3 PDet, −0.026 mIoU, +4° axis, +5 cm origin. The honest price on the one dataset with good depth.</li>
