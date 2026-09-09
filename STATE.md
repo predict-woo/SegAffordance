@@ -348,13 +348,20 @@ zoom and flip). `config/multi3_rgb_scalefree.yaml` has it ON with per-source `hf
 HOI4D 0.0 (user: no mirror there — 86 texts say "right drawer" etc.),
 EPIC/ARCTIC 0.5; `flip_text: skip` as a second guard. The SF3D
 datamodule is NOT touched (user: augmentation is for the 2D sources only).
-**IN FLIGHT 2026-09-09 11:12 local: `20260909_multi3_rgb_scalefree`** on
-pod C `segaffordance-rgbsf-c` (`run_multi3_chain.sh`, log
-`/workspace/SegAffordance/multi3_chain.log`; LMDBs staged in /dev/shm via
-a pod-local config copy): HOI4D + EPIC + ARCTIC, plain-TF RGB-only
-scale-free recipe, augmentation x8 = 41,288 samples/epoch (user: "40000
-samples"), 30 ep, milestones [24, 28]. Then test on the 841-record val
-union. **Phase 2 chained on the same pod** (`run_multi3_post_chain.sh`,
+**DONE 2026-09-09 14:00 local: `20260909_multi3_rgb_scalefree`** (pod C,
+2 h 46 min): HOI4D + EPIC + ARCTIC, plain-TF RGB-only scale-free recipe,
+augmentation x8 = 41,288 samples/epoch, 30 ep. Best val 0.3901 at EPOCH 6
+— the val projection loss overfits from ep ~8 (0.47 -> 0.65) while train
+falls to 0.02: x8 views x 30 ep is far too long; use ~10 ep next time.
+Per-source held-out (same splits as the single-source arms): HOI4D
+**0.754 / 91.9 / shape 0.0355** (better than the HOI4D-only arm 0.733 /
+88.7 / 0.0378 on every metric), EPIC 0.591 / 69.8 / 0.092, ARCTIC 0.702 /
+83.3 / 0.084 (first numbers). Panels `viz/20260909_multi3_val_panels`:
+EPIC/ARCTIC masks on the right part, the type gate self-organised on EPIC
+(p_rev ~0.9 doors / ~0.4 drawers), trajectories short/jittery on the two
+new sources. NOTE: `config/{epic,arctic}_v1_rgb_scalefree.yaml` switched
+to the plain head (they were DCT-6 from the smoke configs; the multi3 ckpt
+could not load into them). **Phase 2 chained on the same pod** (`run_multi3_post_chain.sh`,
 log `multi3_post_chain.log`, started 12:09 local, waits for
 MULTI3_TEST_DONE): `20260909_sf3d_plain_rgb_scalefree_ft_multi3` = SF3D
 post-training with the PLAIN head (`trajectory_dct_coeffs 0`, so the multi3
