@@ -377,6 +377,19 @@ matched axis, 2 cm worse origin. Plain-head cost = jittery sweeps
 `viz/20260909_sf3d_plain_ft_multi3_panels`. Every scale-free arm's two
 test passes (pred_z_p / gt_z0) are identical — no test metric reads the
 trajectory scale.
+**USER DECISION 2026-09-10: DCT head from now on** (after the literature
+sweeps `knowledge/2026-09-10_*` — DCT is the human-motion standard, the
+egocentric/point-track fields use temporal decoders or physical decoders;
+synthesis + ranked alternatives in `knowledge/2026-09-10_2d_trajectory_head_synthesis.md`).
+**IN FLIGHT 2026-09-10 ~19:30 local: pod D `segaffordance-rgbsf-d`**
+(`run_multi3dct_chain.sh`, log `multi3dct_chain.log`):
+`20260910_multi3_dct_rgb_scalefree` = the multi3 recipe with the DCT-6 head,
+12 ep / milestones [9, 11] (the plain run peaked at ep 6 of 30) -> union +
+per-source tests -> `20260910_sf3d_g19_dct_rgb_scalefree_ft_multi3dct` =
+SF3D DCT post-training from it (DCT at both stages, nothing re-initialised)
+-> tests pred_z_p / gt_z0. Watcher deletes the pod on CHAIN_DONE — VERIFY.
+Comparison rows: plain multi3 2D (HOI4D 0.754 / 91.9 / 0.0355) and the
+plain SF3D post-training (MA 31.01 / PDet 22.72 / mIoU 0.2625, rough 0.068).
 **Next candidates:** the DCT teacher-forcing HOI4D arm under the new
 recipe as the SF3D init (depth counterpart = the 31.13 record); EPIC and
 ARCTIC first runs (`config/{epic,arctic}_v1_rgb_scalefree.yaml`, smoke-
