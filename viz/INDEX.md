@@ -8,6 +8,7 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
 |---|---|---|
+| [20260909_hoi4d_rgb_scalefree_val_panels](20260909_hoi4d_rgb_scalefree_val_panels/README.md) | RGB-only scale-free HOI4D arm (no depth anywhere, anchor at depth 1) on held-out furniture: masks 16/16 on the moving part, knuckle point, projected trajectories follow GT direction/extent (jittery plain head); held-out mIoU 0.733 / PDet 88.7 beats the depth tf_plain arm | `tools/hoi4d_vis_2d_panels.py` |
 | [20260908_arctic_v1_random24b](20260908_arctic_v1_random24b/README.md) | second random draw (seed 17) of the rebuilt ARCTIC 2D LMDB v1 (2,559 strokes): masks 24/24 on the moving part, single-arc trajectories | `tools/epic_lmdb_sample.py --uniform` |
 | [20260908_arctic_v1_lmdb_sample](20260908_arctic_v1_lmdb_sample/README.md) | 24 uniform-random records of the ARCTIC 2D LMDB v1 (2,559 strokes, 238 sequences, stroke-splitter fix): rendered GT moving-part masks 24/24, hinge origins, single-arc knuckle tracks | `tools/epic_lmdb_sample.py --uniform` |
 | [20260908_arctic_builder_test](20260908_arctic_builder_test/README.md) | ARCTIC record builder test: rendered moving-part masks from GT mesh poses, hinge origins, re-anchored knuckle tracks on 8 strokes (box/laptop/microwave) | `tools/arctic_process_2d.py --viz` |

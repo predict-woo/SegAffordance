@@ -1,0 +1,15 @@
+command: tools/hoi4d_vis_2d_panels.py --config config/hoi4d_v2_rgb_scalefree.yaml
+  --ckpt experiments/20260909_hoi4d_2d_v2_rgb_scalefree/checkpoints/best-epoch83-valloss0.2993.ckpt
+  --out viz/20260909_hoi4d_rgb_scalefree_val_panels --num 16
+tool_commit: 4c3cd6a
+generated: '2026-09-09T00:41:18+00:00'
+argv:
+- tools/hoi4d_vis_2d_panels.py
+- --config
+- config/hoi4d_v2_rgb_scalefree.yaml
+- --ckpt
+- experiments/20260909_hoi4d_2d_v2_rgb_scalefree/checkpoints/best-epoch83-valloss0.2993.ckpt
+- --out
+- viz/20260909_hoi4d_rgb_scalefree_val_panels
+- --num
+- '16'
