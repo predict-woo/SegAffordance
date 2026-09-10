@@ -7,7 +7,8 @@
 <script>
   window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
 </script>
-<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<!-- MathJax bundled locally (vendor/mathjax/tex-svg.js, MathJax 3, Apache-2.0); falls back to the CDN if the local copy is missing. -->
+<script src="vendor/mathjax/tex-svg.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js';document.head.appendChild(s);"></script>
 <style>
   :root { --ink:#1f2937; --muted:#6b7280; --rule:#e5e7eb; --acc:#b45309; --acc2:#1d4ed8; --ok:#047857; --bad:#b91c1c; --bg:#fbfbf9; --card:#fff; }
   html { color-scheme: light; }
@@ -28,7 +29,7 @@
   th { background: #f3f4f6; font-weight: 600; }
   figure { margin: 18px 0; }
   figcaption { color: var(--muted); font-size: 14px; margin-top: 6px; }
-  svg { max-width: 100%; height: auto; display:block; margin: 0 auto; }
+  figure svg { max-width: 100%; height: auto; display:block; margin: 0 auto; }  /* scoped: MathJax renders inline formulas as svg too */
   .row { display:flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
   .row > * { flex: 1 1 320px; }
   .muted { color: var(--muted); }
