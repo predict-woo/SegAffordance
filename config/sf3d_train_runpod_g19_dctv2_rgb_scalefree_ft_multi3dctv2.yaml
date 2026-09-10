@@ -10,7 +10,7 @@
 seed_everything: 42
 
 model:
-  finetune_from_path: "RESOLVED_BY_CHAIN"   # multi3 DCT v2 arm best (resolved by run_multi3dctv2_chain.sh)
+  finetune_from_path: "/workspace/SegAffordance/experiments/20260910_multi3_dctv2_rgb_scalefree/checkpoints/best-epoch07-valloss0.7640.ckpt"   # multi3 DCT v2 arm best (resolved by run_multi3dctv2_chain.sh)
   # gen-7: CLIP FROZEN (user decision). Watch item: the gen-5 frozen run
   # had the mask regression, and gen-7 leans on masks harder than any
   # generation (heatmaps share the projector with the mask channel).
