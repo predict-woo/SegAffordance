@@ -293,7 +293,32 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
-## IN FLIGHT 2026-09-10 ~02:20 local: DCT READOUT CONVENTIONS v2 — two pods (dctv2-m, dctv2-j), user asleep
+## DONE 2026-09-10 ~07:10 local: DCT READOUT CONVENTIONS v2 — both chains complete, pods deleted (verified), only the dev pod runs
+
+**Results (single seed; full tables in the three notes.md + INDEX):**
+
+| arm | MA / signed | matched axis | origin | mIoU / PDet | traj_dir | rough |
+|---|---|---|---|---|---|---|
+| DCT chain (ref, ep 24) | **32.80 / 32.43** | 20.5° | **0.256** | 0.254 / 20.7 | 92.6 | 0.0081 |
+| **v2 chain** `20260910_sf3d_g19_dctv2_rgb_scalefree_ft_multi3dctv2` (ep 15) | 32.31 / 31.60 | 18.9° | 0.301 | 0.233 / 15.7 | 95.7 | **0.0078** |
+| joint4 (ref, ep 12) | 31.41 / 30.15 | 20.1° | 0.327 | **0.274 / 22.7** | **96.4** | 0.0090 |
+| **v2 joint** `20260910_joint4_dctv2_rgb_scalefree` (ep 13) | **32.94** / 32.08 | **16.4°** | 0.355 | 0.250 / 19.1 | 96.0 | 0.0096 |
+
+2D arm `20260910_multi3_dctv2_rgb_scalefree` (ep 7): union 0.670 / 78.7 / shape 0.0551 vs the DCT
+arm 0.715 / 83.8 / 0.057 (track fit slightly better, masks -0.045, rough 0.012 = 2x).
+Hand sources under the v2 joint model: HOI4D 0.592 / 73.6 (joint4 0.676 / 85.2), ARCTIC 0.547 / 59.6.
+
+**Verdict.** The v2 conventions are an ARTICULATION-vs-MASK trade, the g19_fdiff signature three
+times over: axes sharpen (matched -1.6° / -3.6°), direction and smoothness improve, the joint recipe
+sets the best MA of any arm (32.94, no depth); but masks / detection regress on every arm and every
+source (-0.02 mIoU, -4..-5 PDet on SF3D; -0.08 / -12 on HOI4D), origin +3..5 cm, and the chain's
+MA drops 0.5. Four ingredients changed at once (pin, scale split, fdiff trio, log-length); the
+precedent says the derivative trio owns both the axis gain and the mask loss. **Next:** ablate on the
+joint recipe — v2 head with the trio OFF, and the trio at 0.25/0.1/0.1; then the analytic decoder as
+the output head (synthesis #1, parked by the user). Ops: watchers must be launched with
+`nohup ... & disown` (the harness kills plain background wrappers; no `setsid` on macOS).
+
+Was: IN FLIGHT 02:20 local — two pods (dctv2-m, dctv2-j).
 
 **Why.** Second, clean-slate trajectory-head literature sweep (four Fable
 subagents, ~145 papers; `knowledge/2026-09-10_survey_v2_*.md` + the merged
@@ -337,9 +362,8 @@ conventions changed):**
   (joint recipe unchanged: hand x10, lr 2e-5, 20 ep, ~16 min/ep) -> SF3D +
   per-source tests. Compare: joint4 (MA 31.41, mIoU 0.2738, traj_dir 96.4,
   HOI4D 0.676 / 85.2).
-Both started 00:21 UTC; expected done ~07:30-08:00 UTC (M) / ~06:30 UTC (J).
-Watchers (Mac background, `rgb_pod_watch.sh`) delete each pod on
-CHAIN_DONE — VERIFY with `runpodctl pod list`. Test commands pass
+Both started 00:21 UTC; done 05:04 UTC (M) / 04:55 UTC (J); both pods deleted by the
+watchers and verified with `runpodctl pod list`. Test commands pass
 `--model.model_params.trajectory_dct_pin_start true --model.model_params.
 trajectory_dct_scale_split true` to the single-source / scratch configs.
 Per-source tests read the multi/joint ckpts with the plain-head configs +
