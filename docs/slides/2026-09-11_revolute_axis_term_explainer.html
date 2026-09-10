@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Why the revolute trajectory loss cannot carry the axis sign (and what can)</title>
+<script>
+  window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 <style>
   :root { --ink:#1f2937; --muted:#6b7280; --rule:#e5e7eb; --acc:#b45309; --acc2:#1d4ed8; --ok:#047857; --bad:#b91c1c; --bg:#fbfbf9; --card:#ffffff; }
   html { color-scheme: light; }
@@ -18,7 +22,7 @@
   .key { border-left: 4px solid var(--acc); }
   .good { border-left: 4px solid var(--ok); }
   .warn { border-left: 4px solid var(--bad); }
-  .math { font-family: "STIX Two Math", "Cambria Math", "Times New Roman", serif; font-size: 18px; text-align:center; margin: 12px 0; padding: 6px 0; }
+  .math { font-size: 17px; text-align:center; margin: 12px 0; padding: 6px 0; }
   .math .small { font-size: 14px; color: var(--muted); }
   code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; background:#f3f4f6; padding: 1px 5px; border-radius: 4px; }
   table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 15px; }
@@ -47,10 +51,10 @@
 <div>
 <p>The model predicts an axis direction <b>n</b>, a hinge origin <b>o</b>, and the interaction point <b>p₀</b>. Ground truth is <b>n*</b>, <b>o*</b>, <b>p₀*</b>. The point's path is a circular arc, and everything about that arc is captured by two vectors:</p>
 <ul>
-  <li><b>the lever</b> <span class="math" style="display:inline; font-size:16px">r = (I − nnᵀ)(p₀ − o)</span> — from the axis line to the point, perpendicular to the axis. Its length is the radius.</li>
-  <li><b>the tangent</b> <span class="math" style="display:inline; font-size:16px">t = n × r</span> — the direction the point starts moving. This is the <em>only</em> place the axis sign enters: flip <b>n</b> and <b>t</b> flips.</li>
+  <li><b>the lever</b> \(\mathbf r = (I - \mathbf n\mathbf n^{\top})(\mathbf p_0 - \mathbf o)\) — from the axis line to the point, perpendicular to the axis. Its length is the radius.</li>
+  <li><b>the tangent</b> \(\mathbf t = \mathbf n \times \mathbf r\) — the direction the point starts moving. This is the <em>only</em> place the axis sign enters: flip \(\mathbf n\) and \(\mathbf t\) flips.</li>
 </ul>
-<div class="math">x(θ) = o + cos θ · r + sin θ · t,&nbsp;&nbsp; θ ∈ [0, Θ]</div>
+<div class="math">\[\mathbf x(\theta) = \mathbf o + \cos\theta\,\mathbf r + \sin\theta\,\mathbf t, \qquad \theta \in [0, \Theta]\]</div>
 <p>The loss compares this arc with the GT arc at matched angles θ, integrates over the sweep Θ (π/2 in the writer), and divides by the same integral on the GT arc so a collapsed prediction scores 1.</p>
 </div>
 <div>
@@ -85,28 +89,28 @@
 
 <h2>2. Why prismatic gives 1 − cos for free</h2>
 <p>A prismatic trajectory is a straight segment of fixed length L along the predicted direction d̂. The squared distance to the GT segment, integrated and normalised, is</p>
-<div class="math">(1/L²) · ∫ |s·L·d̂ − s·L·d̂*|² ds ÷ ∫ s² ds &nbsp;=&nbsp; |d̂ − d̂*|² &nbsp;=&nbsp; 2 (1 − cos ∠(d̂, d̂*))</div>
+<div class="math">\[\frac{\int_0^1 \lVert sL\hat{\mathbf d} - sL\hat{\mathbf d}^*\rVert^2\,ds}{\int_0^1 \lVert sL\hat{\mathbf d}^*\rVert^2\,ds} \;=\; \lVert \hat{\mathbf d} - \hat{\mathbf d}^*\rVert^2 \;=\; 2\bigl(1 - \cos\angle(\hat{\mathbf d}, \hat{\mathbf d}^*)\bigr)\]</div>
 <p>The length cancels under the normalisation, nothing else is left, and what remains is exactly the sign-aware axis loss: scale-free, and with its steepest gradient at the flipped direction. Nothing was designed here; it is the only thing a segment knows about.</p>
 
 <h2>3. The master formula for every revolute point-arc loss</h2>
-<p>Expanding the revolute quadratic in the frame of the two arcs gives one form that covers the position term, the derivative term, any sweep and any normaliser. With <b>k = n·n*</b> (the axis alignment), <b>λ = |r| / |r*|</b> (predicted over GT radius) and two in-plane phases ψ and χ:</p>
+<p>Expanding the revolute quadratic in the frame of the two arcs gives one form that covers the position term, the derivative term, any sweep and any normaliser. With \(k = \mathbf n\cdot\mathbf n^*\) (the axis alignment), \(\lambda = \lVert\mathbf r\rVert / \lVert\mathbf r^*\rVert\) (predicted over GT radius) and two in-plane phases \(\psi\) and \(\chi\):</p>
 <div class="box key">
-<div class="math">L &nbsp;=&nbsp; radius(λ) &nbsp;+&nbsp; λ<sup>p</sup> (1 − k) · [1 + ρ<sub>Θ</sub> cos(χ − χ<sub>Θ</sub>)] &nbsp;+&nbsp; λ<sup>p</sup> (1 + k) · (1 − cos ψ)</div>
-<p class="muted" style="margin:0">Three pieces: a radius error, an axis-alignment term that <em>is</em> a 1 − cos but multiplied by two factors, and a lever-phase term (how far the lever is rotated in-plane).</p>
+<div class="math">\[\mathcal L \;=\; \underbrace{\mathrm{radius}(\lambda)}_{\text{radius error}} \;+\; \underbrace{\lambda^{p}\,(1-k)\,\bigl[1 + \rho_\Theta \cos(\chi - \chi_\Theta)\bigr]}_{\text{axis alignment}} \;+\; \underbrace{\lambda^{p}\,(1+k)\,(1-\cos\psi)}_{\text{lever phase}}\]</div>
+<p class="muted" style="margin:0">Three pieces: a radius error, an axis-alignment term that <em>is</em> a \(1-\cos\) but multiplied by two factors, and a lever-phase term (how far the lever is rotated in-plane).</p>
 </div>
 <p>So the 1 − cos is there. The problem is the two multipliers in front of it:</p>
 <table>
-<tr><th>term</th><th>p (lever scaling)</th><th>ρ<sub>Θ</sub> (phase leak) at π/2 · π · 2π</th></tr>
-<tr><td>position L2 / |r*|² &nbsp;<span class="tag">code: rot_pos</span></td><td class="num">1</td><td class="num">0.95 · 0.81 · 0.50</td></tr>
-<tr><td>derivative H1 / |r*|² &nbsp;<span class="tag">code: rot_der</span></td><td class="num">1</td><td class="num">0.64 · 0 · 0</td></tr>
-<tr><td>direct axis loss 1 − k &nbsp;<span class="tag">the "anchor"</span></td><td class="num">0</td><td class="num">0</td></tr>
+<tr><th>term</th><th>\(p\) (lever scaling)</th><th>\(\rho_\Theta\) (phase leak) at \(\Theta = \pi/2,\ \pi,\ 2\pi\)</th></tr>
+<tr><td>position \(L^2 / \lVert\mathbf r^*\rVert^2\) &nbsp;<span class="tag">code: rot_pos</span></td><td class="num">1</td><td class="num">0.95 · 0.81 · 0.50</td></tr>
+<tr><td>derivative \(H^1 / \lVert\mathbf r^*\rVert^2\) &nbsp;<span class="tag">code: rot_der</span></td><td class="num">1</td><td class="num">0.64 · 0 · 0</td></tr>
+<tr><td>direct axis loss \(1-k\) &nbsp;<span class="tag">the "anchor"</span></td><td class="num">0</td><td class="num">0</td></tr>
 </table>
 
-<h3>Mechanism 1 — homogeneity (p = 1): the axis gradient shrinks with the radius</h3>
-<p>The numerator is quadratic in the predicted lever and the denominator uses only the GT lever, so every axis-carrying term is multiplied by λ. At a predicted radius of 1 cm on a 1 m door the axis gradient is 1 % of normal; at zero lever the loss is exactly 1 for every axis — a plateau where the axis is invisible. A scale-free term like 1 − k has degree 0 in the lever and simply cannot arise from a degree-2 numerator over a GT-only normaliser.</p>
+<h3>Mechanism 1 — homogeneity (\(p = 1\)): the axis gradient shrinks with the radius</h3>
+<p>The numerator is quadratic in the predicted lever and the denominator uses only the GT lever, so every axis-carrying term is multiplied by \(\lambda\). At a predicted radius of 1 cm on a 1 m door the axis gradient is 1 % of normal; at zero lever the loss is exactly 1 for every axis — a plateau where the axis is invisible. A scale-free term like \(1-k\) has degree 0 in the lever and simply cannot arise from a degree-2 numerator over a GT-only normaliser.</p>
 
-<h3>Mechanism 2 — phase leak (ρ &gt; 0): the flipped axis can be bought back</h3>
-<p>The coefficient of (1 − k) is 1 + ρ cos(χ − χ<sub>Θ</sub>), and the phase χ is set by where the origin and point are placed. So the other heads can shrink the flip penalty to (1 − ρ). For the position term ρ is at least 0.5 at every sweep, because its basis {cos θ − 1, sin θ} is never isotropic. For the derivative term ρ = |sin Θ| / Θ, which vanishes at Θ = π and 2π.</p>
+<h3>Mechanism 2 — phase leak (\(\rho_\Theta > 0\)): the flipped axis can be bought back</h3>
+<p>The coefficient of \((1-k)\) is \(1 + \rho_\Theta\cos(\chi - \chi_\Theta)\), and the phase \(\chi\) is set by where the origin and point are placed. So the other heads can shrink the flip penalty to \((1-\rho_\Theta)\). For the position term \(\rho_\Theta \ge 0.5\) at every sweep, because its basis \(\{\cos\theta - 1,\ \sin\theta\}\) is never isotropic. For the derivative term \(\rho_\Theta = \lvert\sin\Theta\rvert/\Theta\), which vanishes at \(\Theta = \pi\) and \(2\pi\).</p>
 
 <div class="row">
 <div>
@@ -132,10 +136,10 @@
 <p>Minimising over origin and point at a flipped axis gives the <b>floor</b> — how cheap a flip can be made:</p>
 <table>
 <tr><th>loss</th><th>flipped, honest o,p₀</th><th>floor after compensation</th></tr>
-<tr><td>L2, π/2 (current)</td><td class="num">2.75</td><td class="num"><b>0.09</b> — a near-trap: 7 of 8 curvature directions do not lead out</td></tr>
-<tr><td>H1, π/2 (current)</td><td class="num">2.00</td><td class="num">0.60</td></tr>
-<tr><td>H1, π, unit levers</td><td class="num">2.00</td><td class="num">2.00 — cannot be bought</td></tr>
-<tr><td>axis loss 1 − k</td><td class="num">2</td><td class="num">2 — cannot be bought</td></tr>
+<tr><td>\(L^2\), \(\Theta=\pi/2\) (current)</td><td class="num">2.75</td><td class="num"><b>0.09</b> — a near-trap: 7 of 8 curvature directions do not lead out</td></tr>
+<tr><td>\(H^1\), \(\Theta=\pi/2\) (current)</td><td class="num">2.00</td><td class="num">0.60</td></tr>
+<tr><td>\(H^1\), \(\Theta=\pi\), unit levers</td><td class="num">2.00</td><td class="num">2.00 — cannot be bought</td></tr>
+<tr><td>axis loss \(1-k\)</td><td class="num">2</td><td class="num">2 — cannot be bought</td></tr>
 </table>
 <p>This is the August result read off the formula: the L2-only arm trained against a loss whose flipped-axis floor was 3 % of its honest value, and its revolute flips stayed at 20 %. The "antipodal saddle" in the earlier notes is really this compensated state.</p>
 </div>
@@ -143,14 +147,14 @@
 
 <h2>4. The one clean instance</h2>
 <div class="box good">
-<p>A clean, scale-free, uncompensable (1 − k) appears exactly when <b>p = 0</b> (normalise by the predicted lever too, or compare unit tangents) <b>and ρ = 0</b> (derivative term at Θ = π or 2π). The simplest form is the derivative loss at Θ = π on unit-normalised levers:</p>
-<div class="math">rot_der_unit &nbsp;=&nbsp; ½ (|r̂ − r̂*|² + |t̂ − t̂*|²) &nbsp;=&nbsp; (1 − k) + (1 + k)(1 − cos ψ)</div>
-<p style="margin:0">Two lines in <code>closed_form_screw_loss</code>: normalise r and t (with a floor on |r|) and set the sweep to π. The flipped axis costs exactly 2 whatever the origin and point do; the axis gradient is the same at any radius.</p>
+<p>A clean, scale-free, uncompensable \((1-k)\) appears exactly when \(p = 0\) (normalise by the predicted lever too, or compare unit tangents) <b>and</b> \(\rho_\Theta = 0\) (derivative term at \(\Theta = \pi\) or \(2\pi\)). The simplest form is the derivative loss at \(\Theta = \pi\) on unit-normalised levers:</p>
+<div class="math">\[\mathcal L_{\text{rot\_der\_unit}} \;=\; \tfrac12\bigl(\lVert\hat{\mathbf r} - \hat{\mathbf r}^*\rVert^2 + \lVert\hat{\mathbf t} - \hat{\mathbf t}^*\rVert^2\bigr) \;=\; (1-k) + (1+k)(1-\cos\psi)\]</div>
+<p style="margin:0">Two lines in <code>closed_form_screw_loss</code>: normalise \(\mathbf r\) and \(\mathbf t\) (with a floor on \(\lVert\mathbf r\rVert\)) and set the sweep to \(\pi\). The flipped axis costs exactly 2 whatever the origin and point do; the axis gradient is the same at any radius.</p>
 </div>
 <p>What it gives up, and why it is still not the axis loss:</p>
 <ul>
-  <li><b>No radius.</b> Unit levers discard |r|; the existing position term at a small weight (0.1–0.2) has to carry radius and origin.</li>
-  <li><b>A singularity</b> when the predicted axis is parallel to p₀ − o (the projected lever vanishes); needs the floor.</li>
+  <li><b>No radius.</b> Unit levers discard \(\lVert\mathbf r\rVert\); the existing position term at a small weight (0.1–0.2) has to carry radius and origin.</li>
+  <li><b>A singularity</b> when the predicted axis is parallel to \(\mathbf p_0 - \mathbf o\) (the projected lever vanishes); needs the floor.</li>
   <li><b>Half the escape routes.</b> At the flipped axis the curvature in the two axis directions is (−1, +1): tilting the axis one way lowers the loss, tilting it the other way raises it. The direct axis loss has (−1, −1): every tilt helps. A point arc only sees the axis through the tangent direction, whose phase is a nuisance the origin controls, so this is the best any point-arc functional can do.</li>
 </ul>
 
@@ -176,11 +180,11 @@
 <div>
 <p>A joint moves the whole part, not just one point. Write the motion as a rigid transform: a rotation and a translation.</p>
 <ul>
-  <li><b>Prismatic:</b> rotation = identity, translation = θ·L·d̂. The whole motion <em>is</em> the direction, and any point's path shows it. That is why the segment loss collapsed to 1 − cos.</li>
-  <li><b>Revolute:</b> rotation = R(θn), translation = (I − R(θn))·o. The direction lives in the <em>rotation</em> part. A single point's arc is the translation part evaluated at that point — it sees the axis only indirectly, through the lever.</li>
+  <li><b>Prismatic:</b> rotation \(= I\), translation \(= \theta L\,\hat{\mathbf d}\). The whole motion <em>is</em> the direction, and any point's path shows it. That is why the segment loss collapsed to \(1-\cos\).</li>
+  <li><b>Revolute:</b> rotation \(= R(\theta\mathbf n)\), translation \(= (I - R(\theta\mathbf n))\,\mathbf o\). The direction lives in the <em>rotation</em> part. A single point's arc is the translation part evaluated at that point — it sees the axis only indirectly, through the lever.</li>
 </ul>
-<p>Now take the trajectory loss of the <em>orientation</em>, the derivative (H1) version: the body angular velocity of R(θn) is the constant vector n, so</p>
-<div class="math">(1/2Θ) ∫ ‖RᵀṘ − R*ᵀṘ*‖² dθ &nbsp;=&nbsp; |n − n*|² &nbsp;=&nbsp; 2 (1 − k)</div>
+<p>Now take the trajectory loss of the <em>orientation</em>, the derivative (\(H^1\)) version: the body angular velocity of \(R(\theta\mathbf n)\) is the constant vector \(\mathbf n\), so</p>
+<div class="math">\[\frac{1}{2\Theta}\int_0^{\Theta} \bigl\lVert R^{\top}\dot R - R^{*\top}\dot R^{*}\bigr\rVert_F^2\,d\theta \;=\; \lVert\mathbf n - \mathbf n^*\rVert^2 \;=\; 2\,(1-k)\]</div>
 <p>which is the same expression the prismatic rows produce. <b>The direct axis loss is the revolute twin of the prismatic trajectory loss.</b> It was in the recipe from the start for empirical reasons; this is the reason it belongs there.</p>
 </div>
 <div>
@@ -201,26 +205,26 @@
 </figure>
 </div>
 </div>
-<p class="muted">Side result: the position (L2) loss on the rotation matrices, ∫‖R(θn) − R(θn*)‖², is a concave reshaping of 1 − cos that becomes non-monotone for sweeps above about 2.1 rad (at Θ = π the flipped axis is a local minimum, because a reversed full turn visits the same orientations). Do not use it at large sweeps.</p>
+<p class="muted">Side result: the position (\(L^2\)) loss on the rotation matrices, \(\int \lVert R(\theta\mathbf n) - R(\theta\mathbf n^*)\rVert_F^2\,d\theta = 8(\Theta - \sin\Theta)(1-k) - 2A(1-k)^2\), is a concave reshaping of \(1-\cos\) that becomes non-monotone for sweeps above about 2.1 rad (at \(\Theta = \pi\) the flipped axis is a local minimum, because a reversed full turn visits the same orientations). Do not use it at large sweeps.</p>
 
 <h2>6. What this means for the runs</h2>
 <div class="box key">
 <ol>
   <li><b>Keep the axis loss on.</b> It is not an extra; it is the missing half of the revolute trajectory loss, with the only curvature shape (−1, −1) that closes every escape from a flipped axis. Every record recipe already has it at 0.5.</li>
   <li><b>The planned first run stands:</b> the L2 closed form plus the standard axis loss on SF3D — the untested corner of the August grid — with the decoder and projection loss on the hand-video sources. Adding the derivative (H1) term later is the same functional one derivative up.</li>
-  <li><b>If a single trajectory term should carry the sign,</b> the composition is: unit-lever H1 at Θ = π (shape and sign) + the current position term at 0.1–0.2 (radius and origin) + the axis loss at 0.5. The experiment that tests the theory is unit-lever H1 with no axis loss against the no-axis arm's 15.9 % flips.</li>
-  <li><b>Two things not to do:</b> the SO(3) position loss at sweeps ≥ 2.1 rad, and a geometric-mean normaliser (1 / |r||r*|) without a lever floor — its origin gradient grows like 1/λ² at small radius.</li>
+  <li><b>If a single trajectory term should carry the sign,</b> the composition is: unit-lever \(H^1\) at \(\Theta = \pi\) (shape and sign) + the current position term at 0.1–0.2 (radius and origin) + the axis loss at 0.5. The experiment that tests the theory is unit-lever \(H^1\) with no axis loss against the no-axis arm's 15.9 % flips.</li>
+  <li><b>Two things not to do:</b> the \(SO(3)\) position loss at sweeps \(\ge 2.1\) rad, and a geometric-mean normaliser \(1/(\lVert\mathbf r\rVert\,\lVert\mathbf r^*\rVert)\) without a lever floor — its origin gradient grows like \(1/\lambda^2\) at small radius.</li>
 </ol>
 </div>
 
 <h3>Gradient and curvature summary <span class="muted">(exact origin and point; gradient with respect to the axis on the sphere)</span></h3>
 <table>
 <tr><th>loss</th><th>|∇| at 90° error</th><th>|∇| at 170°</th><th>curvature at flipped axis</th><th>floor after compensation</th></tr>
-<tr><td>L2, π/2 (code)</td><td class="num">1.63 · λ</td><td class="num">0.40</td><td class="num">−2.7, −0.8</td><td class="num">0.09</td></tr>
-<tr><td>H1, π/2 (code)</td><td class="num">1.19 · λ</td><td class="num">0.21</td><td class="num">−1.6, −0.4</td><td class="num">0.60</td></tr>
-<tr><td>unit-lever H1, π</td><td class="num">1.00</td><td class="num">0.17</td><td class="num">−1, +1</td><td class="num">2.00</td></tr>
-<tr><td>Frenet frame (SO(3) chordal)</td><td class="num">4.00</td><td class="num">0.00</td><td class="num">−4, 0</td><td class="num">8</td></tr>
-<tr><td>axis loss 1 − k</td><td class="num">1.00</td><td class="num">0.17</td><td class="num">−1, −1</td><td class="num">2</td></tr>
+<tr><td>\(L^2\), \(\pi/2\) (code)</td><td class="num">1.63 · λ</td><td class="num">0.40</td><td class="num">−2.7, −0.8</td><td class="num">0.09</td></tr>
+<tr><td>\(H^1\), \(\pi/2\) (code)</td><td class="num">1.19 · λ</td><td class="num">0.21</td><td class="num">−1.6, −0.4</td><td class="num">0.60</td></tr>
+<tr><td>unit-lever \(H^1\), \(\pi\)</td><td class="num">1.00</td><td class="num">0.17</td><td class="num">−1, +1</td><td class="num">2.00</td></tr>
+<tr><td>Frenet frame (\(SO(3)\) chordal)</td><td class="num">4.00</td><td class="num">0.00</td><td class="num">−4, 0</td><td class="num">8</td></tr>
+<tr><td>axis loss \(1-k\)</td><td class="num">1.00</td><td class="num">0.17</td><td class="num">−1, −1</td><td class="num">2</td></tr>
 </table>
 
 </main>
