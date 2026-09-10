@@ -203,7 +203,8 @@ B_2 = 2\!\int_0^{\Theta}(\cos\theta - 1)\sin\theta\, d\theta = -1.\]
 </table>
 <div class="box key">
 \[\mathcal L \;=\; 2\,(1 - \mathbf n\cdot\mathbf n^*) \;+\; (1 + \mathbf n\cdot\mathbf n^*)\,(1 - \cos\psi) \;+\; 0.15\,(\log\lambda)^2\]
-<p style="margin:0">with unit levers and a lever floor. Relative to the record recipe (H1 at \(\pi/2\) + axis loss 0.5) this changes three things: the axis and phase pieces no longer scale with the predicted radius, the leak goes from 0.64 to 0, and the sweep disappears.</p>
+<p style="margin:0 0 6px">with unit levers and a lever floor. The \((\log\lambda)^2\) is a design choice, not a derived term: the derivation gives \((\lambda-1)^2\), which charges a doubled radius (1) four times a halved one (0.25); a penalty in \(\log\lambda\) treats "half" and "double" symmetrically, and agrees with \((\lambda-1)^2\) to second order near \(\lambda = 1\). \(\lambda + 1/\lambda - 2 = 4\sinh^2(\tfrac12\log\lambda)\) is the other symmetric option (it is what the geometric-mean normaliser produces, but it grows like \(1/\lambda\) toward a collapsed lever and needs a floor).</p>
+<p style="margin:0">Relative to the record recipe (H1 at \(\pi/2\) + axis loss 0.5) this changes three things: the axis and phase pieces no longer scale with the predicted radius, the leak goes from 0.64 to 0, and the sweep disappears.</p>
 </div>
 <p>This is a hypothesis from the shape of the equation, not a result. The run that tests it is this loss on the arm-B config against <code>20260828_sf3d_cf_h1only</code> (MA 30.64, hinge flips 15.4 %, matched axis 16.6°, origin 0.254), a single seed. Expected direction: fewer flips and a sharper matched axis, with origin set by the radius weight.</p>
 
