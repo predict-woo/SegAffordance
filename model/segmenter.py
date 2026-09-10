@@ -1,10 +1,12 @@
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 from model.backbones import build_backbone
-from model.losses.geometric import backproject_points
+from model.losses.geometric import analytic_decode_curves, backproject_points
 from model.outputs import ModelOutputs
 
 from .layers import (
@@ -15,6 +17,7 @@ from .layers import (
     MotionVAE,
     MotionMLP,
     DepthEncoder,
+    TrajectoryLengthHead,
     TrajectoryMLP,
     Trajectory2DMLP,
     OriginDepthHead,
@@ -273,6 +276,24 @@ class CRIS(nn.Module):
         else:
             self.trajectory_predictor = None
 
+        # 2026-09-11: analytic trajectory DECODER (joint design) — renders the
+        # trajectory from the articulation heads + a learned arc length instead
+        # of a free-form head. Built after vae_condition_dim is final (below);
+        # flag kept here so the guards can run before the heads exist.
+        self.trajectory_decoder = getattr(model_params, "trajectory_decoder", "none")
+        if self.trajectory_decoder not in ("none", "analytic"):
+            raise ValueError(f"trajectory_decoder must be none|analytic, got {self.trajectory_decoder!r}")
+        if self.trajectory_decoder == "analytic":
+            if self.use_trajectory_head:
+                raise ValueError("trajectory_decoder analytic replaces the trajectory head: set use_trajectory_head false")
+            if not getattr(model_params, "split_axis_heads", False):
+                raise ValueError("trajectory_decoder analytic needs split_axis_heads (rot + trans directions)")
+        self.trajectory_length_head = None
+        self.trajectory_scale_free = bool(getattr(model_params, "trajectory_scale_free", False))
+        self.trajectory_decoder_length = getattr(model_params, "trajectory_decoder_length", "head")
+        self.trajectory_decoder_max_angle = float(getattr(model_params, "trajectory_decoder_max_angle", math.pi))
+        self.trajectory_decoder_lever_floor = float(getattr(model_params, "trajectory_decoder_lever_floor", 0.02))
+
         # 2D hand/contact-track head, for pretraining on mined video.
         self.use_2d_trajectory_head = getattr(model_params, "use_2d_trajectory_head", False)
         if self.use_2d_trajectory_head:
@@ -364,6 +385,16 @@ class CRIS(nn.Module):
             if self.use_origin_heatmap
             else None
         )
+        if self.trajectory_decoder == "analytic":
+            if self.point_depth_head is None or self.origin_depth_head_g7 is None:
+                raise ValueError(
+                    "trajectory_decoder analytic needs the lifted point (predict_point_depth) "
+                    "and origin (use_origin_heatmap) — it renders from point_3d_pred / origin_pred"
+                )
+            self.trajectory_length_head = TrajectoryLengthHead(
+                input_dim=vae_condition_dim,
+                hidden_dim=getattr(model_params, "trajectory_length_hidden", 256),
+            )
 
         if self.channels_last:
             self.to(memory_format=torch.channels_last)
@@ -680,6 +711,43 @@ class CRIS(nn.Module):
         if not self.use_motion_type_head:
             motion_type_logits = None  # also covers the CVAE path
 
+        # 2026-09-11 analytic decoder: both branches from the model's own
+        # parameters + the learned arc length; trajectory_pred = the branch of
+        # the PREDICTED type (the trainer re-routes by GT type). Rendered in the
+        # scale-free frame (metres / z_p) when trajectory_scale_free, so the
+        # unit-anchor projection loss and the test-time z_p multiply apply
+        # unchanged. Needs the lifts, i.e. intrinsics in the batch.
+        trajectory_pred_rot = trajectory_pred_trans = trajectory_length = None
+        if (
+            self.trajectory_length_head is not None
+            and point_3d_pred is not None and origin_pred is not None
+            and motion_pred_rot is not None and motion_pred_trans is not None
+        ):
+            p3, o3 = point_3d_pred.float(), origin_pred.float()
+            if self.trajectory_scale_free:
+                zdiv = z_p.float().view(-1, 1).clamp(min=1e-3)
+                p3, o3 = p3 / zdiv, o3 / zdiv
+            trajectory_length = self.trajectory_length_head(vae_condition)
+            if self.trajectory_decoder_length == "writer":
+                # comparability pass: the GT writer's constants (pi/2 sweep,
+                # 0.7 m slide) expressed as arc lengths in the current frame
+                n_hat = F.normalize(motion_pred_rot.float(), p=2, dim=1, eps=1e-8)
+                rel = p3 - o3
+                radius = (rel - (rel * n_hat).sum(-1, keepdim=True) * n_hat).norm(dim=-1)
+                trans_len = 0.7 / zdiv.view(-1) if self.trajectory_scale_free else torch.full_like(radius, 0.7)
+                is_rot_pred = motion_type_logits.argmax(dim=-1) == 1 if motion_type_logits is not None else torch.ones_like(radius, dtype=torch.bool)
+                trajectory_length = torch.where(is_rot_pred, (math.pi / 2.0) * radius, trans_len).detach()
+            trajectory_pred_rot, trajectory_pred_trans, _aux = analytic_decode_curves(
+                motion_pred_rot, motion_pred_trans, o3, p3, trajectory_length,
+                num_points=20, max_angle=self.trajectory_decoder_max_angle,
+                lever_floor=self.trajectory_decoder_lever_floor,
+            )
+            if motion_type_logits is not None:
+                is_rot = (motion_type_logits.argmax(dim=-1) == 1)[:, None, None]
+                trajectory_pred = torch.where(is_rot, trajectory_pred_rot, trajectory_pred_trans)
+            else:
+                trajectory_pred = trajectory_pred_rot
+
         return ModelOutputs(
             mask_logits=mask_pred,
             point_logits=point_pred,
@@ -689,6 +757,9 @@ class CRIS(nn.Module):
             motion_pred_trans=motion_pred_trans,
             motion_type_logits=motion_type_logits,
             trajectory_pred=trajectory_pred,
+            trajectory_pred_rot=trajectory_pred_rot,
+            trajectory_pred_trans=trajectory_pred_trans,
+            trajectory_length=trajectory_length,
             trajectory_2d_pred=trajectory_2d_pred,
             origin_depth=origin_depth,
             twist_pred=twist_pred,

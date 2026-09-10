@@ -452,6 +452,30 @@ class TrajectoryMLP(nn.Module):
         return trajectory_pred.view(-1, K, self.num_points, 3)
 
 
+class TrajectoryLengthHead(nn.Module):
+    """Arc length of the interaction point's path (2026-09-11 decoder design):
+    one positive scalar per sample, the only trajectory-specific learned
+    quantity when the analytic decoder replaces the trajectory head. Same
+    construction as the v2 DCT scale head (2-layer MLP -> softplus, bias at
+    softplus(-0.7) ~ 0.40, a typical scale-free path length)."""
+
+    BIAS_INIT = -0.7
+
+    def __init__(self, input_dim: int, hidden_dim: int = 256):
+        super().__init__()
+        self.backbone = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim), nn.ReLU(True),
+            nn.Linear(hidden_dim, hidden_dim), nn.ReLU(True),
+        )
+        self.length_head = nn.Linear(hidden_dim, 1)
+        nn.init.zeros_(self.length_head.weight)
+        nn.init.constant_(self.length_head.bias, self.BIAS_INIT)
+
+    def forward(self, condition: torch.Tensor) -> torch.Tensor:
+        """-> (B,) positive arc length."""
+        return F.softplus(self.length_head(self.backbone(condition)).float()).view(-1)
+
+
 class Trajectory2DMLP(nn.Module):
     """Image-plane track, normalised to [0, 1], relative to its own first point.
 

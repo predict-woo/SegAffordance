@@ -1141,6 +1141,69 @@ def closed_form_screw_loss(
     return pos, der
 
 
+def analytic_decode_curves(
+    axis_rot: torch.Tensor,
+    axis_trans: torch.Tensor,
+    origin: torch.Tensor,
+    point: torch.Tensor,
+    length: torch.Tensor,
+    num_points: int = 20,
+    max_angle: float = math.pi,
+    lever_floor: float = 0.02,
+    detach_radius: bool = True,
+) -> Tuple[torch.Tensor, torch.Tensor, dict]:
+    """The analytic trajectory DECODER (2026-09-11 joint design): render both
+    articulation branches from the predicted parameters and a predicted ARC
+    LENGTH, in whatever frame the inputs share (metres, or scale-free units =
+    metres / z_p).
+
+      trans: rel_k = s_k * L * d_hat                          (straight line)
+      rot:   lever r = (I - nn^T)(p - o), radius rho = |r| (floored),
+             theta_k = s_k * min(L / rho, max_angle),
+             rel_k = (cos theta_k - 1) r + sin theta_k (n x r)  (arc about the axis line)
+      s_k = k / (N - 1): the writer's uniform timing (no learned profile).
+
+    The radius in the angle is DETACHED by default so a small predicted lever
+    cannot turn the projection loss into a huge angle gradient on the origin
+    (the arc's shape still trains origin/point through r). Returns
+    (rot_curve, trans_curve, {"radius", "theta_max"}), each curve (B, N, 3)
+    relative to its own first point (= 0 at k = 0).
+    """
+    device = point.device
+    s = torch.linspace(0.0, 1.0, num_points, device=device, dtype=torch.float32)   # (N,)
+    L = length.float().view(-1)                                                    # (B,)
+    d_hat = F.normalize(axis_trans.float(), p=2, dim=1, eps=1e-8)
+    trans_curve = s[None, :, None] * (L[:, None] * d_hat)[:, None, :]              # (B, N, 3)
+
+    n_hat = F.normalize(axis_rot.float(), p=2, dim=1, eps=1e-8)
+    rel = (point - origin).float()
+    lever = rel - (rel * n_hat).sum(-1, keepdim=True) * n_hat                      # (B, 3)
+    radius = lever.norm(dim=-1).clamp(min=lever_floor)                             # (B,)
+    rad_for_angle = radius.detach() if detach_radius else radius
+    theta_max = (L / rad_for_angle).clamp(max=max_angle)                            # (B,)
+    theta = s[None, :] * theta_max[:, None]                                         # (B, N)
+    tangent = torch.cross(n_hat, lever, dim=-1)
+    rot_curve = (
+        (torch.cos(theta) - 1.0)[..., None] * lever[:, None, :]
+        + torch.sin(theta)[..., None] * tangent[:, None, :]
+    )
+    return rot_curve, trans_curve, {"radius": radius, "theta_max": theta_max}
+
+
+def route_decoded_trajectory(outputs, motion_type: torch.Tensor):
+    """Teacher-forced routing of the decoder's two branches: trajectory_pred
+    becomes the rot branch where motion_type == 1 and the trans branch
+    elsewhere (train/val; test keeps the model's predicted-type selection).
+    No-op unless the model produced both branches."""
+    rot = getattr(outputs, "trajectory_pred_rot", None)
+    trans = getattr(outputs, "trajectory_pred_trans", None)
+    if rot is None or trans is None:
+        return outputs
+    is_rot = (motion_type.to(rot.device).view(-1) > 0.5)[:, None, None]
+    outputs.trajectory_pred = torch.where(is_rot, rot, trans)
+    return outputs
+
+
 def closed_form_frame_loss(
     motion_type_gt: torch.Tensor,
     axis_trans: torch.Tensor,

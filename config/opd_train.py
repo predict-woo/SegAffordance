@@ -122,6 +122,20 @@ class ModelParams:
     # checkpoints keep loading unchanged).
     trajectory_dct_pin_start: bool = False
     trajectory_dct_scale_split: bool = False
+    # 2026-09-11 joint design: the ANALYTIC DECODER replaces the trajectory head
+    # ("none" | "analytic"). With "analytic" the model renders both branches
+    # from its own type/axis/origin/point heads + a predicted arc length
+    # (TrajectoryLengthHead): rot = arc about the axis line with angle
+    # L / radius (radius detached, clamped at max_angle), trans = L * direction.
+    # Requires use_trajectory_head false, split_axis_heads, predict_point_depth
+    # and the origin heatmap lift. trajectory_decoder_length: "head" (the
+    # learned length) or "writer" (the GT writer's constants pi/2 and 0.7 m —
+    # comparability pass at test time only).
+    trajectory_decoder: str = "none"
+    trajectory_decoder_length: str = "head"
+    trajectory_decoder_max_angle: float = 3.141592653589793
+    trajectory_decoder_lever_floor: float = 0.02
+    trajectory_length_hidden: int = 256
     # 2026-09-09 (RGB-only / scale-free spec): the trajectory head predicts
     # Δ̃ = Δ / z0 — offsets in units of the anchor depth — instead of metres.
     # The head is unchanged; the trainers multiply trajectory_pred by a

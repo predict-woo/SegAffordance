@@ -22,6 +22,7 @@ from model.losses.geometric import (
     ScrewConsistencyLoss,
     TrajectoryProjectionLoss,
     apply_trajectory_scale,
+    route_decoded_trajectory,
     normalized_intrinsics,
     trajectory_scale_factor,
 )
@@ -209,6 +210,12 @@ class OPDRealTrainingModule(pl.LightningModule):
             motion_type_input, intrinsics_norm,
         )
 
+    def _no_learned_trajectory_head(self, outputs) -> bool:
+        """True when the trajectory (if any) comes from the analytic decoder,
+        not a learned head — the closed-form / analytic-decode losses on the
+        articulation parameters then apply (2026-09-11)."""
+        return outputs.trajectory_pred is None or getattr(self.model, "trajectory_decoder", "none") == "analytic"
+
     def _common_step(self, batch, batch_idx, step_type="train"):
         img, depth, word_str_list, targets = unpack_batch(batch)
         pname = self._profile_for(targets.source)
@@ -269,6 +276,14 @@ class OPDRealTrainingModule(pl.LightningModule):
             img, depth, tokenized_words, mask_gt, point_gt_norm, motion_gt,
             motion_type_input, K_norm,
         )
+        # Analytic decoder (2026-09-11): teacher-force the branch by GT type
+        # for the losses (the model selected by predicted type); test keeps
+        # the prediction. Before the scale multiply, which reads trajectory_pred.
+        if (
+            getattr(self.model, "trajectory_decoder", "none") == "analytic"
+            and motion_type_gt is not None and step_type != "test"
+        ):
+            outputs = route_decoded_trajectory(outputs, motion_type_gt)
         # Scale-free head (2026-09-09 spec): the head emits Δ̃ = Δ / z0; put
         # the metric scale back BEFORE any loss reads trajectory_pred. "unit"
         # (2D datasets) is a no-op; "gt_z0" (SF3D) multiplies by the GT
@@ -551,7 +566,7 @@ class OPDRealTrainingModule(pl.LightningModule):
         _cf_der = getattr(self.loss_params, "closed_form_velocity_weight", 0.0)
         if (
             (_cf_pos > 0.0 or _cf_der > 0.0)
-            and outputs.trajectory_pred is None
+            and self._no_learned_trajectory_head(outputs)
             and targets.trajectory is not None
             and targets.motion_type is not None
             and targets.motion is not None
@@ -603,7 +618,7 @@ class OPDRealTrainingModule(pl.LightningModule):
         _cff = getattr(self.loss_params, "closed_form_frame_weight", 0.0)
         if (
             _cff > 0.0
-            and outputs.trajectory_pred is None
+            and self._no_learned_trajectory_head(outputs)
             and targets.trajectory is not None
             and targets.motion_type is not None
             and targets.motion is not None
@@ -654,7 +669,7 @@ class OPDRealTrainingModule(pl.LightningModule):
         # heads + GT type routing, like the axis loss.
         if (
             getattr(self.loss_params, "analytic_trajectory_weight", 0.0) > 0.0
-            and outputs.trajectory_pred is None
+            and self._no_learned_trajectory_head(outputs)
             and targets.trajectory is not None
             and targets.motion_type is not None
             and outputs.motion_pred_rot is not None

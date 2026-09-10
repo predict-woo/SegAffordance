@@ -48,6 +48,15 @@ class ModelOutputs:
     #: (`use_trajectory_head: false`), as in 2D pretraining where no
     #: element-sweep ground truth exists.
     trajectory_pred: Optional[torch.Tensor] = None
+    #: Analytic decoder (ModelParams.trajectory_decoder == "analytic"): the two
+    #: rendered branches, (B, num_points, 3) each, relative to the first point,
+    #: in the head's frame (scale-free when trajectory_scale_free). trajectory_pred
+    #: is the row-wise selection by PREDICTED type; the trainer re-routes by GT
+    #: type (route_decoded_trajectory). trajectory_length (B,) is the predicted
+    #: arc length in the same frame. None without the decoder.
+    trajectory_pred_rot: Optional[torch.Tensor] = None
+    trajectory_pred_trans: Optional[torch.Tensor] = None
+    trajectory_length: Optional[torch.Tensor] = None
     #: (B, num_points, 2) 2D track in normalised [0, 1] coords, relative to its
     #: own first point. The hand/contact path — a different quantity from
     #: `trajectory_pred`. None unless `use_2d_trajectory_head`.
