@@ -293,6 +293,40 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
+## IN FLIGHT 2026-09-11 evening: two closed-form arms (pods cfframe, cfl22pi)
+
+**Context.** Morning: user plan = analytic decoder on the 2D sources (with rot/trans
+labels; EPIC to be VLM-labelled), closed-form loss on SF3D, no decoded curve there,
+start with L2 (+ the standard axis loss). Then the question "is there a revolute
+trajectory loss that contains 1-cos?" -> Fable subagent derivation
+`knowledge/2026-09-11_revolute_loss_with_axis_term.md` (+ `tools/revolute_loss_check.py`,
+explainers `docs/slides/2026-09-11_revolute_axis_term_explainer.html` and
+`..._l2_quadratic_from_scratch.html`, MathJax): EVERY point-arc loss expands to
+radius(lam) + lam^p (1-k)[1 + rho cos(chi - chi0)] + lam^p (1+k)(1 - cos psi);
+all August arms had p = 1 (axis penalty scaled by the predicted radius) and rho > 0
+(a flipped axis buyable by moving origin/point: floor 0.09 for L2 at pi/2, 0.60 H1;
+the mechanism behind the 20 % / 15.9 % flips). The direct axis loss is the p = 0,
+rho = 0 case = the body-velocity H1 of the ORIENTATION trajectory (the revolute twin
+of "prismatic trajectory loss = axis loss"), not an ad-hoc extra. No sweep closes
+the L2 leak (rho >= 0.43); H1 at Theta = pi on unit levers is the one clean instance.
+
+**Arms (arm-B config, 30 ep, seed 42, same pipeline as the August cf arms:
+sweep_queue + test; TMPDIR on the volume):**
+- `20260911_sf3d_cf_frame` (pod `segaffordance-cfframe`, `run_cf_frame_chain.sh`,
+  log `cf_frame_chain.log`): the loss designed from the SHAPE of the formula —
+  `closed_form_frame_loss` (commit fc6c21f): rot 2(1-k) + (1+k)(1-cos psi) +
+  0.15 (log lam)^2 on unit levers floored at 0.1|r*|, trans 2(1-cos); H1 and the
+  direct axis loss OFF (the 2(1-k) IS the anchor). Compare cf_h1only (MA 30.64,
+  rot flips 15.4, matched 16.6, origin 0.254). Prediction: fewer flips, sharper
+  matched axis, origin set by the radius weight.
+- `20260911_sf3d_cf_l2_noaxis_2pi` (pod `segaffordance-cfl22pi`,
+  `run_cf_l2_2pi_chain.sh`, log `cf_l2_2pi_chain.log`): cf_l2_noaxis with sweep
+  2pi (rho 0.953 -> 0.500). Compare cf_l2_noaxis (MA 23.80, rot flips 20.1,
+  matched 18.6, origin 0.277). Prediction: flips well below 20, matched blurrier,
+  origin worse.
+Watchers: Mac `nohup ... & disown` (`rgb_pod_watch.sh`), delete pods on
+CHAIN_DONE — VERIFY. ~4 h each.
+
 ## DONE 2026-09-10 ~07:10 local: DCT READOUT CONVENTIONS v2 — both chains complete, pods deleted (verified), only the dev pod runs
 
 **Results (single seed; full tables in the three notes.md + INDEX):**
