@@ -112,6 +112,28 @@
 <tr><td>direct axis loss \(1-k\) &nbsp;<span class="tag">the "anchor"</span></td><td class="num">0</td><td class="num">0</td></tr>
 </table>
 
+<h3>The same table, written out: what multiplies \((1-k)\) in each loss</h3>
+<p>Each row below is the full expansion of one loss in the master form. The bracket is the multiplier in front of \((1-k)\); its range is what the origin/point heads can do to it by choosing the phase \(\chi\). Constants at \(\Theta = \pi/2\): \(A = \tfrac{3\pi}{4} - 2 \approx 0.356\), \(C = \tfrac{\pi}{4} \approx 0.785\), \(B_2 = -1\).</p>
+<table>
+<tr><th>loss</th><th>expansion (\(\lambda = \lVert\mathbf r\rVert/\lVert\mathbf r^*\rVert\), \(k = \mathbf n\cdot\mathbf n^*\))</th><th>multiplier of \((1-k)\)</th><th>its range</th></tr>
+<tr><td>position \(L^2\), \(\Theta = \pi/2\) <span class="tag">rot_pos</span></td>
+<td>\(\displaystyle (\lambda-1)^2 + \lambda\,(1-k)\bigl[1 + 0.953\cos(\chi + 113^\circ)\bigr] + \lambda\,(1+k)(1-\cos\psi)\)<br><span class="muted">\(\rho_{\pi/2} = \sqrt{(A-C)^2 + B_2^2}\,/\,(A+C)\), \(\chi_{\pi/2} = \operatorname{atan2}(B_2, A-C)\)</span></td>
+<td>\(\lambda\,[1 + 0.953\cos(\chi + 113^\circ)]\)</td><td class="num">λ · [0.05, 1.95]</td></tr>
+<tr><td>derivative \(H^1\), \(\Theta = \pi/2\) <span class="tag">rot_der</span></td>
+<td>\(\displaystyle (\lambda-1)^2 + \lambda\,(1-k)\bigl[1 + 0.637\cos(\chi - \tfrac{\pi}{2})\bigr] + \lambda\,(1+k)(1-\cos\psi)\)<br><span class="muted">\(\rho_\Theta = \sin\Theta/\Theta\), \(\chi_\Theta = \Theta\)</span></td>
+<td>\(\lambda\,[1 + 0.637\cos(\chi - \tfrac{\pi}{2})]\)</td><td class="num">λ · [0.36, 1.64]</td></tr>
+<tr><td>derivative \(H^1\), \(\Theta = \pi\)</td>
+<td>\(\displaystyle (\lambda-1)^2 + \lambda\,(1-k) + \lambda\,(1+k)(1-\cos\psi)\)</td>
+<td>\(\lambda\)</td><td class="num">λ · [1, 1] — no leak, still radius-scaled</td></tr>
+<tr><td>derivative \(H^1\), \(\Theta = \pi\), unit levers <span class="tag">rot_der_unit</span></td>
+<td>\(\displaystyle (1-k) + (1+k)(1-\cos\psi)\)</td>
+<td>\(1\)</td><td class="num">[1, 1] — clean</td></tr>
+<tr><td>direct axis loss <span class="tag">anchor</span></td>
+<td>\(\displaystyle (1-k)\)</td>
+<td>\(1\)</td><td class="num">[1, 1] — clean, and no lever-phase term at all</td></tr>
+</table>
+<p>Two readings of the ranges. The lower end is how cheap a flipped axis can be made: with \(k = -1\) the axis term is \(2\times\) the multiplier, so the current position loss can price a flip at \(2 \times 0.05\,\lambda\) instead of 2 (that is the 0.09 floor after the radius term is also traded). The factor \(\lambda\) in front means the whole thing is further discounted by predicting a short lever. The unit-lever half-turn form and the axis loss have neither escape.</p>
+
 <h3>Mechanism 1 — homogeneity (\(p = 1\)): the axis gradient shrinks with the radius</h3>
 <p>The numerator is quadratic in the predicted lever and the denominator uses only the GT lever, so every axis-carrying term is multiplied by \(\lambda\). At a predicted radius of 1 cm on a 1 m door the axis gradient is 1 % of normal; at zero lever the loss is exactly 1 for every axis — a plateau where the axis is invisible. A scale-free term like \(1-k\) has degree 0 in the lever and simply cannot arise from a degree-2 numerator over a GT-only normaliser.</p>
 
