@@ -325,6 +325,22 @@ no residual, no consistency term, no derivative terms; joint4 recipe unchanged (
 ARCTIC on the 2D side; closed-form guard must become "no learned head"; SF3D test renders
 with the predicted length (and the writer constants for comparability).
 
+## AUTONOMOUS NIGHT 2026-09-11/12 (user away ~14 h from ~02:00 local; budget ~$150, soft)
+
+**Mandate (user, 2026-09-11 ~01:50 local):** finish the analytic-decoder implementation, run the joint
+training experiment (`20260911_joint4_decoder_rgb_scalefree`, `run_joint4dec_chain.sh`); when it
+finishes CHECK metrics AND look at rendered samples — fix if broken; if it worked, run the same joint
+recipe with different closed-form loss variants (informed by the cf_frame / cf_l2_noaxis_2pi results);
+when those closed-form arms finish, design and run further experiments if something is interesting.
+Commit and save everything as you go. Keep the dev pod running.
+
+**Plan:** (1) joint decoder run on pod jdec (~5.5 h, ~$12). (2) cf_frame + cf_l2_noaxis_2pi land ~04:00
+local -> notes/INDEX/STATE. (3) joint decoder lands ~08:00 -> SF3D test (head + writer length), per-source
+tests, panels (`tools/sf3d_vis_val.py`, `tools/hoi4d_vis_2d_panels.py` with decoder overrides) -> verdict.
+(4) Variants on the joint recipe, SF3D side only: L2 2pi + direct axis loss; H1 pi/2 + axis (cf_h1only
+recipe); cf_frame loss; pick by (2). Two to three pods in parallel. (5) Write-ups; STATE.
+Cost guide: PRO 6000 ~$2.1/h; joint run ~5.5 h; cf arm ~4 h; dev pod $0.57/h.
+
 ## IN FLIGHT 2026-09-11 evening: two closed-form arms (pods cfframe, cfl22pi)
 
 **Context.** Morning: user plan = analytic decoder on the 2D sources (with rot/trans
