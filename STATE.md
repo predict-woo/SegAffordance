@@ -305,6 +305,16 @@ labels in `docs/data/epic_vlm_type_labels_v1.json`; batch
 `viz/20260911_epic_type_label_prompt`. EPIC videos are NOT on any volume (deleted
 after the build), so onset-only; user: accurate enough.
 
+**HOI4D v2 labels (2026-09-11, rules, `tools/hoi4d_label_types.py`, backup
+`data.lmdb.bak_pre_rule_types`):** the v2 LMDB had the placeholder "trans" on all
+3,084 windows. User rules: rot = trash-can lids, safes, lamp open/close, laptops, C4
+windows whose text names a door (170); trans = C4 drawers (349 + 1 "front panel"),
+toy car push/pull, every press/switch; none = dump (bucket/kettle/mug/bottle), stapler,
+pliers, scissors. Result 1,868 rot / 953 trans / 263 none. ARCTIC already carried rot
+from its object models (all 2,559). **"none" must be handled by the loader before
+any HOI4D run: the current string->label mapping would silently read it as trans**
+(part of the decoder work: masks type CE + trajectory losses, keeps masks/points).
+
 **Joint decoder design (settled with the user 2026-09-11):** 2D sources (HOI4D, ARCTIC,
 EPIC, all with rot/trans labels; HOI4D's category labels now used for training, type CE
 0.5 on all sources, predicted type at test) -> analytic decoder rendered from GT-routed
