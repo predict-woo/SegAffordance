@@ -8,6 +8,7 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
 |---|---|---|
+| [20260911_epic_type_label_prompt](20260911_epic_type_label_prompt/README.md) | EPIC VLM rot/trans labelling: composites (outline mask + hand path) + the 20-record pilot sheet; full run 172 trans / 187 rot, all high confidence, 0 noun-rule disagreements; applied to the LMDB | tools/epic_vlm_label_types.py |
 | [20260911_sf3d_val_panels_sharp](20260911_sf3d_val_panels_sharp/README.md) | 16 SF3D val samples in the sharp 2x style, GT | joint | DCT chain: types right, hinges on the door edges (axis errors 8-18°), smooth arcs along the decoded orbits; the joint model loops occasionally where the chain's arc is clean | `tools/sf3d_vis_val.py` |
 | [20260911_iphone_probe](20260911_iphone_probe/README.md) | the joint model on four of the user's phone photos: the room door works (rot 0.94, hinge on the correct edge, z_p 1.43 m), laptop screen segmented but "trans", wardrobe localised by the handle only, chair fails (out of distribution); photos not committed | `tools/predict_image.py` |
 | [20260911_hoi4d_laptop_joint_only](20260911_hoi4d_laptop_joint_only/README.md) | the joint model alone on 10 held-out HOI4D laptops (GT | pred): lid masks 10/10, smooth tracks in the GT direction, but type "trans" 10/10 with arbitrary axes and z_p 2.5-4 m — 2D generalises, 3D articulation does not without laptop 3D labels | `tools/hoi4d_predict_articulation.py` |

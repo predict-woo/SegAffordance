@@ -293,6 +293,28 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
+## DONE 2026-09-11 ~00:45 local: EPIC rot/trans labels (VLM) — prerequisite of the joint decoder run
+
+`tools/epic_vlm_label_types.py` (gpt-5.6-luna via codex; codex login on the volume had
+expired -> the Mac's `~/.codex/auth.json` copied to `/workspace/.codex/`, user-approved):
+one composite per record (onset frame, mask OUTLINE, hand path), 359 records in ~2 min.
+Result: 172 trans (drawers) / 187 rot, all high confidence, 0 disagreements with the
+noun rule. Applied into `/workspace/datasets/epic_processed_2d/data.lmdb`
+(`motion_type_source = vlm-gpt-5.6-luna-v1`, backup `data.lmdb.bak_pre_vlm_types`);
+labels in `docs/data/epic_vlm_type_labels_v1.json`; batch
+`viz/20260911_epic_type_label_prompt`. EPIC videos are NOT on any volume (deleted
+after the build), so onset-only; user: accurate enough.
+
+**Joint decoder design (settled with the user 2026-09-11):** 2D sources (HOI4D, ARCTIC,
+EPIC, all with rot/trans labels; HOI4D's category labels now used for training, type CE
+0.5 on all sources, predicted type at test) -> analytic decoder rendered from GT-routed
+type / axis / origin / point + the v2 scale head reinterpreted as ARC LENGTH (rot: theta =
+L / r, r detached, clamp pi; trans: L d), trained by the unit-anchor projection loss only;
+SF3D -> closed-form L2 at 2pi ONLY (no direct axis loss, no rendered curve in training);
+no residual, no consistency term, no derivative terms; joint4 recipe unchanged (hand x10);
+ARCTIC on the 2D side; closed-form guard must become "no learned head"; SF3D test renders
+with the predicted length (and the writer constants for comparability).
+
 ## IN FLIGHT 2026-09-11 evening: two closed-form arms (pods cfframe, cfl22pi)
 
 **Context.** Morning: user plan = analytic decoder on the 2D sources (with rot/trans

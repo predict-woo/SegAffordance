@@ -1,0 +1,3592 @@
+{
+ "P01_09/P01_09_655": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is a hinged flap, and the hand follows an arcing path while closing it.",
+  "noun": "oven",
+  "verb": "close",
+  "narration": "close oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is a hinged flap, and the hand follows an arcing path while closing it."
+ },
+ "P01_01/P01_01_111": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer front has a horizontal pull handle and the hand path is straight outward, indicating it slides along rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer front has a horizontal pull handle and the hand path is straight outward, indicating it slides along rails."
+ },
+ "P01_01/P01_01_121": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is a hinged vertical panel, and the hand pulls its edge outward along an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is a hinged vertical panel, and the hand pulls its edge outward along an arc."
+ },
+ "P01_01/P01_01_34": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The broad cupboard door is mounted on hinges and swings shut, with the hand operating its edge handle.",
+  "noun": "cupboard",
+  "verb": "close",
+  "narration": "close cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The broad cupboard door is mounted on hinges and swings shut, with the hand operating its edge handle."
+ },
+ "P03_112/P03_112_122": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The freezer door is a hinged panel, and the hand path pulls its handle outward in an arc.",
+  "noun": "freezer",
+  "verb": "open",
+  "narration": "open freezer",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The freezer door is a hinged panel, and the hand path pulls its handle outward in an arc."
+ },
+ "P04_02/P04_02_196": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The dishwasher door is a large hinged panel operated by a hand path that swings downward.",
+  "noun": "dishwasher",
+  "verb": "open",
+  "narration": "open dishwasher",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The dishwasher door is a large hinged panel operated by a hand path that swings downward."
+ },
+ "P08_09/P08_09_134": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The microwave door is hinged at the side and swings outward, with the hand moving along an arc.",
+  "noun": "microwave",
+  "verb": "open",
+  "narration": "open microwave",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The microwave door is hinged at the side and swings outward, with the hand moving along an arc."
+ },
+ "P10_04/P10_04_357": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The outlined cabinet door is side-hinged and swings open, with the hand near its edge.",
+  "noun": "cabinet",
+  "verb": "open",
+  "narration": "open cabinet",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The outlined cabinet door is side-hinged and swings open, with the hand near its edge."
+ },
+ "P01_103/P01_103_0": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The tall panel is a hinged door, and the hand follows an arcing path while closing it.",
+  "noun": "door",
+  "verb": "close",
+  "narration": "close door",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The tall panel is a hinged door, and the hand follows an arcing path while closing it."
+ },
+ "P02_135/P02_135_20": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked fridge drawer is mounted on straight runners and the hand path pulls it outward in a linear motion.",
+  "noun": "drawer:fridge",
+  "verb": "open",
+  "narration": "open drawer of fridge",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked fridge drawer is mounted on straight runners and the hand path pulls it outward in a linear motion."
+ },
+ "P06_101/P06_101_62": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The window has a visible side hinge/pivot and the hand operates its edge in a swinging arc.",
+  "noun": "window",
+  "verb": "open",
+  "narration": "open window",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The window has a visible side hinge/pivot and the hand operates its edge in a swinging arc."
+ },
+ "P22_07/P22_07_517": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The outlined microwave door is hinged and swings outward, with the hand moving along an arc from the handle.",
+  "noun": "oven:microwave",
+  "verb": "open",
+  "narration": "open microwave oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The outlined microwave door is hinged and swings outward, with the hand moving along an arc from the handle."
+ },
+ "P22_07/P22_07_628": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The microwave door is hinged on the side, and the hand path operates its edge in a swinging arc.",
+  "noun": "door:microwave",
+  "verb": "close",
+  "narration": "close microwave door",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The microwave door is hinged on the side, and the hand path operates its edge in a swinging arc."
+ },
+ "P01_01/P01_01_114": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The long front panel has a drawer pull and the hand moves straight outward, with no visible hinge.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The long front panel has a drawer pull and the hand moves straight outward, with no visible hinge."
+ },
+ "P01_01/P01_01_3": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The outlined fridge door has a vertical hinge edge and swings outward as the hand pulls its handle.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The outlined fridge door has a vertical hinge edge and swings outward as the hand pulls its handle."
+ },
+ "P02_01/P02_01_11": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard panel is a hinged door with a visible side hinge, and the hand path approaches its edge to swing it closed.",
+  "noun": "cupboard",
+  "verb": "close",
+  "narration": "close cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard panel is a hinged door with a visible side hinge, and the hand path approaches its edge to swing it closed."
+ },
+ "P01_09/P01_09_718": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is hinged at its lower edge and swings upward to close.",
+  "noun": "oven",
+  "verb": "close",
+  "narration": "close oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is hinged at its lower edge and swings upward to close."
+ },
+ "P04_04/P04_04_1": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The dishwasher door is a large hinged panel operated by a handle near its upper edge.",
+  "noun": "dishwasher",
+  "verb": "open",
+  "narration": "open dishwasher",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The dishwasher door is a large hinged panel operated by a handle near its upper edge."
+ },
+ "P04_05/P04_05_290": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The freezer door is a large hinged panel operated by a side-mounted handle, and the hand path indicates it swings outward.",
+  "noun": "freezer",
+  "verb": "open",
+  "narration": "open freezer",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The freezer door is a large hinged panel operated by a side-mounted handle, and the hand path indicates it swings outward."
+ },
+ "P08_21/P08_21_292": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The microwave door is side-hinged and swings outward, with the hand moving away from its handle.",
+  "noun": "microwave",
+  "verb": "open",
+  "narration": "open microwave",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The microwave door is side-hinged and swings outward, with the hand moving away from its handle."
+ },
+ "P01_01/P01_01_69": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged along its side and swings outward as the hand pulls its edge.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged along its side and swings outward as the hand pulls its edge."
+ },
+ "P01_01/P01_01_7": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The fridge door is a hinged panel, and the hand pulls it along an arcing path.",
+  "noun": "fridge",
+  "verb": "close",
+  "narration": "close fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The fridge door is a hinged panel, and the hand pulls it along an arcing path."
+ },
+ "P01_03/P01_03_4": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged along its side edge, and the hand pulls its outer edge in an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged along its side edge, and the hand pulls its outer edge in an arc."
+ },
+ "P01_03/P01_03_27": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The fridge door is a large hinged panel swinging closed, with the hand path pulling its outer edge inward.",
+  "noun": "fridge",
+  "verb": "close",
+  "narration": "close fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The fridge door is a large hinged panel swinging closed, with the hand path pulling its outer edge inward."
+ },
+ "P01_01/P01_01_17": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer front has a straight horizontal pull handle and the hand path is directly outward, indicating linear sliding.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer front has a straight horizontal pull handle and the hand path is directly outward, indicating linear sliding."
+ },
+ "P01_05/P01_05_0": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged along its side and swings outward as the hand pulls its handle.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged along its side and swings outward as the hand pulls its handle."
+ },
+ "P01_05/P01_05_134": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The long drawer front has no visible hinges and the hand path indicates pulling it straight outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The long drawer front has no visible hinges and the hand path indicates pulling it straight outward."
+ },
+ "P01_05/P01_05_183": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked front panel is a drawer that pulls straight outward, with the hand path moving directly away from the cabinet.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked front panel is a drawer that pulls straight outward, with the hand path moving directly away from the cabinet."
+ },
+ "P01_05/P01_05_192": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked panel has a long horizontal handle and is mounted as a drawer, while the hand path indicates pulling it straight outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked panel has a long horizontal handle and is mounted as a drawer, while the hand path indicates pulling it straight outward."
+ },
+ "P01_05/P01_05_193": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked wooden drawer has a straight horizontal pull path with no visible hinge.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked wooden drawer has a straight horizontal pull path with no visible hinge."
+ },
+ "P01_05/P01_05_194": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight sliding rails and the hand pulls it linearly closed.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight sliding rails and the hand pulls it linearly closed."
+ },
+ "P01_05/P01_05_151": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined drawer has a front-mounted handle and the hand path pulls straight outward, with no visible hinge.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined drawer has a front-mounted handle and the hand path pulls straight outward, with no visible hinge."
+ },
+ "P01_05/P01_05_199": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has no visible hinges and is operated by a straight outward hand pull.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has no visible hinges and is operated by a straight outward hand pull."
+ },
+ "P01_05/P01_05_66": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked component is a drawer with a front-mounted handle and slides straight outward along the hand path.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked component is a drawer with a front-mounted handle and slides straight outward along the hand path."
+ },
+ "P01_05/P01_05_86": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight runners and the hand path is consistent with pulling it linearly closed.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight runners and the hand path is consistent with pulling it linearly closed."
+ },
+ "P01_05/P01_05_200": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has no visible hinges and is operated by a hand path consistent with straight sliding motion.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has no visible hinges and is operated by a hand path consistent with straight sliding motion."
+ },
+ "P01_05/P01_05_64": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked panel is a drawer front with no visible hinge, and the hand pulls it outward along a straight path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked panel is a drawer front with no visible hinge, and the hand pulls it outward along a straight path."
+ },
+ "P01_09/P01_09_13": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The fridge door is hinged along its side and swings closed while the hand pulls its outer edge inward.",
+  "noun": "fridge",
+  "verb": "close",
+  "narration": "close fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The fridge door is hinged along its side and swings closed while the hand pulls its outer edge inward."
+ },
+ "P01_09/P01_09_248": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged along its side and swings outward, with the hand pulling the edge-mounted handle.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged along its side and swings outward, with the hand pulling the edge-mounted handle."
+ },
+ "P01_09/P01_09_346": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The fridge door is hinged at the side and swings outward, with the hand pulling its edge in an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The fridge door is hinged at the side and swings outward, with the hand pulling its edge in an arc."
+ },
+ "P01_09/P01_09_386": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight horizontal runners and the hand path pulls it directly outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight horizontal runners and the hand path pulls it directly outward."
+ },
+ "P01_09/P01_09_399": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged along its left edge and the hand pulls its right-side handle in an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged along its left edge and the hand pulls its right-side handle in an arc."
+ },
+ "P01_09/P01_09_706": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer front is mounted on horizontal rails and the hand follows a straight pull-out path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer front is mounted on horizontal rails and the hand follows a straight pull-out path."
+ },
+ "P01_09/P01_09_730": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is hinged below the control panel, and the hand follows an upward arc while pulling its handle.",
+  "noun": "oven",
+  "verb": "open",
+  "narration": "open the oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is hinged below the control panel, and the hand follows an upward arc while pulling its handle."
+ },
+ "P01_09/P01_09_815": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is visibly hinged at the bottom and swings outward, with the hand following an arcing path.",
+  "noun": "oven",
+  "verb": "open",
+  "narration": "open oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is visibly hinged at the bottom and swings outward, with the hand following an arcing path."
+ },
+ "P01_09/P01_09_847": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is a hinged flap with a visible lower edge and the hand path indicates pulling it downward.",
+  "noun": "oven",
+  "verb": "open",
+  "narration": "open oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is a hinged flap with a visible lower edge and the hand path indicates pulling it downward."
+ },
+ "P01_09/P01_09_867": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has a straight front-mounted handle and the hand pulls it directly outward along a linear path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has a straight front-mounted handle and the hand pulls it directly outward along a linear path."
+ },
+ "P01_09/P01_09_861": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined drawer has a front-mounted handle and the hand path is straight outward, indicating it slides on runners.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined drawer has a front-mounted handle and the hand path is straight outward, indicating it slides on runners."
+ },
+ "P01_09/P01_09_877": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is visibly hinged along its lower edge and the hand path operates it by swinging it outward.",
+  "noun": "oven",
+  "verb": "open",
+  "narration": "open oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is visibly hinged along its lower edge and the hand path operates it by swinging it outward."
+ },
+ "P01_09/P01_09_849": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is a hinged flap with the hand pulling its handle along an arc.",
+  "noun": "oven",
+  "verb": "close",
+  "narration": "close oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is a hinged flap with the hand pulling its handle along an arc."
+ },
+ "P01_09/P01_09_878": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is hinged at its lower edge and the hand path closes it by swinging the door upward.",
+  "noun": "oven",
+  "verb": "close",
+  "narration": "close oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is hinged at its lower edge and the hand path closes it by swinging the door upward."
+ },
+ "P01_103/P01_103_87": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight horizontal rails and the hand pulls it directly outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight horizontal rails and the hand pulls it directly outward."
+ },
+ "P01_107/P01_107_0": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large door panel is hinged at its side and the hand moves the edge in an arc around that hinge.",
+  "noun": "door",
+  "verb": "close",
+  "narration": "close door",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large door panel is hinged at its side and the hand moves the edge in an arc around that hinge."
+ },
+ "P01_107/P01_107_53": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has a front-mounted handle and the hand path pulls it straight outward along its rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has a front-mounted handle and the hand path pulls it straight outward along its rails."
+ },
+ "P01_14/P01_14_117": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The red-marked drawer has a horizontal pull handle and no visible hinges, indicating it slides straight outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The red-marked drawer has a horizontal pull handle and no visible hinges, indicating it slides straight outward."
+ },
+ "P01_14/P01_14_119": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The drawer is mounted on straight slides and the hand moves along a linear path to push it closed.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The drawer is mounted on straight slides and the hand moves along a linear path to push it closed."
+ },
+ "P01_14/P01_14_156": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The red-outlined drawer front is mounted on straight runners and the hand path is essentially straight, indicating it slides outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The red-outlined drawer front is mounted on straight runners and the hand path is essentially straight, indicating it slides outward."
+ },
+ "P01_14/P01_14_239": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has straight sliding rails and the hand follows a nearly straight outward pull path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has straight sliding rails and the hand follows a nearly straight outward pull path."
+ },
+ "P01_14/P01_14_240": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has no visible hinge and the hand path is straight outward, indicating it slides along rails.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has no visible hinge and the hand path is straight outward, indicating it slides along rails."
+ },
+ "P01_14/P01_14_31": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The red-outlined refrigerator door is hinged along its side and the hand follows an arcing path while opening it.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The red-outlined refrigerator door is hinged along its side and the hand follows an arcing path while opening it."
+ },
+ "P01_14/P01_14_347": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked compartment is a drawer mounted in straight sliding rails, and the hand path is straight toward closing it.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked compartment is a drawer mounted in straight sliding rails, and the hand path is straight toward closing it."
+ },
+ "P01_14/P01_14_348": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The outlined fridge door is hinged and swings outward, with the hand pulling its handle along an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The outlined fridge door is hinged and swings outward, with the hand pulling its handle along an arc."
+ },
+ "P02_01/P02_01_9": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard door is side-hinged, and the hand follows an outward swinging path around the hinge.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard door is side-hinged, and the hand follows an outward swinging path around the hinge."
+ },
+ "P02_03/P02_03_203": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked cupboard door has a side hinge and swings outward, with the handle tracing an arc.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked cupboard door has a side hinge and swings outward, with the handle tracing an arc."
+ },
+ "P02_03/P02_03_229": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The fridge door is a hinged panel operated by a handle near its outer edge.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The fridge door is a hinged panel operated by a handle near its outer edge."
+ },
+ "P02_03/P02_03_23": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked cupboard door is hinged along its side and swings outward, matching the hand\u2019s curved path.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked cupboard door is hinged along its side and swings outward, matching the hand\u2019s curved path."
+ },
+ "P02_03/P02_03_326": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard door is side-hinged and swings outward, with the hand following an arcing path.",
+  "noun": "cupboard",
+  "verb": "close",
+  "narration": "close cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard door is side-hinged and swings outward, with the hand following an arcing path."
+ },
+ "P02_07/P02_07_25": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged at its side and swings outward, with the hand path curving near the door edge.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged at its side and swings outward, with the hand path curving near the door edge."
+ },
+ "P02_07/P02_07_47": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has a horizontal handle and the hand path pulls it straight outward, indicating sliding motion.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has a horizontal handle and the hand path pulls it straight outward, indicating sliding motion."
+ },
+ "P02_09/P02_09_153": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer front is mounted on straight rails and the hand pulls it directly outward along a linear path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer front is mounted on straight rails and the hand pulls it directly outward along a linear path."
+ },
+ "P02_09/P02_09_163": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is a hinged flap with a handle along its lower edge, and the hand path approaches the handle to swing it open.",
+  "noun": "oven",
+  "verb": "open",
+  "narration": "open oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is a hinged flap with a handle along its lower edge, and the hand path approaches the handle to swing it open."
+ },
+ "P02_09/P02_09_168": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The outlined oven door is bottom-hinged and swings closed, consistent with the hand\u2019s curved path.",
+  "noun": "oven",
+  "verb": "close",
+  "narration": "close oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The outlined oven door is bottom-hinged and swings closed, consistent with the hand\u2019s curved path."
+ },
+ "P02_09/P02_09_20": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight runners and the hand path pulls it outward in a straight line.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight runners and the hand path pulls it outward in a straight line."
+ },
+ "P02_09/P02_09_187": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard has a vertically mounted handle on a cabinet door panel, indicating it swings about side hinges.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard has a vertically mounted handle on a cabinet door panel, indicating it swings about side hinges."
+ },
+ "P02_09/P02_09_277": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard door is side-hinged and swings outward, with the hand following an arcing path from the handle.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard door is side-hinged and swings outward, with the hand following an arcing path from the handle."
+ },
+ "P02_09/P02_09_387": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted below the countertop and the hand path pulls straight outward, indicating linear sliding.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted below the countertop and the hand path pulls straight outward, indicating linear sliding."
+ },
+ "P02_09/P02_09_262": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted below the counter with a straight horizontal front and no visible hinges, and the hand path indicates pulling it outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted below the counter with a straight horizontal front and no visible hinges, and the hand path indicates pulling it outward."
+ },
+ "P02_101/P02_101_8": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked fridge door is hinged along its side and the hand path pulls its handle outward in an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked fridge door is hinged along its side and the hand path pulls its handle outward in an arc."
+ },
+ "P02_102/P02_102_10": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked fridge door is hinged along its side, and the hand moves it in an arc at the handle.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked fridge door is hinged along its side, and the hand moves it in an arc at the handle."
+ },
+ "P02_102/P02_102_19": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked front panel has no visible hinge and the hand pulls it straight outward along the drawer rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked front panel has no visible hinge and the hand pulls it straight outward along the drawer rails."
+ },
+ "P02_102/P02_102_22": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked fridge door is hinged at the side and the hand pulls it along an arc.",
+  "noun": "fridge",
+  "verb": "close",
+  "narration": "close fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked fridge door is hinged at the side and the hand pulls it along an arc."
+ },
+ "P02_109/P02_109_47": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked cupboard panel is hinged at the side and swings outward, with the hand operating its edge.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked cupboard panel is hinged at the side and swings outward, with the hand operating its edge."
+ },
+ "P02_12/P02_12_102": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked panel has a drawer pull and the hand moves straight outward, indicating it slides on rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked panel has a drawer pull and the hand moves straight outward, indicating it slides on rails."
+ },
+ "P02_109/P02_109_78": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer front is mounted below the counter with a handle and the hand follows a straight pull-out path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer front is mounted below the counter with a handle and the hand follows a straight pull-out path."
+ },
+ "P02_102/P02_102_21": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer front is mounted on straight rails and the hand path indicates it is being pushed linearly closed.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer front is mounted on straight rails and the hand path indicates it is being pushed linearly closed."
+ },
+ "P02_12/P02_12_101": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a drawer mounted on sliding rails, and the hand path is inward along a straight line.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a drawer mounted on sliding rails, and the hand path is inward along a straight line."
+ },
+ "P02_12/P02_12_69": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked cupboard door is side-hinged and swings outward, with the hand moving along its opening arc.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked cupboard door is side-hinged and swings outward, with the hand moving along its opening arc."
+ },
+ "P02_12/P02_12_370": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is a large hinged flap rotating upward, with the hand path consistent with swinging it closed.",
+  "noun": "oven",
+  "verb": "close",
+  "narration": "close oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is a large hinged flap rotating upward, with the hand path consistent with swinging it closed."
+ },
+ "P02_12/P02_12_73": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard door is side-mounted on hinges and the hand pulls its handle along an arcing path.",
+  "noun": "cupboard",
+  "verb": "close",
+  "narration": "close cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard door is side-mounted on hinges and the hand pulls its handle along an arcing path."
+ },
+ "P02_12/P02_12_92": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is a hinged flap, and the hand path operates its lower handle as it swings open.",
+  "noun": "oven",
+  "verb": "open",
+  "narration": "open oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is a hinged flap, and the hand path operates its lower handle as it swings open."
+ },
+ "P02_121/P02_121_43": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight sliding rails, and the hand path follows its pull direction.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight sliding rails, and the hand path follows its pull direction."
+ },
+ "P02_121/P02_121_44": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has a horizontal pull handle and is mounted to slide straight outward along rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has a horizontal pull handle and is mounted to slide straight outward along rails."
+ },
+ "P02_121/P02_121_58": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight sliding rails, and the hand pulls it directly outward along a linear path.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight sliding rails, and the hand pulls it directly outward along a linear path."
+ },
+ "P02_122/P02_122_210": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight runners and the hand pulls it directly outward along a linear path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight runners and the hand pulls it directly outward along a linear path."
+ },
+ "P02_121/P02_121_45": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked front panel is a drawer that slides straight outward, with the hand path aligned vertically along its pull direction.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked front panel is a drawer that slides straight outward, with the hand path aligned vertically along its pull direction."
+ },
+ "P02_121/P02_121_57": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight runners and the hand path pulls it linearly closed.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight runners and the hand path pulls it linearly closed."
+ },
+ "P02_122/P02_122_212": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer slides straight inward along horizontal runners, as indicated by the hand path and drawer construction.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer slides straight inward along horizontal runners, as indicated by the hand path and drawer construction."
+ },
+ "P02_121/P02_121_95": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard panel is visibly hinged along its side and swings outward as the hand pulls its edge.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard panel is visibly hinged along its side and swings outward as the hand pulls its edge."
+ },
+ "P02_122/P02_122_82": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight runners and the hand pulls it along a linear path.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight runners and the hand pulls it along a linear path."
+ },
+ "P02_122/P02_122_80": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer pulls straight outward along linear rails, with the hand following a mostly straight path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer pulls straight outward along linear rails, with the hand following a mostly straight path."
+ },
+ "P02_124/P02_124_71": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged along its side and swings outward, with the hand pulling near the edge.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged along its side and swings outward, with the hand pulling near the edge."
+ },
+ "P02_128/P02_128_12": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged along its side and swings outward as the hand pulls its edge.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged along its side and swings outward as the hand pulls its edge."
+ },
+ "P02_128/P02_128_54": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined drawer is mounted on straight runners and the hand pulls it directly outward along a linear path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined drawer is mounted on straight runners and the hand pulls it directly outward along a linear path."
+ },
+ "P02_124/P02_124_36": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer front is mounted on horizontal runners and the hand pulls it along a straight path.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer front is mounted on horizontal runners and the hand pulls it along a straight path."
+ },
+ "P02_130/P02_130_162": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The handle is mounted on a drawer that slides straight outward, matching the hand\u2019s linear pull path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The handle is mounted on a drawer that slides straight outward, matching the hand\u2019s linear pull path."
+ },
+ "P02_130/P02_130_181": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a drawer front mounted to slide straight outward, with the hand path aligned directly away from the cabinet.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a drawer front mounted to slide straight outward, with the hand path aligned directly away from the cabinet."
+ },
+ "P02_130/P02_130_187": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The red-outlined drawer is mounted to slide straight out, and the hand path is directed along the drawer\u2019s opening axis.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The red-outlined drawer is mounted to slide straight out, and the hand path is directed along the drawer\u2019s opening axis."
+ },
+ "P02_135/P02_135_73": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard panel is visibly hinged along its left side and swings closed, with the hand following an arcing path.",
+  "noun": "cupboard",
+  "verb": "close",
+  "narration": "close cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard panel is visibly hinged along its left side and swings closed, with the hand following an arcing path."
+ },
+ "P02_135/P02_135_25": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a drawer mounted on straight sliding rails, and the hand path pulls it linearly inward.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a drawer mounted on straight sliding rails, and the hand path pulls it linearly inward."
+ },
+ "P02_135/P02_135_61": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted to slide straight outward, and the hand pulls along a roughly straight path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted to slide straight outward, and the hand pulls along a roughly straight path."
+ },
+ "P03_04/P03_04_111": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a drawer mounted to slide straight outward, and the hand path follows a direct pulling motion.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a drawer mounted to slide straight outward, and the hand path follows a direct pulling motion."
+ },
+ "P03_04/P03_04_141": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked cupboard panel is a hinged door operated at its edge, and the hand path indicates swinging open.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked cupboard panel is a hinged door operated at its edge, and the hand path indicates swinging open."
+ },
+ "P03_04/P03_04_192": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked shallow drawer has no visible hinge and the hand pulls it straight outward along a linear path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked shallow drawer has no visible hinge and the hand pulls it straight outward along a linear path."
+ },
+ "P03_04/P03_04_326": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard panel is a hinged door mounted along one edge, and the hand path operates it by swinging it open.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard panel is a hinged door mounted along one edge, and the hand path operates it by swinging it open."
+ },
+ "P03_04/P03_04_56": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard panel is a hinged door that swings outward, with the hand pulling its handle along an arc.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard panel is a hinged door that swings outward, with the hand pulling its handle along an arc."
+ },
+ "P03_05/P03_05_26": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large cupboard panel is a hinged door being pulled along an arc near its edge.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large cupboard panel is a hinged door being pulled along an arc near its edge."
+ },
+ "P03_101/P03_101_32": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard panel is side-mounted with a visible hinge and the hand pulls its handle along an arc.",
+  "noun": "cupboard",
+  "verb": "close",
+  "narration": "close cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard panel is side-mounted with a visible hinge and the hand pulls its handle along an arc."
+ },
+ "P03_11/P03_11_0": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has a horizontal front handle and the hand path pulls straight outward, with no visible hinge.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has a horizontal front handle and the hand path pulls straight outward, with no visible hinge."
+ },
+ "P03_112/P03_112_53": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard door is side-hinged and swings outward, with the hand following an arc around the hinge side.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard door is side-hinged and swings outward, with the hand following an arc around the hinge side."
+ },
+ "P03_23/P03_23_124": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is a hinged flap, and the hand follows an arcing path while operating its handle.",
+  "noun": "oven",
+  "verb": "close",
+  "narration": "close the oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is a hinged flap, and the hand follows an arcing path while operating its handle."
+ },
+ "P04_02/P04_02_207": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer front is mounted on horizontal runners and the hand pulls it straight outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer front is mounted on horizontal runners and the hand pulls it straight outward."
+ },
+ "P04_02/P04_02_205": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The fridge door is a large hinged panel with a side-mounted handle, and the hand path indicates it swings outward.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The fridge door is a large hinged panel with a side-mounted handle, and the hand path indicates it swings outward."
+ },
+ "P04_02/P04_02_219": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has a front-mounted handle and the hand path indicates it is pulled straight outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has a front-mounted handle and the hand path indicates it is pulled straight outward."
+ },
+ "P04_02/P04_02_307": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined drawer front is mounted on horizontal rails and the hand pulls it straight outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined drawer front is mounted on horizontal rails and the hand pulls it straight outward."
+ },
+ "P03_23/P03_23_21": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer front has no visible hinge and the hand path pulls it straight outward along its runners.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer front has no visible hinge and the hand path pulls it straight outward along its runners."
+ },
+ "P04_02/P04_02_47": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The tall fridge door is side-hinged and swings outward, with the hand pulling its edge in an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The tall fridge door is side-hinged and swings outward, with the hand pulling its edge in an arc."
+ },
+ "P04_03/P04_03_30": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked front panel has a horizontal pull handle and the hand path is straight outward, indicating a sliding drawer.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked front panel has a horizontal pull handle and the hand path is straight outward, indicating a sliding drawer."
+ },
+ "P04_04/P04_04_13": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard panel is a hinged door operated at its outer edge, and the hand follows an arc-like path.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboards",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard panel is a hinged door operated at its outer edge, and the hand follows an arc-like path."
+ },
+ "P04_04/P04_04_28": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The tall cupboard door is side-hinged and the hand pulls its outer edge in an arc.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The tall cupboard door is side-hinged and the hand pulls its outer edge in an arc."
+ },
+ "P04_04/P04_04_39": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The outlined dishwasher door is a large hinged panel with the hand operating its upper edge.",
+  "noun": "dishwasher",
+  "verb": "open",
+  "narration": "open dishwasher",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The outlined dishwasher door is a large hinged panel with the hand operating its upper edge."
+ },
+ "P04_04/P04_04_38": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The outlined cupboard door is side-hinged and swings outward, with the hand moving along an arc near its edge.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The outlined cupboard door is side-hinged and swings outward, with the hand moving along an arc near its edge."
+ },
+ "P04_04/P04_04_41": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The dishwasher door is bottom-hinged and swings closed, with the hand moving along an arc.",
+  "noun": "dishwasher",
+  "verb": "close",
+  "narration": "close dishwasher",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The dishwasher door is bottom-hinged and swings closed, with the hand moving along an arc."
+ },
+ "P04_05/P04_05_108": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has a front-mounted handle and the hand path is straight toward the viewer, indicating it slides out on rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has a front-mounted handle and the hand path is straight toward the viewer, indicating it slides out on rails."
+ },
+ "P04_05/P04_05_110": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked component is a drawer front with a centered handle and no visible hinge, and the hand path is straight toward it.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked component is a drawer front with a centered handle and no visible hinge, and the hand path is straight toward it."
+ },
+ "P04_05/P04_05_156": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The dishwasher door is a bottom-hinged flap operated by a handle at its upper edge, with the hand path indicating downward rotation.",
+  "noun": "dishwasher",
+  "verb": "open",
+  "narration": "open dishwasher",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The dishwasher door is a bottom-hinged flap operated by a handle at its upper edge, with the hand path indicating downward rotation."
+ },
+ "P04_05/P04_05_159": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined drawer is mounted on straight runners and the hand path is directly outward/inward, indicating linear sliding.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined drawer is mounted on straight runners and the hand path is directly outward/inward, indicating linear sliding."
+ },
+ "P04_05/P04_05_196": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer front has a horizontal pull and the hand follows a straight outward path, consistent with sliding rails rather than hinges.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer front has a horizontal pull and the hand follows a straight outward path, consistent with sliding rails rather than hinges."
+ },
+ "P04_05/P04_05_222": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has no visible hinge and the hand pulls it straight outward along a linear path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has no visible hinge and the hand pulls it straight outward along a linear path."
+ },
+ "P04_05/P04_05_263": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined part is a drawer front with a centered pull, and the hand path is straight outward rather than rotating around a hinge.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined part is a drawer front with a centered pull, and the hand path is straight outward rather than rotating around a hinge."
+ },
+ "P04_05/P04_05_299": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has a horizontal handle and the hand path is straight toward the viewer, indicating it slides out on rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has a horizontal handle and the hand path is straight toward the viewer, indicating it slides out on rails."
+ },
+ "P04_05/P04_05_304": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large upright fridge door is hinged along its side edge and is operated by pulling its handle.",
+  "noun": "fridge",
+  "verb": "close",
+  "narration": "close fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large upright fridge door is hinged along its side edge and is operated by pulling its handle."
+ },
+ "P04_05/P04_05_305": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large freezer door is side-mounted with a visible vertical hinge edge, and the hand pulls its handle along an arcing path.",
+  "noun": "freezer",
+  "verb": "open",
+  "narration": "open freezer",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large freezer door is side-mounted with a visible vertical hinge edge, and the hand pulls its handle along an arcing path."
+ },
+ "P04_06/P04_06_3": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The freezer door is a large hinged panel operated by a handle near its edge, and the hand path follows an outward swing.",
+  "noun": "freezer",
+  "verb": "open",
+  "narration": "open freezer",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The freezer door is a large hinged panel operated by a handle near its edge, and the hand path follows an outward swing."
+ },
+ "P04_06/P04_06_5": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer front has no visible hinge and the hand pulls it straight outward along a linear path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer front has no visible hinge and the hand pulls it straight outward along a linear path."
+ },
+ "P04_101/P04_101_39": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has no visible hinges and the hand pulls it straight outward along its runners.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has no visible hinges and the hand pulls it straight outward along its runners."
+ },
+ "P04_109/P04_109_294": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked fridge drawer is mounted on straight sliding rails and the hand path is linear.",
+  "noun": "drawer:fridge",
+  "verb": "close",
+  "narration": "close fridge drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked fridge drawer is mounted on straight sliding rails and the hand path is linear."
+ },
+ "P04_110/P04_110_31": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked refrigerator door is hinged along its side and the hand path pulls it outward in an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked refrigerator door is hinged along its side and the hand path pulls it outward in an arc."
+ },
+ "P04_110/P04_110_43": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight rails and the hand moves directly outward along its sliding path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight rails and the hand moves directly outward along its sliding path."
+ },
+ "P04_12/P04_12_10": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has a front-mounted handle and the hand path approaches it for straight outward pulling, consistent with sliding rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has a front-mounted handle and the hand path approaches it for straight outward pulling, consistent with sliding rails."
+ },
+ "P04_12/P04_12_6": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer front is mounted for straight in-and-out motion, and the hand pulls its handle along a linear path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer front is mounted for straight in-and-out motion, and the hand pulls its handle along a linear path."
+ },
+ "P04_121/P04_121_132": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined drawer is mounted on straight runners, and the hand path pulls it directly outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined drawer is mounted on straight runners, and the hand path pulls it directly outward."
+ },
+ "P04_121/P04_121_133": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined drawer is mounted on straight rails and the hand path shows it being pulled directly outward.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined drawer is mounted on straight rails and the hand path shows it being pulled directly outward."
+ },
+ "P04_121/P04_121_655": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The freezer door is a large hinged panel that swings outward, with the hand path arcing around its side.",
+  "noun": "freezer",
+  "verb": "open",
+  "narration": "open freezer",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The freezer door is a large hinged panel that swings outward, with the hand path arcing around its side."
+ },
+ "P04_121/P04_121_9": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer slides straight outward on runners, with the hand following a linear pull path and no visible hinge.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer slides straight outward on runners, with the hand following a linear pull path and no visible hinge."
+ },
+ "P04_13/P04_13_2": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The red-outlined drawer has a front-mounted handle and the hand pulls it straight outward along a linear path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The red-outlined drawer has a front-mounted handle and the hand pulls it straight outward along a linear path."
+ },
+ "P04_13/P04_13_8": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked front panel is a drawer that pulls straight outward, with the hand path moving directly away from the cabinet.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked front panel is a drawer that pulls straight outward, with the hand path moving directly away from the cabinet."
+ },
+ "P04_24/P04_24_15": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer front is pulled straight outward along a linear path, with no visible hinge.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer front is pulled straight outward along a linear path, with no visible hinge."
+ },
+ "P04_21/P04_21_0": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard panel is a hinged door swinging outward, with the hand operating it near its free edge.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard panel is a hinged door swinging outward, with the hand operating it near its free edge."
+ },
+ "P04_24/P04_24_21": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on horizontal rails and the hand path pulls it straight outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on horizontal rails and the hand path pulls it straight outward."
+ },
+ "P04_25/P04_25_18": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is a bottom-hinged flap, and the hand path pulls its handle outward to swing it open.",
+  "noun": "oven",
+  "verb": "open",
+  "narration": "open oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is a bottom-hinged flap, and the hand path pulls its handle outward to swing it open."
+ },
+ "P04_25/P04_25_7": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large cupboard panel is hinged at its side and swings outward, with the hand path following the opening arc.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large cupboard panel is hinged at its side and swings outward, with the hand path following the opening arc."
+ },
+ "P06_05/P06_05_176": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large cupboard door is side-hinged and the hand follows an outward swinging path.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large cupboard door is side-hinged and the hand follows an outward swinging path."
+ },
+ "P06_05/P06_05_138": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked cupboard door has a side hinge and the hand follows an outward swinging arc.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked cupboard door has a side hinge and the hand follows an outward swinging arc."
+ },
+ "P04_33/P04_33_18": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked panel is a drawer front with no visible hinges, and the hand pulls it straight outward along the drawer\u2019s track.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked panel is a drawer front with no visible hinges, and the hand pulls it straight outward along the drawer\u2019s track."
+ },
+ "P06_05/P06_05_125": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The tall cupboard panel is a hinged door operated near its edge, and the hand path indicates it swings outward.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The tall cupboard panel is a hinged door operated near its edge, and the hand path indicates it swings outward."
+ },
+ "P06_05/P06_05_215": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large cupboard door is mounted at a side hinge and swings outward under the hand's operation.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large cupboard door is mounted at a side hinge and swings outward under the hand's operation."
+ },
+ "P06_05/P06_05_48": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The long cupboard door is side-hinged and the hand pulls its edge outward along an arcing path.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The long cupboard door is side-hinged and the hand pulls its edge outward along an arcing path."
+ },
+ "P06_07/P06_07_206": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The long narrow cupboard door is hinged along one side and the hand follows an arc as it swings open.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The long narrow cupboard door is hinged along one side and the hand follows an arc as it swings open."
+ },
+ "P06_07/P06_07_194": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The dishwasher door is a large hinged panel, and the hand follows an arcing path while closing it.",
+  "noun": "dishwasher",
+  "verb": "close",
+  "narration": "close dishwasher",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The dishwasher door is a large hinged panel, and the hand follows an arcing path while closing it."
+ },
+ "P06_07/P06_07_5": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The red-outlined drawer is mounted on straight runners and the hand pulls it directly outward along a linear path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The red-outlined drawer is mounted on straight runners and the hand pulls it directly outward along a linear path."
+ },
+ "P06_10/P06_10_33": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The dishwasher door is visibly hinged at the bottom and the hand operates its outer edge along an arc.",
+  "noun": "dishwasher",
+  "verb": "close",
+  "narration": "close dishwasher",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The dishwasher door is visibly hinged at the bottom and the hand operates its outer edge along an arc."
+ },
+ "P06_09/P06_09_38": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged along its side and swings outward as indicated by the hand path.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged along its side and swings outward as indicated by the hand path."
+ },
+ "P06_07/P06_07_184": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is hinged at its lower edge and the hand pulls its handle outward along an arc.",
+  "noun": "oven",
+  "verb": "open",
+  "narration": "open oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is hinged at its lower edge and the hand pulls its handle outward along an arc."
+ },
+ "P06_10/P06_10_36": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large cupboard door is hinged along its side and swings outward, with the hand following an arcing path.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large cupboard door is hinged along its side and swings outward, with the hand following an arcing path."
+ },
+ "P06_10/P06_10_56": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The fridge door is a large hinged panel, and the hand path pulls its outer edge in an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The fridge door is a large hinged panel, and the hand path pulls its outer edge in an arc."
+ },
+ "P06_05/P06_05_59": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large cupboard door is hinged along its side and swings outward as the hand pulls its edge.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large cupboard door is hinged along its side and swings outward as the hand pulls its edge."
+ },
+ "P06_101/P06_101_0": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The red-outlined refrigerator door is hinged along its side, and the hand path pulls its outer edge outward.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The red-outlined refrigerator door is hinged along its side, and the hand path pulls its outer edge outward."
+ },
+ "P06_101/P06_101_191": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer front is mounted on straight runners and the hand path pulls it directly outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer front is mounted on straight runners and the hand path pulls it directly outward."
+ },
+ "P06_101/P06_101_195": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined drawer has a horizontal pull handle and the hand follows a straight outward path, indicating it slides on rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined drawer has a horizontal pull handle and the hand follows a straight outward path, indicating it slides on rails."
+ },
+ "P06_101/P06_101_26": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a drawer handle with a straight in-and-out hand path and no visible hinge.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a drawer handle with a straight in-and-out hand path and no visible hinge."
+ },
+ "P06_101/P06_101_174": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard door is visibly side-hinged, and the hand pulls its outer edge along an arc.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard door is visibly side-hinged, and the hand pulls its outer edge along an arc."
+ },
+ "P06_101/P06_101_283": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is a hinged flap with the hand operating its horizontal handle.",
+  "noun": "oven",
+  "verb": "close",
+  "narration": "close oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is a hinged flap with the hand operating its horizontal handle."
+ },
+ "P06_102/P06_102_115": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The red-outlined drawer is mounted on straight runners and the hand path pulls it outward in a straight line.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The red-outlined drawer is mounted on straight runners and the hand path pulls it outward in a straight line."
+ },
+ "P06_103/P06_103_18": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a drawer mounted on straight sliding rails, and the hand moves it directly outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a drawer mounted on straight sliding rails, and the hand moves it directly outward."
+ },
+ "P06_103/P06_103_43": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The outlined cupboard door is mounted on visible side hinges and the hand follows an arc while pulling its handle.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The outlined cupboard door is mounted on visible side hinges and the hand follows an arc while pulling its handle."
+ },
+ "P06_103/P06_103_49": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard door is side-hinged and swings shut around its vertical edge.",
+  "noun": "cupboard",
+  "verb": "close",
+  "narration": "close cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard door is side-hinged and swings shut around its vertical edge."
+ },
+ "P06_103/P06_103_29": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked oven door is a hinged flap operated by a hand following an arcing path.",
+  "noun": "oven",
+  "verb": "close",
+  "narration": "close oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked oven door is a hinged flap operated by a hand following an arcing path."
+ },
+ "P06_103/P06_103_80": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard panel is hinged at the side and swings outward as the hand pulls its edge.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard panel is hinged at the side and swings outward as the hand pulls its edge."
+ },
+ "P06_103/P06_103_82": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard door is visibly hinged along its side and the hand pulls the handle through an arc.",
+  "noun": "cupboard",
+  "verb": "close",
+  "narration": "close cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard door is visibly hinged along its side and the hand pulls the handle through an arc."
+ },
+ "P06_107/P06_107_1": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on horizontal runners and the hand path indicates a straight pull outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on horizontal runners and the hand path indicates a straight pull outward."
+ },
+ "P06_107/P06_107_0": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The fridge door is visibly hinged at the side and the hand pulls its handle along an arcing path.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The fridge door is visibly hinged at the side and the hand pulls its handle along an arcing path."
+ },
+ "P06_108/P06_108_169": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is visibly hinged at its sides and swings outward while the hand pulls the handle.",
+  "noun": "oven",
+  "verb": "open",
+  "narration": "open oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is visibly hinged at its sides and swings outward while the hand pulls the handle."
+ },
+ "P06_108/P06_108_166": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is hinged at its lower edge and swings outward as indicated by the hand path.",
+  "noun": "oven",
+  "verb": "open",
+  "narration": "open oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is hinged at its lower edge and swings outward as indicated by the hand path."
+ },
+ "P06_108/P06_108_4": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is hinged and swings open about its lower hinge.",
+  "noun": "oven",
+  "verb": "open",
+  "narration": "open oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is hinged and swings open about its lower hinge."
+ },
+ "P06_108/P06_108_64": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The panel is a hinged door with a visible side hinge and the hand follows an arcing opening path.",
+  "noun": "door",
+  "verb": "open",
+  "narration": "open door",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The panel is a hinged door with a visible side hinge and the hand follows an arcing opening path."
+ },
+ "P06_108/P06_108_65": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined drawer front moves outward along a straight path, with no visible hinge.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined drawer front moves outward along a straight path, with no visible hinge."
+ },
+ "P06_11/P06_11_16": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged along its side and swings outward as the hand pulls its edge.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged along its side and swings outward as the hand pulls its edge."
+ },
+ "P06_108/P06_108_90": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is a long mounted compartment operated by a hand path pulling straight outward, with no visible hinge.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is a long mounted compartment operated by a hand path pulling straight outward, with no visible hinge."
+ },
+ "P06_13/P06_13_24": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The outlined cupboard panel is mounted on a side hinge and swings closed while the hand follows an arcing path.",
+  "noun": "cupboard",
+  "verb": "close",
+  "narration": "close cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The outlined cupboard panel is mounted on a side hinge and swings closed while the hand follows an arcing path."
+ },
+ "P06_108/P06_108_73": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The outlined cabinet door is hinged along its side and the hand pulls its handle outward in an arc.",
+  "noun": "door",
+  "verb": "open",
+  "narration": "open door",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The outlined cabinet door is hinged along its side and the hand pulls its handle outward in an arc."
+ },
+ "P07_103/P07_103_7": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is visibly hinged at the sides and swings outward around its hinge axis.",
+  "noun": "oven",
+  "verb": "open",
+  "narration": "open oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is visibly hinged at the sides and swings outward around its hinge axis."
+ },
+ "P07_101/P07_101_12": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has a horizontal pull handle and the hand path is straight outward, consistent with sliding rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has a horizontal pull handle and the hand path is straight outward, consistent with sliding rails."
+ },
+ "P07_110/P07_110_7": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a drawer front mounted to slide straight outward, matching the hand\u2019s direct pulling path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a drawer front mounted to slide straight outward, matching the hand\u2019s direct pulling path."
+ },
+ "P08_09/P08_09_30": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard front is a hinged panel operated near its outer edge, with the hand path indicating a swing.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard front is a hinged panel operated near its outer edge, with the hand path indicating a swing."
+ },
+ "P07_110/P07_110_15": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The front-mounted handle and straight hand path indicate the drawer slides outward along rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The front-mounted handle and straight hand path indicate the drawer slides outward along rails."
+ },
+ "P08_09/P08_09_39": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The fridge door is hinged along its side and swings outward, with the hand pulling the edge-mounted handle.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The fridge door is hinged along its side and swings outward, with the hand pulling the edge-mounted handle."
+ },
+ "P08_09/P08_09_42": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged at its side and the hand operates the edge-mounted handle in an arc.",
+  "noun": "fridge",
+  "verb": "close",
+  "narration": "close fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged at its side and the hand operates the edge-mounted handle in an arc."
+ },
+ "P08_16/P08_16_109": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The outlined cupboard flap is side-hinged and swings outward as the hand follows an arcing path.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The outlined cupboard flap is side-hinged and swings outward as the hand follows an arcing path."
+ },
+ "P08_16/P08_16_8": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The dishwasher door is a hinged flap operated by a hand path that arcs upward near its top edge.",
+  "noun": "dishwasher",
+  "verb": "close",
+  "narration": "close dishwasher",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The dishwasher door is a hinged flap operated by a hand path that arcs upward near its top edge."
+ },
+ "P08_17/P08_17_117": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The dishwasher front is a hinged door operated by a hand path near its upper edge.",
+  "noun": "dishwasher",
+  "verb": "close",
+  "narration": "close dishwasher",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The dishwasher front is a hinged door operated by a hand path near its upper edge."
+ },
+ "P08_17/P08_17_99": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight side rails and the hand path pulls it directly outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight side rails and the hand path pulls it directly outward."
+ },
+ "P08_21/P08_21_128": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The red-marked drawer has a horizontal handle and is mounted to slide straight outward, matching the hand\u2019s straight pull path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The red-marked drawer has a horizontal handle and is mounted to slide straight outward, matching the hand\u2019s straight pull path."
+ },
+ "P08_21/P08_21_177": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked fridge door is hinged at the side and the hand operates its handle along an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked fridge door is hinged at the side and the hand operates its handle along an arc."
+ },
+ "P08_21/P08_21_180": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight runners and the hand path pulls it directly outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight runners and the hand path pulls it directly outward."
+ },
+ "P08_21/P08_21_264": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is visibly hinged along its side and swings shut under the hand's motion.",
+  "noun": "fridge",
+  "verb": "close",
+  "narration": "close fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is visibly hinged along its side and swings shut under the hand's motion."
+ },
+ "P08_21/P08_21_301": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The microwave door is a hinged flap, and the hand pulls its edge along an arc.",
+  "noun": "microwave",
+  "verb": "open",
+  "narration": "open microwave",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The microwave door is a hinged flap, and the hand pulls its edge along an arc."
+ },
+ "P08_21/P08_21_310": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The microwave door is side-hinged and swings outward, with the hand pulling its edge along an arc.",
+  "noun": "microwave",
+  "verb": "open",
+  "narration": "open microwave",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The microwave door is side-hinged and swings outward, with the hand pulling its edge along an arc."
+ },
+ "P09_104/P09_104_43": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large cupboard panel is a hinged door being pulled outward by its edge handle, with the hand path curving around the hinge side.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large cupboard panel is a hinged door being pulled outward by its edge handle, with the hand path curving around the hinge side."
+ },
+ "P09_07/P09_07_2": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer slides straight outward along its runners as the hand pulls the front.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer slides straight outward along its runners as the hand pulls the front."
+ },
+ "P08_21/P08_21_240": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked shallow drawer front has no visible hinges and is operated by pulling straight outward along the hand path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked shallow drawer front has no visible hinges and is operated by pulling straight outward along the hand path."
+ },
+ "P11_101/P11_101_2": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer front is mounted for straight outward sliding, with the hand path pulling it from the front and no visible hinge.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer front is mounted for straight outward sliding, with the hand path pulling it from the front and no visible hinge."
+ },
+ "P09_104/P09_104_54": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged at its side and swings outward as the hand pulls its edge-mounted handle.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged at its side and swings outward as the hand pulls its edge-mounted handle."
+ },
+ "P10_04/P10_04_358": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cabinet panel is a hinged door mounted along its side, and the hand path indicates swinging it open.",
+  "noun": "cabinet",
+  "verb": "open",
+  "narration": "open cabinet again",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cabinet panel is a hinged door mounted along its side, and the hand path indicates swinging it open."
+ },
+ "P11_103/P11_103_45": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight runners and the hand path pulls it outward linearly.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight runners and the hand path pulls it outward linearly."
+ },
+ "P11_101/P11_101_25": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a front-mounted drawer with no visible hinges, and the hand path indicates straight outward sliding.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a front-mounted drawer with no visible hinges, and the hand path indicates straight outward sliding."
+ },
+ "P11_102/P11_102_0": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The red-outlined drawer is mounted on straight runners and the hand path pulls it directly outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The red-outlined drawer is mounted on straight runners and the hand path pulls it directly outward."
+ },
+ "P11_103/P11_103_64": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has a front-mounted handle and the hand path pulls straight outward, consistent with sliding rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has a front-mounted handle and the hand path pulls straight outward, consistent with sliding rails."
+ },
+ "P11_103/P11_103_66": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked panel is a drawer with a straight sliding track, and the hand path pulls it outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked panel is a drawer with a straight sliding track, and the hand path pulls it outward."
+ },
+ "P11_104/P11_104_186": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked panel is a drawer mounted on straight sliding rails, and the hand moves directly outward along its length.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked panel is a drawer mounted on straight sliding rails, and the hand moves directly outward along its length."
+ },
+ "P11_104/P11_104_96": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a drawer front with a centered handle and the hand moves straight outward along the drawer rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a drawer front with a centered handle and the hand moves straight outward along the drawer rails."
+ },
+ "P12_02/P12_02_127": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The fridge door is a large hinged panel with the hand pulling its edge along an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The fridge door is a large hinged panel with the hand pulling its edge along an arc."
+ },
+ "P12_02/P12_02_18": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer front and hand move straight outward along the drawer rails, with no visible hinge.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer front and hand move straight outward along the drawer rails, with no visible hinge."
+ },
+ "P12_03/P12_03_17": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked narrow drawer front is mounted on horizontal slides, and the hand path pulls it straight outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked narrow drawer front is mounted on horizontal slides, and the hand path pulls it straight outward."
+ },
+ "P12_03/P12_03_48": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged at its side and swings open around that hinge.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged at its side and swings open around that hinge."
+ },
+ "P12_101/P12_101_390": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a drawer front with a horizontal hand path and no visible hinge, indicating straight-line sliding.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a drawer front with a horizontal hand path and no visible hinge, indicating straight-line sliding."
+ },
+ "P15_02/P15_02_18": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has straight horizontal rails and the hand path indicates pulling it directly outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has straight horizontal rails and the hand path indicates pulling it directly outward."
+ },
+ "P14_05/P14_05_3": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged at its side and the hand pulls its handle along an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged at its side and the hand pulls its handle along an arc."
+ },
+ "P18_01/P18_01_12": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard door is side-hinged and swings open, with the hand pulling its vertical handle along an arc.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard door is side-hinged and swings open, with the hand pulling its vertical handle along an arc."
+ },
+ "P18_02/P18_02_26": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard door is visibly side-hinged with a vertical handle, and the hand path indicates swinging it open.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard door is visibly side-hinged with a vertical handle, and the hand path indicates swinging it open."
+ },
+ "P18_02/P18_02_28": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard door is visibly mounted on side hinges and swings around them as the hand moves the handle.",
+  "noun": "cupboard",
+  "verb": "close",
+  "narration": "close cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard door is visibly mounted on side hinges and swings around them as the hand moves the handle."
+ },
+ "P18_03/P18_03_108": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is visibly hinged along its lower edge and swings open while the hand pulls the top handle.",
+  "noun": "oven",
+  "verb": "open",
+  "narration": "open oven again",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is visibly hinged along its lower edge and swings open while the hand pulls the top handle."
+ },
+ "P18_03/P18_03_106": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is hinged at its lower edge and the hand pulls its front handle along an arcing path.",
+  "noun": "oven",
+  "verb": "open",
+  "narration": "open oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is hinged at its lower edge and the hand pulls its front handle along an arcing path."
+ },
+ "P18_03/P18_03_16": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined drawer front is mounted below the counter and the hand path indicates it is pulled straight outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined drawer front is mounted below the counter and the hand path indicates it is pulled straight outward."
+ },
+ "P18_03/P18_03_34": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The oven door is visibly hinged at its lower edge and the hand operates the top handle to swing it closed.",
+  "noun": "oven",
+  "verb": "close",
+  "narration": "close oven",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The oven door is visibly hinged at its lower edge and the hand operates the top handle to swing it closed."
+ },
+ "P18_03/P18_03_41": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged along its side and the hand operates a vertical handle to swing it open.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged along its side and the hand operates a vertical handle to swing it open."
+ },
+ "P18_06/P18_06_17": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard door is visibly mounted on hinges and swings outward along an arcing hand path.",
+  "noun": "cupboard",
+  "verb": "close",
+  "narration": "close cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard door is visibly mounted on hinges and swings outward along an arcing hand path."
+ },
+ "P18_06/P18_06_70": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked cupboard door is hinged along its side and swings outward, consistent with the hand path.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked cupboard door is hinged along its side and swings outward, consistent with the hand path."
+ },
+ "P20_03/P20_03_15": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The fridge door is hinged along its side and the hand pulls its handle along an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The fridge door is hinged along its side and the hand pulls its handle along an arc."
+ },
+ "P20_03/P20_03_54": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door swings on side hinges, with the hand pulling its edge outward.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door swings on side hinges, with the hand pulling its edge outward."
+ },
+ "P21_01/P21_01_86": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The microwave door is a hinged flap, and the hand path follows an arc as it closes.",
+  "noun": "microwave",
+  "verb": "close",
+  "narration": "closing the microwave",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The microwave door is a hinged flap, and the hand path follows an arc as it closes."
+ },
+ "P18_03/P18_03_59": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged along its side and the hand pulls its handle in an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged along its side and the hand pulls its handle in an arc."
+ },
+ "P22_01/P22_01_106": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked panel has a horizontal drawer-style handle and is mounted to slide straight outward, with the hand path pulling directly away from the cabinet.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked panel has a horizontal drawer-style handle and is mounted to slide straight outward, with the hand path pulling directly away from the cabinet."
+ },
+ "P22_01/P22_01_251": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a drawer front mounted for straight outward sliding, and the hand path pulls directly away from the cabinet.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a drawer front mounted for straight outward sliding, and the hand path pulls directly away from the cabinet."
+ },
+ "P22_01/P22_01_253": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on horizontal slides and the hand follows a straight in-and-out path.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on horizontal slides and the hand follows a straight in-and-out path."
+ },
+ "P22_01/P22_01_16": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight sliding rails and the hand moves linearly inward to close it.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight sliding rails and the hand moves linearly inward to close it."
+ },
+ "P22_01/P22_01_270": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The red-outlined drawer is mounted to slide straight outward, and the hand path is directly along its front.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The red-outlined drawer is mounted to slide straight outward, and the hand path is directly along its front."
+ },
+ "P22_01/P22_01_266": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The hand moves straight outward from the long drawer front, indicating a sliding drawer mechanism.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The hand moves straight outward from the long drawer front, indicating a sliding drawer mechanism."
+ },
+ "P22_01/P22_01_305": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard panel is a hinged door that swings open, with the hand following an arcing path near its edge.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard panel is a hinged door that swings open, with the hand following an arcing path near its edge."
+ },
+ "P22_01/P22_01_343": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a mounted drawer that slides straight outward, and the hand path follows that linear pull direction.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a mounted drawer that slides straight outward, and the hand path follows that linear pull direction."
+ },
+ "P22_01/P22_01_282": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The hand follows a straight outward path from the centered handle, consistent with a drawer sliding on rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The hand follows a straight outward path from the centered handle, consistent with a drawer sliding on rails."
+ },
+ "P22_01/P22_01_347": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a drawer front mounted for straight outward sliding, and the hand path pulls directly away from the cabinet.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a drawer front mounted for straight outward sliding, and the hand path pulls directly away from the cabinet."
+ },
+ "P22_01/P22_01_89": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The outlined cabinet door is mounted on side hinges and the hand reaches its handle to swing it open.",
+  "noun": "cabinet",
+  "verb": "open",
+  "narration": "open cabinet",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The outlined cabinet door is mounted on side hinges and the hand reaches its handle to swing it open."
+ },
+ "P22_07/P22_07_111": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a drawer that slides straight outward on rails, with the hand path aligned along its depth.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a drawer that slides straight outward on rails, with the hand path aligned along its depth."
+ },
+ "P22_07/P22_07_114": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer front is mounted to slide straight in and out, with the hand path aligned vertically along its face.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer front is mounted to slide straight in and out, with the hand path aligned vertically along its face."
+ },
+ "P22_07/P22_07_158": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined part is a drawer front mounted for straight outward sliding, and the hand path pulls directly away from the cabinet.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined part is a drawer front mounted for straight outward sliding, and the hand path pulls directly away from the cabinet."
+ },
+ "P22_07/P22_07_26": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The red-marked drawer is mounted on straight runners and the hand path pulls it linearly outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The red-marked drawer is mounted on straight runners and the hand path pulls it linearly outward."
+ },
+ "P22_07/P22_07_434": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted to slide straight outward, and the hand path follows that linear pull.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted to slide straight outward, and the hand path follows that linear pull."
+ },
+ "P22_07/P22_07_441": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cabinet door is a hinged panel with a visible side hinge/hinge-side mounting and swings shut.",
+  "noun": "cabinet",
+  "verb": "close",
+  "narration": "close cabinet",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cabinet door is a hinged panel with a visible side hinge/hinge-side mounting and swings shut."
+ },
+ "P22_07/P22_07_25": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cabinet panel is a hinged door, and the hand moves along an arc near its edge.",
+  "noun": "cabinet",
+  "verb": "close",
+  "narration": "close cabinet",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cabinet panel is a hinged door, and the hand moves along an arc near its edge."
+ },
+ "P22_07/P22_07_419": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer slides straight outward along rails, matching the hand\u2019s linear path and showing no hinge.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer slides straight outward along rails, matching the hand\u2019s linear path and showing no hinge."
+ },
+ "P22_07/P22_07_639": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a narrow drawer front with a hand path pulling it straight outward, consistent with sliding rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a narrow drawer front with a hand path pulling it straight outward, consistent with sliding rails."
+ },
+ "P22_07/P22_07_657": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined drawer front is pulled straight outward along the hand\u2019s path, with no visible hinge.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined drawer front is pulled straight outward along the hand\u2019s path, with no visible hinge."
+ },
+ "P22_07/P22_07_76": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined drawer is mounted beneath the counter and the hand path pulls straight outward, consistent with sliding rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined drawer is mounted beneath the counter and the hand path pulls straight outward, consistent with sliding rails."
+ },
+ "P22_107/P22_107_225": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a drawer front with a hand path pulling it straight outward, consistent with linear sliding rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a drawer front with a hand path pulling it straight outward, consistent with linear sliding rails."
+ },
+ "P22_107/P22_107_226": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight runners and the hand path follows its linear closing motion.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight runners and the hand path follows its linear closing motion."
+ },
+ "P22_107/P22_107_227": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined drawer is mounted in a straight horizontal track and the hand path is directly outward, indicating linear sliding.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined drawer is mounted in a straight horizontal track and the hand path is directly outward, indicating linear sliding."
+ },
+ "P22_107/P22_107_148": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted to slide straight outward, matching the hand\u2019s linear pull path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted to slide straight outward, matching the hand\u2019s linear pull path."
+ },
+ "P22_107/P22_107_39": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a drawer front mounted for straight outward sliding, and the hand path is directed linearly away from the cabinet.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a drawer front mounted for straight outward sliding, and the hand path is directed linearly away from the cabinet."
+ },
+ "P22_107/P22_107_50": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard front is hinged at its side and the hand follows an arc while pulling it open.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard front is hinged at its side and the hand follows an arc while pulling it open."
+ },
+ "P22_107/P22_107_55": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is visibly hinged at its side and the hand follows an arc while pulling it open.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is visibly hinged at its side and the hand follows an arc while pulling it open."
+ },
+ "P22_117/P22_117_119": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has a straight pull-out path and a front-mounted handle, with no visible hinges.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has a straight pull-out path and a front-mounted handle, with no visible hinges."
+ },
+ "P22_117/P22_117_127": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is visibly hinged along one side and swings closed as the hand pulls its outer edge.",
+  "noun": "fridge",
+  "verb": "close",
+  "narration": "close fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is visibly hinged along one side and swings closed as the hand pulls its outer edge."
+ },
+ "P22_117/P22_117_200": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined drawer is mounted on straight rails and the hand path indicates it slides linearly inward.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined drawer is mounted on straight rails and the hand path indicates it slides linearly inward."
+ },
+ "P22_117/P22_117_17": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The hand follows a straight outward path and the marked drawer has no visible hinges.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The hand follows a straight outward path and the marked drawer has no visible hinges."
+ },
+ "P22_117/P22_117_37": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined drawer is mounted on straight runners and the hand path is nearly vertical, indicating linear sliding.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined drawer is mounted on straight runners and the hand path is nearly vertical, indicating linear sliding."
+ },
+ "P22_117/P22_117_40": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The fridge door is a large hinged panel with a side-mounted handle, and the hand follows an arc as it opens.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The fridge door is a large hinged panel with a side-mounted handle, and the hand follows an arc as it opens."
+ },
+ "P22_117/P22_117_5": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer slides straight outward along its rails, with the hand path pulling directly toward the viewer.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer slides straight outward along its rails, with the hand path pulling directly toward the viewer."
+ },
+ "P22_117/P22_117_400": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The framed cupboard door has a side hinge and the hand pulls its handle along an arc.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The framed cupboard door has a side hinge and the hand pulls its handle along an arc."
+ },
+ "P22_117/P22_117_53": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight rails and the hand path is a straight pull outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight rails and the hand path is a straight pull outward."
+ },
+ "P24_05/P24_05_109": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged along its side and swings outward, with the hand pulling its edge.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged along its side and swings outward, with the hand pulling its edge."
+ },
+ "P24_05/P24_05_48": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked refrigerator door is a hinged panel, and the hand pulls its edge in an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked refrigerator door is a hinged panel, and the hand pulls its edge in an arc."
+ },
+ "P24_08/P24_08_113": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The tall fridge door is hinged along its side and the hand pulls its edge in an arcing path.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The tall fridge door is hinged along its side and the hand pulls its edge in an arcing path."
+ },
+ "P24_08/P24_08_168": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The refrigerator door is a hinged panel with a side-mounted handle, and the hand path indicates it swings outward.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The refrigerator door is a hinged panel with a side-mounted handle, and the hand path indicates it swings outward."
+ },
+ "P24_08/P24_08_174": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked refrigerator door is hinged along its side, and the hand pulls its edge in an arcing path.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked refrigerator door is hinged along its side, and the hand pulls its edge in an arcing path."
+ },
+ "P24_08/P24_08_30": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The refrigerator door is a large hinged panel with a vertical handle, and the hand path pulls it outward in an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The refrigerator door is a large hinged panel with a vertical handle, and the hand path pulls it outward in an arc."
+ },
+ "P24_08/P24_08_77": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The refrigerator door is a large hinged panel with a side-mounted handle, and the hand follows an outward swinging path.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The refrigerator door is a large hinged panel with a side-mounted handle, and the hand follows an outward swinging path."
+ },
+ "P24_09/P24_09_130": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is a hinged panel, and the hand operates its edge-mounted handle along a swinging path.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is a hinged panel, and the hand operates its edge-mounted handle along a swinging path."
+ },
+ "P24_09/P24_09_168": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is mounted on visible side hinges and the hand follows an outward swinging path.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is mounted on visible side hinges and the hand follows an outward swinging path."
+ },
+ "P24_09/P24_09_23": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large freezer door is operated by a side-mounted handle and swings about vertical hinges.",
+  "noun": "freezer",
+  "verb": "open",
+  "narration": "open freezer",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large freezer door is operated by a side-mounted handle and swings about vertical hinges."
+ },
+ "P24_09/P24_09_287": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged along its side and swings outward as the hand pulls the edge.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged along its side and swings outward as the hand pulls the edge."
+ },
+ "P25_09/P25_09_28": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked panel is a drawer front with no visible hinges, and the hand path indicates pulling it straight outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked panel is a drawer front with no visible hinges, and the hand path indicates pulling it straight outward."
+ },
+ "P24_09/P24_09_82": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The refrigerator door has a visible vertical hinge-side edge and is operated by pulling its handle outward along an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The refrigerator door has a visible vertical hinge-side edge and is operated by pulling its handle outward along an arc."
+ },
+ "P25_09/P25_09_47": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has no visible hinge and the hand path is straight outward from the cabinet.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has no visible hinge and the hand path is straight outward from the cabinet."
+ },
+ "P25_101/P25_101_105": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a handle on a drawer front, and the hand path pulls straight outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a handle on a drawer front, and the hand path pulls straight outward."
+ },
+ "P25_101/P25_101_17": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked cupboard panel is a hinged door, and the hand reaches toward its side edge to swing it open.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked cupboard panel is a hinged door, and the hand reaches toward its side edge to swing it open."
+ },
+ "P25_107/P25_107_162": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard panel is a hinged flap with the hand operating its lower edge.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard panel is a hinged flap with the hand operating its lower edge."
+ },
+ "P25_101/P25_101_107": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted to slide straight outward on rails, and the hand path follows a linear pull.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted to slide straight outward on rails, and the hand path follows a linear pull."
+ },
+ "P25_107/P25_107_461": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The outlined cupboard door is mounted at one side and swings outward as the hand pulls its edge.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The outlined cupboard door is mounted at one side and swings outward as the hand pulls its edge."
+ },
+ "P26_108/P26_108_30": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The outlined cupboard door is hinged along its side, and the hand path pulls the handle outward in an arc.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The outlined cupboard door is hinged along its side, and the hand path pulls the handle outward in an arc."
+ },
+ "P25_107/P25_107_50": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is pulled straight outward along a linear path, consistent with a sliding drawer rather than a hinged panel.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is pulled straight outward along a linear path, consistent with a sliding drawer rather than a hinged panel."
+ },
+ "P27_101/P27_101_23": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has a long horizontal handle and the hand path pulls it straight outward, consistent with sliding rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has a long horizontal handle and the hand path pulls it straight outward, consistent with sliding rails."
+ },
+ "P27_101/P27_101_440": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large cupboard door is hinged along its upper edge and swings outward, consistent with the hand\u2019s curved path.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large cupboard door is hinged along its upper edge and swings outward, consistent with the hand\u2019s curved path."
+ },
+ "P27_101/P27_101_447": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The refrigerator door is a hinged panel being pulled outward, with the hand following an arcing path.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The refrigerator door is a hinged panel being pulled outward, with the hand following an arcing path."
+ },
+ "P27_101/P27_101_71": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on linear runners and the hand path shows it being pushed straight inward.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on linear runners and the hand path shows it being pushed straight inward."
+ },
+ "P27_105/P27_105_230": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked refrigerator door is hinged at the side and the hand follows an outward swinging arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked refrigerator door is hinged at the side and the hand follows an outward swinging arc."
+ },
+ "P28_05/P28_05_0": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The drawer has a horizontal pull handle and the hand moves straight outward along the drawer\u2019s sliding direction.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The drawer has a horizontal pull handle and the hand moves straight outward along the drawer\u2019s sliding direction."
+ },
+ "P27_105/P27_105_9": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The refrigerator door is a large hinged panel, and the hand pulls its edge in an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The refrigerator door is a large hinged panel, and the hand pulls its edge in an arc."
+ },
+ "P28_06/P28_06_9": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked refrigerator door is a large hinged panel with a side-mounted handle, indicating it swings closed.",
+  "noun": "fridge",
+  "verb": "close",
+  "narration": "close fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked refrigerator door is a large hinged panel with a side-mounted handle, indicating it swings closed."
+ },
+ "P28_101/P28_101_27": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has a front-mounted handle and slides straight outward along the hand path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has a front-mounted handle and slides straight outward along the hand path."
+ },
+ "P28_103/P28_103_143": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked panel is a drawer front mounted on straight sliding rails, and the hand pulls it directly outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked panel is a drawer front mounted on straight sliding rails, and the hand pulls it directly outward."
+ },
+ "P28_103/P28_103_20": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The fridge door rotates on visible side hinges, with the handle moving along an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The fridge door rotates on visible side hinges, with the handle moving along an arc."
+ },
+ "P28_103/P28_103_172": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked component is a drawer with a front handle and straight outward hand path, indicating linear sliding.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked component is a drawer with a front handle and straight outward hand path, indicating linear sliding."
+ },
+ "P28_06/P28_06_94": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined drawer front is mounted on straight horizontal runners, and the hand pulls it directly outward along a straight path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined drawer front is mounted on straight horizontal runners, and the hand pulls it directly outward along a straight path."
+ },
+ "P28_103/P28_103_16": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The outlined cupboard door is mounted on hinges along one side and swings outward as the hand pulls its edge.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The outlined cupboard door is mounted on hinges along one side and swings outward as the hand pulls its edge."
+ },
+ "P28_103/P28_103_145": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight sliding rails, and the hand path is directly outward from the cabinet.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight sliding rails, and the hand path is directly outward from the cabinet."
+ },
+ "P28_101/P28_101_74": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The marked refrigerator door is a large hinged panel, and the hand path is consistent with pulling it outward to swing open.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The marked refrigerator door is a large hinged panel, and the hand path is consistent with pulling it outward to swing open."
+ },
+ "P28_103/P28_103_250": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged at its side and swings outward as the hand pulls its edge.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged at its side and swings outward as the hand pulls its edge."
+ },
+ "P28_103/P28_103_288": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large cupboard door is side-hinged and swings outward, with the hand pulling its handle along an arc.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large cupboard door is side-hinged and swings outward, with the hand pulling its handle along an arc."
+ },
+ "P28_103/P28_103_27": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer front is mounted on linear runners and the hand path is straight outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer front is mounted on linear runners and the hand path is straight outward."
+ },
+ "P28_103/P28_103_37": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a drawer mounted on horizontal rails, and the hand pulls it straight outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a drawer mounted on horizontal rails, and the hand pulls it straight outward."
+ },
+ "P28_103/P28_103_42": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The red-marked drawer is mounted to slide straight outward, matching the hand\u2019s linear pull path and showing no visible hinge.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The red-marked drawer is mounted to slide straight outward, matching the hand\u2019s linear pull path and showing no visible hinge."
+ },
+ "P28_109/P28_109_13": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The refrigerator door is side-hinged and swings outward, with the hand path following its edge.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The refrigerator door is side-hinged and swings outward, with the hand path following its edge."
+ },
+ "P28_109/P28_109_17": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has no visible hinges and is operated by pulling straight outward along its runners.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has no visible hinges and is operated by pulling straight outward along its runners."
+ },
+ "P28_109/P28_109_33": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has no visible hinges and is operated by a hand pulling it straight outward along its rails.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has no visible hinges and is operated by a hand pulling it straight outward along its rails."
+ },
+ "P28_113/P28_113_123": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked component is a drawer with a horizontal front handle and no visible hinges, indicating straight-line sliding motion.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked component is a drawer with a horizontal front handle and no visible hinges, indicating straight-line sliding motion."
+ },
+ "P28_103/P28_103_40": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked component is a drawer with a front-mounted handle and no visible hinges, indicating straight-line sliding.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked component is a drawer with a front-mounted handle and no visible hinges, indicating straight-line sliding."
+ },
+ "P28_113/P28_113_37": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has a straight horizontal front and the hand path is perpendicular to it, consistent with sliding outward on runners.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has a straight horizontal front and the hand path is perpendicular to it, consistent with sliding outward on runners."
+ },
+ "P28_113/P28_113_52": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined kitchen drawer is mounted on straight runners and the hand path pulls it linearly outward/inward.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined kitchen drawer is mounted on straight runners and the hand path pulls it linearly outward/inward."
+ },
+ "P28_113/P28_113_46": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The drawer front has no visible hinges, and the hand follows a straight outward path while pulling it open.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The drawer front has no visible hinges, and the hand follows a straight outward path while pulling it open."
+ },
+ "P30_07/P30_07_67": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer has a horizontal pull handle and slides straight outward with no visible hinges.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer has a horizontal pull handle and slides straight outward with no visible hinges."
+ },
+ "P28_14/P28_14_8": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The fridge door is visibly hinged along its side and the hand pulls it in an arc to close it.",
+  "noun": "fridge",
+  "verb": "close",
+  "narration": "close fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The fridge door is visibly hinged along its side and the hand pulls it in an arc to close it."
+ },
+ "P30_101/P30_101_263": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted as a pull-out compartment with a straight hand path and no visible hinge.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted as a pull-out compartment with a straight hand path and no visible hinge."
+ },
+ "P30_110/P30_110_41": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is side-hinged and the hand pulls its outer edge along an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is side-hinged and the hand pulls its outer edge along an arc."
+ },
+ "P30_110/P30_110_56": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is side-hinged and the hand moves along its swinging edge.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is side-hinged and the hand moves along its swinging edge."
+ },
+ "P30_111/P30_111_22": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged along its side and swings outward, matching the hand path.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged along its side and swings outward, matching the hand path."
+ },
+ "P30_111/P30_111_264": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is hinged along its side and swings outward, with the hand following an arcing path.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is hinged along its side and swings outward, with the hand following an arcing path."
+ },
+ "P30_111/P30_111_272": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The fridge door is mounted on visible hinges and the hand pulls its handle along an arcing path.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The fridge door is mounted on visible hinges and the hand pulls its handle along an arcing path."
+ },
+ "P30_111/P30_111_277": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The fridge door is visibly hinged along its side and the hand path follows an outward swinging arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The fridge door is visibly hinged along its side and the hand path follows an outward swinging arc."
+ },
+ "P30_111/P30_111_443": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The fridge door is a large hinged panel, and the hand path pulls its outer edge outward in an arc.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The fridge door is a large hinged panel, and the hand path pulls its outer edge outward in an arc."
+ },
+ "P35_105/P35_105_173": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The outlined cupboard door is hinged at the side and the hand follows an arcing path while opening it.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The outlined cupboard door is hinged at the side and the hand follows an arcing path while opening it."
+ },
+ "P35_105/P35_105_160": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked panel is a drawer front with a centered pull, and the hand path is straight outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked panel is a drawer front with a centered pull, and the hand path is straight outward."
+ },
+ "P35_105/P35_105_199": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The refrigerator door is a large hinged panel with the hand operating its edge-mounted handle.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The refrigerator door is a large hinged panel with the hand operating its edge-mounted handle."
+ },
+ "P35_105/P35_105_26": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked drawer is mounted on straight runners and the hand pulls it directly outward along a linear path.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked drawer is mounted on straight runners and the hand pulls it directly outward along a linear path."
+ },
+ "P35_105/P35_105_57": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The large fridge door is visibly hinged along its side and the hand operates its edge in a swinging motion.",
+  "noun": "fridge",
+  "verb": "open",
+  "narration": "open fridge",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The large fridge door is visibly hinged along its side and the hand operates its edge in a swinging motion."
+ },
+ "P35_105/P35_105_3": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The marked part is a drawer front with a hand path pulling straight outward, indicating linear sliding.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The marked part is a drawer front with a hand path pulling straight outward, indicating linear sliding."
+ },
+ "P35_105/P35_105_96": {
+  "type": "rot",
+  "confidence": "high",
+  "why": "The cupboard door is visibly side-hinged, and the hand operates its edge along a short swinging arc.",
+  "noun": "cupboard",
+  "verb": "open",
+  "narration": "open cupboard",
+  "noun_rule": "rot",
+  "raw": "TYPE: revolute\nCONFIDENCE: high\nWHY: The cupboard door is visibly side-hinged, and the hand operates its edge along a short swinging arc."
+ },
+ "P35_109/P35_109_81": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The red-outlined drawer is mounted on straight rails and the hand path pulls it directly outward.",
+  "noun": "drawer",
+  "verb": "open",
+  "narration": "open drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The red-outlined drawer is mounted on straight rails and the hand path pulls it directly outward."
+ },
+ "P37_101/P37_101_7": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined drawer has a long horizontal handle and the hand path indicates straight outward sliding motion.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined drawer has a long horizontal handle and the hand path indicates straight outward sliding motion."
+ },
+ "P35_109/P35_109_171": {
+  "type": "trans",
+  "confidence": "high",
+  "why": "The outlined drawer is mounted on straight runners and the hand path pulls it directly inward to close.",
+  "noun": "drawer",
+  "verb": "close",
+  "narration": "close drawer",
+  "noun_rule": "trans",
+  "raw": "TYPE: prismatic\nCONFIDENCE: high\nWHY: The outlined drawer is mounted on straight runners and the hand path pulls it directly inward to close."
+ }
+}
