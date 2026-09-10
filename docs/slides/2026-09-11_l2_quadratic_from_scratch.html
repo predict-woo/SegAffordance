@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The revolute L2 quadratic, from scratch</title>
+<script>
+  window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+  :root { --ink:#1f2937; --muted:#6b7280; --rule:#e5e7eb; --acc:#b45309; --acc2:#1d4ed8; --ok:#047857; --bad:#b91c1c; --bg:#fbfbf9; --card:#fff; }
+  html { color-scheme: light; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 30px; line-height:1.2; margin: 0 0 8px; }
+  h2 { font-size: 22px; margin: 44px 0 10px; padding-top: 18px; border-top: 1px solid var(--rule); }
+  h3 { font-size: 17px; margin: 22px 0 6px; }
+  p { margin: 10px 0; }
+  .lead { color: var(--muted); font-size: 17px; }
+  .box { background: var(--card); border:1px solid var(--rule); border-radius: 10px; padding: 14px 18px; margin: 14px 0; }
+  .key { border-left: 4px solid var(--acc); }
+  .good { border-left: 4px solid var(--ok); }
+  .note { border-left: 4px solid var(--acc2); }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; background:#f3f4f6; padding: 1px 5px; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 15px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { background: #f3f4f6; font-weight: 600; }
+  figure { margin: 18px 0; }
+  figcaption { color: var(--muted); font-size: 14px; margin-top: 6px; }
+  svg { max-width: 100%; height: auto; display:block; margin: 0 auto; }
+  .row { display:flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+  .row > * { flex: 1 1 320px; }
+  .muted { color: var(--muted); }
+  ol li, ul li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>The revolute L2 quadratic, from scratch</h1>
+<p class="lead">Only one thing is on this page: the position (L2) closed-form loss for a revolute joint, <code>rot_pos</code> in <code>closed_form_screw_loss</code>. We build it from the definition of a trajectory loss, expand it, and read off what each piece measures. Every identity here is checked numerically by <code>tools/revolute_loss_check.py</code>.</p>
+
+<h2>1. What is being compared</h2>
+<p>The model predicts a unit axis \(\mathbf n\), a hinge origin \(\mathbf o\) and the interaction point \(\mathbf p_0\). Ground truth is \(\mathbf n^*, \mathbf o^*, \mathbf p_0^*\). Each triple defines an arc: the path of the point as the part rotates by an angle \(\theta\) about the axis line.</p>
+<p>Two vectors describe an arc completely:</p>
+<div class="box">
+\[\mathbf r = (I - \mathbf n\mathbf n^{\top})(\mathbf p_0 - \mathbf o) \qquad\text{(lever: from the axis line to the point, } \lVert\mathbf r\rVert = \text{radius)}\]
+\[\mathbf t = \mathbf n \times \mathbf r \qquad\text{(tangent: the direction the point first moves; } \lVert\mathbf t\rVert = \lVert\mathbf r\rVert\text{, and } \mathbf t \perp \mathbf r)\]
+</div>
+<p>The arc, written relative to its own first point (this is how the trajectory loss has always compared curves: the first point is subtracted, so the absolute position of the hinge drops out):</p>
+\[\mathbf x(\theta) - \mathbf x(0) \;=\; (\cos\theta - 1)\,\mathbf r \;+\; \sin\theta\,\mathbf t, \qquad \theta \in [0,\Theta],\quad \Theta = \tfrac{\pi}{2}.\]
+<p>Check: at \(\theta = 0\) this is zero; at small \(\theta\) it is \(\approx \theta\,\mathbf t\), motion along the tangent; at \(\theta = \pi/2\) it is \(-\mathbf r + \mathbf t\), a quarter turn.</p>
+
+<h2>2. The trajectory loss as an integral</h2>
+<p>The sampled loss is the mean squared distance between predicted and GT points at the same 20 angles. Let the number of points go to infinity and it becomes an integral over \(\theta\). Because both arcs are built from the same two basis functions \((\cos\theta - 1)\) and \(\sin\theta\), the difference of the two arcs is</p>
+\[\Delta(\theta) \;=\; (\cos\theta - 1)\,\mathbf{dr} \;+\; \sin\theta\,\mathbf{dt}, \qquad \mathbf{dr} = \mathbf r - \mathbf r^*,\quad \mathbf{dt} = \mathbf t - \mathbf t^*.\]
+<p>Square it and integrate. Only three numbers come out of the integral, and they depend only on the sweep \(\Theta\):</p>
+<div class="box">
+\[\int_0^{\Theta} \lVert\Delta(\theta)\rVert^2\,d\theta \;=\; A\,\lVert\mathbf{dr}\rVert^2 + C\,\lVert\mathbf{dt}\rVert^2 + B_2\,(\mathbf{dr}\cdot\mathbf{dt})\]
+\[A = \int_0^{\Theta}(\cos\theta - 1)^2 d\theta = \tfrac{3\pi}{4} - 2 \approx 0.356,\qquad
+C = \int_0^{\Theta}\sin^2\theta\, d\theta = \tfrac{\pi}{4} \approx 0.785,\qquad
+B_2 = 2\!\int_0^{\Theta}(\cos\theta - 1)\sin\theta\, d\theta = -1.\]
+<p class="muted" style="margin:0">(values at \(\Theta = \pi/2\); these are the constants hard-coded in the code's <code>rot_pos</code>)</p>
+</div>
+<p>This is the whole "quadratic": a weighted sum of the squared lever error, the squared tangent error, and their dot product. Note that \(C > A\): the tangent error is weighted more than twice the lever error, because over a quarter turn \(\sin\theta\) is larger on average than \(\cos\theta - 1\).</p>
+
+<h3>Normalisation</h3>
+<p>To make a collapsed prediction score exactly 1 regardless of door size, the integral is divided by the same integral evaluated on the GT arc alone (i.e. with \(\mathbf r = \mathbf t = 0\)). Since \(\mathbf r^*\cdot\mathbf t^* = 0\) and \(\lVert\mathbf t^*\rVert = \lVert\mathbf r^*\rVert\), that denominator is simply \((A + C)\,\lVert\mathbf r^*\rVert^2\):</p>
+<div class="box key">
+\[\boxed{\;\mathcal L_{\text{pos}} \;=\; \frac{A\,\lVert\mathbf{dr}\rVert^2 + C\,\lVert\mathbf{dt}\rVert^2 + B_2\,(\mathbf{dr}\cdot\mathbf{dt})}{(A + C)\,\lVert\mathbf r^*\rVert^2}\;}\]
+</div>
+<p>That is the loss as implemented. Everything below is just rewriting it in variables that have a meaning.</p>
+
+<h2>3. Open the squares</h2>
+<p>Write the levers as length times direction: \(\mathbf r = \lVert\mathbf r\rVert\,\hat{\mathbf r}\), \(\mathbf t = \lVert\mathbf r\rVert\,\hat{\mathbf t}\) (same length, because \(\mathbf n\) is a unit vector), and the same for GT. Then</p>
+\[\lVert\mathbf{dr}\rVert^2 = \lVert\mathbf r\rVert^2 + \lVert\mathbf r^*\rVert^2 - 2\lVert\mathbf r\rVert\lVert\mathbf r^*\rVert\,(\hat{\mathbf r}\cdot\hat{\mathbf r}^*),\]
+\[\lVert\mathbf{dt}\rVert^2 = \lVert\mathbf r\rVert^2 + \lVert\mathbf r^*\rVert^2 - 2\lVert\mathbf r\rVert\lVert\mathbf r^*\rVert\,(\hat{\mathbf t}\cdot\hat{\mathbf t}^*),\]
+\[\mathbf{dr}\cdot\mathbf{dt} = \underbrace{\mathbf r\cdot\mathbf t}_{0} - \mathbf r\cdot\mathbf t^* - \mathbf r^*\cdot\mathbf t + \underbrace{\mathbf r^*\cdot\mathbf t^*}_{0} = -\lVert\mathbf r\rVert\lVert\mathbf r^*\rVert\,(\hat{\mathbf r}\cdot\hat{\mathbf t}^* + \hat{\mathbf t}\cdot\hat{\mathbf r}^*).\]
+<p>So after dividing by \(\lVert\mathbf r^*\rVert^2\) and writing \(\lambda = \lVert\mathbf r\rVert / \lVert\mathbf r^*\rVert\) (predicted radius over true radius), the loss depends on exactly five numbers:</p>
+<div class="box note">
+<p style="margin:0 0 6px"><b>One scale:</b> \(\lambda\), the radius ratio.</p>
+<p style="margin:0"><b>Four overlaps</b> between the predicted frame \((\hat{\mathbf r}, \hat{\mathbf t})\) and the GT frame \((\hat{\mathbf r}^*, \hat{\mathbf t}^*)\):
+\(\ \hat{\mathbf r}\cdot\hat{\mathbf r}^*,\ \ \hat{\mathbf t}\cdot\hat{\mathbf t}^*,\ \ \hat{\mathbf r}\cdot\hat{\mathbf t}^*,\ \ \hat{\mathbf t}\cdot\hat{\mathbf r}^*.\)</p>
+</div>
+<p>Notice what is <em>not</em> on the list: the axis \(\mathbf n\) never appears by itself. It only enters through \(\hat{\mathbf t} = \mathbf n \times \hat{\mathbf r}\). This is the first half of the whole story.</p>
+
+<h2>4. What the four overlaps mean: an axis tilt and an in-plane turn</h2>
+<div class="row">
+<div>
+<p>Each frame is a pair of perpendicular unit vectors lying in a plane; the plane's normal is the axis. Two such frames differ in two ways:</p>
+<ul>
+  <li><b>the planes are tilted</b> relative to each other — measured by the angle between the axes, \(k = \mathbf n\cdot\mathbf n^* = \cos(\text{tilt})\);</li>
+  <li><b>within the plane, the lever is turned</b> — measured by an in-plane angle \(\psi\): is the point sitting at the right place around the hinge?</li>
+</ul>
+<p>The four overlaps encode both. The bookkeeping identities (checked numerically):</p>
+\[\hat{\mathbf r}\cdot\hat{\mathbf r}^* + \hat{\mathbf t}\cdot\hat{\mathbf t}^* = (1 + k)\cos\psi,\qquad
+\hat{\mathbf t}^*\cdot\hat{\mathbf r} - \hat{\mathbf r}^*\cdot\hat{\mathbf t} = (1 + k)\sin\psi,\]
+\[\hat{\mathbf r}\cdot\hat{\mathbf r}^* - \hat{\mathbf t}\cdot\hat{\mathbf t}^* = (1 - k)\cos\chi,\qquad
+\hat{\mathbf r}^*\cdot\hat{\mathbf t} + \hat{\mathbf t}^*\cdot\hat{\mathbf r} = (1 - k)\sin\chi.\]
+<p>\(\chi\) is a second in-plane angle that only matters when the planes are tilted (its coefficient is \(1 - k\), zero when the axes agree).</p>
+</div>
+<div>
+<figure>
+<svg viewBox="0 0 380 300" width="380" height="300" role="img" aria-label="Two frames: tilt and in-plane turn">
+  <!-- GT plane -->
+  <polygon points="40,200 200,150 340,200 180,250" fill="#ecfdf5" stroke="#047857" stroke-width="1.5"/>
+  <line x1="190" y1="200" x2="300" y2="185" stroke="#047857" stroke-width="2.5"/><text x="300" y="180" font-size="13" fill="#047857">r̂*</text>
+  <line x1="190" y1="200" x2="230" y2="240" stroke="#047857" stroke-width="2.5"/><text x="234" y="252" font-size="13" fill="#047857">t̂*</text>
+  <line x1="190" y1="200" x2="190" y2="60" stroke="#047857" stroke-width="2"/><text x="196" y="70" font-size="13" fill="#047857">n*</text>
+  <!-- predicted plane (tilted) -->
+  <polygon points="60,170 220,110 350,175 200,240" fill="none" stroke="#b45309" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <line x1="190" y1="200" x2="292" y2="160" stroke="#b45309" stroke-width="2.5"/><text x="296" y="156" font-size="13" fill="#b45309">r̂ (turned by ψ)</text>
+  <line x1="190" y1="200" x2="150" y2="240" stroke="#b45309" stroke-width="2.5"/><text x="96" y="252" font-size="13" fill="#b45309">t̂</text>
+  <line x1="190" y1="200" x2="240" y2="70" stroke="#b45309" stroke-width="2"/><text x="246" y="78" font-size="13" fill="#b45309">n (tilted, k = n·n*)</text>
+  <path d="M190,110 A90,90 0 0 1 222,116" fill="none" stroke="#1f2937" stroke-width="1"/><text x="205" y="102" font-size="12">tilt</text>
+</svg>
+<figcaption>Green: the GT frame and its plane. Orange: the predicted frame — its plane is tilted (axis angle, \(k\)) and its lever is turned within the plane (\(\psi\)).</figcaption>
+</figure>
+</div>
+</div>
+
+<p>Two limiting cases make the identities obvious:</p>
+<ul>
+  <li><b>Same axis</b> (\(k = 1\)): the two frames lie in the same plane and differ by a pure rotation by \(\psi\). Then \(\hat{\mathbf r}\cdot\hat{\mathbf r}^* = \hat{\mathbf t}\cdot\hat{\mathbf t}^* = \cos\psi\), so the sum is \(2\cos\psi = (1+k)\cos\psi\) and the difference is \(0 = (1-k)\cos\chi\). ✓</li>
+  <li><b>Flipped axis</b> (\(k = -1\)): same plane, \(\hat{\mathbf r}\) unchanged, \(\hat{\mathbf t}\) reversed. The frames differ by a <em>reflection</em>, not a rotation: \(\hat{\mathbf r}\cdot\hat{\mathbf r}^* = 1\), \(\hat{\mathbf t}\cdot\hat{\mathbf t}^* = -1\). Sum \(0 = (1+k)\cos\psi\), difference \(2 = (1-k)\cos\chi\). ✓</li>
+</ul>
+<p>In between, the overlap matrix is a mixture of a rotation part (weight \(1+k\)) and a reflection part (weight \(1-k\)). That is all the identities say.</p>
+
+<h2>5. Substitute and collect</h2>
+<p>Put the overlaps into the loss. The numerator over \(\lVert\mathbf r^*\rVert^2\) is</p>
+\[(A + C)(\lambda^2 + 1) \;-\; 2\lambda\bigl(A\,\hat{\mathbf r}\cdot\hat{\mathbf r}^* + C\,\hat{\mathbf t}\cdot\hat{\mathbf t}^*\bigr) \;-\; B_2\,\lambda\,(\hat{\mathbf r}\cdot\hat{\mathbf t}^* + \hat{\mathbf t}\cdot\hat{\mathbf r}^*).\]
+<p>Split the middle bracket into "sum" and "difference" of the two overlaps, so the identities of §4 can be used:</p>
+\[A\,\hat{\mathbf r}\cdot\hat{\mathbf r}^* + C\,\hat{\mathbf t}\cdot\hat{\mathbf t}^* \;=\; \tfrac{A+C}{2}\,\underbrace{(\hat{\mathbf r}\cdot\hat{\mathbf r}^* + \hat{\mathbf t}\cdot\hat{\mathbf t}^*)}_{(1+k)\cos\psi} \;+\; \tfrac{A-C}{2}\,\underbrace{(\hat{\mathbf r}\cdot\hat{\mathbf r}^* - \hat{\mathbf t}\cdot\hat{\mathbf t}^*)}_{(1-k)\cos\chi}.\]
+<p>Divide by \((A + C)\), and use \(\lambda^2 + 1 = (\lambda - 1)^2 + 2\lambda\) together with \(2\lambda = \lambda(1+k) + \lambda(1-k)\) to pair each \(\lambda\) with its cosine. The result:</p>
+<div class="box key">
+\[\mathcal L_{\text{pos}} \;=\; \underbrace{(\lambda - 1)^2}_{\text{radius}} \;+\; \underbrace{\lambda\,(1+k)\,(1 - \cos\psi)}_{\text{lever turned in-plane}} \;+\; \underbrace{\lambda\,(1-k)\,\bigl[1 + \rho\cos(\chi - \chi_0)\bigr]}_{\text{axis tilted}}\]
+\[\rho = \frac{\sqrt{(A-C)^2 + B_2^2}}{A+C} \;=\; \frac{\sqrt{(\tfrac{\pi}{2}-2)^2 + 1}}{\pi - 2} \;\approx\; 0.953,\qquad \chi_0 = \operatorname{atan2}(B_2,\ A - C).\]
+</div>
+<p>The two \(\chi\)-terms were combined into one cosine with amplitude \(\rho\) and a phase shift \(\chi_0\); that is just \(a\cos\chi + b\sin\chi = \sqrt{a^2+b^2}\cos(\chi - \chi_0)\).</p>
+
+<h2>6. Read the three pieces</h2>
+<table>
+<tr><th>piece</th><th>what it measures</th><th>when it is zero</th></tr>
+<tr><td>\((\lambda - 1)^2\)</td><td>radius error: predicted radius vs true radius, as a ratio</td><td>right radius</td></tr>
+<tr><td>\(\lambda(1+k)(1 - \cos\psi)\)</td><td>the lever is turned around the axis by \(\psi\): the point sits at the wrong place on the circle (a <em>different</em> cosine from the axis one)</td><td>lever at the right place, <b>or</b> axis flipped (\(1+k = 0\) kills it)</td></tr>
+<tr><td>\(\lambda(1-k)[1 + \rho\cos(\chi-\chi_0)]\)</td><td>the axis is tilted: \(1 - k = 1 - \cos(\text{axis angle})\) — <b>this is the axis 1 − cos</b></td><td>right axis</td></tr>
+</table>
+
+<p>So yes, the L2 quadratic contains \(1 - \cos\) of the axis angle. It is the third piece. But it never appears alone; two multipliers sit in front of it:</p>
+<div class="row">
+<div class="box">
+<h3 style="margin-top:0">Multiplier 1: \(\lambda\)</h3>
+<p>The axis penalty is proportional to the predicted radius. If the model predicts a lever that is 1 % of the true one, the axis piece is 1 % of its size, and its gradient with respect to \(\mathbf n\) is 1 % as well. At \(\lambda = 0\) the whole loss is exactly 1 for every axis: the axis has become invisible.</p>
+<p class="muted" style="margin:0">Why it is there: the numerator is quadratic in the predicted lever, the denominator uses only the GT lever. Any term of degree 0 in the lever (like a bare \(1 - k\)) cannot come out of that ratio.</p>
+</div>
+<div class="box">
+<h3 style="margin-top:0">Multiplier 2: \(1 + \rho\cos(\chi - \chi_0)\)</h3>
+<p>\(\chi\) is an in-plane angle the origin and point heads control. By choosing it, the bracket ranges from \(1 - \rho = 0.047\) to \(1 + \rho = 1.95\). So the other heads can shrink the axis penalty to 5 % of its nominal value without touching the axis at all.</p>
+<p class="muted" style="margin:0">Why it is there: the two basis functions \((\cos\theta - 1)\) and \(\sin\theta\) are not weighted equally (\(A \ne C\)) and not orthogonal (\(B_2 \ne 0\)) over a quarter turn. Their imbalance is exactly \(\rho\). No sweep length makes the position basis balanced: \(\rho \ge 0.5\) for every \(\Theta\).</p>
+</div>
+</div>
+
+<h2>7. Three sanity checks against the formula</h2>
+<ol>
+  <li><b>Perfect prediction:</b> \(\lambda = 1,\ k = 1,\ \psi = 0\). All three pieces vanish, \(\mathcal L = 0\). ✓</li>
+  <li><b>Collapsed prediction</b> (lever shrunk to nothing, \(\lambda = 0\)): \(\mathcal L = 1\), regardless of \(k\) and \(\psi\). ✓ (this is what the normalisation was designed to give)</li>
+  <li><b>Axis flipped, everything else exact:</b> \(\lambda = 1,\ k = -1\). The lever piece is gone (\(1 + k = 0\)); the identities give \(\chi = 0\), so the axis piece is \(2\,[1 + \rho\cos\chi_0] = 2\,[1 - \tfrac{A-C}{A+C}] = \tfrac{4C}{A+C} = \tfrac{\pi}{\pi-2} \approx 2.75\). The same number falls out of the original form directly: \(\mathbf{dr} = 0\), \(\mathbf{dt} = -2\mathbf t^*\), so \(\mathcal L = 4C/(A+C)\). ✓</li>
+</ol>
+
+<h2>8. The consequence: a flipped axis can be bought back</h2>
+<p>Start from case 3: the axis is flipped and the loss is 2.75. Now let the origin and point heads move, which changes \(\lambda\) and \(\chi\). The lever piece is already zero (\(1 + k = 0\)), so the loss is</p>
+\[\mathcal L = (\lambda - 1)^2 + 2\lambda\,[1 + \rho\cos(\chi - \chi_0)].\]
+<p>Pick \(\chi\) to make the cosine \(-1\): the bracket becomes \(1 - \rho = 0.047\), the loss \((\lambda - 1)^2 + 0.094\lambda\). Minimise over \(\lambda\): \(\lambda = 0.953\), giving</p>
+<div class="box good">
+\[\min_{\lambda,\chi}\ \mathcal L\big|_{k=-1} \;\approx\; 0.091 \qquad\text{versus}\qquad \mathcal L\big|_{k=-1,\ \text{honest }o,p_0} = 2.75.\]
+<p style="margin:0">A flipped axis costs 3 % of what it should, once the origin and point are placed to compensate (a lever of 95 % of the true length, rotated in-plane by about \(-113^\circ\)). This is why the L2-only run kept 20 % of its hinges flipped: the loss offered that trade, and the network took it.</p>
+</div>
+<p>The direct axis loss \(1 - k\) has no \(\lambda\) and no \(\chi\) in front of it. A flipped axis costs 2 no matter what the other heads do. That is the one thing it adds, and the quadratic cannot supply it.</p>
+
+</main>
+</body>
+</html>
