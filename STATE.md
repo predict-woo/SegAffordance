@@ -334,7 +334,10 @@ recipe with different closed-form loss variants (informed by the cf_frame / cf_l
 when those closed-form arms finish, design and run further experiments if something is interesting.
 Commit and save everything as you go. Keep the dev pod running.
 
-**Plan:** (1) joint decoder run on pod jdec (~5.5 h, ~$12). (2) cf_frame + cf_l2_noaxis_2pi land ~04:00
+**Plan:** (1) joint decoder run on pod jdec (~5.5 h, ~$12) — LAUNCHED 23:52 UTC 2026-09-10 (pod
+`segaffordance-jdec` 0gyeabat00qd47, Server Edition, 2355 MHz; smoke on the dev pod confirmed
+L_cf_position on SF3D batches, L_traj_proj on the decoded curve + L_motion_type on 2D batches).
+Variant configs/scripts prepared (commit 7b1ad2e): `joint4_decoder_{l2anchor,h1anchor,cfframe}`. (2) cf_frame + cf_l2_noaxis_2pi land ~04:00
 local -> notes/INDEX/STATE. (3) joint decoder lands ~08:00 -> SF3D test (head + writer length), per-source
 tests, panels (`tools/sf3d_vis_val.py`, `tools/hoi4d_vis_2d_panels.py` with decoder overrides) -> verdict.
 (4) Variants on the joint recipe, SF3D side only: L2 2pi + direct axis loss; H1 pi/2 + axis (cf_h1only
