@@ -87,6 +87,9 @@ class SourceSpec:
     # Which loss profile the trainer applies to this source's batches
     # (model.source_profiles maps name -> profile; kept here for the record).
     loss_profile: str = "2d"
+    # 2026-09-11: leave records with motion_type "none" out of this source's key list
+    # (the LMDB keeps them). Set False to train on them (read as translation).
+    skip_unlabeled_motion: bool = True
 
 
 class SourceTagDataset(Dataset):
@@ -228,6 +231,7 @@ class MultiSourceDataModule(pl.LightningDataModule):
             min_revolute_radius=spec.min_revolute_radius,
             min_mask_area_frac=spec.min_mask_area_frac,
             edge_margin_frac=spec.edge_margin_frac,
+            skip_unlabeled_motion=spec.skip_unlabeled_motion,
         )
 
     def setup(self, stage: Optional[str] = None) -> None:

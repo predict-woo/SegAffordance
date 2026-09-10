@@ -31,6 +31,7 @@ class SF3DDataModule(pl.LightningDataModule):
         frame_cache_path: Optional[str] = None,
         fast_pipeline: bool = False,
         load_depth: bool = True,
+        skip_unlabeled_motion: bool = True,
         min_revolute_radius: float = 0.0,
         min_mask_area_frac: float = 0.0,
         edge_margin_frac: float = 0.0,
@@ -63,6 +64,7 @@ class SF3DDataModule(pl.LightningDataModule):
         self.fast_pipeline = fast_pipeline
         # RGB-only runs: no depth decode (see SF3DDataset.load_depth).
         self.load_depth = load_depth
+        self.skip_unlabeled_motion = skip_unlabeled_motion
         # Drop knob/dial-class revolute records (element-to-axis distance
         # below this, metres). See SF3DDataset.min_revolute_radius.
         self.min_revolute_radius = min_revolute_radius
@@ -112,6 +114,7 @@ class SF3DDataModule(pl.LightningDataModule):
                     frame_cache_path=self.frame_cache_path,
                     fast_pipeline=self.fast_pipeline,
                     load_depth=self.load_depth,
+                    skip_unlabeled_motion=self.skip_unlabeled_motion,
                     min_revolute_radius=self.min_revolute_radius,
                     min_mask_area_frac=self.min_mask_area_frac,
                     edge_margin_frac=self.edge_margin_frac,

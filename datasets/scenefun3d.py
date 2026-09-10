@@ -52,6 +52,7 @@ class SF3DDataset(Dataset):
         ),  # Needed if original size not stored
         lmdb_path: Optional[str] = None,
         sensor_max_occluded_frac: Optional[float] = 0.5,
+        skip_unlabeled_motion: bool = True,
         min_revolute_radius: float = 0.0,
         min_mask_area_frac: float = 0.0,
         edge_margin_frac: float = 0.0,
@@ -101,6 +102,11 @@ class SF3DDataset(Dataset):
             Path(lmdb_path) if lmdb_path else self.lmdb_data_root / "data.lmdb"
         )
         self.sensor_max_occluded_frac = sensor_max_occluded_frac
+        # 2026-09-11: records whose motion_type is "none" (HOI4D windows with no
+        # articulated part: dump/pour, stapler, pliers, scissors) are left OUT of the
+        # key list (the LMDB keeps them; user: not trained on for now). False re-admits
+        # them, in which case the loader reads them as translation (label 0).
+        self.skip_unlabeled_motion = skip_unlabeled_motion
         # Drop revolute records whose element rotates about an axis closer
         # than this (metres): the knob/dial/faucet mode. Measured on the v2
         # train split the revolute radius distribution is BIMODAL — 40% sit
@@ -233,6 +239,7 @@ class SF3DDataset(Dataset):
         min_rad = self.min_revolute_radius
         min_mask = self.min_mask_area_frac
         margin = self.edge_margin_frac
+        skip_none = self.skip_unlabeled_motion
 
         # Cache validity is keyed on the record COUNT, not the path, so a cache
         # built from a /dev/shm copy stays valid for the same database on the
@@ -248,6 +255,7 @@ class SF3DDataset(Dataset):
                 and cached.get("min_revolute_radius", 0.0) == min_rad
                 and cached.get("min_mask_area_frac", 0.0) == min_mask
                 and cached.get("edge_margin_frac", 0.0) == margin
+                and cached.get("skip_unlabeled_motion", False) == skip_none
             ):
                 print(
                     f"Loaded {len(cached['keys'])} keys from cache "
@@ -261,9 +269,10 @@ class SF3DDataset(Dataset):
         dropped_radius = 0
         dropped_mask = 0
         dropped_edge = 0
+        dropped_none = 0
         unverified = 0
         scan = (cutoff is not None or min_rad > 0.0 or min_mask > 0.0
-                or margin > 0.0)
+                or margin > 0.0 or skip_none)
         with self.env.begin(write=False) as txn:
             cursor = txn.cursor()
             if not scan:
@@ -275,6 +284,9 @@ class SF3DDataset(Dataset):
                     if key == b"__metadata__":
                         continue
                     record = pickle.loads(value)
+                    if skip_none and self._motion_unlabeled(record):
+                        dropped_none += 1
+                        continue
                     if cutoff is not None:
                         sensor = record.get("sensor_check")
                         if sensor is None:
@@ -295,7 +307,12 @@ class SF3DDataset(Dataset):
 
         if scan:
             total = (len(keys) + dropped + dropped_radius + dropped_mask
-                     + dropped_edge)
+                     + dropped_edge + dropped_none)
+            if skip_none:
+                print(
+                    f"Unlabeled-motion filter (motion_type none): dropped {dropped_none} "
+                    f"({100.0 * dropped_none / max(1, total):.2f}%)"
+                )
             print(
                 f"Sensor filter (occluded_frac > {cutoff}): dropped {dropped} of "
                 f"{total} records ({100.0 * dropped / max(1, total):.2f}%); "
@@ -328,6 +345,7 @@ class SF3DDataset(Dataset):
                         "min_revolute_radius": min_rad,
                         "min_mask_area_frac": min_mask,
                         "edge_margin_frac": margin,
+                        "skip_unlabeled_motion": skip_none,
                         "keys": keys,
                     }
                 )
@@ -335,6 +353,11 @@ class SF3DDataset(Dataset):
             print(f"Cached key list -> {self.key_cache_path}")
 
         return keys
+
+    @staticmethod
+    def _motion_unlabeled(record: dict) -> bool:
+        original = (record.get("motion_info") or {}).get("original_motion_data") or {}
+        return original.get("motion_type") == "none"
 
     @staticmethod
     def _points_near_edge(record: dict, margin: float) -> bool:
