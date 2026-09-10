@@ -179,6 +179,34 @@ B_2 = 2\!\int_0^{\Theta}(\cos\theta - 1)\sin\theta\, d\theta = -1.\]
 </div>
 <p>The direct axis loss \(1 - k\) has no \(\lambda\) and no \(\chi\) in front of it. A flipped axis costs 2 no matter what the other heads do. That is the one thing it adds, and the quadratic cannot supply it.</p>
 
+<h3>Does any sweep close the leak for the position term?</h3>
+<p>No. \(\rho_\Theta\) never reaches zero for the position basis, because \(\cos\theta - 1\) is never positive, so the two basis functions never carry equal energy and never fully decorrelate. The compensated floor is \(1 - \rho^2\):</p>
+<table>
+<tr><th>sweep \(\Theta\)</th><th>\(\rho_\Theta\)</th><th>floor after compensation \(1-\rho^2\)</th></tr>
+<tr><td>90° (the writer's)</td><td>0.953</td><td>0.09</td></tr>
+<tr><td>180°</td><td>0.809</td><td>0.35</td></tr>
+<tr><td>360°</td><td>0.500</td><td>0.75</td></tr>
+<tr><td>462° (minimum of \(\rho\))</td><td>0.429</td><td>0.82</td></tr>
+<tr><td>\(\Theta \to \infty\)</td><td>\(\to 0.500\)</td><td>\(\to 0.75\)</td></tr>
+</table>
+<p class="muted">The derivative basis \((-\sin\theta, \cos\theta)\) is different: equal energy and zero cross-correlation at every multiple of \(\pi\), so the H1 term reaches \(\rho = 0\) at \(\Theta = \pi\). The one run that changed the sweep (<code>20260829_sf3d_cf_noaxis_2pi</code>, L2 + H1 at \(2\pi\), no axis loss) moved \(\rho\) from 0.95 / 0.64 to 0.50 / 0 and cut hinge flips from 15.9 % to 13.0 %, at the cost of a blurrier matched axis.</p>
+
+<h2>9. Forgetting the derivation: what shape should the loss have?</h2>
+<p>Treat the three-piece form as a designed loss with free parameters — the exponent \(p\), the leak \(\rho\), the radius function, and the weights of the three pieces — and ask what the experiments say about each.</p>
+<table>
+<tr><th>parameter</th><th>every arm so far</th><th>choice from the shape</th><th>evidence</th></tr>
+<tr><td>\(p\) (lever scaling)</td><td>1 (GT-only normaliser)</td><td><b>0</b>: normalise both levers to unit length, floor the predicted one at ~0.1 of the GT radius</td><td>\(p = 1\) gives the collapse plateau (loss = 1 for any axis at \(\lambda = 0\)) and an axis gradient that dies on small hinges; nothing in the results favours it</td></tr>
+<tr><td>\(\rho\) (leak)</td><td>0.95 (L2), 0.64 (H1), 0.50 / 0 at \(2\pi\)</td><td><b>0</b></td><td>flips are monotone in \(\rho\): 20 % (0.95), 15.4 % (0.64), 13.0 % (0.50 / 0), best with the bare axis term (0). At \(\rho = 0\) both \(\chi\) and the sweep \(\Theta\) drop out of the loss</td></tr>
+<tr><td>radius term</td><td>\((\lambda - 1)^2\), weight 1 or absent</td><td>small weight 0.1–0.2, symmetric in the ratio: \((\log\lambda)^2\) or \(\lambda + 1/\lambda - 2\)</td><td>dropping it cost 4 mm of origin and gained 1.5 MA (cf_h1only vs closedform): it is for origin, not articulation; \((\lambda-1)^2\) charges 1 for a collapsed lever but 4 for a 3× lever</td></tr>
+<tr><td>axis : phase weight</td><td>H1 gives 1 : 1 plus the anchor at 0.5</td><td><b>\(\ge 2 : 1\)</b></td><td>at equal weights the flipped axis is a saddle (curvature \(-1, +1\)); adding axis weight \(w\) gives \((-1-w,\ 1-w)\), a true maximum for \(w \ge 1\). The 2 : 1 ratio is also the chordal distance between the frames \([\hat{\mathbf r}, \hat{\mathbf t}, \mathbf n]\) and \([\hat{\mathbf r}^*, \hat{\mathbf t}^*, \mathbf n^*]\) as rotations</td></tr>
+<tr><td>\((1 + k)\) factor, per-row normalisation</td><td>present</td><td>keep</td><td>the lever phase is meaningless when the axes are opposite; every door votes once regardless of size</td></tr>
+</table>
+<div class="box key">
+\[\mathcal L \;=\; 2\,(1 - \mathbf n\cdot\mathbf n^*) \;+\; (1 + \mathbf n\cdot\mathbf n^*)\,(1 - \cos\psi) \;+\; 0.15\,(\log\lambda)^2\]
+<p style="margin:0">with unit levers and a lever floor. Relative to the record recipe (H1 at \(\pi/2\) + axis loss 0.5) this changes three things: the axis and phase pieces no longer scale with the predicted radius, the leak goes from 0.64 to 0, and the sweep disappears.</p>
+</div>
+<p>This is a hypothesis from the shape of the equation, not a result. The run that tests it is this loss on the arm-B config against <code>20260828_sf3d_cf_h1only</code> (MA 30.64, hinge flips 15.4 %, matched axis 16.6°, origin 0.254), a single seed. Expected direction: fewer flips and a sharper matched axis, with origin set by the radius weight.</p>
+
 </main>
 </body>
 </html>
