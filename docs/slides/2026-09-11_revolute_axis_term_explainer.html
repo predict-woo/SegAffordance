@@ -7,7 +7,8 @@
 <script>
   window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
 </script>
-<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<!-- MathJax bundled locally (vendor/mathjax/tex-svg.js, MathJax 3, Apache-2.0); falls back to the CDN if the local copy is missing. -->
+<script src="vendor/mathjax/tex-svg.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js';document.head.appendChild(s);"></script>
 <style>
   :root { --ink:#1f2937; --muted:#6b7280; --rule:#e5e7eb; --acc:#b45309; --acc2:#1d4ed8; --ok:#047857; --bad:#b91c1c; --bg:#fbfbf9; --card:#ffffff; }
   html { color-scheme: light; }
@@ -22,7 +23,8 @@
   .key { border-left: 4px solid var(--acc); }
   .good { border-left: 4px solid var(--ok); }
   .warn { border-left: 4px solid var(--bad); }
-  .math { font-size: 17px; text-align:center; margin: 12px 0; padding: 6px 0; }
+  .math { font-size: 17px; text-align:center; margin: 12px 0; padding: 6px 0; overflow-x: auto; }
+  mjx-container[display="true"] { margin: 0 !important; }
   .math .small { font-size: 14px; color: var(--muted); }
   code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; background:#f3f4f6; padding: 1px 5px; border-radius: 4px; }
   table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 15px; }
@@ -59,30 +61,33 @@
 </div>
 <div>
 <figure>
-<svg viewBox="0 0 360 300" width="360" height="300" role="img" aria-label="Arc geometry: axis, origin, lever, tangent">
+<svg viewBox="0 0 380 310" width="380" height="310" role="img" aria-label="Arc geometry: axis, origin, lever, tangent, orbit plane">
   <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#1f2937"/></marker>
   <marker id="ahb" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#1d4ed8"/></marker>
   <marker id="aho" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#b45309"/></marker></defs>
-  <!-- axis line -->
-  <line x1="120" y1="290" x2="120" y2="30" stroke="#1f2937" stroke-width="2" marker-end="url(#ah)"/>
-  <text x="128" y="42" font-size="14">n (axis)</text>
-  <!-- origin -->
-  <circle cx="120" cy="190" r="4" fill="#1f2937"/>
-  <text x="96" y="210" font-size="14">o</text>
-  <!-- lever -->
-  <line x1="120" y1="190" x2="270" y2="190" stroke="#b45309" stroke-width="2.5" marker-end="url(#aho)"/>
-  <text x="185" y="182" font-size="14" fill="#b45309">r (lever, radius)</text>
+  <!-- orbit plane (perpendicular to the axis), drawn in perspective as an ellipse -->
+  <ellipse cx="130" cy="200" rx="150" ry="45" fill="none" stroke="#9ca3af" stroke-width="1" stroke-dasharray="3 4"/>
+  <text x="240" y="262" font-size="12" fill="#6b7280">orbit plane ⟂ n</text>
+  <!-- axis -->
+  <line x1="130" y1="295" x2="130" y2="35" stroke="#1f2937" stroke-width="2" marker-end="url(#ah)"/>
+  <text x="138" y="46" font-size="14">n (axis)</text>
+  <!-- origin (foot of the axis in the orbit plane) -->
+  <circle cx="130" cy="200" r="4" fill="#1f2937"/>
+  <text x="104" y="218" font-size="14">o</text>
+  <!-- lever: from the axis to the point, inside the plane -->
+  <line x1="130" y1="200" x2="245" y2="229" stroke="#b45309" stroke-width="2.5" marker-end="url(#aho)"/>
+  <text x="150" y="246" font-size="14" fill="#b45309">r (lever)</text>
   <!-- point -->
-  <circle cx="270" cy="190" r="5" fill="#b45309"/>
-  <text x="278" y="206" font-size="14">p₀</text>
-  <!-- tangent -->
-  <line x1="270" y1="190" x2="270" y2="110" stroke="#1d4ed8" stroke-width="2.5" marker-end="url(#ahb)"/>
-  <text x="278" y="130" font-size="14" fill="#1d4ed8">t = n × r</text>
-  <!-- arc -->
-  <path d="M270,190 A150,150 0 0 0 120,40" fill="none" stroke="#047857" stroke-width="2" stroke-dasharray="6 4"/>
-  <text x="200" y="80" font-size="14" fill="#047857">arc x(θ)</text>
+  <circle cx="245" cy="229" r="5" fill="#b45309"/>
+  <text x="252" y="246" font-size="14">p₀</text>
+  <!-- tangent: along the orbit, perpendicular to both n and r -->
+  <line x1="245" y1="229" x2="310" y2="206" stroke="#1d4ed8" stroke-width="2.5" marker-end="url(#ahb)"/>
+  <text x="290" y="196" font-size="14" fill="#1d4ed8">t = n × r</text>
+  <!-- the arc actually swept -->
+  <path d="M245,229 A150,45 0 0 0 205,161" fill="none" stroke="#047857" stroke-width="2.5"/>
+  <text x="262" y="150" font-size="14" fill="#047857">arc x(θ)</text>
 </svg>
-<figcaption>The arc lives in the plane spanned by r and t. Flipping n keeps r and reverses t, so the arc runs the other way.</figcaption>
+<figcaption>The arc lies in the orbit plane perpendicular to the axis, spanned by r and t. Flipping n keeps r and reverses t, so the arc runs the other way around the same circle.</figcaption>
 </figure>
 </div>
 </div>
@@ -115,21 +120,25 @@
 <div class="row">
 <div>
 <figure>
-<svg viewBox="0 0 400 260" width="400" height="260" role="img" aria-label="Compensated flipped state">
-  <!-- GT arc -->
-  <circle cx="200" cy="200" r="4" fill="#1f2937"/><text x="190" y="222" font-size="13">o*</text>
-  <path d="M320,200 A120,120 0 0 0 200,80" fill="none" stroke="#047857" stroke-width="3"/>
-  <circle cx="320" cy="200" r="5" fill="#047857"/><text x="328" y="205" font-size="13" fill="#047857">p₀* (GT arc, n* up)</text>
-  <!-- honest flipped arc -->
-  <path d="M320,200 A120,120 0 0 1 200,320" fill="none" stroke="#b91c1c" stroke-width="2" stroke-dasharray="5 4"/>
-  <text x="250" y="252" font-size="13" fill="#b91c1c">flipped n, same o, p₀: far away</text>
-  <!-- compensated arc -->
-  <circle cx="290" cy="90" r="4" fill="#b45309"/><text x="298" y="86" font-size="13" fill="#b45309">o moved</text>
-  <path d="M290,205 A115,115 0 0 1 200,90" fill="none" stroke="#b45309" stroke-width="2.5" stroke-dasharray="2 3"/>
-  <circle cx="290" cy="205" r="5" fill="#b45309"/>
-  <text x="40" y="40" font-size="13" fill="#b45309">flipped n + moved origin/point: nearly on top of the GT arc</text>
+<svg viewBox="0 0 420 300" width="420" height="300" role="img" aria-label="Compensated flipped state, viewed along the axis">
+  <text x="14" y="22" font-size="13" fill="#6b7280">view along the axis (⊙ = axis toward you, ⊗ = away)</text>
+  <!-- GT circle and arc: centre o*, counter-clockwise -->
+  <circle cx="200" cy="170" r="110" fill="none" stroke="#9ca3af" stroke-width="1" stroke-dasharray="3 4"/>
+  <circle cx="200" cy="170" r="7" fill="none" stroke="#047857" stroke-width="2"/><circle cx="200" cy="170" r="2" fill="#047857"/>
+  <text x="212" y="186" font-size="13" fill="#047857">o*, n* ⊙</text>
+  <path d="M310,170 A110,110 0 0 0 200,60" fill="none" stroke="#047857" stroke-width="3"/>
+  <circle cx="310" cy="170" r="5" fill="#047857"/><text x="318" y="175" font-size="13" fill="#047857">p₀*</text>
+  <text x="285" y="70" font-size="13" fill="#047857">GT arc</text>
+  <!-- flipped axis, honest origin: same circle, other way -->
+  <path d="M310,170 A110,110 0 0 1 200,280" fill="none" stroke="#b91c1c" stroke-width="2" stroke-dasharray="5 4"/>
+  <text x="262" y="292" font-size="13" fill="#b91c1c">flipped n, same o: far from the GT arc</text>
+  <!-- flipped axis + moved origin: reversed travel, same endpoints -->
+  <circle cx="310" cy="60" r="7" fill="none" stroke="#b45309" stroke-width="2"/><line x1="305" y1="55" x2="315" y2="65" stroke="#b45309" stroke-width="2"/><line x1="315" y1="55" x2="305" y2="65" stroke="#b45309" stroke-width="2"/>
+  <text x="322" y="52" font-size="13" fill="#b45309">o moved, n flipped ⊗</text>
+  <path d="M310,170 A110,110 0 0 1 200,60" fill="none" stroke="#b45309" stroke-width="2.5" stroke-dasharray="2 3"/>
+  <text x="196" y="118" font-size="13" fill="#b45309">compensated arc</text>
 </svg>
-<figcaption>With the axis flipped, moving the origin across the arc (and the point slightly) produces an arc that traces the GT arc backwards from almost the same place. The position loss cannot tell them apart well.</figcaption>
+<figcaption>Seen along the axis. Flipping n alone sends the point the wrong way (red). But flipping n <em>and</em> moving the origin to the other side of the chord gives an arc with the same start, the same end and the same sweep, only bulging the other way (orange). The position loss compares points at matched times, so the two differ by the bulge only — that is the 0.09 floor.</figcaption>
 </figure>
 </div>
 <div>
