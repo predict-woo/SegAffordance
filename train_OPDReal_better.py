@@ -187,6 +187,7 @@ class OPDRealTrainingModule(pl.LightningModule):
             fdiff_angle_weight=getattr(lp, "proj_fdiff_angle_weight", 0.0),
             fdiff_length_weight=getattr(lp, "proj_fdiff_length_weight", 0.0),
             anchor_source=getattr(lp, "trajectory_proj_anchor", "pred_depth"),
+            scale_log_weight=getattr(lp, "proj_scale_log_weight", 0.0),
         )
         return geometric, projection
 
@@ -748,7 +749,8 @@ class OPDRealTrainingModule(pl.LightningModule):
             _vw = getattr(self.loss_params, "trajectory_velocity_weight", 0.0)
             _aw = getattr(self.loss_params, "trajectory_angle_weight", 0.0)
             _lw = getattr(self.loss_params, "trajectory_length_weight", 0.0)
-            if _vw > 0.0 or _aw > 0.0 or _lw > 0.0:
+            _sw = getattr(self.loss_params, "trajectory_scale_log_weight", 0.0)
+            if _vw > 0.0 or _aw > 0.0 or _lw > 0.0 or _sw > 0.0:
                 _dp = torch.diff(outputs.trajectory_pred.float(), dim=1)
                 _dg = torch.diff(trajectory_gt_device.float(), dim=1)
                 if _vw > 0.0:
@@ -782,6 +784,23 @@ class OPDRealTrainingModule(pl.LightningModule):
                     grad_terms["traj_length"] = _lw * L_traj_length
                     self.log(
                         f"{step_type}/L_traj_length", L_traj_length,
+                        on_step=(step_type == "train"), on_epoch=True,
+                        logger=True, sync_dist=True,
+                    )
+                if _sw > 0.0:
+                    # DCT readout v2 (2026-09-10): General Flow's scale
+                    # loss in log form on the summed path length — the
+                    # explicit teacher of the scale-split head's scalar
+                    # (head-agnostic: any readout's path length is graded).
+                    _len_p = _dp.norm(dim=-1).sum(-1)
+                    _len_g = _dg.norm(dim=-1).sum(-1)
+                    L_traj_scale = (
+                        torch.log(_len_p + 1e-3) - torch.log(_len_g + 1e-3)
+                    ).abs().mean()
+                    total_loss = total_loss + _sw * L_traj_scale
+                    grad_terms["traj_scale"] = _sw * L_traj_scale
+                    self.log(
+                        f"{step_type}/L_traj_scale", L_traj_scale,
                         on_step=(step_type == "train"), on_epoch=True,
                         logger=True, sync_dist=True,
                     )

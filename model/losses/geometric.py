@@ -1228,9 +1228,15 @@ class TrajectoryProjectionLoss(nn.Module):
         energy_floor: float = 1e-4, detach_anchor: bool = False,
         fdiff_velocity_weight: float = 0.0, fdiff_angle_weight: float = 0.0,
         fdiff_length_weight: float = 0.0, anchor_source: str = "pred_depth",
+        scale_log_weight: float = 0.0,
     ):
         super().__init__()
         self.weight = weight
+        # 2026-09-10 (DCT readout v2): uv-space path-length supervision,
+        # mean |log L_proj - log L_track| over rows with a non-degenerate
+        # track (both-endpoints-valid segments only). The explicit teacher
+        # of the scale-split head's scalar on the 2D sources.
+        self.scale_log_weight = scale_log_weight
         self.near_plane = near_plane
         self.energy_floor = energy_floor
         # "pred_depth": point_uv lifted with the input depth (g17-2d chain).
@@ -1281,6 +1287,7 @@ class TrajectoryProjectionLoss(nn.Module):
                 and self.fdiff_velocity_weight == 0.0
                 and self.fdiff_angle_weight == 0.0
                 and self.fdiff_length_weight == 0.0
+                and self.scale_log_weight == 0.0
             )
             or outputs.trajectory_pred is None
             or targets.trajectory_2d is None
@@ -1377,12 +1384,23 @@ class TrajectoryProjectionLoss(nn.Module):
                 self.fdiff_velocity_weight > 0.0
                 or self.fdiff_angle_weight > 0.0
                 or self.fdiff_length_weight > 0.0
+                or self.scale_log_weight > 0.0
             ):
                 dp = proj[:, 1:] - proj[:, :-1]                    # (B, N-1, 2)
                 dt = track[:, 1:] - track[:, :-1]
                 seg_ok = (mask[:, 1:] * mask[:, :-1]) > 0.5        # both ends
                 seg_cnt = seg_ok.float().sum().clamp(min=1.0)
                 zero = (proj.sum() * 0.0)
+                if self.scale_log_weight > 0.0:
+                    len_p = (dp.norm(dim=-1) * seg_ok.float()).sum(dim=1)   # (B,)
+                    len_t = (dt.norm(dim=-1) * seg_ok.float()).sum(dim=1)
+                    row_ok2 = len_t > 1e-3
+                    scale_term = (
+                        (torch.log(len_p[row_ok2] + 1e-3) - torch.log(len_t[row_ok2] + 1e-3)).abs().mean()
+                        if bool(row_ok2.any()) else zero
+                    )
+                    terms["L_proj_scale"] = scale_term
+                    total = total + self.scale_log_weight * scale_term
                 if self.fdiff_velocity_weight > 0.0:
                     vel = ((dp - dt).norm(dim=-1) * seg_ok.float()).sum() / seg_cnt
                     vel = vel if bool(seg_ok.any()) else zero

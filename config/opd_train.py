@@ -113,6 +113,15 @@ class ModelParams:
     # the 20 points by a fixed IDCT buffer. 0 = legacy direct readout.
     # Incompatible with trajectory_delta_cumsum.
     trajectory_dct_coeffs: int = 0
+    # DCT readout conventions v2 (2026-09-10, knowledge/2026-09-10_
+    # trajectory_head_synthesis_v2.md). pin_start: decoded point 0 is
+    # exactly 0 and the K coefficients are the first K AC frequencies (the
+    # DC row is cancelled by the pin). scale_split: the decoded curve is a
+    # unit-path-length shape times a separately predicted softplus scale.
+    # Both need trajectory_dct_coeffs > 0; both default off (legacy DCT
+    # checkpoints keep loading unchanged).
+    trajectory_dct_pin_start: bool = False
+    trajectory_dct_scale_split: bool = False
     # 2026-09-09 (RGB-only / scale-free spec): the trajectory head predicts
     # Δ̃ = Δ / z0 — offsets in units of the anchor depth — instead of metres.
     # The head is unchanged; the trainers multiply trajectory_pred by a
@@ -332,6 +341,13 @@ class LossParams:
     proj_fdiff_velocity_weight: float = 0.0
     proj_fdiff_angle_weight: float = 0.0
     proj_fdiff_length_weight: float = 0.0
+    # 2026-09-10 (DCT readout v2): explicit path-length supervision, the
+    # General Flow scale loss in log form — mean |log L_pred - log L_gt|
+    # over the summed segment lengths. uv-space (projected curve vs the GT
+    # 2D track, both-endpoints-valid segments) for the 2D sources; 3D
+    # (metres after the scale factor) for SF3D. Default off.
+    proj_scale_log_weight: float = 0.0
+    trajectory_scale_log_weight: float = 0.0
     # Gen-19 (2026-08-21 spec): first-difference (segment-vector) losses on
     # the 3D trajectory — the survey's cheap smoothness recipe. Velocity:
     # siMLPe convention, mean L2 norm of (dpred - dgt), weight 1.0 when on.

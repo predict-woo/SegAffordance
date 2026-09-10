@@ -267,6 +267,8 @@ class CRIS(nn.Module):
                 num_hypotheses=self.twist_num_hypotheses,
                 absolute=getattr(model_params, "trajectory_absolute", False),
                 dct_coeffs=getattr(model_params, "trajectory_dct_coeffs", 0),
+                dct_pin_start=getattr(model_params, "trajectory_dct_pin_start", False),
+                dct_scale_split=getattr(model_params, "trajectory_dct_scale_split", False),
             )
         else:
             self.trajectory_predictor = None

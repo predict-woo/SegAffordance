@@ -313,9 +313,15 @@ class MotionMLP(nn.Module):
 
 
 class TrajectoryMLP(nn.Module):
+    # dct_scale_split: softplus(bias) at init ~ 0.40 — a typical scale-free
+    # path length (0.6 m arc / 1.5 m anchor depth on SF3D doors, ~0.4 on
+    # hand video), so the unit shape starts at a sensible magnitude.
+    SCALE_BIAS_INIT = -0.7
+
     def __init__(self, input_dim: int, hidden_dim: int = 256, num_points: int = 20,
                  delta_cumsum: bool = False, num_hypotheses: int = 1,
-                 absolute: bool = False, dct_coeffs: int = 0):
+                 absolute: bool = False, dct_coeffs: int = 0,
+                 dct_pin_start: bool = False, dct_scale_split: bool = False):
         super().__init__()
         assert not (absolute and delta_cumsum), (
             "trajectory_absolute and trajectory_delta_cumsum are mutually "
@@ -328,6 +334,15 @@ class TrajectoryMLP(nn.Module):
             )
         if dct_coeffs > num_points:
             raise ValueError("trajectory_dct_coeffs cannot exceed num_points")
+        if (dct_pin_start or dct_scale_split) and dct_coeffs <= 0:
+            raise ValueError(
+                "trajectory_dct_pin_start / trajectory_dct_scale_split are "
+                "DCT-readout conventions — they need trajectory_dct_coeffs > 0"
+            )
+        if dct_pin_start and dct_coeffs + 1 > num_points:
+            raise ValueError("pinned DCT readout needs dct_coeffs + 1 <= num_points")
+        if (dct_pin_start or dct_scale_split) and absolute:
+            raise ValueError("pinned / scale-split DCT readouts are relative-frame only")
         self.num_points = num_points
         # absolute: the num_points outputs are ABSOLUTE camera-frame points
         # (gen-7), not positions relative to the trajectory's own first point.
@@ -357,6 +372,21 @@ class TrajectoryMLP(nn.Module):
         # knowledge/trajectory-parameterization-survey.md). Losses stay on
         # the decoded points; forward output shape is unchanged.
         self.dct_coeffs = int(dct_coeffs)
+        # DCT readout conventions v2 (2026-09-10, literature sweep
+        # knowledge/2026-09-10_trajectory_head_synthesis_v2.md): the basis
+        # is the small lever; the readout conventions carry the gains.
+        #   pin_start: point 0 is EXACTLY 0 (the curve is relative to its
+        #     first point by definition, so the head no longer spends
+        #     coefficients learning that; BEAST's pinned c0, siMLPe's
+        #     residual-to-anchor readout). The pin cancels the DC basis
+        #     row, so the K coefficients are the first K AC frequencies.
+        #   scale_split: the decoded curve is normalised to unit path
+        #     length (shape) and multiplied by a separately predicted
+        #     softplus scale (General Flow's shape/scale decomposition) —
+        #     one head no longer has to cover 5 cm slides and 70 cm sweeps
+        #     inside the same coefficient range.
+        self.dct_pin_start = bool(dct_pin_start)
+        self.dct_scale_split = bool(dct_scale_split)
         if self.dct_coeffs > 0:
             N, K = num_points, self.dct_coeffs
             n = torch.arange(N, dtype=torch.float64)
@@ -364,9 +394,11 @@ class TrajectoryMLP(nn.Module):
             dct_m = torch.cos(math.pi * (n[None, :] + 0.5) * k[:, None] / N)
             dct_m *= math.sqrt(2.0 / N)
             dct_m[0] /= math.sqrt(2.0)
-            # Orthonormal: inverse == transpose. Keep the first K rows'
-            # transpose as the (N, K) decode matrix.
-            self.register_buffer("idct_m", dct_m[:K].T.contiguous().float())
+            # Orthonormal: inverse == transpose. Keep K rows' transpose as
+            # the (N, K) decode matrix: rows 0..K-1, or 1..K when pinned
+            # (the DC row is cancelled by the pin and would be dead weight).
+            rows = dct_m[1:K + 1] if self.dct_pin_start else dct_m[:K]
+            self.register_buffer("idct_m", rows.T.contiguous().float())
         self.backbone = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(True),
@@ -381,6 +413,13 @@ class TrajectoryMLP(nn.Module):
         self.trajectory_head = nn.Linear(
             hidden_dim, num_hypotheses * out_points * 3
         )
+        if self.dct_scale_split:
+            # One log-ish scale per hypothesis; softplus keeps it positive
+            # without exp's blow-up. Zero weights + a bias at a typical
+            # magnitude: the shape branch trains first, the scale follows.
+            self.scale_head = nn.Linear(hidden_dim, num_hypotheses)
+            nn.init.zeros_(self.scale_head.weight)
+            nn.init.constant_(self.scale_head.bias, self.SCALE_BIAS_INIT)
 
     def forward(self, condition: torch.Tensor):
         """-> (B, K, num_points, 3); K = num_hypotheses (1 for the legacy head)."""
@@ -390,7 +429,17 @@ class TrajectoryMLP(nn.Module):
         if self.dct_coeffs > 0:
             coeffs = trajectory_pred.view(-1, K, self.dct_coeffs, 3)
             # (N, C) @ (B, K, C, 3) -> (B, K, N, 3)
-            return torch.einsum("nc,bkcd->bknd", self.idct_m, coeffs)
+            pts = torch.einsum("nc,bkcd->bknd", self.idct_m, coeffs)
+            if self.dct_pin_start:
+                pts = pts - pts[:, :, :1]
+            if self.dct_scale_split:
+                pts32 = pts.float()
+                seg = pts32[:, :, 1:] - pts32[:, :, :-1]
+                length = seg.norm(dim=-1).sum(-1)[..., None, None]      # (B, K, 1, 1)
+                unit = pts32 / length.clamp(min=1e-4)
+                scale = F.softplus(self.scale_head(h).float()).view(-1, K, 1, 1)
+                pts = (unit * scale).to(pts.dtype)
+            return pts
         if self.delta_cumsum:
             deltas = trajectory_pred.view(-1, K, self.num_points - 1, 3)
             rel = torch.cumsum(deltas, dim=2)
