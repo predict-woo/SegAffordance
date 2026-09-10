@@ -201,7 +201,16 @@ def cmd_run(a):
     lp = out / "labels.json"
     labels = json.loads(lp.read_text()) if lp.exists() else {}
     todo = [j for j in jobs_all if labels.get(j["key"], {}).get("type") in (None, "ERROR", "UNPARSED")]
-    if a.limit: todo = todo[:a.limit]
+    if a.limit:
+        # round-robin over nouns so a small pilot covers the rare fixtures too
+        from collections import defaultdict
+        byn = defaultdict(list)
+        for j in todo: byn[j["noun"]].append(j)
+        nouns = sorted(byn, key=lambda n: -len(byn[n])); pick = []
+        while len(pick) < a.limit and any(byn.values()):
+            for n in nouns:
+                if byn[n] and len(pick) < a.limit: pick.append(byn[n].pop(0))
+        todo = pick
     print(f"{len(jobs_all)} jobs, {len(labels)} labelled, {len(todo)} to ask")
     q = queue.Queue()
     for j in todo: q.put(j)
@@ -229,6 +238,32 @@ def cmd_summary(a):
     for d in dis: print("   ", d)
 
 
+def cmd_sheet(a):
+    """Review sheet: each labelled record's composite (scaled) with the VLM answer under it."""
+    labels = json.loads(Path(a.out).joinpath("labels.json").read_text())
+    jobs = {j["key"]: j for j in json.loads(Path(a.out).joinpath("jobs.json").read_text())}
+    keys = [k for k in labels if k in jobs]
+    if a.limit: keys = keys[:a.limit]
+    tiles = []
+    for k in keys:
+        r = labels[k]; im = cv2.imread(jobs[k]["comp"])
+        im = cv2.resize(im, None, fx=a.sheet_scale, fy=a.sheet_scale, interpolation=cv2.INTER_AREA)
+        h, w = im.shape[:2]
+        tile = np.full((h + 62, w, 3), 255, np.uint8); tile[:h] = im
+        flag = "" if r["type"] == r["noun_rule"] else "   <-- differs from the noun rule"
+        cv2.putText(tile, f'VLM: {r["type"]} ({r["confidence"]}){flag}', (6, h + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (0, 0, 200) if flag else (0, 120, 0), 2, cv2.LINE_AA)
+        cv2.putText(tile, (r["why"] or "")[:110], (6, h + 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+        tiles.append(tile)
+    if not tiles: print("no labels"); return
+    cols = a.sheet_cols; w = tiles[0].shape[1]; h = max(t.shape[0] for t in tiles)
+    rows = (len(tiles) + cols - 1) // cols
+    sheet = np.full((rows * h, cols * w, 3), 255, np.uint8)
+    for i, t in enumerate(tiles):
+        r, c = divmod(i, cols); sheet[r * h:r * h + t.shape[0], c * w:c * w + w] = t
+    outp = Path(a.sheet_out or (Path(a.out) / "review_sheet.jpg")); outp.parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(outp), sheet, [cv2.IMWRITE_JPEG_QUALITY, 88]); print(f"sheet: {len(tiles)} tiles -> {outp}")
+
+
 def cmd_apply(a):
     import lmdb
     labels = json.loads(Path(a.out).joinpath("labels.json").read_text())
@@ -253,7 +288,7 @@ def cmd_apply(a):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["prepare", "run", "summary", "apply"])
+    ap.add_argument("cmd", choices=["prepare", "run", "summary", "sheet", "apply"])
     ap.add_argument("--lmdb", default="/workspace/datasets/epic_processed_2d")
     ap.add_argument("--out", default="/workspace/cache/vlm_epic_types")
     ap.add_argument("--model", default="gpt-5.6-luna")
@@ -261,8 +296,11 @@ def main():
     ap.add_argument("--fast", action="store_true")
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--sheet-out", default=None)
+    ap.add_argument("--sheet-scale", type=float, default=0.5)
+    ap.add_argument("--sheet-cols", type=int, default=2)
     a = ap.parse_args()
-    {"prepare": cmd_prepare, "run": cmd_run, "summary": cmd_summary, "apply": cmd_apply}[a.cmd](a)
+    {"prepare": cmd_prepare, "run": cmd_run, "summary": cmd_summary, "sheet": cmd_sheet, "apply": cmd_apply}[a.cmd](a)
 
 
 if __name__ == "__main__":
