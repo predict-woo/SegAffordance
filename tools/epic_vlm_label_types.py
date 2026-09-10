@@ -4,7 +4,7 @@ The EPIC records carry a placeholder motion_type ("trans" for every record).
 This tool asks a VLM (gpt-5.6-luna via the codex app-server, like
 tools/hoi4d_vlm_select_all.py) whether the marked part swings about a hinge
 (revolute) or slides (prismatic), from ONE composite image per record: the
-onset frame with the part mask tinted red and the hand's 2D path over the
+onset frame with the part mask outlined in red and the hand's 2D path over the
 clip drawn in green (cyan = start, magenta = end), full frame on the left and
 a zoomed crop on the right, plus the narration.
 
@@ -37,7 +37,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 CODEX_CWD = "/root/codex-empty-cwd"
 
 PROMPT = """This image shows the first frame of a short first-person kitchen video clip in \
-which a person {verb}s a {noun} (narration: "{narration}"). The RED overlay marks the \
+which a person {verb}s a {noun} (narration: "{narration}"). The RED outline marks the \
 moving part the person operates. The GREEN line is the path of the person's hand over \
 the clip, from the CYAN dot (start) to the MAGENTA dot (end). Left: the full frame. \
 Right: a zoomed crop of the same frame around the part and the hand path.
@@ -96,10 +96,10 @@ def overlay(im, rec, frame):
     for y, x in rec["mask_coordinates_yx"]:
         mask[min(int(y * sy), S - 1), min(int(x * sx), S - 1)] = 1
     mask = cv2.dilate(mask, np.ones((3, 3), np.uint8))
-    tint = ov.copy(); tint[mask > 0] = (0.45 * tint[mask > 0] + 0.55 * np.array([40, 40, 230])).astype(np.uint8)
-    ov = tint
+    # outline only (user 2026-09-11: a filled tint hides the part's construction)
     cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    cv2.drawContours(ov, cnts, -1, (0, 0, 255), 2)
+    cv2.drawContours(ov, cnts, -1, (0, 0, 0), 5)
+    cv2.drawContours(ov, cnts, -1, (0, 0, 255), 3)
     uv = _track_px(rec, frame)
     pts = uv.round().astype(int)
     for a, b in zip(pts[:-1], pts[1:]):
