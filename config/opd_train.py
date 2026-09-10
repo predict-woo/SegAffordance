@@ -224,6 +224,17 @@ class LossParams:
     # analytic_trajectory_weight. 0 = off.
     closed_form_trajectory_weight: float = 0.0
     closed_form_velocity_weight: float = 0.0
+    # 2026-09-11: the closed-form loss designed from the SHAPE of the master
+    # formula (p = 0 unit levers, rho = 0, symmetric radius term; see
+    # model.losses.geometric.closed_form_frame_loss). Fires with no
+    # trajectory head, like the other closed-form terms; may be combined
+    # with them but the intended arm uses it alone. 0 = off.
+    closed_form_frame_weight: float = 0.0
+    closed_form_frame_axis: float = 2.0
+    closed_form_frame_phase: float = 1.0
+    closed_form_frame_radius: float = 0.15
+    closed_form_frame_lever_floor: float = 0.1
+    closed_form_frame_radius_form: str = "log"
     # Sweep extent Theta for the closed-form Gram coefficients (theory note
     # section 5). pi/2 = the GT writer's arc and the historical constants;
     # 2*pi decouples the residuals and reweights position 3:1 radial.

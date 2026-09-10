@@ -1141,6 +1141,93 @@ def closed_form_screw_loss(
     return pos, der
 
 
+def closed_form_frame_loss(
+    motion_type_gt: torch.Tensor,
+    axis_trans: torch.Tensor,
+    axis_rot: torch.Tensor,
+    origin_pred: torch.Tensor,
+    point_3d_pred: torch.Tensor,
+    axis_gt: torch.Tensor,
+    origin_gt: torch.Tensor,
+    traj_start_gt: torch.Tensor,
+    axis_weight: float = 2.0,
+    phase_weight: float = 1.0,
+    radius_weight: float = 0.15,
+    lever_floor: float = 0.1,
+    radius_form: str = "log",
+) -> Tuple[torch.Tensor, dict]:
+    """The closed-form loss designed from the SHAPE of the master formula
+    (knowledge/2026-09-11_revolute_loss_with_axis_term.md; explainer
+    docs/slides/2026-09-11_l2_quadratic_from_scratch.html section 9).
+
+    Every point-arc loss expands to
+        radius(lam) + lam^p (1-k)[1 + rho cos(chi - chi0)] + lam^p (1+k)(1 - cos psi)
+    with k = n.n*, lam = |r|/|r*|, psi the in-plane lever phase. The arms so
+    far all had p = 1 (axis penalty scaled by the predicted radius; collapse
+    plateau at lam = 0) and rho in {0.95, 0.64, 0.5} (a flipped axis is
+    partly buyable by moving origin/point). This loss sets p = 0 (unit
+    levers, floored) and rho = 0 (no chi, no sweep), with a symmetric
+    radius term:
+
+      rot rows:   axis_weight * (1 - k)
+                + phase_weight * [(1 + k) - (r^.r^* + t^.t^*)]      # = (1+k)(1 - cos psi)
+                + radius_weight * (log lam)^2                       # or (lam - 1)^2
+      trans rows: axis_weight * (1 - d^.d^*)                          # the prismatic closed form / 2
+
+    Unit levers: r^ = r / max(|r|, lever_floor * |r*|), so a collapsed
+    predicted lever is bounded (|r^| < 1) instead of singular; lam is
+    floored the same way. With axis_weight >= 2 * phase_weight the flipped
+    axis is a strict maximum in n for any origin/point (curvature
+    (-1-w, 1-w) with w = axis/phase - 1). Rows routed by GT type, like the
+    axis loss. Returns (per-row loss (B,), dict of unweighted per-row
+    components for logging).
+    """
+    n_hat = F.normalize(axis_rot.float(), p=2, dim=1, eps=1e-8)
+    n_gt = F.normalize(axis_gt.float(), p=2, dim=1, eps=1e-8)
+
+    def lever_tangent(n, p0, q):
+        rel = (p0 - q).float()
+        r = rel - (rel * n).sum(-1, keepdim=True) * n
+        return r, torch.cross(n, r, dim=-1)
+
+    r_p, t_p = lever_tangent(n_hat, point_3d_pred.float(), origin_pred.float())
+    r_g, t_g = lever_tangent(n_gt, traj_start_gt.float(), origin_gt.float())
+    len_g = r_g.norm(dim=-1).clamp(min=1e-6)                               # (B,)
+    floor = (lever_floor * len_g).clamp(min=1e-6)
+    len_p = r_p.norm(dim=-1)
+    denom = torch.maximum(len_p, floor)
+    r_hat, t_hat = r_p / denom[:, None], t_p / denom[:, None]              # |.| <= 1
+    r_hat_g, t_hat_g = r_g / len_g[:, None], t_g / len_g[:, None]
+
+    k = (n_hat * n_gt).sum(-1)
+    overlap = (r_hat * r_hat_g).sum(-1) + (t_hat * t_hat_g).sum(-1)        # = (1+k) cos psi on unit levers
+    axis_term = 1.0 - k
+    phase_term = (1.0 + k) - overlap
+    lam = denom / len_g
+    if radius_form == "log":
+        radius_term = torch.log(lam).pow(2)
+    elif radius_form == "sq":
+        radius_term = (lam - 1.0).pow(2)
+    else:
+        raise ValueError(f"radius_form must be log|sq, got {radius_form}")
+    rot_total = axis_weight * axis_term + phase_weight * phase_term + radius_weight * radius_term
+
+    d_hat = F.normalize(axis_trans.float(), p=2, dim=1, eps=1e-8)
+    d_gt = F.normalize(axis_gt.float(), p=2, dim=1, eps=1e-8)
+    trans_axis = 1.0 - (d_hat * d_gt).sum(-1)
+    trans_total = axis_weight * trans_axis
+
+    is_rot = motion_type_gt.float() > 0.5
+    total = torch.where(is_rot, rot_total, trans_total)
+    zero = torch.zeros_like(k)
+    comps = {
+        "axis": torch.where(is_rot, axis_term, trans_axis),
+        "phase": torch.where(is_rot, phase_term, zero),
+        "radius": torch.where(is_rot, radius_term, zero),
+    }
+    return total, comps
+
+
 def build_geometric_loss(
     loss_params, trajectory_is_absolute: bool = False
 ) -> GeometricConsistencyLoss:

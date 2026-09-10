@@ -597,6 +597,53 @@ class OPDRealTrainingModule(pl.LightningModule):
                 logger=True, sync_dist=True,
             )
 
+        # 2026-09-11: the shape-designed closed-form loss (unit levers,
+        # no leak, symmetric radius). Same firing conditions as the cf
+        # quadratics; logs its three unweighted components.
+        _cff = getattr(self.loss_params, "closed_form_frame_weight", 0.0)
+        if (
+            _cff > 0.0
+            and outputs.trajectory_pred is None
+            and targets.trajectory is not None
+            and targets.motion_type is not None
+            and targets.motion is not None
+            and targets.motion_origin_3d is not None
+            and outputs.motion_pred_rot is not None
+            and outputs.origin_pred is not None
+            and outputs.point_3d_pred is not None
+        ):
+            from model.losses.geometric import closed_form_frame_loss
+
+            _dev = outputs.origin_pred.device
+            _rows, _comps = closed_form_frame_loss(
+                motion_type_gt=targets.motion_type.to(_dev),
+                axis_trans=outputs.motion_pred_trans,
+                axis_rot=outputs.motion_pred_rot,
+                origin_pred=outputs.origin_pred.float(),
+                point_3d_pred=outputs.point_3d_pred.float(),
+                axis_gt=targets.motion.to(_dev),
+                origin_gt=targets.motion_origin_3d.to(_dev),
+                traj_start_gt=targets.trajectory.to(_dev)[:, 0],
+                axis_weight=getattr(self.loss_params, "closed_form_frame_axis", 2.0),
+                phase_weight=getattr(self.loss_params, "closed_form_frame_phase", 1.0),
+                radius_weight=getattr(self.loss_params, "closed_form_frame_radius", 0.15),
+                lever_floor=getattr(self.loss_params, "closed_form_frame_lever_floor", 0.1),
+                radius_form=getattr(self.loss_params, "closed_form_frame_radius_form", "log"),
+            )
+            L_cf_frame = _rows.mean()
+            total_loss = total_loss + _cff * L_cf_frame
+            grad_terms["cf_frame"] = _cff * L_cf_frame
+            self.log(
+                f"{step_type}/L_cf_frame", L_cf_frame,
+                on_step=(step_type == "train"), on_epoch=True,
+                logger=True, sync_dist=True,
+            )
+            for _name, _c in _comps.items():
+                self.log(
+                    f"{step_type}/L_cf_frame_{_name}", _c.detach().mean(),
+                    on_step=False, on_epoch=True, logger=True, sync_dist=True,
+                )
+
         # Mechanism-study probe (spec 2026-08-25): with NO trajectory head,
         # decode the trajectory ANALYTICALLY from the predicted articulation
         # parameters (differentiable mirror of the GT writer) and apply the
