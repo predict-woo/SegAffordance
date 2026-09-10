@@ -293,6 +293,73 @@ matched-axis sharpness (22.3°). Notes:
 20260828_sf3d_closedform/notes.md. Follow-ups parked: Gram weight/Θ
 sweep; closed form + DCT head = the distilled gen-22 candidate.
 
+## IN FLIGHT 2026-09-10 ~02:20 local: DCT READOUT CONVENTIONS v2 — two pods (dctv2-m, dctv2-j), user asleep
+
+**Why.** Second, clean-slate trajectory-head literature sweep (four Fable
+subagents, ~145 papers; `knowledge/2026-09-10_survey_v2_*.md` + the merged
+`knowledge/2026-09-10_trajectory_head_synthesis_v2.md`, commit 9a77a04).
+All four fields rank the same #1: decode the trajectory analytically from
+our own type/axis/origin heads (FlowBot++ 0.73 -> 0.18 OOD; GAMMA vs
+VAT-Mart) — **parked by the user until morning ("I will deal with that
+after I wake up")**; the repo's `analytic_screw_trajectory()` (mechanism
+probe) is 80 % of it. #2, done tonight (user: "fix these conventions and
+implement the new dct head"): the DCT basis is the small lever (siMLPe:
+DCT 0.3-1 mm, residual readout 3-4 mm); the readout conventions carry the
+gains.
+
+**What landed (commit d8038a1, 11 tests + 57-test neighbourhood green,
+fast_dev_run smokes of both training configs OK):**
+`TrajectoryMLP(dct_pin_start, dct_scale_split)` — pinned first point
+(point 0 exactly 0; the K coefficients are the first K AC frequencies, the
+DC row is dropped so nothing is dead), shape/scale split (unit-path-length
+curve x softplus scale, bias init softplus(-0.7) ~ 0.40); `model_params.
+trajectory_dct_pin_start / trajectory_dct_scale_split` (default off; legacy
+DCT ckpts load unchanged); `loss_params.trajectory_scale_log_weight` (3D,
+|log L_pred - log L_gt| on summed segment lengths, in the fdiff block of
+`train_OPDReal_better.py`) and `proj_scale_log_weight` (uv-space, in
+`TrajectoryProjectionLoss`) = General Flow's scale loss in log form. The
+first-difference trio (3D `trajectory_velocity/angle/length_weight`, uv
+`proj_fdiff_*`) already existed (g19 fdiff) — now ON at HALF the g19
+weights (0.5 / 0.25 / 0.25) + log-length 0.5. NOTE: DCT head + fdiff was
+the never-run "gen-20 candidate" (INDEX row 20260821_sf3d_g19_fdiff).
+
+**Runs (identical recipes to their comparison rows, only the head/loss
+conventions changed):**
+- pod M `segaffordance-dctv2-m` (hu6i0e9dc1v04m, PRO 6000 Server, clocks
+  OK 2340 MHz): `run_multi3dctv2_chain.sh` -> `20260910_multi3_dctv2_rgb_
+  scalefree` (2D arm, 12 ep, 632 steps/ep at 6.7 min) -> union + per-source
+  tests -> `20260910_sf3d_g19_dctv2_rgb_scalefree_ft_multi3dctv2` (SF3D
+  post-training, 30 ep) -> tests pred_z_p / gt_z0. Compare: multi3 DCT
+  (val 0.4161; HOI4D/EPIC/ARCTIC in its notes) and the DCT chain (MA
+  32.80 / signed 32.43, rough 0.0081, PDet 20.7, mIoU 0.254).
+- pod J `segaffordance-dctv2-j` (78oc977jyptw9r, PRO 6000 Server, 2325
+  MHz): `run_joint4v2_chain.sh` -> `20260910_joint4_dctv2_rgb_scalefree`
+  (joint recipe unchanged: hand x10, lr 2e-5, 20 ep, ~16 min/ep) -> SF3D +
+  per-source tests. Compare: joint4 (MA 31.41, mIoU 0.2738, traj_dir 96.4,
+  HOI4D 0.676 / 85.2).
+Both started 00:21 UTC; expected done ~07:30-08:00 UTC (M) / ~06:30 UTC (J).
+Watchers (Mac background, `rgb_pod_watch.sh`) delete each pod on
+CHAIN_DONE — VERIFY with `runpodctl pod list`. Test commands pass
+`--model.model_params.trajectory_dct_pin_start true --model.model_params.
+trajectory_dct_scale_split true` to the single-source / scratch configs.
+Per-source tests read the multi/joint ckpts with the plain-head configs +
+the three DCT overrides.
+
+**Ops gotcha (new, cost 20 min):** Lightning's `_atomic_save` writes the
+checkpoint through an fsspec TRANSACTION = `tempfile.mkstemp()` in
+`$TMPDIR` then a move. On a pod whose overlay `/tmp` has < 3.7 GB free
+(the dev pod: 20 GB overlay, /root/.cache/uv 5.4 G + torch 3.3 G) every
+checkpoint save dies with `OSError: [Errno 28] No space left on device`
+even though the volume has ~800 GB free (5 GB dd probe fine). Fix in the
+chain scripts: `export TMPDIR=/workspace/tmp`. Apply to any new launcher.
+(Volume is 1.5 TB: experiments 302 G / datasets 374 G / 91 ckpts 316 G.)
+
+**Next (morning):** results -> notes/INDEX/report; then the analytic
+decoder as the OUTPUT head (synthesis #1: predicted extent + monotone
+profile + DCT-3 residual, soft type gate; new metrics: residual norm vs
+analytic part, ID-vs-OOD delta, extent error); Bezier as the ablation
+partner; best-of-K oracle diagnostic on the 2D val splits.
+
 ## DONE 2026-09-09 ~06:30 local: RGB-only + scale-free trajectory head — chain complete, NO pods running
 
 **Results (all single seed; details in the three notes.md + INDEX):**
