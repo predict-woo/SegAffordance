@@ -344,6 +344,13 @@ tests, panels (`tools/sf3d_vis_val.py`, `tools/hoi4d_vis_2d_panels.py` with deco
 recipe); cf_frame loss; pick by (2). Two to three pods in parallel. (5) Write-ups; STATE.
 Cost guide: PRO 6000 ~$2.1/h; joint run ~5.5 h; cf arm ~4 h; dev pod $0.57/h.
 
+## DONE 2026-09-11 10:50 local: joint decoder h1anchor — no gain on MA, +5 hinge flips again (pod deleted, verified)
+
+`20260912_joint4_decoder_h1anchor`: MA 31.07 / 29.97 (base 31.29 / 30.86), rot flips 18.7 (base 13.9),
+traj_dir 88.3 (91.1); best origin 0.269 / point3d 0.261 / all-axis 24.1 of the joint arms, masks = base.
+Two anchor-carrying variants, two +5 flip results: under the decoder the direct axis loss fights the
+sign the 2D projection loss imposes through the arc (hypothesis; seed7 will calibrate noise).
+
 ## IN FLIGHT 2026-09-11 09:45 local: five pods (~$11/h; ~$75 spent since 21:00; projected ~$115 by noon)
 
 | pod | experiment | what | ETA (local) |
