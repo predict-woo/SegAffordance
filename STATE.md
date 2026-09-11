@@ -352,7 +352,8 @@ v2 32.94), type 91.8 + all-flips 10.7 (best), **origin 0.273 / radius 0.124** (j
 joint4), roughness 0; traj_dir 91.1 vs 96.4 (the curve inherits axis-sign errors; the free head knew the
 sign better than the axis head); HOI4D 0.615 / 74.4 (joint4 0.676 / 85.2), 2D direction acc +8..+10;
 type 100 on the hand sources. Panels `viz/20260912_joint_decoder_panels`: arcs on the orbit, hinge on the
-door edge. Variants running: `20260912_joint4_decoder_{l2anchor,h1anchor}` (pods jdec-l2anchor /
+door edge. Length probe: the head predicts ~0.21 m sweeps on SF3D (0.3x the writer's 0.7 m /
+0.62 m, uncorrelated) — by design (no SF3D length supervision); no metric reads it. Variants running: `20260912_joint4_decoder_{l2anchor,h1anchor}` (pods jdec-l2anchor /
 jdec-h1anchor), `cfframe` launcher polling for stock; `20260911_sf3d_cf_frame_a3` on pod cfframea3.
 
 ## DONE 2026-09-11 ~03:45 local: the two closed-form arms (pods deleted, verified) + follow-ups launched

@@ -68,3 +68,13 @@ origin/radius, structurally smooth, masks kept, direction inherited from the axi
 (autonomous night): `l2anchor` (L2 2π + direct axis loss — the sign fix), `h1anchor` (the August MA
 recipe), `cfframe` (the shape-designed loss).
 
+
+**Arc-length probe (2026-09-11 07:15, 400 SF3D val samples, scratch script length_probe.py).** The
+length head (trained only by the hand-video projection loss) predicts a metric arc length L·z_p of
+median 0.213 m for slides and 0.212 m for hinges — about 0.30× the writer's constants (0.70 m / ~0.62 m
+arc) and uncorrelated with them (corr 0.03 / −0.31; p10–p90 0.10–0.37 m). Expected by design: SF3D never
+supervises the length, so the head reports "how far a hand moves in a clip", and the rendered SF3D sweeps
+are ~30 % of the orbit (the short arcs in the panels). No test metric reads the length (direction, shape,
+MA are extent-free), so nothing else is affected; for full-orbit renders use `trajectory_decoder_length
+writer`. A GT-extent metric would need real extents, which SF3D does not have. Type accuracy on the same
+400: 93.3 %.
