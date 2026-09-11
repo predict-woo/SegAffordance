@@ -58,12 +58,6 @@ def draw_prediction(bgr, out, K_norm, name, ray_len=0.5, extra_lines=()):
     if out.motion_type_logits is not None:
         p_rev = float(torch.softmax(out.motion_type_logits[0].float(), -1)[1])
         cls_type = "rot" if p_rev > 0.5 else "trans"
-    if anchor is not None and out.trajectory_pred is not None:
-        traj_abs = anchor.unsqueeze(1) + out.trajectory_pred[0:1].cpu().float()
-        tv = (traj_abs[0, :, 2] > 0.05).numpy()
-        tuv = project_points(K_norm, traj_abs)[0].clamp(-2, 3).numpy()
-        p = draw_polyline_norm(p, tuv, tv, GREEN, thickness=2)
-        p = draw_points_norm(p, tuv, tv, GREEN, radius=3)
     d = None
     if anchor is not None and out.motion_pred is not None:
         d = out.motion_pred[0].cpu().float().numpy()
@@ -87,6 +81,14 @@ def draw_prediction(bgr, out, K_norm, name, ray_len=0.5, extra_lines=()):
     if out.origin_uv is not None:
         ou = out.origin_uv[0].cpu().float()
         cv2.circle(p, (int(ou[0] * W), int(ou[1] * H)), 7, (0, 0, 255), 2, cv2.LINE_AA)
+    # trajectory LAST so it stays visible over the orbit/axis (the analytic decoder's
+    # curve lies exactly on the orbit)
+    if anchor is not None and out.trajectory_pred is not None:
+        traj_abs = anchor.unsqueeze(1) + out.trajectory_pred[0:1].cpu().float()
+        tv = (traj_abs[0, :, 2] > 0.05).numpy()
+        tuv = project_points(K_norm, traj_abs)[0].clamp(-2, 3).numpy()
+        p = draw_polyline_norm(p, tuv, tv, GREEN, thickness=2)
+        p = draw_points_norm(p, tuv, tv, GREEN, radius=3)
     lines.extend(extra_lines)
     return put_lines(p, lines), cls_type, d
 
