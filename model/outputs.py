@@ -57,6 +57,13 @@ class ModelOutputs:
     trajectory_pred_rot: Optional[torch.Tensor] = None
     trajectory_pred_trans: Optional[torch.Tensor] = None
     trajectory_length: Optional[torch.Tensor] = None
+    #: Dense hinge voting (ModelParams.articulation_readout == "dense"): the
+    #: per-pixel origin votes (B, 2, h, w) in normalised [0, 1] uv and the
+    #: part weights (B, 1, h, w) that averaged them into origin_uv. Lets the
+    #: trainer supervise every vote (loss_params.dense_offset_weight). None
+    #: otherwise.
+    origin_vote_uv: Optional[torch.Tensor] = None
+    vote_weights: Optional[torch.Tensor] = None
     #: (B, num_points, 2) 2D track in normalised [0, 1] coords, relative to its
     #: own first point. The hand/contact path — a different quantity from
     #: `trajectory_pred`. None unless `use_2d_trajectory_head`.

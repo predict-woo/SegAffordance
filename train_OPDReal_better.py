@@ -455,16 +455,50 @@ class OPDRealTrainingModule(pl.LightningModule):
             else:
                 L_origin_map = per_sample.sum() * 0.0
 
+        # 2026-09-13 dense hinge voting: every part pixel's vote is pulled to
+        # q*'s projection (same row gate as the heatmap BCE).
+        L_dense_offset = zero
+        dense_offset_weight = getattr(self.loss_params, "dense_offset_weight", 0.0)
+        if (
+            dense_offset_weight > 0
+            and outputs.origin_vote_uv is not None
+            and outputs.vote_weights is not None
+            and valid_q is not None
+        ):
+            vote = outputs.origin_vote_uv.float()
+            wgt = outputs.vote_weights.float()
+            target = uv_q.to(vote.device).float()[:, :, None, None]
+            per_pix = (vote - target).norm(dim=1, keepdim=True)
+            per_sample = (per_pix * wgt).sum(dim=(1, 2, 3)) / (wgt.sum(dim=(1, 2, 3)) + 1e-6)
+            row_mask = valid_q.to(per_sample.device) & (
+                motion_type_gt.to(per_sample.device) == 1
+            )
+            if bool(row_mask.any()):
+                L_dense_offset = per_sample[row_mask].mean()
+            else:
+                L_dense_offset = per_sample.sum() * 0.0
+
         origin_map_weight = getattr(self.loss_params, "origin_map_weight", 0.5)
         total_loss = (
             total_loss
             + self.loss_params.point_3d_weight * L_point_3d
             + self.loss_params.origin_weight * L_origin
             + origin_map_weight * L_origin_map
+            + dense_offset_weight * L_dense_offset
         )
         grad_terms["point_3d"] = self.loss_params.point_3d_weight * L_point_3d
         grad_terms["origin"] = self.loss_params.origin_weight * L_origin
         grad_terms["origin_map"] = origin_map_weight * L_origin_map
+        if dense_offset_weight > 0:
+            grad_terms["dense_offset"] = dense_offset_weight * L_dense_offset
+            self.log(
+                f"{step_type}/L_dense_offset",
+                L_dense_offset,
+                on_step=(step_type == "train"),
+                on_epoch=True,
+                logger=True,
+                sync_dist=True,
+            )
         self.log(
             f"{step_type}/L_point_3d",
             L_point_3d,

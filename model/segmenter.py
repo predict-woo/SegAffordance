@@ -844,5 +844,7 @@ class CRIS(nn.Module):
             point_3d_pred=point_3d_pred,
             origin_pred=origin_pred,
             origin_uv=origin_uv,
+            origin_vote_uv=dense_out["vote_uv"] if dense_out is not None else None,
+            vote_weights=mask_for_pooling if dense_out is not None else None,
             origin_logits=origin_logits,
         )

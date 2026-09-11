@@ -296,6 +296,11 @@ class LossParams:
     # gen-7 origin-heatmap analogue of point_map_weight: BCE vs the Gaussian
     # at the projected q*, revolute+in-frame rows only.
     origin_map_weight: float = 0.5
+    # 2026-09-13 dense hinge voting: part-weighted mean over the map of the
+    # per-pixel vote's distance to q*'s projection (normalised uv, L2),
+    # revolute + in-frame rows only. 0 = off (votes learn only through the
+    # averaged origin).
+    dense_offset_weight: float = 0.0
     # MSE of the direct 3D interaction point vs GT trajectory_3d[0].
     # Replaces point_map+coord (both zero on the 3D path) at the same
     # total weight budget.
