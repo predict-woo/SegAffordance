@@ -1,0 +1,223 @@
+# SEED REPLICATE of the joint decoder base run (2026-09-12, autonomous night): identical to config/joint4_decoder_rgb_scalefree.yaml except seed_everything 7 (data split seed 42 kept, so the same val/test scenes). Calibrates single-seed noise for the decoder comparisons (MA 31.29, rot flips 13.9, origin 0.273, mIoU 0.266).
+# lr 2e-5, 20 ep, monitor val/sf3d/loss_total, from scratch) with NO trajectory head. SF3D batches: closed-form L2 at sweep 2pi ONLY
+# (no direct axis loss, no rendered curve, no trajectory head loss). Hand-video batches (HOI4D / EPIC / ARCTIC, all with rot/trans
+# labels now; HOI4D 'none' windows left out): the trajectory is RENDERED by the analytic decoder from the GT-routed type, the split
+# axis heads, the lifted origin/point and the learned ARC LENGTH, and trained by the unit-anchor projection loss only; type CE 0.5
+# on every source; no residual, no consistency term (identity now), no derivative terms. Test: predicted type everywhere.
+# Compare: joint4 (MA 31.41, mIoU 0.2738, HOI4D 0.676/85.2), joint v2 (32.94 / 0.250), DCT chain (32.80).
+# Model = the RGB-only scale-free DCT-6 model (no depth). Base loss_params = the SF3D 3D recipe (scale gt_z0); loss_profiles.2d = the
+# multi3 teacher-forcing 2D recipe (unit anchor, projection 0.5, 3D-GT terms off) applied to hoi4d/epic/arctic batches (source_profiles).
+# Balance: hand sources augmented x10 (5,161 x 10 = 51,610 views/epoch) vs SF3D ~53k raw (no augmentation on SF3D). One lr 2e-5 (guess
+# between the 2D 3e-5 and the post-training 1e-5; TUNE), 20 epochs, milestones [16, 19]. Checkpoint monitor = val/sf3d/loss_total.
+# Spec: docs/superpowers/specs/2026-09-09-rgb-only-scale-free-trajectory-design.md; datamodule datasets/multisource_datamodule.py.
+seed_everything: 7
+model:
+  freeze_backbone: true
+  model_params:
+    backbone: dinov3
+    backbone_id: facebook/dinov3-vitl16-pretrain-lvd1689m
+    text_source: dinotxt
+    dinotxt_weights: /workspace/cache/dinov3/dinov3_vitl16_dinotxt_vision_head_and_text_encoder-a442d8f5.pth
+    dinov3_backbone_weights: /workspace/cache/dinov3/dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth
+    dinov3_repo_dir: /workspace/cache/dinov3repo
+    backbone_image_size: 512
+    clip_pretrain: pretrain/RN50.pt
+    word_len: 77
+    use_depth: false
+    use_cvae: false
+    use_twist_head: false
+    use_motion_head: true
+    split_axis_heads: true
+    use_motion_type_head: true
+    use_motion_type_input: false
+    motion_type_input_dropout: 0.5
+    motion_type_embedding_dim: 16
+    twist_pitch_free: false
+    use_trajectory_head: false
+    trajectory_decoder: analytic
+    trajectory_decoder_length: head
+    trajectory_decoder_max_angle: 3.141592653589793
+    trajectory_decoder_lever_floor: 0.02
+    trajectory_length_hidden: 256
+    trajectory_scale_free: true
+    twist_num_hypotheses: 1
+    point_prediction_3d: false
+    use_origin_head: false
+    use_origin_heatmap: true
+    use_origin_local_feature: true
+    predict_point_depth: true
+    pool_with_predicted_mask: false
+    depth_feat_channels:
+    - 128
+    - 256
+    fpn_in:
+    - 512
+    - 1024
+    - 1024
+    fpn_out:
+    - 256
+    - 512
+    - 1024
+    num_layers: 3
+    num_head: 8
+    dim_ffn: 1024
+    dropout: 0.2
+    intermediate: false
+    proj_dropout: 0.25
+    vae_latent_dim: 32
+    vae_hidden_dim: 256
+    num_motion_types: 2
+    channels_last: true
+    compile_model: true
+  loss_params:
+    bce_weight: 0.5
+    dice_weight: 0.5
+    mask_weight: 0.5
+    point_map_weight: 0.5
+    coord_weight: 0.5
+    origin_map_weight: 0.5
+    point_3d_weight: 0.5
+    vae_weight: 0.0
+    axis_sign_agnostic: false
+    motion_type_weight: 0.5
+    origin_weight: 0.5
+    trajectory_weight: 0.0
+    trajectory_loss_normalized: true
+    trajectory_scale_source: gt_z0
+    closed_form_trajectory_weight: 1.0
+    closed_form_velocity_weight: 0.0
+    closed_form_sweep: 6.283185307179586
+    geometric_loss: none
+    pred_pred_art_weight: 0.0
+    pred_pred_art_normalized: true
+    pred_pred_art_radius_floor: 0.1
+    twist_weight: 0.0
+    point_sigma: 16.0
+    vae_beta: 0.01
+  optimizer_params:
+    lr: 2.0e-05
+    weight_decay: 0.0001
+    scheduler_milestones:
+    - 16
+    - 19
+    scheduler_gamma: 0.1
+  config:
+    log_image_interval_steps: 100
+    input_size:
+    - 512
+    - 512
+    enable_wandb: false
+    val_vis_samples: 2
+    manual_seed: 42
+    test_trajectory_scale: pred_z_p
+  loss_profiles:
+    2d:
+      origin_map_weight: 0.0
+      point_3d_weight: 0.0
+      vae_weight: 0.0
+      motion_type_weight: 0.5
+      origin_weight: 0.0
+      trajectory_weight: 0.0
+      closed_form_trajectory_weight: 0.0
+      pred_pred_art_radius_floor: 0.15
+      trajectory_proj_weight: 0.5
+      trajectory_proj_normalized: true
+      depth_anchor_weight: 0.0
+      trajectory_proj_detach_anchor: true
+      trajectory_proj_anchor: unit
+      depth_anchor_source: gt_point
+      trajectory_scale_source: unit
+      trajectory_proj_energy_floor: 0.0025
+      p_rev_balance_weight: 0.0
+      p_rev_balance_target: 0.225
+  source_profiles:
+    sf3d: default
+    hoi4d: 2d
+    epic: 2d
+    arctic: 2d
+trainer:
+  max_epochs: 20
+  accelerator: gpu
+  devices: 1
+  precision: 16
+  callbacks:
+  - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+    init_args:
+      dirpath: /workspace/SegAffordance/experiments/20260912_joint4_decoder_seed7/checkpoints
+      monitor: val/sf3d/loss_total
+      mode: min
+      save_top_k: 1
+      save_last: true
+      auto_insert_metric_name: false
+      filename: best-epoch{epoch:02d}-sf3dval{val/sf3d/loss_total:.4f}
+  logger:
+    class_path: pytorch_lightning.loggers.CSVLogger
+    init_args:
+      save_dir: /workspace/SegAffordance/experiments/20260912_joint4_decoder_seed7/logs
+      name: csv
+  log_every_n_steps: 10
+data:
+  sources:
+  - name: sf3d
+    train_data_dir: /workspace/datasets/sf3d_processed_v3
+    frame_cache_path: /workspace/datasets/sf3d_frames_512.lmdb
+    key_cache_path: /workspace/cache/sf3d_v2_keys_cutoff05_minrad010_maskfrac0010_edge05.pkl
+    repeat: 1
+    augment: false
+    min_revolute_radius: 0.1
+    min_mask_area_frac: 0.001
+    edge_margin_frac: 0.05
+    val_split_ratio: 0.1
+    loss_profile: 3d
+  - name: hoi4d
+    train_data_dir: /workspace/datasets/hoi4d_processed_2d_v2
+    frame_cache_path: /workspace/datasets/hoi4d_processed_2d_v2/frames.lmdb
+    key_cache_path: /workspace/cache/hoi4d_2d_keys_v2.pkl
+    repeat: 10
+    hflip_p: 0.0
+    augment: true
+    loss_profile: 2d
+  - name: epic
+    train_data_dir: /workspace/datasets/epic_processed_2d
+    frame_cache_path: /workspace/datasets/epic_processed_2d/frames.lmdb
+    key_cache_path: /workspace/cache/epic_2d_keys_v1.pkl
+    repeat: 10
+    augment: true
+    loss_profile: 2d
+  - name: arctic
+    train_data_dir: /workspace/datasets/arctic_processed_2d
+    frame_cache_path: /workspace/datasets/arctic_processed_2d/frames.lmdb
+    key_cache_path: /workspace/cache/arctic_2d_keys_v1.pkl
+    repeat: 10
+    augment: true
+    loss_profile: 2d
+  augment:
+    enabled: true
+    brightness: 0.3
+    contrast: 0.3
+    saturation: 0.3
+    hue: 0.05
+    photometric_p: 0.8
+    gray_p: 0.05
+    blur_p: 0.15
+    noise_p: 0.15
+    noise_std: 6.0
+    hflip_p: 0.5
+    flip_text: skip
+    crop_p: 0.7
+    scale_min: 0.6
+    keep_margin: 0.03
+  epoch_multiplier: 1
+  return_trajectory_2d: true
+  point_source: element
+  fast_pipeline: true
+  load_depth: false
+  val_split_ratio: 0.15
+  input_size:
+  - 512
+  - 512
+  batch_size_train: 64
+  batch_size_val: 64
+  num_workers_train: 48
+  num_workers_val: 16
+  manual_seed: 42
