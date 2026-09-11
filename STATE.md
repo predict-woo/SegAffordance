@@ -344,7 +344,22 @@ tests, panels (`tools/sf3d_vis_val.py`, `tools/hoi4d_vis_2d_panels.py` with deco
 recipe); cf_frame loss; pick by (2). Two to three pods in parallel. (5) Write-ups; STATE.
 Cost guide: PRO 6000 ~$2.1/h; joint run ~5.5 h; cf arm ~4 h; dev pod $0.57/h.
 
-## IN FLIGHT 2026-09-11 evening: two closed-form arms (pods cfframe, cfl22pi)
+## DONE 2026-09-11 ~03:45 local: the two closed-form arms (pods deleted, verified) + follow-ups launched
+
+| arm | MA / signed | matched | rot flips | origin | mIoU / PDet | vs |
+|---|---|---|---|---|---|---|
+| `20260911_sf3d_cf_frame` (shape-designed: p=0, rho=0, 2(1-k)+(1+k)(1-cos psi)+0.15 log-radius) | **31.03 / 30.27** (family RECORD) | 17.0 | 17.8 | **0.245** (record) | **0.270 / 21.9** (best cf) | cf_h1only 30.64 / 16.6 / 15.4 / 0.254 |
+| `20260911_sf3d_cf_l2_noaxis_2pi` (L2 alone at 2pi) | 26.49 / 25.94 | 19.9 | 18.0 | **0.251** | 0.264 / 21.1 | cf_l2_noaxis pi/2: 23.80 / 18.6 / 20.1 / 0.277 |
+
+Readings: the formula's scale claims delivered (cf_frame: masks, origin, radius, point all best-of-
+family; MA +0.4) but its SIGN claim needed a strict inequality — axis:phase 2:1 leaves a flat
+direction at the flipped axis (curvature (-2, 0)), hence MORE hinge flips (17.8). L2 at 2pi: halving
+the leak = +2.7 MA and a big origin gain (3:1 radial basis) but flips only 20.1 -> 18.0 (L2 alone
+cannot fix sign at any sweep). Follow-ups launched: `20260911_sf3d_cf_frame_a3` (axis:phase 3:1,
+pod cfframea3) and the joint decoder variant `20260912_joint4_decoder_l2anchor` (pod jdec-l2anchor,
+L2 2pi + direct axis loss = the never-run {L2 + anchor} corner, on the joint recipe).
+
+## (was) IN FLIGHT 2026-09-11 evening: two closed-form arms (pods cfframe, cfl22pi)
 
 **Context.** Morning: user plan = analytic decoder on the 2D sources (with rot/trans
 labels; EPIC to be VLM-labelled), closed-form loss on SF3D, no decoded curve there,
