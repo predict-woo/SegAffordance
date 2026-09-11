@@ -42,7 +42,7 @@ PY
 )"
 echo "pixel stats $FMT: $MEAN $STD"
 cd $R
-COMMON_OPTS="MODEL.SEM_SEG_HEAD.NUM_CLASSES 8 MODEL.PIXEL_MEAN $MEAN MODEL.PIXEL_STD $STD DATALOADER.NUM_WORKERS 8"
+COMMON_OPTS="MODEL.SEM_SEG_HEAD.NUM_CLASSES 8 MODEL.PIXEL_MEAN $MEAN MODEL.PIXEL_STD $STD DATALOADER.NUM_WORKERS 8 INPUT.MASK_FORMAT bitmask"
 if [ ! -f $RUNS/model_final.pth ]; then
   python train.py --config-file $CFG --output-dir $RUNS --data-path $DATA/MotionDataset_h5 --input-format $FMT \
     --model_attr_path $DATA/obj_info.json --opts $COMMON_OPTS DATASETS.TEST "('MotionNet_valid',)" ${EXTRA_OPTS:-} \

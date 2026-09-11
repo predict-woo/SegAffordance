@@ -21,6 +21,7 @@ python -c "import detectron2; print('detectron2', detectron2.__version__)"
 echo "== repo"; REPO="${OPD_REPO:-OPDMulti}"; URL="${OPD_URL:-https://github.com/3dlg-hcvc/OPDMulti}"
 [ -d $R/$REPO/.git ] || git clone -q "$URL" $R/$REPO
 cd $R/$REPO && echo "$REPO @ $(git rev-parse --short HEAD)"
+python /workspace/SegAffordance/runpod/baselines/opd/patch_mapper.py $R/$REPO/opdformer/mask2former/data/motion_dataset_mapper.py
 echo "== MSDeformAttn"; if ! python -c "import MultiScaleDeformableAttention" 2>/dev/null; then
   rm -rf /tmp/msda && cp -r $R/$REPO/opdformer/mask2former/modeling/pixel_decoder/ops /tmp/msda && cd /tmp/msda
   python setup.py build install > /tmp/msda_build.log 2>&1 || { tail -30 /tmp/msda_build.log; exit 1; }
