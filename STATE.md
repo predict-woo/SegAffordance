@@ -344,6 +344,15 @@ tests, panels (`tools/sf3d_vis_val.py`, `tools/hoi4d_vis_2d_panels.py` with deco
 recipe); cf_frame loss; pick by (2). Two to three pods in parallel. (5) Write-ups; STATE.
 Cost guide: PRO 6000 ~$2.1/h; joint run ~5.5 h; cf arm ~4 h; dev pod $0.57/h.
 
+## DONE 2026-09-11 11:05 local: joint decoder + cf_frame — NEW ALL-TIME MA RECORD 36.36 (pod deleted, verified)
+
+`20260912_joint4_decoder_cfframe` (SF3D side = the shape-designed loss, 2:1): **MA 36.36 / signed 35.73**
+(prev records 32.94 / 32.43), type 92.4, signed-all 30.7, all-flips 9.8, rot flips 13.4, traj_dir 92.4;
+origin 0.313 / radius 0.171 / masks 0.252 / 20.0 (the L2-2pi base is better there: 0.273 / 0.124 /
+0.266 / 22.5). Verified: full test set, 10 deg threshold, same test config. Mean all-axis error moves
+only 25.3 -> 24.3: the gain is 5 % more of the set under 10 deg (the scale-free axis term). Follow-ups
+launched: `20260912_joint4_decoder_cfframe_a3` (3:1) and `..._cfframe_seed7` (replicate).
+
 ## DONE 2026-09-11 10:50 local: joint decoder h1anchor — no gain on MA, +5 hinge flips again (pod deleted, verified)
 
 `20260912_joint4_decoder_h1anchor`: MA 31.07 / 29.97 (base 31.29 / 30.86), rot flips 18.7 (base 13.9),
