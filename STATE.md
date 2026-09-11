@@ -350,6 +350,19 @@ mask-mean pooled vector are the suspected bottleneck -> three arms, same recipe,
 | jdec-query | `20260913_joint4_decoder_l2anchor_query` | `articulation_readout: query` — 4 learned queries x 2 pre-norm layers, mask-biased cross-attention over the decoded map (2D sine keys), one query per head | +6.3M |
 | jdec-attnpool | `20260913_joint4_decoder_l2anchor_attnpool` | `articulation_readout: attnpool` — one query attention-pools the map in place of the mask mean, heads unchanged | +1.0M |
 | jdec-mlp1024 | `20260913_joint4_decoder_l2anchor_mlp1024` | capacity CONTROL: classical pooling, head width 256 -> 1024 (`vae_hidden_dim`, `trajectory_length_hidden`) | +13.8M |
+| jdec-dense | `20260913_joint4_decoder_l2anchor_dense` | `articulation_readout: dense` — DENSE HINGE VOTING: per-pixel rot/trans axis, type and offset-to-hinge fields on the decoded map, mask-weighted means give axis / type / origin_uv (heatmap kept as aux; scalar heads classical); no per-pixel loss in this arm (`dense_offset_weight` 0, implemented for a follow-up) | +1.8M |
+| jdec-cfq | `20260913_joint4_decoder_cfframe_query` | wave-2 (launched early, stock-scarce): query readout on the MA-record cf_frame 2:1 SF3D side — does the readout keep the record AND fix its hand-video sign? | +6.3M |
+
+All on Server Edition PRO 6000s except mlp1024 (Workstation; loaded-clock check queued). Launch timeline
+(UTC): attnpool 22:57, dense 23:22, mlp1024 23:28 (relaunched), query 23:29 (by hand + watch-only
+watcher), cfq polling. ETA per arm ~5 h train + ~20 min tests. **Ops lesson (2026-09-13): torch
+inductor/triton caches default to $TMPDIR — with TMPDIR on the network volume, two pods compiling at
+once hit `OSError: Stale file handle`; all chain scripts now export
+TORCHINDUCTOR_CACHE_DIR/TRITON_CACHE_DIR to pod-local /root.** Also: `mutagen sync flush` can hang for
+many minutes while pods write logs — launchers now bound it with `timeout 120`.
+Tools: `tools/make_joint_arm.py` derives an arm (config + chain + notes) by param overrides (needs the
+pod's python for PyYAML). `loss_params.dense_offset_weight` (per-pixel vote loss toward q*'s projection,
+default 0) is implemented and tested for a dense follow-up arm.
 
 Code: commit f3e1642 (`ArticulationReadout` in model/layers.py, `_head_condition` in segmenter, ModelParams
 `articulation_readout / readout_*`; 8 tests; spec docs/superpowers/specs/2026-09-12-articulation-readout-design.md).
