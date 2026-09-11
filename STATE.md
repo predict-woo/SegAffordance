@@ -328,6 +328,28 @@ no residual, no consistency term, no derivative terms; joint4 recipe unchanged (
 ARCTIC on the 2D side; closed-form guard must become "no learned head"; SF3D test renders
 with the predicted length (and the writer constants for comparability).
 
+## IN FLIGHT 2026-09-12 evening: ARTICULATION READOUT arms (three pods) — the head-bottleneck test
+
+**Decisions (user, 2026-09-12):** the FINAL model recipe is the joint decoder with L2 2pi + direct axis
+loss on SF3D (`config/joint4_decoder_l2anchor.yaml`, exp `20260912_joint4_decoder_l2anchor`) — chosen on
+hand-video hinge PLACEMENT (best ARCTIC hinge-line offset 0.070, best on box/laptop/phone), accepting its
+SF3D masks 0.241 / PDet 18.5 / rot flips 19.0. DINOv3 stays frozen. The 256-wide MLP heads on ONE
+mask-mean pooled vector are the suspected bottleneck -> three arms, same recipe, seed 42, 20 ep:
+
+| pod | experiment | arm | params |
+|---|---|---|---|
+| jdec-query | `20260913_joint4_decoder_l2anchor_query` | `articulation_readout: query` — 4 learned queries x 2 pre-norm layers, mask-biased cross-attention over the decoded map (2D sine keys), one query per head | +6.3M |
+| jdec-attnpool | `20260913_joint4_decoder_l2anchor_attnpool` | `articulation_readout: attnpool` — one query attention-pools the map in place of the mask mean, heads unchanged | +1.0M |
+| jdec-mlp1024 | `20260913_joint4_decoder_l2anchor_mlp1024` | capacity CONTROL: classical pooling, head width 256 -> 1024 (`vae_hidden_dim`, `trajectory_length_hidden`) | +13.8M |
+
+Code: commit f3e1642 (`ArticulationReadout` in model/layers.py, `_head_condition` in segmenter, ModelParams
+`articulation_readout / readout_*`; 8 tests; spec docs/superpowers/specs/2026-09-12-articulation-readout-design.md).
+Dev-pod smoke: all three arms forward/backward at 512 px fp16. Launchers detached (nohup/disown), logs
+`scratchpad/launch_{query,attnpool,mlp1024}.log`; each polls PRO 6000 stock (36 x 5 min), runs
+`run_joint4dec_l2anchor_<arm>_chain.sh` (chain.log), deletes its pod on CHAIN_DONE — VERIFY with the pod list.
+Judge by SF3D origin / rot flips / MA / masks vs l2anchor AND `tools/arctic_axis_probe.py` on each ckpt.
+Cost ~$10/arm. Also parked: ARCTIC GT axes under the closed-form loss (still the fix for origin/sign).
+
 ## DONE 2026-09-12: hand-video articulation transfer, 94 random panels + ARCTIC axis probe (dev pod only)
 
 `viz/20260912_hand2d_articulation_100` (README has the tables): the four joint decoder arms on random
