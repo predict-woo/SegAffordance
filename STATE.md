@@ -67,6 +67,9 @@ silent mid-run deaths with truncated ~4.35G ckpts = volume quota.
 
 | role | experiment | checkpoint |
 |---|---|---|
+| **ALL-TIME BEST MA + all-round, NO DEPTH — joint decoder + cf_frame (seed 7)** | 20260912_joint4_decoder_cfframe_seed7 | best-epoch17-sf3dval1.0880 — MA **36.03** / signed **35.91** (record band 36.0-36.7 across 3 runs; prev record 32.94), type 93.3, all-axis **22.5** / signed-all **29.6** (records), rot flips **9.5** (record), PDet **23.9** (record), mIoU 0.264, origin 0.305, roughness 0 (analytic decoder). Recipe: `config/joint4_decoder_cfframe.yaml` (joint4 recipe, analytic decoder, SF3D side = closed_form_frame 2:1, 2D side = projection loss on the decoded arc + type CE) |
+| **highest MA + sharpest sign — same at 3:1** | 20260912_joint4_decoder_cfframe_a3 | best-epoch19-sf3dval1.2559 — MA **36.73** / signed 36.14, matched 16.1, all-flips **7.8** (record); SF3D masks 0.247 / 18.5; best hand-source masks of the decoder arms (HOI4D 0.614) |
+| first record run (seed 42) | 20260912_joint4_decoder_cfframe | best-epoch17-sf3dval1.1178 — MA 36.36 / 35.73 |
 | **best MA (3D), single seed — NO DEPTH, DCT chain** | 20260910_sf3d_g19_dct_rgb_scalefree_ft_multi3dct | best-epoch24-valloss1.0178 — MA **32.80**/signed **32.43** (records by +1.7), origin 0.256 (0.006 off the record), point3d 0.248, rot flips 9.83 (= record), roughness 0.0081; RGB-only scale-free DCT-6 model, SF3D post-training from the multi3 DCT 2D arm (DCT at both stages, nothing re-initialised). PDet 20.7 / mIoU 0.254 (lowest of the recent arms) |
 | **best masks / detection / direction + multi-source, NO DEPTH, JOINT 2D+3D** | 20260910_joint4_dct_rgb_scalefree | best-epoch12-sf3dval0.9688 — MA **31.41**/signed 30.15 + mIoU **0.2738** (records) + traj_dir 96.4 (ties record) + PDet 22.72 + roughness 0.0090; RGB-only scale-free DCT-6 model trained jointly on SF3D + HOI4D + EPIC + ARCTIC (source-homogeneous batches, lr 2e-5, 20 ep); the SAME checkpoint keeps HOI4D 0.676 mIoU / 85 PDet. Axis 26.1°/20.1°, origin 0.327 |
 | best MA with depth (prev record) | 20260907_sf3d_g19_dct_ft_hoi4d_tf | best-epoch25-valloss0.9794 — MA **31.13**/signed 30.80 + PDet **23.27** + roughness 0.0079 (records); g19_dct recipe initialized from HOI4D v2 teacher_forcing; axis 28.0°/matched 19.7°, type 91.9 (worse than cf_h1only) |
@@ -325,7 +328,30 @@ no residual, no consistency term, no derivative terms; joint4 recipe unchanged (
 ARCTIC on the 2D side; closed-form guard must become "no learned head"; SF3D test renders
 with the predicted length (and the writer constants for comparability).
 
-## AUTONOMOUS NIGHT 2026-09-11/12 (user away ~14 h from ~02:00 local; budget ~$150, soft)
+## NIGHT DONE 2026-09-11 15:50 local — ALL PODS DELETED (verified: only segaffordance-dev runs); ~$140 spent
+
+**Result of the night in one line:** the analytic decoder + the shape-designed closed-form loss on SF3D,
+trained jointly, sets the MA record at **36.0-36.7 across three runs** (prev 32.94), with record hinge-flip,
+all-axis, signed-all and PDet numbers at seed 7, roughness 0 by construction. Report:
+`docs/slides/2026-09-12_autonomous_night_report.html`. Twelve runs; per-run notes + INDEX rows committed.
+
+**What was learned (single-seed noise on the joint decoder recipe ~ +-1 MA / +-2 cm origin / +-0.01 mIoU / +-1 flip pt):**
+1. Decoder works as designed (arcs on the orbit, lines on the ray; trajectory only as right as the axis).
+2. SF3D-side loss decides the numbers: cf_frame >> L2 2pi (base 31.3 / 33.3) ~ H1+axis ~ L2+axis.
+3. An axis term with a radius-scaled partner (L2 or H1 + 1-cos) adds no axis information under the
+   decoder (val axis term identical) and raised hinge flips in both arms (+5, above noise) — hypothesis:
+   it fights the sign the 2D projection loss imposes through the arc. The fully scale-free cf_frame
+   axis term does not.
+4. Chain < joint under the decoder (28.8 vs 31-36); the 2D decoder arm alone has weak masks.
+5. Arm-B closed-form family: cf_frame 31.03 -> 3:1 31.90 (family record; sign fixed by the strict
+   curvature condition), radius weight 0.30 is deadweight; L2-only 2pi 26.49 (+2.7, origin 0.251).
+6. Hand-source masks under the decoder: 0.56-0.62 vs joint4's 0.676 (seed-robust) — the open cost.
+7. The length head is a hand-video quantity (~0.21 m on SF3D); no metric reads it.
+
+**Next candidates:** hand-source mask cost (detach z_p/z_q on 2D batches, or lower proj weight);
+axis:phase 2.5:1; ARCTIC's GT axes under the closed-form loss; a third seed of the record.
+
+## (was) AUTONOMOUS NIGHT 2026-09-11/12 (user away ~14 h from ~02:00 local; budget ~$150, soft)
 
 **Mandate (user, 2026-09-11 ~01:50 local):** finish the analytic-decoder implementation, run the joint
 training experiment (`20260911_joint4_decoder_rgb_scalefree`, `run_joint4dec_chain.sh`); when it
@@ -382,7 +408,7 @@ traj_dir 88.3 (91.1); best origin 0.269 / point3d 0.261 / all-axis 24.1 of the j
 Two anchor-carrying variants, two +5 flip results: under the decoder the direct axis loss fights the
 sign the 2D projection loss imposes through the arc (hypothesis; seed7 will calibrate noise).
 
-## IN FLIGHT 2026-09-11 09:45 local: five pods (~$11/h; ~$75 spent since 21:00; projected ~$115 by noon)
+## (was) IN FLIGHT 2026-09-11 09:45 local: five pods — all done and deleted by 15:50
 
 | pod | experiment | what | ETA (local) |
 |---|---|---|---|

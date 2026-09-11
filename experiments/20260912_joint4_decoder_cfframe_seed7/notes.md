@@ -3,7 +3,7 @@
 **Goal.** Confirm the MA 36.36 record (seed 42) at a second seed.
 
 **Result (2026-09-11 15:40 local, pod jdec-cfs7, 4 h 20 min + tests, pod deleted — verified).** Best
-`val/sf3d/loss_total` at epoch 19 (see checkpoints).
+`val/sf3d/loss_total` 1.0880 at epoch 17 (`best-epoch17-sf3dval1.0880.ckpt`).
 
 | SF3D metric | cfframe seed 42 | **cfframe seed 7** | base seed 42 / 7 |
 |---|---|---|---|
