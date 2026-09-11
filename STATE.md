@@ -344,6 +344,14 @@ tests, panels (`tools/sf3d_vis_val.py`, `tools/hoi4d_vis_2d_panels.py` with deco
 recipe); cf_frame loss; pick by (2). Two to three pods in parallel. (5) Write-ups; STATE.
 Cost guide: PRO 6000 ~$2.1/h; joint run ~5.5 h; cf arm ~4 h; dev pod $0.57/h.
 
+## DONE 2026-09-11 09:30 local: joint decoder + direct axis loss (l2anchor) — NEGATIVE (pod deleted, verified)
+
+`20260912_joint4_decoder_l2anchor`: MA 31.05 (base 31.29), rot flips 13.9 -> 19.0, origin 0.294 (0.273),
+masks 0.241 / 18.5 (0.266 / 22.5), HOI4D 0.576 (0.615); val axis term identical (0.279 vs 0.281). Under
+the decoder the 2D projection loss already supplies the axis sign through the arc; the anchor adds no
+axis information and pulls the trunk. Keep the base recipe's SF3D side (L2 2pi only). Contrast: on the
+arm-B family (no 2D data) the anchor was worth +1.5 MA.
+
 ## DONE 2026-09-11 08:55 local: cf_frame_a3 (3:1) — closed-form family MA RECORD 31.90, flips fixed, masks/origin cost
 
 `20260911_sf3d_cf_frame_a3`: MA **31.90 / 31.33**, matched 16.2, rot flips **13.0** (cf_frame 17.8), all-flips
