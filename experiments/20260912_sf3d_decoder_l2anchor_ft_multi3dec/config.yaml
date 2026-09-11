@@ -13,7 +13,7 @@
 seed_everything: 42
 
 model:
-  finetune_from_path: "RESOLVED_BY_CHAIN"   # multi3 decoder arm best (resolved by run_multi3dec_chain.sh)
+  finetune_from_path: "/workspace/SegAffordance/experiments/20260912_multi3_decoder_rgb_scalefree/checkpoints/best-epoch09-valloss0.5584.ckpt"   # multi3 decoder arm best (resolved by run_multi3dec_chain.sh)
   # gen-7: CLIP FROZEN (user decision). Watch item: the gen-5 frozen run
   # had the mask regression, and gen-7 leans on masks harder than any
   # generation (heatmaps share the projector with the mask channel).

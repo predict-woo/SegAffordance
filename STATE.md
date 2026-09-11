@@ -344,6 +344,13 @@ tests, panels (`tools/sf3d_vis_val.py`, `tools/hoi4d_vis_2d_panels.py` with deco
 recipe); cf_frame loss; pick by (2). Two to three pods in parallel. (5) Write-ups; STATE.
 Cost guide: PRO 6000 ~$2.1/h; joint run ~5.5 h; cf arm ~4 h; dev pod $0.57/h.
 
+## DONE 2026-09-11 14:30 local: the decoder CHAIN — does not transfer (pod deleted, verified)
+
+`20260912_multi3_decoder_rgb_scalefree` (2D arm: union masks 0.626 / 72.9 vs the DCT arm's 0.715 / 83.8)
+-> `20260912_sf3d_decoder_l2anchor_ft_multi3dec`: MA 28.81 / 28.36 (DCT chain 32.80; decoder joint
+31.3 base / 36.4 cf_frame), rot flips 15.0, type 89.7; origin 0.254 (= DCT chain). Under the decoder
+JOINT > CHAIN. Confounded by the SF3D stage's direct axis loss. Not worth a second seed.
+
 ## DONE 2026-09-11 14:05 local: joint decoder SEED REPLICATE — single-seed noise is ~2 MA (pod deleted, verified)
 
 `20260912_joint4_decoder_seed7` (base recipe, seed 7): MA 33.26 / 32.21 vs 31.29 / 30.86 at seed 42;
