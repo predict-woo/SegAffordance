@@ -344,6 +344,23 @@ tests, panels (`tools/sf3d_vis_val.py`, `tools/hoi4d_vis_2d_panels.py` with deco
 recipe); cf_frame loss; pick by (2). Two to three pods in parallel. (5) Write-ups; STATE.
 Cost guide: PRO 6000 ~$2.1/h; joint run ~5.5 h; cf arm ~4 h; dev pod $0.57/h.
 
+## IN FLIGHT 2026-09-11 09:45 local: five pods (~$11/h; ~$75 spent since 21:00; projected ~$115 by noon)
+
+| pod | experiment | what | ETA (local) |
+|---|---|---|---|
+| jdec-h1anchor | `20260912_joint4_decoder_h1anchor` | joint decoder, SF3D side = H1 pi/2 + axis 0.5 | ~10:30 |
+| jdec-cfframe | `20260912_joint4_decoder_cfframe` | joint decoder, SF3D side = cf_frame 2:1 | ~10:45 |
+| jdec-seed7 | `20260912_joint4_decoder_seed7` | base decoder recipe, seed 7 (noise calibration) | ~14:15 |
+| cfframea3r3 | `20260911_sf3d_cf_frame_a3r3` | cf_frame 3:1 with log-radius 0.30 (buy the origin back) | ~13:20 |
+| mdec | `20260912_multi3_decoder_rgb_scalefree` -> `20260912_sf3d_decoder_l2anchor_ft_multi3dec` | the decoder CHAIN (2D arm 12 ep -> SF3D post-training L2 2pi + axis 0.5, 30 ep) | ~16:30 |
+
+All watchers detached (nohup/disown), monitors armed; each pod is deleted by its watcher on CHAIN_DONE
+— VERIFY. Ops: a launcher found the seed-7 chain script missing on the volume (mirror lag; the launcher
+exits SCRIPT_MISSING with the pod alive) — fixed by `mutagen sync flush` + launching the script by hand
+over ssh (`nohup bash <script> > <log> 2>&1 < /dev/null &`) and starting the watcher.
+Note for the chain: its SF3D stage carries the direct axis loss (decided before the l2anchor result);
+under the decoder that may cost — read against the DCT chain (32.80) AND the decoder base.
+
 ## DONE 2026-09-11 09:30 local: joint decoder + direct axis loss (l2anchor) — NEGATIVE (pod deleted, verified)
 
 `20260912_joint4_decoder_l2anchor`: MA 31.05 (base 31.29), rot flips 13.9 -> 19.0, origin 0.294 (0.273),
