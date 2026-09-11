@@ -105,8 +105,46 @@ def test_query_mode_feeds_each_head_its_own_query():
     assert torch.allclose(seen["axis"][:, D:], seen["zq"][:, D:n])
 
 
+def test_dense_head_votes_are_the_masked_means():
+    from model.layers import DenseArticulationHead
+    torch.manual_seed(0)
+    head = DenseArticulationHead(in_dim=32, hidden=32).eval()
+    with torch.no_grad():
+        head.net[-1].weight[8:].normal_(); head.net[-1].bias[8:].normal_()   # non-zero offsets
+    fq = torch.randn(2, 32, 4, 6)
+    mask = torch.zeros(2, 1, 4, 6)
+    mask[0, 0, 1, 2] = 1.0                       # one pixel -> the vote IS that pixel's
+    mask[1, 0, :, :] = 1.0                       # all pixels -> plain mean
+    out = head(fq, mask)
+    assert out["rot"].shape == (2, 3) and out["trans"].shape == (2, 3)
+    assert out["type_logits"].shape == (2, 2) and out["origin_uv"].shape == (2, 2)
+    assert out["rot"].abs().max() < 1.0
+    u, v = (2 + 0.5) / 6, (1 + 0.5) / 4
+    expect = torch.tensor([u, v]) + out["offset_field"][0, :, 1, 2]
+    assert torch.allclose(out["origin_uv"][0], expect, atol=1e-5)
+    assert torch.allclose(out["origin_uv"][1], out["vote_uv"][1].mean(dim=(-1, -2)), atol=1e-5)
+
+
+def test_dense_mode_in_cris_votes_the_origin_and_axes():
+    m = _decoder_model(articulation_readout="dense", dense_hidden=32)
+    assert m.dense_head is not None and m.motion_mlp is None and m.readout is None
+    img, depth, word, mask = _inputs(B=2, size=64)
+    K = torch.tensor([[[1.0, 0.0, 0.5], [0.0, 1.0, 0.5], [0.0, 0.0, 1.0]]]).repeat(2, 1, 1)
+    m.train()
+    out = m(img, depth, word, mask, None, None, None, K)
+    assert out.motion_pred_rot.shape == (2, 3) and out.motion_type_logits.shape == (2, 2)
+    assert out.origin_uv.shape == (2, 2) and out.origin_logits is not None      # heatmap kept as aux
+    assert out.trajectory_pred.shape == (2, 20, 3)
+    (out.origin_pred.sum() + out.motion_pred_rot.sum() + out.trajectory_pred.sum()).backward()
+    assert m.dense_head.net[-1].weight.grad.abs().sum() > 0
+    m.eval()
+    with torch.no_grad():
+        out2 = m(img, depth, word, mask, None, None, None, K)
+    assert torch.isfinite(out2.origin_pred).all()
+
+
 def test_invalid_mode_is_rejected():
     with pytest.raises(ValueError):
-        _decoder_model(articulation_readout="dense")
+        _decoder_model(articulation_readout="voting")
     with pytest.raises(ValueError):
         ArticulationReadout(d_model=16, mode="query", mask_eps=0.0)

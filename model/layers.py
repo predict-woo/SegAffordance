@@ -711,6 +711,59 @@ class ArticulationReadout(nn.Module):
         return self.out_norm(q)
 
 
+class DenseArticulationHead(nn.Module):
+    """Dense hinge voting (2026-09-12; ModelParams.articulation_readout
+    "dense"). Every pixel of the decoded map votes: a unit-ish rot axis, a
+    trans direction (both tanh, in (-1, 1) like the rescaled MLP readouts),
+    type logits, and a 2D offset from its own image position to the hinge
+    origin (normalised [0, 1] coordinates, unbounded — the hinge may lie
+    off-image). The part-mask-weighted mean of each field is the prediction:
+    the classical ANCSH / Shape2Motion / OPD design, where the origin is
+    located by the part's pixels rather than read out of one pooled vector.
+    """
+
+    def __init__(self, in_dim: int, hidden: int = 256):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(in_dim, hidden, 3, padding=1),
+            nn.GroupNorm(32, hidden),
+            nn.GELU(),
+            nn.Conv2d(hidden, hidden, 3, padding=1),
+            nn.GroupNorm(32, hidden),
+            nn.GELU(),
+            nn.Conv2d(hidden, 10, 1),   # rot 3 | trans 3 | type 2 | offset 2
+        )
+        # offsets start at zero: the initial origin vote is the part centroid
+        nn.init.zeros_(self.net[-1].weight[8:])
+        nn.init.zeros_(self.net[-1].bias[8:])
+
+    def forward(self, fq: torch.Tensor, mask_w: torch.Tensor):
+        """fq (B, C, h, w), mask_w (B, 1, h, w) in [0, 1] -> dict with
+        rot (B, 3), trans (B, 3), type_logits (B, 2), origin_uv (B, 2),
+        offset_field (B, 2, h, w), vote_uv (B, 2, h, w)."""
+        B, _, h, w = fq.shape
+        f = self.net(fq).float()
+        wgt = mask_w.float()
+        wsum = wgt.sum(dim=(-1, -2)) + 1e-6                          # (B, 1)
+
+        def wmean(x):                                                # (B, k, h, w) -> (B, k)
+            return (x * wgt).sum(dim=(-1, -2)) / wsum
+
+        rot = wmean(torch.tanh(f[:, 0:3]))
+        trans = wmean(torch.tanh(f[:, 3:6]))
+        type_logits = wmean(f[:, 6:8])
+        ys = (torch.arange(h, device=fq.device, dtype=torch.float32) + 0.5) / h
+        xs = (torch.arange(w, device=fq.device, dtype=torch.float32) + 0.5) / w
+        grid = torch.stack(torch.meshgrid(xs, ys, indexing="xy"), dim=0)   # (2, h, w): u, v
+        offset = f[:, 8:10]
+        vote = grid[None] + offset                                   # (B, 2, h, w)
+        origin_uv = wmean(vote)
+        return {
+            "rot": rot, "trans": trans, "type_logits": type_logits, "origin_uv": origin_uv,
+            "offset_field": offset, "vote_uv": vote,
+        }
+
+
 class Point3DHead(nn.Module):
     """Absolute 3D point in camera coordinates (metres).
 

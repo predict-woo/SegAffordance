@@ -11,6 +11,7 @@ from model.outputs import ModelOutputs
 
 from .layers import (
     ArticulationReadout,
+    DenseArticulationHead,
     FPN,
     Projector,
     TransformerDecoder,
@@ -403,9 +404,9 @@ class CRIS(nn.Module):
         # attention over the decoded map; in "query" mode each articulation
         # head gets its own query's output in that slot.
         self.articulation_readout = getattr(model_params, "articulation_readout", "mlp")
-        if self.articulation_readout not in ("mlp", "attnpool", "query"):
+        if self.articulation_readout not in ("mlp", "attnpool", "query", "dense"):
             raise ValueError(
-                f"articulation_readout must be mlp|attnpool|query, got {self.articulation_readout!r}"
+                f"articulation_readout must be mlp|attnpool|query|dense, got {self.articulation_readout!r}"
             )
         self.readout_dim = model_params.fpn_out[1]
         self.readout = (
@@ -418,9 +419,23 @@ class CRIS(nn.Module):
                 dim_ffn=getattr(model_params, "readout_dim_ffn", 1024),
                 mask_eps=getattr(model_params, "readout_mask_eps", 0.01),
             )
-            if self.articulation_readout != "mlp"
+            if self.articulation_readout in ("attnpool", "query")
             else None
         )
+        # "dense": per-pixel votes replace the type/axis MLP and the origin
+        # heatmap's soft-argmax (the heatmap channel stays as an auxiliary);
+        # the scalar heads keep the classical pooled condition.
+        self.dense_head = None
+        if self.articulation_readout == "dense":
+            if not (self.split_axis_heads and self.use_origin_heatmap and self.use_motion_type_head):
+                raise ValueError(
+                    "articulation_readout dense needs split_axis_heads, use_origin_heatmap and "
+                    "use_motion_type_head (it votes rot/trans axes, type and origin_uv)"
+                )
+            self.dense_head = DenseArticulationHead(
+                in_dim=model_params.fpn_out[1], hidden=getattr(model_params, "dense_hidden", 256)
+            )
+            self.motion_mlp = None
 
         if self.channels_last:
             self.to(memory_format=torch.channels_last)
@@ -569,6 +584,12 @@ class CRIS(nn.Module):
             )
 
         readout_feats = None
+        dense_out = None
+        if self.dense_head is not None:
+            # Dense hinge voting: the origin the lifts / condition / decoder
+            # use is the part's vote, not the heatmap's soft-argmax.
+            dense_out = self.dense_head(fq, mask_for_pooling)
+            origin_uv = dense_out["origin_uv"].to(fq.dtype)
         if self.readout is not None:
             # (B, K, C): query 0 takes the pooled slot; the other queries are
             # swapped in per head below (_head_condition).
@@ -731,18 +752,24 @@ class CRIS(nn.Module):
                 # During pure inference (e.g. in a test script), sample z from prior.
                 # mu/log_var do not exist in this case and stay None.
                 motion_pred, motion_type_logits = self.motion_vae.inference(vae_condition)  # type: ignore[operator]
-        elif self.motion_mlp is not None and self.split_axis_heads:
+        elif dense_out is not None or (self.motion_mlp is not None and self.split_axis_heads):
             # Gen-17: both per-type candidates every forward (no data-
             # dependent branching — compile-safe), rescaled like the legacy
             # head; motion_pred = row-wise selection by PREDICTED type so
             # every legacy consumer (metrics, viz, probes) reads the axis
             # that matches the type call. The trainer routes the LOSS by GT
             # type over the two candidates instead.
-            motion_pred_rot, motion_pred_trans, motion_type_logits = self.motion_mlp(  # type: ignore[operator]
-                vae_condition
-            )
-            motion_pred_rot = (motion_pred_rot - 0.5) * 2.0
-            motion_pred_trans = (motion_pred_trans - 0.5) * 2.0
+            if dense_out is not None:
+                # voted fields, already in (-1, 1) via tanh
+                motion_pred_rot = dense_out["rot"].to(vae_condition.dtype)
+                motion_pred_trans = dense_out["trans"].to(vae_condition.dtype)
+                motion_type_logits = dense_out["type_logits"].to(vae_condition.dtype)
+            else:
+                motion_pred_rot, motion_pred_trans, motion_type_logits = self.motion_mlp(  # type: ignore[operator]
+                    vae_condition
+                )
+                motion_pred_rot = (motion_pred_rot - 0.5) * 2.0
+                motion_pred_trans = (motion_pred_trans - 0.5) * 2.0
             # Index 1 = rotation, matching motion_type_gt's convention.
             pred_stack = torch.stack([motion_pred_trans, motion_pred_rot], dim=1)
             sel = motion_type_logits.argmax(dim=-1)

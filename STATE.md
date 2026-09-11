@@ -328,6 +328,15 @@ no residual, no consistency term, no derivative terms; joint4 recipe unchanged (
 ARCTIC on the 2D side; closed-form guard must become "no learned head"; SF3D test renders
 with the predicted length (and the writer constants for comparability).
 
+## AUTONOMOUS NIGHT 2 (2026-09-12/13, user asleep from ~01:00 local): model-STRUCTURE iteration
+
+**Mandate (user):** watch the three readout arms, then run follow-up experiments iterating on the model
+structure (DINOv3 stays frozen) to see how good it can get. No budget stated — keep to the previous
+night's ~$150 soft cap, ~$10 per PRO 6000 arm. Commit as you go; delete pods after their test pass
+and VERIFY; ARCTIC hinge probe on every checkpoint. Plan: wave 1 = query / attnpool / mlp1024 (+ a
+dense hinge-voting head, built while stock is dry); wave 2 = the best readout on the cf_frame SF3D
+side (the MA record recipe), deeper/wider readout, combinations; keep the l2anchor baseline as the row.
+
 ## IN FLIGHT 2026-09-12 evening: ARTICULATION READOUT arms (three pods) — the head-bottleneck test
 
 **Decisions (user, 2026-09-12):** the FINAL model recipe is the joint decoder with L2 2pi + direct axis

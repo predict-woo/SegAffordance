@@ -149,7 +149,15 @@ class ModelParams:
     #                the arc length (each replaces the pooled slot of the
     #                condition vector). readout_mask_eps sets the bias floor
     #                log(mask + eps) outside the part.
+    #   "dense"    — dense hinge VOTING: a small conv head on the decoded map
+    #                predicts per-pixel rot/trans axis (tanh), type logits and
+    #                a 2D offset to the hinge origin; the part-mask-weighted
+    #                mean of each field gives the axis / type / origin_uv
+    #                (the origin heatmap channel stays as an auxiliary). The
+    #                scalar heads (depths, arc length) keep the classical
+    #                pooled condition. dense_hidden = conv width.
     articulation_readout: str = "mlp"
+    dense_hidden: int = 256
     readout_queries: int = 4
     readout_layers: int = 2
     readout_dim_ffn: int = 1024
