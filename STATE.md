@@ -355,9 +355,11 @@ Readings: the formula's scale claims delivered (cf_frame: masks, origin, radius,
 family; MA +0.4) but its SIGN claim needed a strict inequality — axis:phase 2:1 leaves a flat
 direction at the flipped axis (curvature (-2, 0)), hence MORE hinge flips (17.8). L2 at 2pi: halving
 the leak = +2.7 MA and a big origin gain (3:1 radial basis) but flips only 20.1 -> 18.0 (L2 alone
-cannot fix sign at any sweep). Follow-ups launched: `20260911_sf3d_cf_frame_a3` (axis:phase 3:1,
-pod cfframea3) and the joint decoder variant `20260912_joint4_decoder_l2anchor` (pod jdec-l2anchor,
-L2 2pi + direct axis loss = the never-run {L2 + anchor} corner, on the joint recipe).
+cannot fix sign at any sweep). Follow-ups: `20260912_joint4_decoder_l2anchor` (pod jdec-l2anchor 11kwy3slv52ms9, Server Edition,
+LAUNCHED 03:08 UTC after 15 stock attempts; L2 2pi + direct axis loss = the never-run {L2 + anchor}
+corner, on the joint recipe) and `20260911_sf3d_cf_frame_a3` (axis:phase 3:1; launcher still polling
+for PRO 6000 stock — detached with nohup/disown, log scratchpad/launch_cfframea3.log). Ops: pod
+LAUNCHERS must also be run detached (the harness killed two plain background launchers at 03:55).
 
 ## (was) IN FLIGHT 2026-09-11 evening: two closed-form arms (pods cfframe, cfl22pi)
 
