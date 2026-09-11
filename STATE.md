@@ -344,6 +344,13 @@ tests, panels (`tools/sf3d_vis_val.py`, `tools/hoi4d_vis_2d_panels.py` with deco
 recipe); cf_frame loss; pick by (2). Two to three pods in parallel. (5) Write-ups; STATE.
 Cost guide: PRO 6000 ~$2.1/h; joint run ~5.5 h; cf arm ~4 h; dev pod $0.57/h.
 
+## DONE 2026-09-11 08:55 local: cf_frame_a3 (3:1) — closed-form family MA RECORD 31.90, flips fixed, masks/origin cost
+
+`20260911_sf3d_cf_frame_a3`: MA **31.90 / 31.33**, matched 16.2, rot flips **13.0** (cf_frame 17.8), all-flips
+9.2 (record); origin 0.262 (cf_frame 0.245), masks 0.249 / 19.0 (0.270 / 21.9). The strict curvature
+condition (axis:phase > 2) fixed the sign as predicted; the heavier axis weight costs masks/origin — the
+articulation-vs-mask trade as one knob. Next knob: 2.5:1 or 3:1 with radius weight 0.3. Pod deleted, verified.
+
 ## DONE 2026-09-11 06:20 local: JOINT DECODER first run — it works (pod jdec deleted, verified)
 
 `20260911_joint4_decoder_rgb_scalefree` best ep16: SF3D **MA 31.29 / signed 30.86** (joint4 31.41 / 30.15,
