@@ -43,7 +43,7 @@
 <main>
 
 <h1>Overnight report, 2026-09-11 → 12: closed-form losses and the analytic decoder</h1>
-<p class="lead">Fourteen hours of autonomous runs after the joint-training design was settled. Headline: the analytic decoder works as designed, and combining it with the shape-designed closed-form loss on the SF3D side set a new all-time MA record of <b>36.36</b> (previous 32.94). Two negative results and two structural findings along the way. Everything is committed; per-run details live in each <code>experiments/&lt;id&gt;/notes.md</code>, one-line summaries in <code>experiments/INDEX.md</code>, the running state in <code>STATE.md</code>.</p>
+<p class="lead">Fourteen hours of autonomous runs after the joint-training design was settled. Headline: the analytic decoder works as designed, and combining it with the shape-designed closed-form loss on the SF3D side sets a new all-time MA record band of <b>36.0–36.7 across three runs</b> (previous record 32.94), replicated at a second seed, with record hinge-flip, axis-error and detection numbers. Two negative results and two structural findings along the way. Everything is committed; per-run details live in each <code>experiments/&lt;id&gt;/notes.md</code>, one-line summaries in <code>experiments/INDEX.md</code>, the running state in <code>STATE.md</code>.</p>
 
 <h2>1. What ran</h2>
 <div class="wrap">
@@ -52,15 +52,15 @@
 <tr><td>1</td><td><code>20260911_sf3d_cf_frame</code></td><td>arm-B config, SF3D side = the shape-designed closed-form loss (p = 0, ρ = 0), axis : phase 2 : 1</td><td>done</td></tr>
 <tr><td>2</td><td><code>20260911_sf3d_cf_l2_noaxis_2pi</code></td><td>arm-B config, position L2 alone at sweep 2π (user request)</td><td>done</td></tr>
 <tr><td>3</td><td><code>20260911_sf3d_cf_frame_a3</code></td><td>as 1 with axis : phase 3 : 1</td><td>done</td></tr>
-<tr><td>4</td><td><code>20260911_sf3d_cf_frame_a3r3</code></td><td>as 3 with the log-radius weight 0.15 → 0.30</td><td>running</td></tr>
+<tr><td>4</td><td><code>20260911_sf3d_cf_frame_a3r3</code></td><td>as 3 with the log-radius weight 0.15 → 0.30</td><td>done (negative)</td></tr>
 <tr><td>5</td><td><code>20260911_joint4_decoder_rgb_scalefree</code></td><td><b>the joint decoder run</b>: joint4 recipe, no trajectory head; SF3D side = L2 at 2π only; 2D side = projection loss on the decoded curve + type CE</td><td>done</td></tr>
 <tr><td>6</td><td><code>20260912_joint4_decoder_l2anchor</code></td><td>5 + the direct 1 − cos axis loss on SF3D</td><td>done (negative)</td></tr>
 <tr><td>7</td><td><code>20260912_joint4_decoder_h1anchor</code></td><td>5 with the SF3D side = H1 π/2 + axis loss (the August record recipe)</td><td>done</td></tr>
 <tr><td>8</td><td><code>20260912_joint4_decoder_cfframe</code></td><td>5 with the SF3D side = the shape-designed loss (2 : 1)</td><td><b>done — record</b></td></tr>
-<tr><td>9</td><td><code>20260912_joint4_decoder_seed7</code></td><td>5 at seed 7 (noise calibration)</td><td>running</td></tr>
-<tr><td>10</td><td><code>20260912_joint4_decoder_cfframe_a3</code></td><td>8 at 3 : 1</td><td>running</td></tr>
-<tr><td>11</td><td><code>20260912_joint4_decoder_cfframe_seed7</code></td><td>8 at seed 7 (replicate of the record)</td><td>running</td></tr>
-<tr><td>12</td><td><code>20260912_multi3_decoder_rgb_scalefree</code> → <code>20260912_sf3d_decoder_l2anchor_ft_multi3dec</code></td><td>the decoder CHAIN: 2D multi-source arm with the decoder, then SF3D post-training (L2 2π + axis loss)</td><td>stage 1 done, stage 2 running</td></tr>
+<tr><td>9</td><td><code>20260912_joint4_decoder_seed7</code></td><td>5 at seed 7 (noise calibration)</td><td>done</td></tr>
+<tr><td>10</td><td><code>20260912_joint4_decoder_cfframe_a3</code></td><td>8 at 3 : 1</td><td><b>done — MA 36.73, all-flips record</b></td></tr>
+<tr><td>11</td><td><code>20260912_joint4_decoder_cfframe_seed7</code></td><td>8 at seed 7 (replicate of the record)</td><td><b>done — MA 36.03, record replicates</b></td></tr>
+<tr><td>12</td><td><code>20260912_multi3_decoder_rgb_scalefree</code> → <code>20260912_sf3d_decoder_l2anchor_ft_multi3dec</code></td><td>the decoder CHAIN: 2D multi-source arm with the decoder, then SF3D post-training (L2 2π + axis loss)</td><td>done (MA 28.8: chain &lt; joint)</td></tr>
 </table>
 </div>
 <p class="muted">Also done before the runs: EPIC rot/trans labels from a VLM pass (359 records, all high confidence, zero disagreements with the noun rule), HOI4D rot/trans/none labels by rule (1,868 / 953 / 263), a dataset flag that keeps the 263 "none" windows in the LMDB but out of training, the decoder implementation itself (10 tests), and the DCT readout-v2 arms from the previous night.</p>
@@ -123,24 +123,33 @@
 <h2>5. The chain under the decoder (stage 1 done)</h2>
 <p>The 2D multi-source arm with the decoder is clearly weaker than the DCT-head arm on masks and detection (union 0.626 / 72.9 vs 0.715 / 83.8): with no 3D data the projection loss has to invent the articulation from the hand track and drives the trunk through the axis/origin/point heads. Whether this init still transfers to SF3D (stage 2, running; compare the DCT chain's 32.80) is the open question. Note its SF3D stage carries the direct axis loss, decided before the l2anchor result.</p>
 
-<h2>6. Pending (results appended when they land)</h2>
-<ul>
-<li><code>cf_frame_a3r3</code> — 3 : 1 with radius weight 0.30: does the origin come back?</li>
-<li><code>joint4_decoder_seed7</code> — noise calibration for the decoder comparisons.</li>
-<li><code>joint4_decoder_cfframe_a3</code> and <code>_cfframe_seed7</code> — the record at 3 : 1 and at a second seed.</li>
-<li><code>sf3d_decoder_l2anchor_ft_multi3dec</code> — the decoder chain's SF3D stage.</li>
-</ul>
+<h2>6. The last five runs (landed 13:15–15:40)</h2>
+<div class="wrap">
+<table>
+<tr><th>SF3D test</th><th>base seed 42</th><th>base seed 7</th><th>cf_frame 2:1 seed 42</th><th>cf_frame 2:1 seed 7</th><th>cf_frame 3:1</th><th>decoder chain</th></tr>
+<tr><td>MA / signed</td><td class="n">31.29 / 30.86</td><td class="n">33.26 / 32.21</td><td class="n">36.36 / 35.73</td><td class="n">36.03 / 35.91</td><td class="n best">36.73 / 36.14</td><td class="n worse">28.81 / 28.36</td></tr>
+<tr><td>type pass</td><td class="n">91.8</td><td class="n">91.9</td><td class="n">92.4</td><td class="n best">93.3</td><td class="n">91.1</td><td class="n">89.7</td></tr>
+<tr><td>axis matched / all / signed-all</td><td class="n">18.4 / 25.3 / 32.1</td><td class="n">18.8 / 25.3 / 33.3</td><td class="n">18.8 / 24.3 / 30.7</td><td class="n">17.6 / <span class="best">22.5 / 29.6</span></td><td class="n"><span class="best">16.1</span> / 24.9 / 30.0</td><td class="n">20.4 / 28.1 / 35.9</td></tr>
+<tr><td>flips all / rot (%)</td><td class="n">10.7 / 13.9</td><td class="n">10.5 / 15.2</td><td class="n">9.8 / 13.4</td><td class="n">10.6 / <span class="best">9.5</span></td><td class="n"><span class="best">7.8</span> / 11.0</td><td class="n">11.6 / 15.0</td></tr>
+<tr><td>origin / radius (m)</td><td class="n best">0.273 / 0.124</td><td class="n">0.311 / 0.164</td><td class="n">0.313 / 0.171</td><td class="n">0.305 / 0.150</td><td class="n">0.304 / 0.137</td><td class="n">0.254 / 0.145</td></tr>
+<tr><td>mIoU / PDet</td><td class="n">0.266 / 22.5</td><td class="n">0.247 / 20.0</td><td class="n">0.252 / 20.0</td><td class="n">0.264 / <span class="best">23.9</span></td><td class="n">0.247 / 18.5</td><td class="n">0.257 / 19.1</td></tr>
+<tr><td>HOI4D mIoU</td><td class="n">0.615</td><td class="n">0.573</td><td class="n">0.578</td><td class="n">0.558</td><td class="n best">0.614</td><td class="n">—</td></tr>
+</table>
+</div>
+<div class="box good">
+<p><b>The record replicates and the noise is calibrated.</b> The base recipe moves by 2 MA, 4 cm of origin and 0.02 mIoU between seeds, so single-seed differences below that are inconclusive — which retires the earlier "origin big win" reading of the base and softens the anchor-variant readings (their +5 flips remain suggestive). Against that noise, cf_frame sits at 36.0–36.7 across three runs versus a base mean of 32.3: a +4 MA effect. At seed 7 it also holds the best all-axis (22.5°), signed-all (29.6°), hinge-flip (9.5 %) and PDet (23.9) numbers of the whole project; at 3 : 1 the all-flip rate drops to 7.8 % and the matched axis to 16.1° at a mask cost. The heavier radius weight on the arm-B config did not buy the origin back (0.270 vs 0.262) and blurred the axis. The decoder chain transfers poorly (28.8): under the decoder, joint training beats the two-stage chain.</p>
+</div>
 
 <h2>7. Ops and cost</h2>
 <ul>
-<li>Spend ≈ $95 by 11:30 local; projected ≈ $140 when the last five finish (budget ~$150). All pods are deleted by their watchers on completion and verified against the pod list; only the dev pod stays.</li>
+<li>Spend ≈ $140 for the night (budget ~$150): twelve training runs on PRO 6000 pods plus the dev pod. Every training pod was deleted by its watcher on completion and verified against the pod list; only the dev pod is running at 15:50.</li>
 <li>PRO 6000 stock was dry for ~3 h in the early morning; launchers polled and caught it. One launcher found a chain script not yet mirrored to the volume (mutagen lag) and left its pod idle — fixed by flushing the mirror and launching by hand. Lesson recorded in STATE: both launchers and watchers must run detached (<code>nohup … &amp; disown</code>), and flush the mirror before launching a freshly written script.</li>
 <li>Lightning writes checkpoints through a temp file in <code>$TMPDIR</code>; pods with a small overlay fail with ENOSPC. Chain scripts set <code>TMPDIR=/workspace/tmp</code>.</li>
 </ul>
 
 <h2>8. Suggested next steps</h2>
 <ol>
-<li>If the replicate holds the record: make cf_frame the default SF3D side of the joint decoder recipe; tune the axis : phase ratio and the log-radius weight for the origin/mask trade (the arm-B grid says 3 : 1 sharpens sign, a higher radius weight should restore origin).</li>
+<li>cf_frame is the default SF3D side of the joint decoder recipe (record replicated). The axis : phase ratio is the sign-vs-mask knob (2 : 1 all-round, 3 : 1 sign); the log-radius weight is not a lever (0.30 hurt). Try 2.5 : 1 and a third seed of the record.</li>
 <li>Hand-source masks: every decoder arm loses HOI4D masks (0.676 → ~0.6). Candidates: lower projection weight, or detach the depth heads (z_p, z_q) inside the decoder on 2D batches so the projection loss trains axis and length only.</li>
 <li>Direction accuracy: the decoder's 91–92 vs the head's 96 is the axis head's sign; ARCTIC's GT axes under the closed-form loss are the untouched lever for hinges.</li>
 <li>Seeds: one seed per arm everywhere; the two replicates running are the first calibration.</li>
