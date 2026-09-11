@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overnight report 2026-09-11/12 — closed-form losses and the analytic decoder</title>
+<script>
+  window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<!-- MathJax bundled locally (vendor/mathjax/tex-svg.js, MathJax 3, Apache-2.0); falls back to the CDN if the local copy is missing. -->
+<script src="vendor/mathjax/tex-svg.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js';document.head.appendChild(s);"></script>
+<style>
+  :root { --ink:#1f2937; --muted:#6b7280; --rule:#e5e7eb; --acc:#b45309; --acc2:#1d4ed8; --ok:#047857; --bad:#b91c1c; --bg:#fbfbf9; --card:#fff; }
+  html { color-scheme: light; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 30px; line-height:1.2; margin: 0 0 8px; }
+  h2 { font-size: 22px; margin: 44px 0 10px; padding-top: 18px; border-top: 1px solid var(--rule); }
+  h3 { font-size: 17px; margin: 22px 0 6px; }
+  p { margin: 10px 0; }
+  .lead { color: var(--muted); font-size: 17px; }
+  .box { background: var(--card); border:1px solid var(--rule); border-radius: 10px; padding: 14px 18px; margin: 14px 0; }
+  .key { border-left: 4px solid var(--acc); }
+  .good { border-left: 4px solid var(--ok); }
+  .warn { border-left: 4px solid var(--bad); }
+  .note { border-left: 4px solid var(--acc2); }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13.5px; background:#f3f4f6; padding: 1px 5px; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14.5px; }
+  th, td { text-align: left; padding: 6px 9px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { background: #f3f4f6; font-weight: 600; }
+  td.n { font-family: ui-monospace, Menlo, monospace; font-size: 13.5px; white-space: nowrap; }
+  .best { color: var(--ok); font-weight: 700; }
+  .worse { color: var(--bad); }
+  .wrap { overflow-x: auto; }
+  figure { margin: 18px 0; }
+  figure img { max-width: 100%; border: 1px solid var(--rule); border-radius: 6px; }
+  figcaption { color: var(--muted); font-size: 14px; margin-top: 6px; }
+  .muted { color: var(--muted); }
+  ol li, ul li { margin: 5px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Overnight report, 2026-09-11 → 12: closed-form losses and the analytic decoder</h1>
+<p class="lead">Fourteen hours of autonomous runs after the joint-training design was settled. Headline: the analytic decoder works as designed, and combining it with the shape-designed closed-form loss on the SF3D side set a new all-time MA record of <b>36.36</b> (previous 32.94). Two negative results and two structural findings along the way. Everything is committed; per-run details live in each <code>experiments/&lt;id&gt;/notes.md</code>, one-line summaries in <code>experiments/INDEX.md</code>, the running state in <code>STATE.md</code>.</p>
+
+<h2>1. What ran</h2>
+<div class="wrap">
+<table>
+<tr><th>#</th><th>experiment</th><th>what</th><th>status</th></tr>
+<tr><td>1</td><td><code>20260911_sf3d_cf_frame</code></td><td>arm-B config, SF3D side = the shape-designed closed-form loss (p = 0, ρ = 0), axis : phase 2 : 1</td><td>done</td></tr>
+<tr><td>2</td><td><code>20260911_sf3d_cf_l2_noaxis_2pi</code></td><td>arm-B config, position L2 alone at sweep 2π (user request)</td><td>done</td></tr>
+<tr><td>3</td><td><code>20260911_sf3d_cf_frame_a3</code></td><td>as 1 with axis : phase 3 : 1</td><td>done</td></tr>
+<tr><td>4</td><td><code>20260911_sf3d_cf_frame_a3r3</code></td><td>as 3 with the log-radius weight 0.15 → 0.30</td><td>running</td></tr>
+<tr><td>5</td><td><code>20260911_joint4_decoder_rgb_scalefree</code></td><td><b>the joint decoder run</b>: joint4 recipe, no trajectory head; SF3D side = L2 at 2π only; 2D side = projection loss on the decoded curve + type CE</td><td>done</td></tr>
+<tr><td>6</td><td><code>20260912_joint4_decoder_l2anchor</code></td><td>5 + the direct 1 − cos axis loss on SF3D</td><td>done (negative)</td></tr>
+<tr><td>7</td><td><code>20260912_joint4_decoder_h1anchor</code></td><td>5 with the SF3D side = H1 π/2 + axis loss (the August record recipe)</td><td>done</td></tr>
+<tr><td>8</td><td><code>20260912_joint4_decoder_cfframe</code></td><td>5 with the SF3D side = the shape-designed loss (2 : 1)</td><td><b>done — record</b></td></tr>
+<tr><td>9</td><td><code>20260912_joint4_decoder_seed7</code></td><td>5 at seed 7 (noise calibration)</td><td>running</td></tr>
+<tr><td>10</td><td><code>20260912_joint4_decoder_cfframe_a3</code></td><td>8 at 3 : 1</td><td>running</td></tr>
+<tr><td>11</td><td><code>20260912_joint4_decoder_cfframe_seed7</code></td><td>8 at seed 7 (replicate of the record)</td><td>running</td></tr>
+<tr><td>12</td><td><code>20260912_multi3_decoder_rgb_scalefree</code> → <code>20260912_sf3d_decoder_l2anchor_ft_multi3dec</code></td><td>the decoder CHAIN: 2D multi-source arm with the decoder, then SF3D post-training (L2 2π + axis loss)</td><td>stage 1 done, stage 2 running</td></tr>
+</table>
+</div>
+<p class="muted">Also done before the runs: EPIC rot/trans labels from a VLM pass (359 records, all high confidence, zero disagreements with the noun rule), HOI4D rot/trans/none labels by rule (1,868 / 953 / 263), a dataset flag that keeps the 263 "none" windows in the LMDB but out of training, the decoder implementation itself (10 tests), and the DCT readout-v2 arms from the previous night.</p>
+
+<h2>2. The joint decoder: it works, and the SF3D-side loss decides the numbers</h2>
+<p>The decoder renders the trajectory from the model's own type, axis, origin and point heads plus a learned arc length (revolute: angle = length / radius with the radius detached and clamped at π; prismatic: length × direction). Hand-video batches train it through the unit-anchor projection loss with GT-routed type; SF3D batches see no rendered curve at all, only a closed-form loss on the articulation parameters. Four SF3D-side losses were tried on the otherwise identical joint4 recipe.</p>
+<div class="wrap">
+<table>
+<tr><th>SF3D test (5,088; 10° threshold)</th><th>joint4 (DCT head)</th><th>joint v2 (head, prev record)</th><th>decoder, L2 2π</th><th>+ axis loss</th><th>H1 + axis</th><th><b>cf_frame 2:1</b></th></tr>
+<tr><td>MA / signed</td><td class="n">31.41 / 30.15</td><td class="n">32.94 / 32.08</td><td class="n">31.29 / 30.86</td><td class="n worse">31.05 / 30.27</td><td class="n">31.07 / 29.97</td><td class="n best">36.36 / 35.73</td></tr>
+<tr><td>type pass</td><td class="n">91.2</td><td class="n">91.6</td><td class="n">91.8</td><td class="n">91.5</td><td class="n">91.5</td><td class="n best">92.4</td></tr>
+<tr><td>axis matched / all / signed-all</td><td class="n">20.1 / 26.1 / 34.4</td><td class="n best">16.4 / 25.2 / 32.0</td><td class="n">18.4 / 25.3 / 32.1</td><td class="n">18.9 / 24.3 / 34.0</td><td class="n">19.9 / 24.1 / 35.2</td><td class="n">18.8 / 24.3 / <span class="best">30.7</span></td></tr>
+<tr><td>flips all / rot (%)</td><td class="n">11.9 / 13.6</td><td class="n">10.8 / 15.2</td><td class="n">10.7 / 13.9</td><td class="n worse">12.1 / 19.0</td><td class="n worse">13.2 / 18.7</td><td class="n best">9.8 / 13.4</td></tr>
+<tr><td>origin / line (m)</td><td class="n">0.327 / 0.297</td><td class="n">0.355 / 0.320</td><td class="n best">0.273 / 0.247</td><td class="n">0.294 / 0.257</td><td class="n best">0.269 / 0.244</td><td class="n">0.313 / 0.284</td></tr>
+<tr><td>radius / 3D point (m)</td><td class="n">0.163 / 0.285</td><td class="n">0.161 / 0.279</td><td class="n best">0.124 / 0.289</td><td class="n">0.135 / 0.299</td><td class="n">0.132 / <span class="best">0.261</span></td><td class="n">0.171 / 0.297</td></tr>
+<tr><td>mIoU / PDet</td><td class="n best">0.274 / 22.7</td><td class="n">0.250 / 19.1</td><td class="n">0.266 / 22.5</td><td class="n worse">0.241 / 18.5</td><td class="n">0.266 / 22.1</td><td class="n">0.252 / 20.0</td></tr>
+<tr><td>trajectory direction acc</td><td class="n best">96.4</td><td class="n">96.0</td><td class="n">91.1</td><td class="n">89.6</td><td class="n">88.3</td><td class="n">92.4</td></tr>
+<tr><td>roughness</td><td class="n">0.0090</td><td class="n">0.0096</td><td class="n best">0</td><td class="n best">0</td><td class="n best">0</td><td class="n best">0</td></tr>
+<tr><td>HOI4D mIoU / PDet</td><td class="n best">0.676 / 85.2</td><td class="n">0.591 / 73.6</td><td class="n">0.615 / 74.4</td><td class="n">0.576 / 69.6</td><td class="n">0.573 / 70.5</td><td class="n">0.578 / 71.0</td></tr>
+</table>
+</div>
+
+<div class="box key">
+<p><b>Reading.</b></p>
+<ul>
+<li><b>The decoder alone (L2 2π) is a sound replacement for the head.</b> Same MA as joint4, far better origin and radius (the 2π quadratic's 3 : 1 radial weighting plus the projection loss reaching the origin through the arc), masks kept, smooth by construction. Its cost is direction accuracy (96 → 91): the curve inherits every axis-sign error, whereas the free head had learned the sign better than the axis head.</li>
+<li><b>Adding an axis term with a radius-scaled partner hurts.</b> Both anchor-carrying variants (L2 + axis, H1 + axis) raise hinge flips from 14 % to 19 % and lose masks or MA; the +axis variant's validation axis term is identical to the base's (0.279 vs 0.281), so the anchor added no axis information under the decoder — the 2D projection loss already supplies sign through the arc — and only re-balanced the trunk.</li>
+<li><b>The shape-designed loss is the right SF3D side.</b> Its axis term is the same 1 − cos, but inside a loss whose other term is also scale-free in the lever, and it drops the flips instead of raising them. MA 36.36 comes from the core of the distribution: the mean all-axis error moves only 25.3 → 24.3, but five more percent of the test set falls under 10°. The costs are the origin (+4 cm) and masks (−0.014), where the 2π L2 base is better.</li>
+</ul>
+</div>
+
+<figure>
+<img src="../../viz/20260912_joint_decoder_cfframe_panels/08_rot_val50.png" alt="oven door: GT, record model, base decoder">
+<figcaption>Oven door, SF3D val 50: GT (left), the record model (12° axis error, arc swinging down like the GT track), the L2-2π base (29°). Both trajectories are exact segments of the decoded orbit.</figcaption>
+</figure>
+<figure>
+<img src="../../viz/20260912_joint_decoder_panels/11_rot_val3635.png" alt="closet door: GT, decoder, joint4 head">
+<figcaption>Closet door, SF3D val 3635: GT, the base decoder (hinge on the door edge, 6°), the joint4 head (4° axis but a looping jittery trajectory). The decoder's curve cannot jitter.</figcaption>
+</figure>
+
+<h2>3. The closed-form arms on the arm-B config (depth, no 2D data)</h2>
+<div class="wrap">
+<table>
+<tr><th>arm-B config</th><th>cf_h1only (H1 + axis, Aug. record)</th><th>L2 only π/2</th><th>L2 only 2π</th><th>cf_frame 2:1</th><th>cf_frame 3:1</th></tr>
+<tr><td>MA / signed</td><td class="n">30.64 / 30.11</td><td class="n">23.80 / 23.35</td><td class="n">26.49 / 25.94</td><td class="n">31.03 / 30.27</td><td class="n best">31.90 / 31.33</td></tr>
+<tr><td>axis matched / all</td><td class="n">16.6 / <span class="best">24.5</span></td><td class="n">18.6 / 28.4</td><td class="n">19.9 / 27.3</td><td class="n">17.0 / 24.8</td><td class="n"><span class="best">16.2</span> / 25.1</td></tr>
+<tr><td>flips all / rot (%)</td><td class="n">9.8 / 15.4</td><td class="n">10.6 / 20.1</td><td class="n">12.1 / 18.0</td><td class="n">9.9 / 17.8</td><td class="n best">9.2 / 13.0</td></tr>
+<tr><td>origin / line (m)</td><td class="n">0.254 / 0.230</td><td class="n">0.277 / 0.251</td><td class="n">0.251 / 0.228</td><td class="n best">0.245 / 0.215</td><td class="n">0.262 / 0.234</td></tr>
+<tr><td>mIoU / PDet</td><td class="n">0.266 / 21.8</td><td class="n">0.261 / 20.4</td><td class="n">0.264 / 21.1</td><td class="n best">0.270 / 21.9</td><td class="n">0.249 / 19.0</td></tr>
+</table>
+</div>
+<p>Three things the master formula predicted and the runs confirmed: halving the L2 leak (π/2 → 2π) is worth +2.7 MA and a large origin gain but cannot fix sign (L2 alone has no scale-free axis term at any sweep); the p = 0, ρ = 0 loss gives the best masks, origin and radius of the family; and sign needs the strict curvature condition — at 2 : 1 the flipped axis has one flat direction and flips went <em>up</em>, at 3 : 1 they fell to 13.0 and MA reached 31.90, at the cost of origin and masks. The 3 : 1 + heavier radius arm (running) probes that trade.</p>
+
+<h2>4. Two structural findings</h2>
+<div class="box note">
+<p><b>Sign under the decoder.</b> On the arm-B config the direct axis loss was worth +1.5 MA (no other sign source). Under the joint decoder the hand-video projection loss supplies the axis sign through the rendered arc, and the two anchor-carrying variants both showed +5 hinge-flip points with no axis-term improvement on validation. The working hypothesis: the hand track fixes the sign relative to the observed motion by the right-hand rule, the direct loss pulls toward SF3D's canonical sign, and where these differ per instance the tail of flipped hinges grows. The seed replicate (running) says how much of the 14 → 19 is noise; the cf_frame variant, whose axis term sits inside a fully scale-free loss, moves the other way (13.4).</p>
+<p><b>The arc-length head is a hand-video quantity.</b> Trained only by the projection loss, it predicts ~0.21 m sweeps on SF3D for hinges and slides alike, 0.3× the writer's constants and uncorrelated with them (probe over 400 val samples, <code>tools/decoder_length_probe.py</code>). Expected: SF3D never supervises length. No test metric reads it; renders can use the writer constants (<code>trajectory_decoder_length writer</code>).</p>
+</div>
+
+<h2>5. The chain under the decoder (stage 1 done)</h2>
+<p>The 2D multi-source arm with the decoder is clearly weaker than the DCT-head arm on masks and detection (union 0.626 / 72.9 vs 0.715 / 83.8): with no 3D data the projection loss has to invent the articulation from the hand track and drives the trunk through the axis/origin/point heads. Whether this init still transfers to SF3D (stage 2, running; compare the DCT chain's 32.80) is the open question. Note its SF3D stage carries the direct axis loss, decided before the l2anchor result.</p>
+
+<h2>6. Pending (results appended when they land)</h2>
+<ul>
+<li><code>cf_frame_a3r3</code> — 3 : 1 with radius weight 0.30: does the origin come back?</li>
+<li><code>joint4_decoder_seed7</code> — noise calibration for the decoder comparisons.</li>
+<li><code>joint4_decoder_cfframe_a3</code> and <code>_cfframe_seed7</code> — the record at 3 : 1 and at a second seed.</li>
+<li><code>sf3d_decoder_l2anchor_ft_multi3dec</code> — the decoder chain's SF3D stage.</li>
+</ul>
+
+<h2>7. Ops and cost</h2>
+<ul>
+<li>Spend ≈ $95 by 11:30 local; projected ≈ $140 when the last five finish (budget ~$150). All pods are deleted by their watchers on completion and verified against the pod list; only the dev pod stays.</li>
+<li>PRO 6000 stock was dry for ~3 h in the early morning; launchers polled and caught it. One launcher found a chain script not yet mirrored to the volume (mutagen lag) and left its pod idle — fixed by flushing the mirror and launching by hand. Lesson recorded in STATE: both launchers and watchers must run detached (<code>nohup … &amp; disown</code>), and flush the mirror before launching a freshly written script.</li>
+<li>Lightning writes checkpoints through a temp file in <code>$TMPDIR</code>; pods with a small overlay fail with ENOSPC. Chain scripts set <code>TMPDIR=/workspace/tmp</code>.</li>
+</ul>
+
+<h2>8. Suggested next steps</h2>
+<ol>
+<li>If the replicate holds the record: make cf_frame the default SF3D side of the joint decoder recipe; tune the axis : phase ratio and the log-radius weight for the origin/mask trade (the arm-B grid says 3 : 1 sharpens sign, a higher radius weight should restore origin).</li>
+<li>Hand-source masks: every decoder arm loses HOI4D masks (0.676 → ~0.6). Candidates: lower projection weight, or detach the depth heads (z_p, z_q) inside the decoder on 2D batches so the projection loss trains axis and length only.</li>
+<li>Direction accuracy: the decoder's 91–92 vs the head's 96 is the axis head's sign; ARCTIC's GT axes under the closed-form loss are the untouched lever for hinges.</li>
+<li>Seeds: one seed per arm everywhere; the two replicates running are the first calibration.</li>
+</ol>
+
+</main>
+</body>
+</html>
