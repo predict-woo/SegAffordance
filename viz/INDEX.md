@@ -8,6 +8,7 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
 |---|---|---|
+| [20260912_joint_decoder_cfframe_panels](20260912_joint_decoder_cfframe_panels/README.md) | the MA-record joint decoder (cf_frame SF3D side, 36.36) vs the L2-2pi base on the same 12 SF3D val samples: oven door 12° vs 29°, arcs on the orbit, origins a little further from the edge | tools/sf3d_vis_val.py |
 | [20260912_joint_decoder_panels](20260912_joint_decoder_panels/README.md) | first joint run with the analytic decoder: 12 SF3D val panels (GT | decoder | joint4 head) + 8 per hand source; arcs on the orbit / lines on the ray, hinge on the door edge; direction only as right as the axis | tools/sf3d_vis_val.py, tools/hoi4d_vis_2d_panels.py |
 | [20260911_epic_type_label_prompt](20260911_epic_type_label_prompt/README.md) | EPIC VLM rot/trans labelling: composites (outline mask + hand path) + the 20-record pilot sheet; full run 172 trans / 187 rot, all high confidence, 0 noun-rule disagreements; applied to the LMDB | tools/epic_vlm_label_types.py |
 | [20260911_sf3d_val_panels_sharp](20260911_sf3d_val_panels_sharp/README.md) | 16 SF3D val samples in the sharp 2x style, GT | joint | DCT chain: types right, hinges on the door edges (axis errors 8-18°), smooth arcs along the decoded orbits; the joint model loops occasionally where the chain's arc is clean | `tools/sf3d_vis_val.py` |
