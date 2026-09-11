@@ -344,6 +344,15 @@ tests, panels (`tools/sf3d_vis_val.py`, `tools/hoi4d_vis_2d_panels.py` with deco
 recipe); cf_frame loss; pick by (2). Two to three pods in parallel. (5) Write-ups; STATE.
 Cost guide: PRO 6000 ~$2.1/h; joint run ~5.5 h; cf arm ~4 h; dev pod $0.57/h.
 
+## DONE 2026-09-11 14:05 local: joint decoder SEED REPLICATE — single-seed noise is ~2 MA (pod deleted, verified)
+
+`20260912_joint4_decoder_seed7` (base recipe, seed 7): MA 33.26 / 32.21 vs 31.29 / 30.86 at seed 42;
+origin 0.311 vs 0.273; radius 0.164 vs 0.124; mIoU 0.247 vs 0.266; rot flips 15.2 vs 13.9; HOI4D
+0.573 vs 0.615. **Read every single-seed decoder comparison with +-1 MA / +-2 cm / +-0.01 mIoU / +-1
+flip point of noise.** The base's origin/mask advantage over cfframe was partly seed luck; the cfframe
+record (36.36) is +4.1 over the two-seed base mean; the anchor variants' +5 flips remain suggestive,
+not proven. The HOI4D mask regression under the decoder (0.57-0.62 vs joint4 0.676) is seed-robust.
+
 ## DONE 2026-09-11 13:15 local: cf_frame_a3r3 (radius 0.30) — origin NOT bought back (pod deleted, verified)
 
 `20260911_sf3d_cf_frame_a3r3`: MA 32.47 / 31.56 (noise-level +0.6) but origin 0.270 (a3 0.262), matched
