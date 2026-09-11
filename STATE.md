@@ -344,6 +344,17 @@ tests, panels (`tools/sf3d_vis_val.py`, `tools/hoi4d_vis_2d_panels.py` with deco
 recipe); cf_frame loss; pick by (2). Two to three pods in parallel. (5) Write-ups; STATE.
 Cost guide: PRO 6000 ~$2.1/h; joint run ~5.5 h; cf arm ~4 h; dev pod $0.57/h.
 
+## DONE 2026-09-11 06:20 local: JOINT DECODER first run — it works (pod jdec deleted, verified)
+
+`20260911_joint4_decoder_rgb_scalefree` best ep16: SF3D **MA 31.29 / signed 30.86** (joint4 31.41 / 30.15,
+v2 32.94), type 91.8 + all-flips 10.7 (best), **origin 0.273 / radius 0.124** (joint4 0.327 / 0.163 — the
+2pi L2 origin effect + the projection loss reaching the origin through the arc), masks 0.266 / 22.5 (=
+joint4), roughness 0; traj_dir 91.1 vs 96.4 (the curve inherits axis-sign errors; the free head knew the
+sign better than the axis head); HOI4D 0.615 / 74.4 (joint4 0.676 / 85.2), 2D direction acc +8..+10;
+type 100 on the hand sources. Panels `viz/20260912_joint_decoder_panels`: arcs on the orbit, hinge on the
+door edge. Variants running: `20260912_joint4_decoder_{l2anchor,h1anchor}` (pods jdec-l2anchor /
+jdec-h1anchor), `cfframe` launcher polling for stock; `20260911_sf3d_cf_frame_a3` on pod cfframea3.
+
 ## DONE 2026-09-11 ~03:45 local: the two closed-form arms (pods deleted, verified) + follow-ups launched
 
 | arm | MA / signed | matched | rot flips | origin | mIoU / PDet | vs |
