@@ -6,6 +6,7 @@
 cd /workspace/SegAffordance
 bash runpod/ensure_env.sh
 export TMPDIR=/workspace/tmp; mkdir -p $TMPDIR   # Lightning's checkpoint tempfile must not land on the pod overlay
+export TORCHINDUCTOR_CACHE_DIR=/root/inductor_cache TRITON_CACHE_DIR=/root/triton_cache   # compile caches stay POD-LOCAL: under $TMPDIR on the network volume, concurrent pods hit "Stale file handle" (2026-09-13)
 cat /workspace/cache/dinov3/*.pth > /dev/null 2>&1 || true
 ulimit -n 65536
 E=20260913_joint4_decoder_l2anchor_attnpool; CFG=config/joint4_decoder_l2anchor_attnpool.yaml
