@@ -344,6 +344,12 @@ tests, panels (`tools/sf3d_vis_val.py`, `tools/hoi4d_vis_2d_panels.py` with deco
 recipe); cf_frame loss; pick by (2). Two to three pods in parallel. (5) Write-ups; STATE.
 Cost guide: PRO 6000 ~$2.1/h; joint run ~5.5 h; cf arm ~4 h; dev pod $0.57/h.
 
+## DONE 2026-09-11 13:15 local: cf_frame_a3r3 (radius 0.30) — origin NOT bought back (pod deleted, verified)
+
+`20260911_sf3d_cf_frame_a3r3`: MA 32.47 / 31.56 (noise-level +0.6) but origin 0.270 (a3 0.262), matched
+21.0 deg (16.2), all-flips 11.1 (9.2), type 92.1 (95.0). The log-radius weight is deadweight at 0.30;
+keep 0.15. The origin/mask vs sign knob is the axis:phase ratio (2:1 vs 3:1).
+
 ## DONE 2026-09-11 11:05 local: joint decoder + cf_frame — NEW ALL-TIME MA RECORD 36.36 (pod deleted, verified)
 
 `20260912_joint4_decoder_cfframe` (SF3D side = the shape-designed loss, 2:1): **MA 36.36 / signed 35.73**
