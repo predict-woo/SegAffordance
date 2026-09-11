@@ -328,6 +328,20 @@ no residual, no consistency term, no derivative terms; joint4 recipe unchanged (
 ARCTIC on the 2D side; closed-form guard must become "no learned head"; SF3D test renders
 with the predicted length (and the writer constants for comparability).
 
+## DONE 2026-09-12: hand-video articulation transfer, 94 random panels + ARCTIC axis probe (dev pod only)
+
+`viz/20260912_hand2d_articulation_100` (README has the tables): the four joint decoder arms on random
+held-out HOI4D / EPIC / ARCTIC records. Type right everywhere; vertical door hinges land near the hinge
+edge; lids get the axis DIRECTION but not the placement (radius 1-5 m or collapsed). New tool
+`tools/arctic_axis_probe.py` scores predicted axes against ARCTIC's GT hinges (329 held-out revolute
+records, ~4 min on the dev pod): **H1_axis 18.0 deg mean / 70 % under 20 deg / 12.8 % flips** vs L2_2pi
+41 / 25 % / 33 %, L2_2pi_axis 48 / 19 % / 26 %, **cf_frame 46 / 23 % / 48 % flips** — the SF3D MA record
+is the WORST hinge transfer, the SF3D-worst arm the best. The origin is bad for all four (hinge-line
+offset 7-16 % of the image width; nothing on the 2D side supervises it). Reads: the H1 quadratic carries
+sign to hand video, cf_frame's scale-free axis term does not; notebooks invert the ordering (object-
+dependent sign convention from the 2D arc). Run the ARCTIC axis probe on every future joint arm. Next
+step unchanged and now sharper: ARCTIC's GT axes + origins under the closed-form loss.
+
 ## NIGHT DONE 2026-09-11 15:50 local — ALL PODS DELETED (verified: only segaffordance-dev runs); ~$140 spent
 
 **Result of the night in one line:** the analytic decoder + the shape-designed closed-form loss on SF3D,

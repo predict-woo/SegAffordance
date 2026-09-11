@@ -1,8 +1,9 @@
-"""Cross-domain probe: run SF3D-post-trained checkpoints on HOI4D frames of
-one category (default C3 = laptop) and draw their PREDICTED 3D articulation
-on the HOI4D image — the model was never given 3D articulation labels for
-these objects (HOI4D's motion_info is a placeholder), so this shows what the
-SF3D stage transfers.
+"""Cross-domain probe: run checkpoints on held-out frames of a 2D hand source
+(--dataset hoi4d | epic | arctic, optional --category key filter, e.g. C3 =
+HOI4D laptops) and draw their PREDICTED 3D articulation on the image. HOI4D
+and EPIC carry only a rot/trans label (no 3D axis); ARCTIC's GT hinge from
+the object model is drawn in green on the GT panel. The scene split matches
+the joint4 datamodule (same key cache, ratio 0.15, seed 42).
 
 Panels per sample: [GT | model A | model B ...]
   GT:    moving-part mask (green), 2D knuckle track (cyan), first point ring
@@ -40,14 +41,25 @@ from sf3d_vis_predictions import (  # noqa: E402
 )
 from viz_manifest import write_manifest  # noqa: E402
 
+# root, key cache (same as the joint4 configs -> identical key list and scene split), has real 3D GT axes
+SOURCES = {
+    "hoi4d": ("/workspace/datasets/hoi4d_processed_2d_v2", "/workspace/cache/hoi4d_2d_keys_v2.pkl", False),
+    "epic": ("/workspace/datasets/epic_processed_2d", "/workspace/cache/epic_2d_keys_v1.pkl", False),
+    "arctic": ("/workspace/datasets/arctic_processed_2d", "/workspace/cache/arctic_2d_keys_v1.pkl", True),
+}
+
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", nargs=3, action="append", required=True, metavar=("NAME", "CONFIG", "CKPT"))
-    ap.add_argument("--hoi4d-root", default="/workspace/datasets/hoi4d_processed_2d_v2")
+    ap.add_argument("--dataset", choices=list(SOURCES), default="hoi4d",
+                    help="which 2D hand source to sample (root / key cache / GT-axis availability)")
+    ap.add_argument("--hoi4d-root", default=None, help="override the source's LMDB root")
     ap.add_argument("--hoi4d-config", default="config/hoi4d_v2_rgb_scalefree.yaml",
-                    help="only its data.val_split_ratio / manual_seed are read (the scene split)")
-    ap.add_argument("--category", default="C3", help="HOI4D category tag in the key, e.g. C3 = laptop")
+                    help="only its data.val_split_ratio / manual_seed are read (the scene split; 0.15 / 42 = "
+                         "what the joint4 datamodule uses for every hand source)")
+    ap.add_argument("--category", default="", help="key substring filter, e.g. C3 = HOI4D laptops; empty = all")
+    ap.add_argument("--per-seq", type=int, default=1, help="max picks per sequence (key prefix)")
     ap.add_argument("--split", choices=["val", "train", "all"], default="val")
     ap.add_argument("--out", required=True)
     ap.add_argument("--num", type=int, default=8)
@@ -61,35 +73,48 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     dcfg = yaml.safe_load(open(a.hoi4d_config))["data"]
+    root, key_cache, has_gt_axis = SOURCES[a.dataset]
+    root = a.hoi4d_root or root
     ds = SF3DDataset(
-        lmdb_data_root=a.hoi4d_root, lmdb_path=f"{a.hoi4d_root}/data.lmdb",
-        frame_cache_path=f"{a.hoi4d_root}/frames.lmdb",
+        lmdb_data_root=root, lmdb_path=f"{root}/data.lmdb",
+        frame_cache_path=f"{root}/frames.lmdb", key_cache_path=key_cache,
         image_size_for_mask_reconstruction=(512, 512), return_trajectory_2d=True,
         point_source="element", fast_pipeline=True, load_depth=True,
         min_revolute_radius=0.0, min_mask_area_frac=0.0, edge_margin_frac=0.0,
+        sensor_max_occluded_frac=0.5,
     )
     tr, va = split_dataset_by_scene(ds, dcfg.get("val_split_ratio", 0.15), dcfg.get("manual_seed", 42))
     pool = {"val": va.indices, "train": tr.indices, "all": list(range(len(ds)))}[a.split]
-    tag = f"_{a.category}_"
+    tag = f"_{a.category}_" if a.category else ""
     cand = [i for i in pool if tag in ds.item_keys[i].decode()]
     if not cand:
-        raise SystemExit(f"no {a.category} records in split {a.split}")
+        raise SystemExit(f"no {a.category or 'any'} records in split {a.split}")
     rng = np.random.default_rng(a.seed)
-    # one per sequence where possible (key prefix = physical object/sequence)
+    # spread over sequences (key prefix = physical object/sequence): round-robin over a
+    # shuffled sequence list, at most --per-seq picks per sequence
     by_seq = {}
     for i in cand:
         by_seq.setdefault(ds.item_keys[i].decode().split("/")[0], []).append(i)
     seqs = list(by_seq)
     rng.shuffle(seqs)
-    picks = [int(rng.choice(by_seq[s])) for s in seqs[: a.num]]
-    print(f"{len(cand)} {a.category} records in {a.split} ({len(by_seq)} sequences); rendering {len(picks)}")
+    picks = []
+    for rnd in range(a.per_seq):
+        for s in seqs:
+            if len(picks) >= a.num:
+                break
+            lst = by_seq[s]
+            if rnd < len(lst):
+                j = int(rng.integers(len(lst)))
+                picks.append(lst.pop(j))
+    print(f"{len(cand)} {a.category or 'any'} records in {a.split} ({len(by_seq)} sequences); rendering {len(picks)}")
 
     models = [(n, *load_model(c, k, device)) for n, c, k in a.model]
     os.makedirs(a.out, exist_ok=True)
     for n_i, idx in enumerate(picks):
         it = ds[idx]
-        (img_t, depth_t, desc, mask_t, _bbox, point_gt, _mgt, _tgt, img_size, fname,
-         _o3, K, _traj3d, traj2d_px, valid2d) = it
+        (img_t, depth_t, desc, mask_t, _bbox, point_gt, mgt, tgt, img_size, fname,
+         o3, K, _traj3d, traj2d_px, valid2d) = it
+        gt_type = "rot" if int(tgt) == 1 else "trans"
         W, H = float(img_size[0]), float(img_size[1])
         frame = img_t.permute(1, 2, 0).numpy()[:, :, ::-1].copy()
         if a.scale != 1.0:
@@ -104,7 +129,18 @@ def main():
         gt = draw_points_norm(gt, tuv, valid2d.numpy(), (255, 255, 0), radius=2)
         gp = (int(point_gt[0] * S), int(point_gt[1] * S))
         cv2.circle(gt, gp, 8, (255, 255, 255), 2, cv2.LINE_AA)
-        gt = put_lines(gt, ["GT (HOI4D, no 3D articulation label)", desc[:44]])
+        gt_lines = [f"GT {a.dataset}: {gt_type}" + ("" if has_gt_axis else " (label only, no 3D axis)"), desc[:44]]
+        if has_gt_axis:
+            # ARCTIC: real hinge from the object model (green), drawn like the predictions
+            dg = mgt.numpy().astype(np.float64)
+            dg = dg / max(float(np.linalg.norm(dg)), 1e-8)
+            og = o3.numpy().astype(np.float64)
+            if gt_type == "rot":
+                gt = draw_axis_3d(gt, K_norm, og, dg, og, (0, 200, 0), t0=-a.ray_len, t1=a.ray_len, thickness=2)
+                gt_lines.append(f"axis=({dg[0]:+.2f},{dg[1]:+.2f},{dg[2]:+.2f})  z_o={og[2]:.2f}m")
+            else:
+                gt = draw_axis_3d(gt, K_norm, og, dg, og, (0, 200, 0), t0=0.0, t1=a.ray_len, thickness=2)
+        gt = put_lines(gt, gt_lines)
         panels = [gt]
         for name, model, mp in models:
             with torch.no_grad():
@@ -156,8 +192,8 @@ def main():
                 ou = out.origin_uv[0].cpu().float()
                 cv2.circle(p, (int(ou[0] * S), int(ou[1] * S)), 5, (0, 0, 255), 2, cv2.LINE_AA)
             panels.append(put_lines(p, lines))
-        key = ds.item_keys[idx].decode().replace("/", "_")
-        cv2.imwrite(f"{a.out}/{n_i:02d}_{key}.png", np.hstack(panels))  # lossless: thin overlays survive
+        key = ds.item_keys[idx].decode().replace("/", "_")[:80]
+        cv2.imwrite(f"{a.out}/{n_i:02d}_{a.dataset}_{gt_type}_{key}.png", np.hstack(panels))  # lossless
         print("wrote", n_i, key, "|", desc)
     write_manifest(a.out, models=[{"name": n, "config": c, "ckpt": k} for n, c, k in a.model])
     print("done ->", a.out)

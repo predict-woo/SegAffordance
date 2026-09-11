@@ -8,6 +8,7 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
 |---|---|---|
+| [20260912_hand2d_articulation_100](20260912_hand2d_articulation_100/README.md) | the four joint decoder models on 94 random held-out HOI4D / EPIC / ARCTIC records + an ARCTIC axis probe (329 records vs GT hinges): type right everywhere, vertical door hinges land, lids get the direction but not the placement; H1+axis transfers axis direction best (18 deg, 13 % flips) while the SF3D-record cf_frame is worst (46 deg, 48 % flips) | tools/hoi4d_predict_articulation.py, tools/arctic_axis_probe.py |
 | [20260912_hoi4d_laptop_decoder_probe](20260912_hoi4d_laptop_decoder_probe/README.md) | the four joint decoder models on 10 HOI4D laptops: type now rot everywhere (labels), masks/points right, hinge placement wrong for all four (no laptop hinge GT on the 3D side) | tools/hoi4d_predict_articulation.py |
 | [20260912_joint_decoder_cfframe_panels](20260912_joint_decoder_cfframe_panels/README.md) | the MA-record joint decoder (cf_frame SF3D side, 36.36) vs the L2-2pi base on the same 12 SF3D val samples: oven door 12° vs 29°, arcs on the orbit, origins a little further from the edge | tools/sf3d_vis_val.py |
 | [20260912_joint_decoder_panels](20260912_joint_decoder_panels/README.md) | first joint run with the analytic decoder: 12 SF3D val panels (GT | decoder | joint4 head) + 8 per hand source; arcs on the orbit / lines on the ray, hinge on the door edge; direction only as right as the axis | tools/sf3d_vis_val.py, tools/hoi4d_vis_2d_panels.py |

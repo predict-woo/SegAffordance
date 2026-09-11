@@ -1,0 +1,22 @@
+command: tools/hoi4d_predict_articulation.py --model L2_2pi config/sf3d_test_decoder_rgb_scalefree.yaml
+  experiments/20260911_joint4_decoder_rgb_scalefree/checkpoints/best-epoch16-sf3dval1.0089.ckpt
+  --model L2_2pi_axis config/sf3d_test_decoder_rgb_scalefree.yaml experiments/20260912_joint4_decoder_l2anchor/checkpoints/best-epoch17-sf3dval1.1495.ckpt
+  --model H1_axis config/sf3d_test_decoder_rgb_scalefree.yaml experiments/20260912_joint4_decoder_h1anchor/checkpoints/best-epoch16-sf3dval1.1649.ckpt
+  --model cf_frame config/sf3d_test_decoder_rgb_scalefree.yaml experiments/20260912_joint4_decoder_cfframe/checkpoints/best-epoch17-sf3dval1.1178.ckpt
+  --dataset epic --num 33 --per-seq 3 --seed 0 --split val --scale 2 --ray-len 0.5
+  --out viz/20260912_hand2d_articulation_100/epic
+tool_commit: '3866148'
+generated: '2026-09-11T17:32:40+00:00'
+models:
+- name: L2_2pi
+  config: config/sf3d_test_decoder_rgb_scalefree.yaml
+  ckpt: experiments/20260911_joint4_decoder_rgb_scalefree/checkpoints/best-epoch16-sf3dval1.0089.ckpt
+- name: L2_2pi_axis
+  config: config/sf3d_test_decoder_rgb_scalefree.yaml
+  ckpt: experiments/20260912_joint4_decoder_l2anchor/checkpoints/best-epoch17-sf3dval1.1495.ckpt
+- name: H1_axis
+  config: config/sf3d_test_decoder_rgb_scalefree.yaml
+  ckpt: experiments/20260912_joint4_decoder_h1anchor/checkpoints/best-epoch16-sf3dval1.1649.ckpt
+- name: cf_frame
+  config: config/sf3d_test_decoder_rgb_scalefree.yaml
+  ckpt: experiments/20260912_joint4_decoder_cfframe/checkpoints/best-epoch17-sf3dval1.1178.ckpt

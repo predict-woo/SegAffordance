@@ -28,3 +28,4 @@ viz/**
 !viz/INDEX.md
 !viz/*/README.md
 !viz/*/manifest.yaml
+!viz/*/*.csv
