@@ -10,6 +10,7 @@ from model.losses.geometric import analytic_decode_curves, backproject_points
 from model.outputs import ModelOutputs
 
 from .layers import (
+    ArticulationReadout,
     FPN,
     Projector,
     TransformerDecoder,
@@ -396,6 +397,31 @@ class CRIS(nn.Module):
                 hidden_dim=getattr(model_params, "trajectory_length_hidden", 256),
             )
 
+        # 2026-09-12: articulation readout (ModelParams.articulation_readout).
+        # "attnpool" / "query" replace the mask-mean pooled slot of the
+        # condition vector (its first fpn_out[1] columns) with learned-query
+        # attention over the decoded map; in "query" mode each articulation
+        # head gets its own query's output in that slot.
+        self.articulation_readout = getattr(model_params, "articulation_readout", "mlp")
+        if self.articulation_readout not in ("mlp", "attnpool", "query"):
+            raise ValueError(
+                f"articulation_readout must be mlp|attnpool|query, got {self.articulation_readout!r}"
+            )
+        self.readout_dim = model_params.fpn_out[1]
+        self.readout = (
+            ArticulationReadout(
+                d_model=model_params.fpn_out[1],
+                mode=self.articulation_readout,
+                num_queries=getattr(model_params, "readout_queries", 4),
+                num_layers=getattr(model_params, "readout_layers", 2),
+                nhead=model_params.num_head,
+                dim_ffn=getattr(model_params, "readout_dim_ffn", 1024),
+                mask_eps=getattr(model_params, "readout_mask_eps", 0.01),
+            )
+            if self.articulation_readout != "mlp"
+            else None
+        )
+
         if self.channels_last:
             self.to(memory_format=torch.channels_last)
 
@@ -542,11 +568,18 @@ class CRIS(nn.Module):
                 mask_prob, size=(fq_h, fq_w), mode="bilinear", align_corners=False
             )
 
-        mask_sum = mask_for_pooling.sum(dim=(-1, -2), keepdim=True) + 1e-8
-        pooled_features = (fq * mask_for_pooling).sum(
-            dim=(-1, -2), keepdim=True
-        ) / mask_sum
-        motion_features = pooled_features.squeeze(-1).squeeze(-1)
+        readout_feats = None
+        if self.readout is not None:
+            # (B, K, C): query 0 takes the pooled slot; the other queries are
+            # swapped in per head below (_head_condition).
+            readout_feats = self.readout(fq, mask_for_pooling)
+            motion_features = readout_feats[:, 0]
+        else:
+            mask_sum = mask_for_pooling.sum(dim=(-1, -2), keepdim=True) + 1e-8
+            pooled_features = (fq * mask_for_pooling).sum(
+                dim=(-1, -2), keepdim=True
+            ) / mask_sum
+            motion_features = pooled_features.squeeze(-1).squeeze(-1)
 
         # Create rich context for VAE
         # Global visual features
@@ -591,6 +624,19 @@ class CRIS(nn.Module):
             # classical [features, point_uv, type_emb] column layout.
             vae_condition = torch.cat([vae_condition, origin_uv], dim=1)
 
+        # Per-head condition: with the query readout, head k reads its own
+        # query in the pooled slot (first readout_dim columns); otherwise the
+        # shared condition vector. Query index: 0 type/axis, 1 point depth,
+        # 2 origin depth, 3 arc length (clamped to the number of queries).
+        def _head_condition(k):
+            if readout_feats is None or readout_feats.shape[1] == 1:
+                return vae_condition
+            kk = min(k, readout_feats.shape[1] - 1)
+            return torch.cat(
+                [readout_feats[:, kk].to(vae_condition.dtype), vae_condition[:, self.readout_dim:]],
+                dim=1,
+            )
+
         # gen-7 scalar depths, computed from the FINAL condition. z_p also
         # sees a local sample of the decoded feature map at the predicted
         # interaction point; z_q is condition-only (see __init__).
@@ -600,9 +646,9 @@ class CRIS(nn.Module):
             local = F.grid_sample(
                 fq, grid, align_corners=False
             ).flatten(1)                                          # (B, fpn_out[1])
-            z_p = self.point_depth_head(torch.cat([vae_condition, local], dim=1))
+            z_p = self.point_depth_head(torch.cat([_head_condition(1), local], dim=1))
         if self.origin_depth_head_g7 is not None:
-            zq_in = vae_condition
+            zq_in = _head_condition(2)
             if self.use_origin_local_feature:
                 # Gen-11: mirror of the point path's local sample — the
                 # origin heatmap's argmax pixel is typically the visible
@@ -611,7 +657,7 @@ class CRIS(nn.Module):
                 olocal = F.grid_sample(
                     fq, ogrid, align_corners=False
                 ).flatten(1)                                  # (B, fpn_out[1])
-                zq_in = torch.cat([vae_condition, olocal], dim=1)
+                zq_in = torch.cat([zq_in, olocal], dim=1)
             z_q = self.origin_depth_head_g7(zq_in)
 
         trajectory_all = (
@@ -727,7 +773,7 @@ class CRIS(nn.Module):
             if self.trajectory_scale_free:
                 zdiv = z_p.float().view(-1, 1).clamp(min=1e-3)
                 p3, o3 = p3 / zdiv, o3 / zdiv
-            trajectory_length = self.trajectory_length_head(vae_condition)
+            trajectory_length = self.trajectory_length_head(_head_condition(3))
             if self.trajectory_decoder_length == "writer":
                 # comparability pass: the GT writer's constants (pi/2 sweep,
                 # 0.7 m slide) expressed as arc lengths in the current frame

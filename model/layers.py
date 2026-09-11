@@ -597,6 +597,120 @@ class OriginDepthHead(nn.Module):
         return F.softplus(self.mlp(condition).squeeze(-1)) + self.min_depth
 
 
+def sine_positions_2d(h: int, w: int, dim: int, device, dtype) -> torch.Tensor:
+    """(h*w, dim) fixed 2D sine/cosine positions (DETR layout: half the
+    channels encode y, half x), row-major to match ``fq.flatten(2)``."""
+    if dim % 4 != 0:
+        raise ValueError(f"2D sine positions need dim % 4 == 0, got {dim}")
+    quarter = dim // 4
+    freqs = torch.exp(
+        -math.log(10000.0) * torch.arange(quarter, device=device, dtype=torch.float32) / quarter
+    )
+    ys = torch.arange(h, device=device, dtype=torch.float32)[:, None] * freqs[None]  # (h, q)
+    xs = torch.arange(w, device=device, dtype=torch.float32)[:, None] * freqs[None]  # (w, q)
+    py = torch.cat([ys.sin(), ys.cos()], dim=1)                                  # (h, 2q)
+    px = torch.cat([xs.sin(), xs.cos()], dim=1)                                  # (w, 2q)
+    pos = torch.cat([py[:, None, :].expand(h, w, -1), px[None, :, :].expand(h, w, -1)], dim=2)
+    return pos.reshape(h * w, dim).to(dtype)
+
+
+class _MaskedCrossAttention(nn.Module):
+    """Multi-head cross-attention of queries over map tokens with a per-token
+    additive bias on the logits (the part mask). Explicit projections + SDPA
+    so the float bias, autocast and torch.compile behave."""
+
+    def __init__(self, d_model: int, nhead: int):
+        super().__init__()
+        if d_model % nhead != 0:
+            raise ValueError(f"d_model {d_model} not divisible by nhead {nhead}")
+        self.nhead = nhead
+        self.q_proj = nn.Linear(d_model, d_model)
+        self.k_proj = nn.Linear(d_model, d_model)
+        self.v_proj = nn.Linear(d_model, d_model)
+        self.out_proj = nn.Linear(d_model, d_model)
+
+    def forward(self, q: torch.Tensor, keys: torch.Tensor, values: torch.Tensor,
+                bias: torch.Tensor) -> torch.Tensor:
+        # q (B, K, C), keys/values (B, S, C), bias (B, S) -> (B, K, C)
+        B, K, C = q.shape
+        S = keys.shape[1]
+        hd = C // self.nhead
+        qh = self.q_proj(q).view(B, K, self.nhead, hd).transpose(1, 2)
+        kh = self.k_proj(keys).view(B, S, self.nhead, hd).transpose(1, 2)
+        vh = self.v_proj(values).view(B, S, self.nhead, hd).transpose(1, 2)
+        attn_bias = bias[:, None, None, :].expand(B, self.nhead, K, S).to(qh.dtype)
+        out = F.scaled_dot_product_attention(qh, kh, vh, attn_mask=attn_bias)
+        return self.out_proj(out.transpose(1, 2).reshape(B, K, C))
+
+
+class ArticulationReadout(nn.Module):
+    """Learned queries reading the decoded feature map for the articulation
+    heads (2026-09-12; ModelParams.articulation_readout).
+
+    Mask-mean pooling hands the heads one average vector of the part, which
+    keeps nothing of WHERE the hinge sits relative to the part. Here the
+    queries attend over the stride-16 map with 2D sine positions on the keys
+    and ``log(mask + eps)`` added to every attention logit, so tokens on the
+    part dominate while the surroundings (the seam, the frame) stay reachable.
+
+    mode "attnpool": a single query and a single cross-attention — attention
+    pooling in place of the mask mean, nothing else changes.
+    mode "query": ``num_queries`` queries through ``num_layers`` pre-norm
+    layers (self-attention among the queries, masked cross-attention, FFN),
+    LayerNormed output (B, num_queries, d_model).
+    """
+
+    def __init__(self, d_model: int, mode: str, num_queries: int = 4, num_layers: int = 2,
+                 nhead: int = 8, dim_ffn: int = 1024, mask_eps: float = 0.01):
+        super().__init__()
+        if mode not in ("attnpool", "query"):
+            raise ValueError(f"mode must be attnpool|query, got {mode!r}")
+        if mask_eps <= 0:
+            raise ValueError("mask_eps must be > 0 (log bias floor)")
+        self.mode = mode
+        self.mask_eps = float(mask_eps)
+        self.d_model = d_model
+        if mode == "attnpool":
+            num_queries, num_layers = 1, 1
+        self.num_queries = num_queries
+        self.queries = nn.Parameter(torch.randn(num_queries, d_model) * 0.02)
+        if mode == "attnpool":
+            self.pool = _MaskedCrossAttention(d_model, nhead)
+        else:
+            self.layers = nn.ModuleList()
+            for _ in range(num_layers):
+                self.layers.append(nn.ModuleDict({
+                    "ln1": nn.LayerNorm(d_model),
+                    "self_attn": nn.MultiheadAttention(d_model, nhead, batch_first=True),
+                    "ln2": nn.LayerNorm(d_model),
+                    "cross_attn": _MaskedCrossAttention(d_model, nhead),
+                    "ln3": nn.LayerNorm(d_model),
+                    "ffn": nn.Sequential(
+                        nn.Linear(d_model, dim_ffn), nn.GELU(), nn.Linear(dim_ffn, d_model)
+                    ),
+                }))
+            self.out_norm = nn.LayerNorm(d_model)
+
+    def forward(self, fq: torch.Tensor, mask_w: torch.Tensor) -> torch.Tensor:
+        """fq (B, C, h, w) decoded map; mask_w (B, 1, h, w) part weights in
+        [0, 1] (GT mask in teacher-forced training, predicted mask otherwise)
+        -> (B, num_queries, C)."""
+        B, C, h, w = fq.shape
+        tok = fq.flatten(2).transpose(1, 2)                        # (B, S, C)
+        pos = sine_positions_2d(h, w, C, tok.device, tok.dtype)    # (S, C)
+        keys = tok + pos[None]
+        bias = torch.log(mask_w.flatten(1).to(torch.float32) + self.mask_eps)  # (B, S)
+        q = self.queries[None].expand(B, -1, -1).to(tok.dtype)
+        if self.mode == "attnpool":
+            return self.pool(q, keys, tok, bias)
+        for layer in self.layers:
+            x = layer["ln1"](q)
+            q = q + layer["self_attn"](x, x, x, need_weights=False)[0]
+            q = q + layer["cross_attn"](layer["ln2"](q), keys, tok, bias)
+            q = q + layer["ffn"](layer["ln3"](q))
+        return self.out_norm(q)
+
+
 class Point3DHead(nn.Module):
     """Absolute 3D point in camera coordinates (metres).
 

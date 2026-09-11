@@ -136,6 +136,24 @@ class ModelParams:
     trajectory_decoder_max_angle: float = 3.141592653589793
     trajectory_decoder_lever_floor: float = 0.02
     trajectory_length_hidden: int = 256
+    # 2026-09-12: how the articulation heads read the decoded feature map.
+    #   "mlp"      — classical: mask-mean pooling -> one condition vector ->
+    #                per-head MLPs (hidden vae_hidden_dim).
+    #   "attnpool" — one learned query attention-pools the map (the part mask
+    #                as an additive log-bias on the attention logits) in place
+    #                of the mask mean; heads unchanged.
+    #   "query"    — readout_queries learned queries through readout_layers
+    #                pre-norm layers (self-attn, mask-biased cross-attn over
+    #                the map with 2D sine positions, FFN); query 0 feeds the
+    #                type/axis MLP, 1 the point depth, 2 the origin depth, 3
+    #                the arc length (each replaces the pooled slot of the
+    #                condition vector). readout_mask_eps sets the bias floor
+    #                log(mask + eps) outside the part.
+    articulation_readout: str = "mlp"
+    readout_queries: int = 4
+    readout_layers: int = 2
+    readout_dim_ffn: int = 1024
+    readout_mask_eps: float = 0.01
     # 2026-09-09 (RGB-only / scale-free spec): the trajectory head predicts
     # Δ̃ = Δ / z0 — offsets in units of the anchor depth — instead of metres.
     # The head is unchanged; the trainers multiply trajectory_pred by a
