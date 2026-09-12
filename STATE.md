@@ -356,7 +356,12 @@ flips, masks, PDet, traj_dir and hand-video sign; the wide MLP inverts the sign 
 Wave 2/3 pods (06:45): jdec-qseed7 (Server), jdec-ql4 (Workstation), jdec-qeps01 (Server), jdec-dseed7
 (Server), jdec-doff (Workstation) — chains verified running, watch-only watchers (the launcher's
 post-launch clock check is unsafe: its launch ssh blocks until the chain ends, so the check would read
-a finished run's idle clocks as a lemon — launchers replaced by `watch_arm.sh`). Spend so far ~$52.
+a finished run's idle clocks as a lemon — launchers replaced by `watch_arm.sh`; the launcher's launch
+ssh is now `timeout 60` so the live clock check works — it caught a second lemon on doff at 06:53).
+**Wave 4 launched 07:15:** `dense_d2d` (new `loss_params.dense_trunk_detach`, set by the 2d profile:
+hand-video votes are computed from a detached map so the projection loss trains the voting head but
+not the trunk — keep the SF3D record, protect the masks) and `query_w1024` (query readout x width
+1024). Pods jdec-dd2d / jdec-qw1024. Spend so far ~$55 done + 7 arms in flight (~$70) = ~$125 expected.
 
 **Dense hinge voting (06:15):** per-pixel votes for axis / type / hinge offset, averaged under the part
 mask, are the biggest single jump in the project: every SF3D column at or beyond the previous best
