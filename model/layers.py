@@ -597,21 +597,38 @@ class OriginDepthHead(nn.Module):
         return F.softplus(self.mlp(condition).squeeze(-1)) + self.min_depth
 
 
-def sine_positions_2d(h: int, w: int, dim: int, device, dtype) -> torch.Tensor:
-    """(h*w, dim) fixed 2D sine/cosine positions (DETR layout: half the
-    channels encode y, half x), row-major to match ``fq.flatten(2)``."""
+def _sine_xy(x: torch.Tensor, y: torch.Tensor, dim: int) -> torch.Tensor:
+    """Fixed 2D sine/cosine code of continuous grid coordinates x, y (same
+    shape) -> (..., dim); DETR layout: half the channels encode y, half x."""
     if dim % 4 != 0:
         raise ValueError(f"2D sine positions need dim % 4 == 0, got {dim}")
     quarter = dim // 4
     freqs = torch.exp(
-        -math.log(10000.0) * torch.arange(quarter, device=device, dtype=torch.float32) / quarter
+        -math.log(10000.0) * torch.arange(quarter, device=x.device, dtype=torch.float32) / quarter
     )
-    ys = torch.arange(h, device=device, dtype=torch.float32)[:, None] * freqs[None]  # (h, q)
-    xs = torch.arange(w, device=device, dtype=torch.float32)[:, None] * freqs[None]  # (w, q)
-    py = torch.cat([ys.sin(), ys.cos()], dim=1)                                  # (h, 2q)
-    px = torch.cat([xs.sin(), xs.cos()], dim=1)                                  # (w, 2q)
-    pos = torch.cat([py[:, None, :].expand(h, w, -1), px[None, :, :].expand(h, w, -1)], dim=2)
-    return pos.reshape(h * w, dim).to(dtype)
+    ys = y.float()[..., None] * freqs
+    xs = x.float()[..., None] * freqs
+    return torch.cat([ys.sin(), ys.cos(), xs.sin(), xs.cos()], dim=-1)
+
+
+def sine_positions_2d(h: int, w: int, dim: int, device, dtype) -> torch.Tensor:
+    """(h*w, dim) fixed 2D sine/cosine positions of the map cells, row-major
+    to match ``fq.flatten(2)`` (cell (i, j) -> y = i, x = j)."""
+    ys, xs = torch.meshgrid(
+        torch.arange(h, device=device, dtype=torch.float32),
+        torch.arange(w, device=device, dtype=torch.float32), indexing="ij",
+    )
+    return _sine_xy(xs.reshape(-1), ys.reshape(-1), dim).to(dtype)
+
+
+def sine_embed_uv(uv: torch.Tensor, h: int, w: int, dim: int) -> torch.Tensor:
+    """(B, K, 2) normalised [0, 1] image locations -> (B, K, dim) codes on the
+    SAME basis as sine_positions_2d (cell centres at integer coordinates:
+    x = u * w - 0.5, y = v * h - 0.5), so a query carrying its location
+    matches the keys around that location."""
+    x = uv[..., 0] * w - 0.5
+    y = uv[..., 1] * h - 0.5
+    return _sine_xy(x, y, dim)
 
 
 class _MaskedCrossAttention(nn.Module):
@@ -661,10 +678,19 @@ class ArticulationReadout(nn.Module):
     """
 
     def __init__(self, d_model: int, mode: str, num_queries: int = 4, num_layers: int = 2,
-                 nhead: int = 8, dim_ffn: int = 1024, mask_eps: float = 0.01):
+                 nhead: int = 8, dim_ffn: int = 1024, mask_eps: float = 0.01, query_pos: bool = False):
         super().__init__()
         if mode not in ("attnpool", "query"):
             raise ValueError(f"mode must be attnpool|query, got {mode!r}")
+        # 2026-09-13 option 1: location-conditioned queries — each query may
+        # carry the sine code of an image location (the predicted point / hinge)
+        # through a zero-initialised projection, so training starts exactly at
+        # the unconditioned readout and learns to attend around the location.
+        self.query_pos = bool(query_pos)
+        self.pos_proj = nn.Linear(d_model, d_model) if query_pos else None
+        if self.pos_proj is not None:
+            nn.init.zeros_(self.pos_proj.weight)
+            nn.init.zeros_(self.pos_proj.bias)
         if mask_eps <= 0:
             raise ValueError("mask_eps must be > 0 (log bias floor)")
         self.mode = mode
@@ -691,16 +717,20 @@ class ArticulationReadout(nn.Module):
                 }))
             self.out_norm = nn.LayerNorm(d_model)
 
-    def forward(self, fq: torch.Tensor, mask_w: torch.Tensor) -> torch.Tensor:
+    def forward(self, fq: torch.Tensor, mask_w: torch.Tensor,
+                query_uv: "torch.Tensor | None" = None) -> torch.Tensor:
         """fq (B, C, h, w) decoded map; mask_w (B, 1, h, w) part weights in
-        [0, 1] (GT mask in teacher-forced training, predicted mask otherwise)
-        -> (B, num_queries, C)."""
+        [0, 1] (GT mask in teacher-forced training, predicted mask otherwise);
+        query_uv (B, num_queries, 2) normalised locations per query (used only
+        when built with query_pos) -> (B, num_queries, C)."""
         B, C, h, w = fq.shape
         tok = fq.flatten(2).transpose(1, 2)                        # (B, S, C)
         pos = sine_positions_2d(h, w, C, tok.device, tok.dtype)    # (S, C)
         keys = tok + pos[None]
         bias = torch.log(mask_w.flatten(1).to(torch.float32) + self.mask_eps)  # (B, S)
         q = self.queries[None].expand(B, -1, -1).to(tok.dtype)
+        if self.pos_proj is not None and query_uv is not None:
+            q = q + self.pos_proj(sine_embed_uv(query_uv.float(), h, w, C).to(tok.dtype))
         if self.mode == "attnpool":
             return self.pool(q, keys, tok, bias)
         for layer in self.layers:

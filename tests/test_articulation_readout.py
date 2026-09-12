@@ -143,6 +143,44 @@ def test_dense_mode_in_cris_votes_the_origin_and_axes():
     assert torch.isfinite(out2.origin_pred).all()
 
 
+def test_query_pos_starts_identical_and_then_depends_on_location():
+    from model.layers import sine_embed_uv
+    torch.manual_seed(0)
+    base = ArticulationReadout(d_model=32, mode="query", num_queries=4, num_layers=1, nhead=4, dim_ffn=64).eval()
+    pos = ArticulationReadout(d_model=32, mode="query", num_queries=4, num_layers=1, nhead=4, dim_ffn=64, query_pos=True).eval()
+    pos.load_state_dict(base.state_dict(), strict=False)
+    fq = torch.randn(2, 32, 6, 8)
+    mask = torch.ones(2, 1, 6, 8)
+    uv = torch.rand(2, 4, 2)
+    # zero-initialised projection: identical to the unconditioned readout at init
+    assert torch.allclose(pos(fq, mask, uv), base(fq, mask), atol=1e-6)
+    with torch.no_grad():
+        pos.pos_proj.weight.normal_(); pos.pos_proj.bias.normal_()
+    assert not torch.allclose(pos(fq, mask, uv), pos(fq, mask, torch.rand(2, 4, 2)), atol=1e-4)
+    # the query code at a cell centre equals that cell's key position code
+    from model.layers import sine_positions_2d
+    code = sine_embed_uv(torch.tensor([[[(3 + 0.5) / 8, (2 + 0.5) / 6]]]), 6, 8, 32)[0, 0]
+    assert torch.allclose(code, sine_positions_2d(6, 8, 32, "cpu", torch.float32)[2 * 8 + 3], atol=1e-5)
+
+
+def test_cris_query_pos_without_grid_samples():
+    m = _decoder_model(articulation_readout="query", readout_queries=4, readout_layers=1, readout_dim_ffn=32,
+                       readout_query_pos=True, depth_local_sample=False)
+    assert m.readout.pos_proj is not None and not m.depth_local_sample and not m.use_origin_local_feature
+    # depth heads read only their condition vector now
+    assert m.point_depth_head.mlp[0].in_features == m.origin_depth_head_g7.mlp[0].in_features
+    img, depth, word, mask = _inputs(B=2, size=64)
+    K = torch.tensor([[[1.0, 0.0, 0.5], [0.0, 1.0, 0.5], [0.0, 0.0, 1.0]]]).repeat(2, 1, 1)
+    m.train()
+    out = m(img, depth, word, mask, None, None, None, K)
+    (out.origin_pred.sum() + out.point_3d_pred.sum() + out.motion_pred_rot.sum()).backward()
+    assert m.readout.queries.grad is not None
+    m.eval()
+    with torch.no_grad():
+        out = m(img, depth, word, mask, None, None, None, K)
+    assert torch.isfinite(out.trajectory_pred).all() and out.trajectory_length.shape == (2,)
+
+
 def test_invalid_mode_is_rejected():
     with pytest.raises(ValueError):
         _decoder_model(articulation_readout="voting")

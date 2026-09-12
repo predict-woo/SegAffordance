@@ -162,6 +162,16 @@ class ModelParams:
     readout_layers: int = 2
     readout_dim_ffn: int = 1024
     readout_mask_eps: float = 0.01
+    # 2026-09-13 option 1: location-conditioned queries (query mode only) —
+    # the point-depth / arc-length / type-axis queries carry the predicted
+    # point's location, the origin-depth query the predicted hinge location,
+    # as sine codes through a zero-initialised projection.
+    readout_query_pos: bool = False
+    # The depth heads' single bilinear grid_sample of the decoded map at the
+    # point / origin location (gen-7 / gen-11). False removes both samples —
+    # the heads then read only their condition vector (with readout_query_pos
+    # the location enters through the query instead).
+    depth_local_sample: bool = True
     # 2026-09-09 (RGB-only / scale-free spec): the trajectory head predicts
     # Δ̃ = Δ / z0 — offsets in units of the anchor depth — instead of metres.
     # The head is unchanged; the trainers multiply trajectory_pred by a

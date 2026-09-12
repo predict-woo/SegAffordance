@@ -156,6 +156,12 @@ class CRIS(nn.Module):
         self.use_origin_local_feature = getattr(
             model_params, "use_origin_local_feature", False
         )
+        # 2026-09-13: depth_local_sample False drops BOTH grid samples (point
+        # and origin) — the location reaches the heads through the readout's
+        # queries instead (readout_query_pos).
+        self.depth_local_sample = bool(getattr(model_params, "depth_local_sample", True))
+        if not self.depth_local_sample:
+            self.use_origin_local_feature = False
         if self.use_origin_local_feature and not self.use_origin_heatmap:
             raise ValueError(
                 "use_origin_local_feature needs use_origin_heatmap: the "
@@ -372,7 +378,7 @@ class CRIS(nn.Module):
         # (predict_origin_depth) above.
         self.point_depth_head = (
             OriginDepthHead(
-                input_dim=vae_condition_dim + model_params.fpn_out[1],
+                input_dim=vae_condition_dim + (model_params.fpn_out[1] if self.depth_local_sample else 0),
                 hidden_dim=model_params.vae_hidden_dim,
             )
             if self.predict_point_depth
@@ -418,6 +424,8 @@ class CRIS(nn.Module):
                 nhead=model_params.num_head,
                 dim_ffn=getattr(model_params, "readout_dim_ffn", 1024),
                 mask_eps=getattr(model_params, "readout_mask_eps", 0.01),
+                query_pos=bool(getattr(model_params, "readout_query_pos", False))
+                and self.articulation_readout == "query",
             )
             if self.articulation_readout in ("attnpool", "query")
             else None
@@ -596,7 +604,15 @@ class CRIS(nn.Module):
         if self.readout is not None:
             # (B, K, C): query 0 takes the pooled slot; the other queries are
             # swapped in per head below (_head_condition).
-            readout_feats = self.readout(fq, mask_for_pooling)
+            query_uv = None
+            if self.readout.pos_proj is not None and point_uv is not None:
+                # per-query locations: origin query (2) -> hinge, the rest -> point
+                K_q = self.readout.num_queries
+                slots = [point_uv] * K_q
+                if K_q > 2 and origin_uv is not None:
+                    slots[2] = origin_uv
+                query_uv = torch.stack(slots, dim=1).detach()      # (B, K, 2); no gradient into the heatmaps
+            readout_feats = self.readout(fq, mask_for_pooling, query_uv)
             motion_features = readout_feats[:, 0]
         else:
             mask_sum = mask_for_pooling.sum(dim=(-1, -2), keepdim=True) + 1e-8
@@ -666,11 +682,14 @@ class CRIS(nn.Module):
         # interaction point; z_q is condition-only (see __init__).
         z_p = z_q = None
         if self.point_depth_head is not None:
-            grid = point_uv.view(-1, 1, 1, 2) * 2.0 - 1.0        # [0,1] -> [-1,1]
-            local = F.grid_sample(
-                fq, grid, align_corners=False
-            ).flatten(1)                                          # (B, fpn_out[1])
-            z_p = self.point_depth_head(torch.cat([_head_condition(1), local], dim=1))
+            zp_in = _head_condition(1)
+            if self.depth_local_sample:
+                grid = point_uv.view(-1, 1, 1, 2) * 2.0 - 1.0        # [0,1] -> [-1,1]
+                local = F.grid_sample(
+                    fq, grid, align_corners=False
+                ).flatten(1)                                          # (B, fpn_out[1])
+                zp_in = torch.cat([zp_in, local], dim=1)
+            z_p = self.point_depth_head(zp_in)
         if self.origin_depth_head_g7 is not None:
             zq_in = _head_condition(2)
             if self.use_origin_local_feature:
