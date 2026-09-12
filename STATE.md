@@ -393,7 +393,12 @@ samples were not load-bearing; location conditioning alone does not buy placemen
 **Field model run 1 (12:11-16:40) DIVERGED** (val loss 6.8 -> 112; L_mask 10x the dense arm's from epoch 0):
 the vote weights were the predicted mask with no floor, so empty early masks made the weighted means
 1/wsum amplifiers. Fixed (commit 3064343: uniform floor of one cell, wsum >= 1, gradient-guard test) and
-**relaunched as run 2 at 16:50** (pod jdec-field; ETA ~21:30). Spend ~$135 done + ~$10 in flight.
+**relaunched as run 2** (after one real lemon and one false lemon — launcher now archives stale logs and
+requires a loaded card; 17:08-21:45): trained cleanly, best val 1.0536 at epoch 14 (dense 0.98 without
+the two extra terms). Its in-chain test passes failed at argparse (the field trainer bound the
+multi-source datamodule for `test`; fixed f074cd2 — `test` now binds the SF3D datamodule) and the pod
+was deleted by the watcher; the five test passes + ARCTIC probe (`--field` loader, f9368c6) are
+rerunning on the dev pod (logs/tests_devpod.log). Spend ~$145. Only the dev pod runs.
 
 ## IN FLIGHT 2026-09-12 evening: ARTICULATION READOUT arms (three pods) — the head-bottleneck test
 
