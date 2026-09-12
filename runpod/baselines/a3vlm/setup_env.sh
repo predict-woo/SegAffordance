@@ -35,4 +35,5 @@ for f in consolidated.00-of-02.model.pth consolidated.01-of-02.model.pth; do
 done
 wait; ls -la $CK/sphinx1k; cat $CK/sphinx1k/config.json; echo
 cd $R/LLaMA2-Accessory/accessory && python -c "import sys; sys.path.insert(0, '..'); from accessory.model.LLM import llama_ens5; from accessory.model.meta import MetaModel; print('a3vlm import ok')"
+touch $B/.env_ready   # artefact-based readiness flag (ENV_READY), see scripts/a3vlm_auto.sh
 echo "== a3vlm env done"
