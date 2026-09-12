@@ -348,7 +348,15 @@ side (the MA record recipe), deeper/wider readout, combinations; keep the l2anch
 | **query** (`20260913_joint4_decoder_l2anchor_query`, best-epoch16) | **35.75 / 35.24** | 15.7 (all 8.1) | 0.308 | 0.270 / **23.35** | 0.625 / **0.386** | **41.2 / 13.4 %** / 0.087 |
 | cf_frame + query (wave 2) | 33.77 / 33.45 (cf_frame alone 36.36) | 13.9 | 0.298 | 0.256 / 21.0 | **0.641 / 0.391** | 40.6 / 37.7 % / 0.095 |
 | **dense** (`20260913_joint4_decoder_l2anchor_dense`, best-epoch13) | **44.01 / 42.69** (ALL-TIME RECORD +7.3) | **12.7** (all 7.6) | **0.248** | **0.2765** / 22.5 | 0.508 / 0.186 (collapse) | 45.8 / 30.4 % / 0.112 (worse) |
-| mlp1024 | pending (epoch ~18) | | | | | |
+| mlp1024 (capacity control, heads 256 -> 1024) | 37.70 / 36.87 (NOT null: +6.6) | 14.8 (all 11.3) | 0.301 | 0.239 / 20.1 | 0.584 / 0.279 | 44.4 / **65.7 %** (worst) / 0.073 |
+
+Ranking on SF3D MA: base 31 < attnpool 33 < query 35.8 < mlp1024 37.7 < dense 44.0 — capacity alone buys
+MA (mean axis errors unchanged; the <10 deg tail tightens) but only the SPATIAL readouts also buy type,
+flips, masks, PDet, traj_dir and hand-video sign; the wide MLP inverts the sign on ARCTIC (66 % flips).
+Wave 2/3 pods (06:45): jdec-qseed7 (Server), jdec-ql4 (Workstation), jdec-qeps01 (Server), jdec-dseed7
+(Server), jdec-doff (Workstation) — chains verified running, watch-only watchers (the launcher's
+post-launch clock check is unsafe: its launch ssh blocks until the chain ends, so the check would read
+a finished run's idle clocks as a lemon — launchers replaced by `watch_arm.sh`). Spend so far ~$52.
 
 **Dense hinge voting (06:15):** per-pixel votes for axis / type / hinge offset, averaged under the part
 mask, are the biggest single jump in the project: every SF3D column at or beyond the previous best
