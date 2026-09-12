@@ -67,7 +67,7 @@ silent mid-run deaths with truncated ~4.35G ckpts = volume quota.
 
 | role | experiment | checkpoint |
 |---|---|---|
-| **ALL-TIME BEST SF3D ARTICULATION, NO DEPTH — dense hinge voting on the final recipe (SINGLE SEED, replicate running 2026-09-13)** | 20260913_joint4_decoder_l2anchor_dense | best-epoch13-sf3dval0.9789 — MA **44.01** / signed **42.69** (prev 36.73 / 36.14), type **96.0**, matched **11.4** / all **19.6** / signed-all **25.0** (all records), all-flips 7.6 / rot 12.7, origin **0.248** (= record band), radius 0.124, mIoU **0.2765** (record), PDet 22.5, traj_dir 94.8. Recipe `config/joint4_decoder_l2anchor_dense.yaml` = joint decoder, L2 2pi + axis 0.5 on SF3D, `articulation_readout: dense` (per-pixel votes). COST: hand-source masks collapse (HOI4D 0.508, EPIC 0.186, ARCTIC 0.509) and ARCTIC hinge transfer is worse (offset 0.112, flips 30 %) — not the hand-video model |
+| **ALL-TIME BEST SF3D ARTICULATION, NO DEPTH — dense hinge voting on the final recipe (REPLICATED: seed 7 = 20260913_joint4_decoder_l2anchor_dense_seed7 best-epoch19-sf3dval1.0205, MA 45.13 / 44.75, rot flips 4.6 record, origin 0.252)** | 20260913_joint4_decoder_l2anchor_dense | best-epoch13-sf3dval0.9789 — MA **44.01** / signed **42.69** (prev 36.73 / 36.14), type **96.0**, matched **11.4** / all **19.6** / signed-all **25.0** (all records), all-flips 7.6 / rot 12.7, origin **0.248** (= record band), radius 0.124, mIoU **0.2765** (record), PDet 22.5, traj_dir 94.8. Recipe `config/joint4_decoder_l2anchor_dense.yaml` = joint decoder, L2 2pi + axis 0.5 on SF3D, `articulation_readout: dense` (per-pixel votes). COST: hand-source masks collapse (HOI4D 0.508, EPIC 0.186, ARCTIC 0.509) and ARCTIC hinge transfer is worse (offset 0.112, flips 30 %) — not the hand-video model |
 | **best hand-video hinge transfer + near-record SF3D on the final recipe — query readout** | 20260913_joint4_decoder_l2anchor_query | best-epoch16-sf3dval1.1168 — MA 35.75 / 35.24, type 93.9, all-flips 8.1, PDet 23.35, traj_dir 93.5, EPIC masks 0.386 (best joint arm), ARCTIC probe flips 13.4 % (base 26.4) / axis 41.2; origin 0.308. Recipe `config/joint4_decoder_l2anchor_query.yaml` |
 | (prev) ALL-TIME BEST MA + all-round, NO DEPTH — joint decoder + cf_frame (seed 7) | 20260912_joint4_decoder_cfframe_seed7 | best-epoch17-sf3dval1.0880 — MA **36.03** / signed **35.91** (record band 36.0-36.7 across 3 runs; prev record 32.94), type 93.3, all-axis **22.5** / signed-all **29.6** (records), rot flips **9.5** (record), PDet **23.9** (record), mIoU 0.264, origin 0.305, roughness 0 (analytic decoder). Recipe: `config/joint4_decoder_cfframe.yaml` (joint4 recipe, analytic decoder, SF3D side = closed_form_frame 2:1, 2D side = projection loss on the decoded arc + type CE) |
 | **highest MA + sharpest sign — same at 3:1** | 20260912_joint4_decoder_cfframe_a3 | best-epoch19-sf3dval1.2559 — MA **36.73** / signed 36.14, matched 16.1, all-flips **7.8** (record); SF3D masks 0.247 / 18.5; best hand-source masks of the decoder arms (HOI4D 0.614) |
@@ -339,57 +339,36 @@ and VERIFY; ARCTIC hinge probe on every checkpoint. Plan: wave 1 = query / attnp
 dense hinge-voting head, built while stock is dry); wave 2 = the best readout on the cf_frame SF3D
 side (the MA record recipe), deeper/wider readout, combinations; keep the l2anchor baseline as the row.
 
-## NIGHT 2 RESULTS SO FAR (2026-09-13 06:15 local) + WAVE 2 IN FLIGHT
+## NIGHT 2 RESULTS (2026-09-13 11:40 local) — 9 arms done, 4 in flight
 
-| arm (l2anchor recipe unless noted) | SF3D MA / signed | rot flips | origin | mIoU / PDet | HOI4D / EPIC mIoU | ARCTIC probe axis / flips / offset |
+| arm (l2anchor recipe = L2 2pi + axis 0.5, joint decoder) | SF3D MA / signed | rot flips | origin | mIoU / PDet | HOI4D / EPIC mIoU | ARCTIC probe axis / flips / offset |
 |---|---|---|---|---|---|---|
-| l2anchor base (2026-09-12) | 31.05 / 30.27 | 19.0 | 0.294 | 0.241 / 18.5 | 0.576 / 0.288 | 48.2 / 26.4 % / 0.070 |
-| attnpool | 33.08 / 32.41 | 17.4 | 0.345 | 0.273 / 22.0 | 0.622 / 0.312 | 49.3 / 34.0 % / 0.082 |
-| **query** (`20260913_joint4_decoder_l2anchor_query`, best-epoch16) | **35.75 / 35.24** | 15.7 (all 8.1) | 0.308 | 0.270 / **23.35** | 0.625 / **0.386** | **41.2 / 13.4 %** / 0.087 |
-| cf_frame + query (wave 2) | 33.77 / 33.45 (cf_frame alone 36.36) | 13.9 | 0.298 | 0.256 / 21.0 | **0.641 / 0.391** | 40.6 / 37.7 % / 0.095 |
-| **dense** (`20260913_joint4_decoder_l2anchor_dense`, best-epoch13) | **44.01 / 42.69** (ALL-TIME RECORD +7.3) | **12.7** (all 7.6) | **0.248** | **0.2765** / 22.5 | 0.508 / 0.186 (collapse) | 45.8 / 30.4 % / 0.112 (worse) |
-| mlp1024 (capacity control, heads 256 -> 1024) | 37.70 / 36.87 (NOT null: +6.6) | 14.8 (all 11.3) | 0.301 | 0.239 / 20.1 | 0.584 / 0.279 | 44.4 / **65.7 %** (worst) / 0.073 |
+| l2anchor base (2026-09-12, s42) | 31.05 / 30.27 | 19.0 | 0.294 | 0.241 / 18.5 | 0.576 / 0.288 | 48.2 / 26 % / 0.070 |
+| attnpool | 33.08 / 32.41 | 17.4 | 0.345 | 0.273 / 22.0 | 0.622 / 0.312 | 49.3 / 34 % / 0.082 |
+| mlp1024 (capacity control) | 37.70 / 36.87 | 14.8 | 0.301 | 0.239 / 20.1 | 0.584 / 0.279 | 44.4 / 66 % / 0.073 |
+| query (2 layers) s42 / s7 | 35.75 / 35.24 ; 33.57 / 33.29 | 15.7 ; **7.3** | 0.308 ; 0.300 | 0.270 / 23.4 ; 0.268 / 23.2 | 0.625 / **0.386** ; 0.614 / 0.330 | 41.2 / 13 % ; 42.4 / **72 %** / 0.083-0.087 |
+| query 4 layers | 37.17 / 36.30 | 15.8 | 0.300 | 0.269 / 22.1 | 0.599 / 0.250 | 43.4 / 12 % / 0.112 |
+| query mask-eps 0.1 | 38.11 / 37.64 | 14.9 | 0.322 | **0.2763** / 22.3 | 0.594 / 0.241 | 48.2 / 59 % / 0.159 (worst) |
+| cf_frame + query | 33.77 / 33.45 (cf_frame alone 36.4) | 13.9 | 0.298 | 0.256 / 21.0 | **0.641 / 0.391** | 40.6 / 38 % / 0.095 |
+| **dense voting s42 / s7** | **44.01 / 42.69 ; 45.13 / 44.75** | 12.7 ; **4.6** | **0.248 ; 0.252** | 0.277 / 22.5 ; 0.263 / 21.1 | 0.508 / 0.186 ; 0.552 / 0.224 | 45.8 / 30 % ; 51.0 / 46 % / 0.10-0.11 |
 
-Ranking on SF3D MA: base 31 < attnpool 33 < query 35.8 < mlp1024 37.7 < dense 44.0 — capacity alone buys
-MA (mean axis errors unchanged; the <10 deg tail tightens) but only the SPATIAL readouts also buy type,
-flips, masks, PDet, traj_dir and hand-video sign; the wide MLP inverts the sign on ARCTIC (66 % flips).
-Wave 2/3 pods (06:45): jdec-qseed7 (Server), jdec-ql4 (Workstation), jdec-qeps01 (Server), jdec-dseed7
-(Server), jdec-doff (Workstation) — chains verified running, watch-only watchers (the launcher's
-post-launch clock check is unsafe: its launch ssh blocks until the chain ends, so the check would read
-a finished run's idle clocks as a lemon — launchers replaced by `watch_arm.sh`; the launcher's launch
-ssh is now `timeout 60` so the live clock check works — it caught a second lemon on doff at 06:53).
-**Wave 4 launched 07:15:** `dense_d2d` (new `loss_params.dense_trunk_detach`, set by the 2d profile:
-hand-video votes are computed from a detached map so the projection loss trains the voting head but
-not the trunk — keep the SF3D record, protect the masks) and `query_w1024` (query readout x width
-1024). Pods jdec-dd2d / jdec-qw1024. Spend so far ~$55 done + 7 arms in flight (~$70) = ~$125 expected.
-**Option 1 (user, 10:30 local): `query_pos`** — location-conditioned queries (`readout_query_pos`: the
-point / hinge locations enter the depth, length and type-axis queries as sine codes on the keys' basis
-through a zero-initialised projection) with the depth heads' single bilinear grid samples REMOVED
-(`depth_local_sample: false`). Commit 325d3ca (47 tests green, real-stack smoke). Pod jdec-qpos.
-Design note on the sampling question: one stride-16 bilinear sample at a soft-argmax location has no
-context, may land between heatmap modes or off-object (hinge), and back-propagates into the location;
-the alternatives are location-conditioned queries (this arm), a deformable window, or a dense depth
-field supervised by SF3D's reconstructed depth (not yet used by RGB-only arms; the bet for origin).
+**Findings.** (1) DENSE HINGE VOTING is the all-time SF3D articulation model and it REPLICATES: MA 44-45
+over two seeds (+8 over the previous record 36.7), origin 0.25, radius 0.124, rot flips 4.6-12.7 —
+with the hand-source masks collapsing (HOI4D 0.51-0.55, EPIC 0.19-0.22) and poor ARCTIC hinge
+transfer, both seeds. (2) The QUERY readout is a real +3.6 MA (two seeds) with the best hand-video
+masks; depth (4 layers) and context (eps 0.1) add SF3D MA (37-38) but context ruins placement.
+(3) Capacity alone (mlp1024) buys MA (37.7) and nothing else. (4) **The hand-video axis SIGN is a per-seed
+coin flip**: the same query recipe gives 13 % ARCTIC flips at seed 42 and 72 % at seed 7 with identical
+mean axis error and identical hand traj_dir; per object it jumps 0 <-> 100 %. Since both seeds' decoded
+arcs follow the tracks, the axis sign and the hinge SIDE flip together — (n, hinge left) and (-n, hinge
+right) project to the same short arc: an exact two-fold ambiguity of 2D-only supervision. Only 3D
+labels (ARCTIC GT axes under the closed-form loss) or a part-geometry prior break it. Single-seed
+ARCTIC flip rates are therefore NOT evidence; the hinge-line offset and mean axis error are.
+(5) Ops: 3 power-capped Workstation pods caught (launcher clock check), 2 compile-cache crashes fixed,
+one 30-min Mac network outage (watchers now tolerate 2 h). Spend ~$95 done + 4 in flight (~$40).
 
-**Dense hinge voting (06:15):** per-pixel votes for axis / type / hinge offset, averaged under the part
-mask, are the biggest single jump in the project: every SF3D column at or beyond the previous best
-(matched axis 11.4 deg, type 96.0, origin 0.248, masks 0.2765) with NO per-pixel loss. The cost: the
-2D-only sources lose their masks (the projection loss reaches the map per pixel through the votes,
-uncontrolled without axis/origin GT) and ARCTIC hinge transfer is worse. Wave 3 launched 06:25:
-`dense_seed7` (replicate — mandatory at this effect size) and `dense_off` (per-pixel offset loss 0.5
-toward q*'s projection on SF3D); pods jdec-dseed7 / jdec-doff. Next structural question after that:
-the 2D-side handling of the votes (detach on 2D batches / lower projection weight / dense + attnpool
-for the scalar heads) so the SF3D gain keeps the hand masks.
-
-Readings: the QUERY readout is the structural win — +4.7 MA on the user's final loss (= the cf_frame
-record band), best flips / type / PDet / traj_dir of the family, EPIC masks 0.386, ARCTIC sign flips
-halved. It does NOT fix hinge PLACEMENT (origin / ARCTIC offset unchanged). attnpool = feature selector
-(+2 MA, masks) and worse placement. The readout INTERACTS with the SF3D loss: on cf_frame it costs 2.6 MA
-and leaves the sign wrong -> the readout line stays on l2anchor. Wave 2 launched 06:12: `query_seed7`
-(noise), `query_l4` (4 layers), `query_eps01` (mask bias floor 0.1 = hinge context reachable —
-placement hypothesis); pods jdec-qseed7 / jdec-ql4 / jdec-qeps01. Ops: one Workstation lemon (622 MHz
-at the 600 W cap) caught and swapped by the launcher's clock check; two chains crashed on the
-network-volume compile cache before the pod-local cache fix. Spend so far ~$55.
+**In flight (11:40):** `dense_off` (per-pixel offset loss, epoch 19), `dense_d2d` (2D votes off the trunk),
+`query_w1024` (readout x width), `query_pos` (option 1: location-conditioned queries, no grid samples).
 
 ## IN FLIGHT 2026-09-12 evening: ARTICULATION READOUT arms (three pods) — the head-bottleneck test
 
