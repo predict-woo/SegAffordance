@@ -24,6 +24,23 @@ from datasets.scenefun3d import SF3DDataset, split_dataset_by_scene  # noqa: E40
 from model.losses.geometric import normalized_intrinsics, project_points  # noqa: E402
 from sf3d_vis_predictions import load_model  # noqa: E402
 
+
+def load_field_model(config_path, ckpt_path, device):
+    """FieldModel checkpoints (train_field_better.py): keys are model.core.*."""
+    import dataclasses
+    from config.opd_train import ModelParams
+    from model.field_model import FieldModel
+    cfg = yaml.safe_load(open(config_path))["model"]["model_params"]
+    names = {f.name for f in dataclasses.fields(ModelParams)}
+    mp = ModelParams(**{k: v for k, v in cfg.items() if k in names})
+    model = FieldModel(mp)
+    state = torch.load(ckpt_path, map_location="cpu", weights_only=False)["state_dict"]
+    state = {k[len("model.core."):]: v for k, v in state.items() if k.startswith("model.core.")}
+    missing, unexpected = model.load_state_dict(state, strict=False)
+    if missing or unexpected:
+        print(f"  field load_state_dict: {len(missing)} missing, {len(unexpected)} unexpected")
+    return model.to(device).eval(), mp
+
 ROOT = "/workspace/datasets/arctic_processed_2d"
 KEYS = "/workspace/cache/arctic_2d_keys_v1.pkl"
 
@@ -46,6 +63,7 @@ def line_offset(K_norm, q, d, o_gt):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", nargs=3, action="append", required=True, metavar=("NAME", "CONFIG", "CKPT"))
+    ap.add_argument("--field", action="store_true", help="checkpoints are FieldModel (model.core.* keys)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--split-config", default="config/arctic_v1_rgb_scalefree.yaml")
@@ -60,7 +78,8 @@ def main():
     )
     _, va = split_dataset_by_scene(ds, dcfg.get("val_split_ratio", 0.15), dcfg.get("manual_seed", 42))
     idxs = list(va.indices)[: a.limit or None]
-    models = [(n, *load_model(c, k, device)) for n, c, k in a.model]
+    loader = load_field_model if a.field else load_model
+    models = [(n, *loader(c, k, device)) for n, c, k in a.model]
     rows = {n: [] for n, _, _ in models}
     for j, idx in enumerate(idxs):
         (img_t, depth_t, desc, _m, _b, _pg, mgt, tgt, img_size, fname, o3, K, *_rest) = ds[idx]
