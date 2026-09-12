@@ -155,9 +155,16 @@ class FieldModel(nn.Module):
         # ---- fields and their readouts ----
         feat = fq.detach() if self.dense_trunk_detach else fq
         fields = self.dense_head(feat)                              # (B, 12, h, w) fp32
+        # Part weights = the detached predicted mask, FLOORED: an empty or
+        # near-empty prediction (early training, a miss) must not turn the
+        # weighted means into 1/wsum amplifiers — run 1 diverged exactly so
+        # (val L_mask 5 -> 133 from epoch 6). Mixing in a uniform floor worth
+        # one cell keeps wsum >= 1 and the readout finite; with a confident
+        # mask the floor is negligible (1 / (h*w) per cell).
         weights = F.interpolate(torch.sigmoid(mask_logits.detach().float()), size=(h, w),
                                 mode="bilinear", align_corners=False)   # predicted part, no teacher forcing
-        wsum = weights.sum(dim=(-1, -2)) + 1e-6
+        weights = weights + 1.0 / float(h * w)
+        wsum = weights.sum(dim=(-1, -2)).clamp(min=1.0)
 
         def wmean(x):
             return (x * weights).sum(dim=(-1, -2)) / wsum

@@ -55,13 +55,40 @@ def test_trunk_detach_flag_isolates_the_fields_from_the_trunk():
     trunk = next(m.neck.parameters())
     m.dense_trunk_detach = True
     out = m(img, depth, word, mask, None, None, None, K)
-    (out.motion_pred_rot.sum() + out.origin_pred.sum() + out.trajectory_pred.sum()).backward()
+    # field-only objective (the point heatmap is a trunk output by design, so point_3d / trajectory are not used here)
+    (out.motion_pred_rot.sum() + out.origin_uv.sum() + out.trajectory_length.sum() + out.depth_field.sum()).backward()
     assert m.dense_head.net[-1].weight.grad.abs().sum() > 0
     assert trunk.grad is None or trunk.grad.abs().sum() == 0
     m.zero_grad(set_to_none=True); m.dense_trunk_detach = False
     out = m(img, depth, word, mask, None, None, None, K)
-    (out.motion_pred_rot.sum() + out.origin_pred.sum()).backward()
+    (out.motion_pred_rot.sum() + out.origin_uv.sum()).backward()
     assert trunk.grad is not None and trunk.grad.abs().sum() > 0
+
+
+def test_empty_predicted_mask_does_not_amplify_gradients():
+    """Run 1 diverged: with the predicted mask ~0 the weighted means divided by
+    wsum ~ 1e-6. The uniform floor keeps wsum >= 1 and the field gradients of
+    an empty-mask forward comparable to a full-mask forward."""
+    torch.manual_seed(0)
+    m = _field_model(); m.train()
+    img, depth, word, mask = _inputs(B=2, size=64)
+    K = torch.tensor([[[1.0, 0.0, 0.5], [0.0, 1.0, 0.5], [0.0, 0.0, 1.0]]]).repeat(2, 1, 1)
+
+    def grad_norm(bias_shift):
+        m.zero_grad(set_to_none=True)
+        with torch.no_grad():
+            m.proj.txt_fc[0].bias[-3] += bias_shift          # shift the mask channel's dynamic bias
+        out = m(img, depth, word, mask, None, None, None, K)
+        assert out.vote_weights.sum(dim=(-1, -2)).min() >= 1.0 - 1e-5
+        (out.motion_pred_rot.sum() + out.origin_uv.sum()).backward()
+        g = m.dense_head.net[0].weight.grad.norm().item()
+        with torch.no_grad():
+            m.proj.txt_fc[0].bias[-3] -= bias_shift
+        assert torch.isfinite(out.origin_pred).all()
+        return g
+
+    g_empty, g_full = grad_norm(-40.0), grad_norm(+40.0)
+    assert g_empty < 20.0 * max(g_full, 1e-8)
 
 
 def test_writer_length_mode():
