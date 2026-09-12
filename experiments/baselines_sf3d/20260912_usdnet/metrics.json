@@ -1,0 +1,19 @@
+{
+ "n": 5088,
+ "p_det": 0.0,
+ "mean_iou": 0.07058043416069842,
+ "pass_rate_m": 47.189465408805034,
+ "pass_rate_ma": 23.05424528301887,
+ "pass_rate_ma_signed": 21.79638364779874,
+ "err_adir_all_deg": 55.718656317554824,
+ "err_adir_matched_deg": null,
+ "err_adir_signed_all_deg": 61.40740289627215,
+ "axis_flip_rate": 5.621069182389937,
+ "axis_flip_rate_rot": 9.363295880149813,
+ "origin_err_m": 0.9879932686876116,
+ "origin_line_err_m": 0.9772493013712189,
+ "n_matched": 0,
+ "n_rot": 1068,
+ "preds_file": "/workspace/datasets/baselines/results/usdnet/preds.jsonl",
+ "n_preds_in_file": 5088
+}
