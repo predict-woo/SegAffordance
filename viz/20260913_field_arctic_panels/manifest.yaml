@@ -1,0 +1,10 @@
+command: tools/hoi4d_predict_articulation.py --field --model field config/joint4_decoder_field.yaml
+  experiments/20260913_field_joint4_l2anchor/checkpoints/best-epoch14-sf3dval1.0536.ckpt
+  --dataset arctic --num 20 --per-seq 2 --seed 3 --split val --scale 2 --ray-len 0.5
+  --out viz/20260913_field_arctic_panels
+tool_commit: 8fbee2e
+generated: '2026-09-12T20:20:11+00:00'
+models:
+- name: field
+  config: config/joint4_decoder_field.yaml
+  ckpt: experiments/20260913_field_joint4_l2anchor/checkpoints/best-epoch14-sf3dval1.0536.ckpt
