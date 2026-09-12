@@ -14,3 +14,8 @@ RTX PRO 6000 Server (Blackwell) after 10 attempts. Delete = by
 
 Data on the volume (sync-ignored): `/workspace/datasets/baselines/{data/sf3d_scans (17 GB),
 data/opd_sf3d (20 GB), data/usdnet_sf3d, repos, runs, logs, ckpt}`.
+
+Status 12:20 UTC 2026-09-12: bl-opd-c deleted 07:10, bl-opd-p deleted 08:05, bl-usdnet deleted 12:13
+(all by their watchers after CHAIN_DONE); bl-opd-prgb still running the MOPD fine-tune. The 1 cm
+USDNet variant conversion (`data/usdnet_sf3d_v1cm`) was paused during training and died with the
+pod at 87/182 train scenes; `sf3d_to_usdnet.py --voxel 0.01` resumes it (idempotent per scene).
