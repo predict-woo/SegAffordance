@@ -96,6 +96,7 @@ def draw_prediction(bgr, out, K_norm, name, ray_len=0.5, extra_lines=()):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", nargs=3, action="append", required=True, metavar=("NAME", "CONFIG", "CKPT"))
+    ap.add_argument("--field-names", default="", help="comma-separated model NAMEs that are FieldModel checkpoints (model/field_model.py)")
     ap.add_argument("--case", nargs=2, action="append", required=True, metavar=("IMAGE", "PROMPT"))
     ap.add_argument("--out", required=True)
     ap.add_argument("--f35", type=float, default=26.0, help="35 mm-equivalent focal length of the photos")
@@ -108,7 +109,9 @@ def main():
                     help="explicit intrinsics in pixels of the input image (overrides --f35); e.g. an SF3D frame's K")
     a = ap.parse_args()
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    models = [(n, *load_model(c, k, device)) for n, c, k in a.model]
+    from arctic_axis_probe import load_field_model
+    field_names = {x for x in a.field_names.split(",") if x}
+    models = [(n, *(load_field_model if n in field_names else load_model)(c, k, device)) for n, c, k in a.model]
     os.makedirs(a.out, exist_ok=True)
     S = a.input_size
     for i, (path, prompt) in enumerate(a.case):
