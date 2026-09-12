@@ -390,7 +390,10 @@ the trunk; the 2-layer/256 query arm stays the all-round one.
 HOI4D / ARCTIC masks of the query family (0.630 / 0.606), hinge offset 0.088 (=): the single-pixel grid
 samples were not load-bearing; location conditioning alone does not buy placement.
 
-**In flight (16:05):** `field` (the clean field model; ETA ~17:30). Spend ~$130 done + ~$10 in flight.
+**Field model run 1 (12:11-16:40) DIVERGED** (val loss 6.8 -> 112; L_mask 10x the dense arm's from epoch 0):
+the vote weights were the predicted mask with no floor, so empty early masks made the weighted means
+1/wsum amplifiers. Fixed (commit 3064343: uniform floor of one cell, wsum >= 1, gradient-guard test) and
+**relaunched as run 2 at 16:50** (pod jdec-field; ETA ~21:30). Spend ~$135 done + ~$10 in flight.
 
 ## IN FLIGHT 2026-09-12 evening: ARTICULATION READOUT arms (three pods) — the head-bottleneck test
 
