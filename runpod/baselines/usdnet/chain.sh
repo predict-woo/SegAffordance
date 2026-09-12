@@ -47,6 +47,8 @@ import sys,re; fs=[l.strip() for l in sys.stdin if l.strip()]
 best=max(fs, key=lambda f: float(re.search(r'val_mean_ap_50=([0-9]+\.[0-9]+)', f).group(1))) if fs else ''
 print(best)")
 [ -n "$BEST" ] || BEST=$RUNS/last.ckpt; echo "eval ckpt: $BEST"; echo "$BEST" > $RUNS/eval_ckpt.txt
+# hydra's override grammar chokes on '=' inside the checkpoint filename -> go through a symlink
+ln -sfn "$BEST" $RUNS/best_eval.ckpt; BEST=$RUNS/best_eval.ckpt
 rm -rf $RUNS/test
 python main_instance_segmentation_articulation.py $COMMON general.experiment_name=${NAME}_test general.save_dir=$RUNS/test \
   general.train_mode=false general.debug=true general.checkpoint="$BEST" data.train_mode=train data.validation_mode=test data.cropping=false \
