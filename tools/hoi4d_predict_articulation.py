@@ -52,7 +52,8 @@ SOURCES = {
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", nargs=3, action="append", required=True, metavar=("NAME", "CONFIG", "CKPT"))
-    ap.add_argument("--field", action="store_true", help="checkpoints are FieldModel (model.core.* keys; model/field_model.py)")
+    ap.add_argument("--field", action="store_true", help="ALL checkpoints are FieldModel (model.core.* keys; model/field_model.py)")
+    ap.add_argument("--field-names", default="", help="comma-separated model NAMEs that are FieldModel checkpoints (mixed runs)")
     ap.add_argument("--dataset", choices=list(SOURCES), default="hoi4d",
                     help="which 2D hand source to sample (root / key cache / GT-axis availability)")
     ap.add_argument("--hoi4d-root", default=None, help="override the source's LMDB root")
@@ -109,11 +110,9 @@ def main():
                 picks.append(lst.pop(j))
     print(f"{len(cand)} {a.category or 'any'} records in {a.split} ({len(by_seq)} sequences); rendering {len(picks)}")
 
-    if a.field:
-        from arctic_axis_probe import load_field_model
-        models = [(n, *load_field_model(c, k, device)) for n, c, k in a.model]
-    else:
-        models = [(n, *load_model(c, k, device)) for n, c, k in a.model]
+    from arctic_axis_probe import load_field_model
+    field_names = {x for x in a.field_names.split(",") if x}
+    models = [(n, *(load_field_model if (a.field or n in field_names) else load_model)(c, k, device)) for n, c, k in a.model]
     os.makedirs(a.out, exist_ok=True)
     for n_i, idx in enumerate(picks):
         it = ds[idx]

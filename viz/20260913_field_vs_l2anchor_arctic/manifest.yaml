@@ -1,0 +1,14 @@
+command: tools/hoi4d_predict_articulation.py --field-names field --model l2anchor
+  config/sf3d_test_decoder_rgb_scalefree.yaml experiments/20260912_joint4_decoder_l2anchor/checkpoints/best-epoch17-sf3dval1.1495.ckpt
+  --model field config/joint4_decoder_field.yaml experiments/20260913_field_joint4_l2anchor/checkpoints/best-epoch14-sf3dval1.0536.ckpt
+  --dataset arctic --num 20 --per-seq 2 --seed 3 --split val --scale 2 --ray-len 0.5
+  --out viz/20260913_field_vs_l2anchor_arctic
+tool_commit: b97373b
+generated: '2026-09-12T20:28:56+00:00'
+models:
+- name: l2anchor
+  config: config/sf3d_test_decoder_rgb_scalefree.yaml
+  ckpt: experiments/20260912_joint4_decoder_l2anchor/checkpoints/best-epoch17-sf3dval1.1495.ckpt
+- name: field
+  config: config/joint4_decoder_field.yaml
+  ckpt: experiments/20260913_field_joint4_l2anchor/checkpoints/best-epoch14-sf3dval1.0536.ckpt

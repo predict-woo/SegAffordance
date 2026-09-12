@@ -401,6 +401,15 @@ multi-source datamodule for `test`; fixed f074cd2 — `test` now binds the SF3D 
 was deleted by the watcher; the five test passes + ARCTIC probe (`--field` loader, f9368c6) are
 rerunning on the dev pod (logs/tests_devpod.log). Spend ~$145. Only the dev pod runs.
 
+**CORRECTION (user, 23:30): the field model is NOT the best hand-video hinge model.** Side by side on 20
+ARCTIC strokes (`viz/20260913_field_vs_l2anchor_arctic`) the l2anchor CRIS model places hinge lines on
+the lid edge / notebook spine / phone fold with plausible radii, while the field model draws parallel
+lines across the part with collapsed radii (2-30 cm) and flipped 3D signs. The point-to-line hinge
+offset metric was too lenient (0.048 vs 0.070); the mean axis error (55 vs 48 deg) had it right. Field =
+best SF3D + segmentation model; l2anchor (user's pick) = best hand-video hinge model. TODO: stricter
+placement metric (projected line angle + offset, radius / part size); fix the field model's hand-video
+radius collapse (2D votes off the trunk + no 2D depth supervision — test trunk-detach off).
+
 **FIELD MODEL RESULT (21:45 + dev-pod tests):** SF3D MA 43.32 / 42.90 (dense band 44-46), matched axis
 10.7 / signed-all 24.0 / all-flips 6.7 (records), traj_dir 96.3, origin 0.269, PDet 19.1 (low) — AND
 HOI4D 0.683 / 83.6, EPIC 0.404, ARCTIC 0.652 / 79.3 (the best hand-video masks of any run; every dense
