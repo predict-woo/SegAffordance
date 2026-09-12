@@ -71,6 +71,9 @@ def main():
     c = re.sub(r"^E=\S+; CFG=\S+", f"E={a.exp}; CFG={out_cfg}", c, flags=re.M)
     c = re.sub(r"/dev/shm/joint4dec_\w+_local\.yaml", f"/dev/shm/joint4dec_{a.tag}_local.yaml", c)
     if mp_over:
+        # drop any earlier override of the same key inherited from the base chain (last one wins anyway)
+        for k in mp_over:
+            c = re.sub(rf"--model\.model_params\.{re.escape(k)} \S+ ", "", c)
         mp = " ".join(f"--model.model_params.{k} {v}" for k, v in mp_over.items())
         c = c.replace("--model.model_params.compile_model false --data.lmdb_path /dev/shm/data.lmdb",
                       f"{mp} --model.model_params.compile_model false --data.lmdb_path /dev/shm/data.lmdb")
