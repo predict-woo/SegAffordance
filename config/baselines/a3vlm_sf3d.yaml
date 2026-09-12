@@ -1,0 +1,13 @@
+META:
+  -
+    path: '/workspace/bl/data/a3vlm/det_train.json'
+    type: 'image_text'
+    ratio: 1
+  -
+    path: '/workspace/bl/data/a3vlm/rec_train.json'
+    type: 'image_text'
+    ratio: 1
+  -
+    path: '/workspace/bl/data/a3vlm/joint_train.json'
+    type: 'image_text'
+    ratio: 1

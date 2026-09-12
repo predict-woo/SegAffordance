@@ -1,0 +1,51 @@
+# @package _global_
+# 3DOI released SAM recipe (monoarti/configs/sam.yaml) on SF3D. Differences from theirs: dataset
+# names, the basic (non-Slurm) launcher, checkpoint every epoch (resumable single-shot run) and
+# validation every 10 epochs on our bvalid split. Everything under optimizer/model is verbatim.
+defaults:
+  - defaults
+  - override hydra/launcher: basic
+  - _self_
+
+experiment_name: 'sam_sf3d'
+checkpoint_epoch_interval: 1
+validation_epoch_interval: 10
+data:
+  train_dataset_names: ['3doi_sf3d']
+  val_dataset_names: ['3doi_sf3d']
+  test_dataset_names: ['3doi_sf3d']
+  image_size: [768, 1024]
+  num_workers: 4
+train:
+  batch_size: 2
+  depth_on: True
+test:
+  mode: 'export_imgs'
+  split: 'val'
+optimizer:
+  max_epochs: 200
+  name: 'AdamW'
+  mixed_precision: 'fp16'
+  lr: 1e-4
+  lr_backbone: 1e-5
+  lr_scheduler_name: 'StepLR'
+  lr_scheduler_step_size: 500 # epoch
+  lr_scheduler_gamma: 0.1
+  lbd_movable: 0.5
+  lbd_rigid: 0.5
+  lbd_kinematic: 0.5
+  lbd_action: 0.5
+  lbd_mask: 2.0
+  lbd_dice: 1.0
+  lbd_affordance: 400.0
+  lbd_bbox: 5.0
+  lbd_giou: 2.0
+  lbd_axis: 2.0
+  lbd_axis_offset: 10.0
+  lbd_eascore: 0.0
+  lbd_depth: 1.0
+  clip_max_norm: 0.1
+model:
+  name: "sam"
+  backbone_name: "vit_b"
+  sam_pretrained: True
