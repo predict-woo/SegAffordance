@@ -1694,3 +1694,44 @@ resumable) are on the volume for resolution-matched runs (~$40 / ~$20) if the us
 (4) MOPD without its Baidu checkpoint equals its init. Open follow-ups: non-oracle protocol export;
 OPDFormer-C at 512x384; USDNet at 1 cm; second seeds. Untracked mutagen note: results/preds live
 under `datasets/baselines/results/` (volume only).
+
+## Expensive baselines: A3VLM + 3DOI (session ethz-workspace-34, 2026-09-12/13)
+
+Two more external baselines, chosen as the strongest published competitors on each side of our
+story: **A3VLM** (CoRL'24, SPHINX-1k 13B, image + language -> 3D axis) and **3DOI** (ICCV'23,
+SAM ViT-B, image + point -> 2D axis lifted with depth). Plan and the full list of measured
+deviations: `docs/superpowers/plans/2026-09-12-sf3d-baselines-a3vlm-3doi.md`. Same test split,
+JSONL schema and scorer as the first five baselines. User constraint: **each runs exactly once**.
+
+**Where each one runs, and why.** ETHZ Euler enforces a hard per-user cap of 2 GPUs for the
+`INFK-cvg-leonhard-students` QOS — a client-side cli_filter rejects `--gpus=4/8` before a job id
+exists ("You can only use 2 GPUs as part of INFK-cvg-leonhard-students in the ls_polle share").
+A3VLM's `--data_parallel sdp` shards the optimizer over data-parallel ranks only, so 2 GPUs give
+DP=1 and ~75 GB/GPU of AdamW state (measured OOM at 74.87/79.19 GiB on 2 x H100): **A3VLM cannot
+run on Euler and stays on RunPod (8 x H100, ~$230-300, user-approved)**; **3DOI runs free on Euler**
+(2 x RTX PRO 6000 96 GB, 5-day wall, self-requeueing), which removes what would otherwise have been
+a ~$800+ RunPod item. Raising the QOS cap to 8 (the peer share `ls_grossm` already grants 8) is the
+one action that would move A3VLM to Euler too; the sbatch file is written and waiting.
+
+**Infra added.** RunPod volume `bl-eufr` (5pw4vigftc, 150 GB, EU-FR-1) holds SPHINX-1k (38 GB) and
+the A3VLM data; helpers in `runpod/baselines/eufr/`. Euler: `$SCRATCH/baselines` holds the 3DOI
+tree (17 GB, pulled from the dev pod), venvs and repos; scripts in `euler/baselines/`.
+Note Euler scratch is purged of untouched files (~15 days) — do not park final checkpoints there.
+
+**Validated end to end before any full run** (so the single-shot constraint is safe): both
+converters with unit tests and a GT round trip; 3DOI train -> checkpoint -> resume -> export ->
+score on the dev pod (45 predictions, 43 above IoU 0.5, 15.2 deg matched axis error after only 30
+iterations, because SAM is pretrained and prompted with the GT element point); the A3VLM
+encode/parse/export path. Two findings worth keeping:
+- **A3VLM's answer format is itself a scoring ceiling.** It quantises (u,v,d) to 2 decimals and one
+  depth step is ~2.4 cm on SF3D. With element-sized axis segments (mean 0.135 m) a *perfect* model
+  scores only 89.5% within the 10 deg MA threshold; emitting the longest segment that still
+  projects inside the padded square (mean 0.50 m) lifts the ceiling to 99.9% / 1.21 deg mean. The
+  data was regenerated before training.
+- **Scorer refinement:** IoU now comes from `mask_rle` rather than from `matched`, so a
+  point-prompted method that segments well but declines to predict a joint is not charged IoU 0.
+  Every earlier baseline emits a mask only on matched rows, so all five published numbers are
+  provably unchanged.
+
+**Status 2026-09-13 ~22:15 UTC:** 3DOI queued on Euler (smoke 13967514, full 13968368); A3VLM
+approved and waiting on 8- or 4-GPU stock in EU-FR-1 (the volume is locked to that datacenter).
