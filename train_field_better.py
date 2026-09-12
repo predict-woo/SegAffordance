@@ -91,4 +91,11 @@ class FieldTrainingModule(SF3DTrainingModule):
 
 
 if __name__ == "__main__":
-    LightningCLI(FieldTrainingModule, MultiSourceDataModule, save_config_callback=None)
+    import sys
+    # fit = multi-source (SF3D + hand video); test = the single-source SF3D datamodule the
+    # per-source test configs (config/sf3d_test_*.yaml, config/<src>_rgb_scalefree.yaml) target.
+    if len(sys.argv) > 1 and sys.argv[1] == "test":
+        from train_SF3D_better import SF3DDataModule
+        LightningCLI(FieldTrainingModule, SF3DDataModule, save_config_callback=None)
+    else:
+        LightningCLI(FieldTrainingModule, MultiSourceDataModule, save_config_callback=None)
