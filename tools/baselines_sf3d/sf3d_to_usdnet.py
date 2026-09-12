@@ -520,7 +520,10 @@ def convert_scene(visit, scan_dir, out_dir, mode, voxel=0.02, expand_radius=0.1,
     c = colors.astype(np.float64) / 255.0
     filebase = {
         "filepath": str(outs["npy"]),
-        "raw_filepath": str(paths["ply"]),
+        # upstream stores the scene FOLDER here; the trainer names the scene by its last
+        # path component (datasets/semseg.py ~926) and the evaluator looks up
+        # instance_gt/<mode>/<that name>.txt, so this must end in "/<visit>".
+        "raw_filepath": str(paths["ply"].parent),
         "scene": visit,
         "color_mean": [float(c[:, i].mean()) for i in range(3)] if n else [0.0, 0.0, 0.0],
         "color_std": [float((c[:, i] ** 2).mean()) for i in range(3)] if n else [0.0, 0.0, 0.0],

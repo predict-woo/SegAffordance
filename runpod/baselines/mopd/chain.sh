@@ -10,7 +10,7 @@ export TMPDIR=/workspace/tmp; mkdir -p $RUNS $LOGS /workspace/tmp
 while [ ! -f $INIT_RUN/model_final.pth ]; do echo "$(date -u +%H:%M) waiting for opd_p_rgb model_final.pth"; sleep 300; done
 echo "== $(date -u) MOPD chain on $(nvidia-smi --query-gpu=name --format=csv,noheader)"
 cd /workspace/SegAffordance
-[ -f $RUNS/init.pth ] || python tools/baselines_sf3d/mopd_compose_ckpt.py --opd $INIT_RUN/model_final.pth --esam $B/ckpt/efficient_sam_vits.pt --mopd-repo $B/repos/MOPD --out $RUNS/init.pth
+[ -f $RUNS/init.pth ] || python tools/baselines_sf3d/run.py tools/baselines_sf3d/mopd_compose_ckpt.py --opd $INIT_RUN/model_final.pth --esam $B/ckpt/efficient_sam_vits.pt --mopd-repo $B/repos/MOPD --out $RUNS/init.pth
 read -r MEAN STD <<<"$(python - <<PY
 import json
 s = json.load(open("$DATA/stats.json")); n = 3
@@ -31,6 +31,6 @@ python evaluate_on_log.py --config-file configs/opd_p_real.yaml --output-dir $RU
   > $LOGS/test_mopd_rgb.log 2>&1
 echo "== $(date -u) test done"; grep -E "AP|motion" $LOGS/test_mopd_rgb.log | tail -20
 cd /workspace/SegAffordance
-python tools/baselines_sf3d/opd_preds_to_jsonl.py --pred $RUNS/test/inference/instances_predictions.pth --data-dir $DATA --out $RUNS/preds.jsonl
+python tools/baselines_sf3d/run.py tools/baselines_sf3d/opd_preds_to_jsonl.py --pred $RUNS/test/inference/instances_predictions.pth --data-dir $DATA --out $RUNS/preds.jsonl
 wc -l $RUNS/preds.jsonl; cp $RUNS/config.yaml $RUNS/config_resolved.yaml 2>/dev/null || true
 touch $RUNS/CHAIN_DONE; echo "== $(date -u) CHAIN_DONE mopd_rgb"

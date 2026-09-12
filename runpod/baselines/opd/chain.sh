@@ -21,7 +21,7 @@ echo "== $(date -u) chain $V on $(nvidia-smi --query-gpu=name --format=csv,nohea
 if [ "${OWNER:-0}" = "1" ]; then
   if [ ! -f $DATA/.done_all ]; then
     cd /workspace/SegAffordance
-    python tools/baselines_sf3d/sf3d_to_opd.py --out $DATA --workers "${CONVERT_WORKERS:-$(nproc)}" > $LOGS/convert_opd.log 2>&1
+    python tools/baselines_sf3d/run.py tools/baselines_sf3d/sf3d_to_opd.py --out $DATA --workers "${CONVERT_WORKERS:-$(nproc)}" > $LOGS/convert_opd.log 2>&1
     python - <<'PY'
 import json
 for s in ["train","valid","test"]:
@@ -54,6 +54,6 @@ python evaluate_on_log.py --config-file $CFG --output-dir $RUNS/test --data-path
   > $LOGS/test_opd_$V.log 2>&1
 echo "== $(date -u) test done"; grep -E "AP|motion" $LOGS/test_opd_$V.log | tail -20
 cd /workspace/SegAffordance
-python tools/baselines_sf3d/opd_preds_to_jsonl.py --pred $RUNS/test/inference/instances_predictions.pth --data-dir $DATA --out $RUNS/preds.jsonl
+python tools/baselines_sf3d/run.py tools/baselines_sf3d/opd_preds_to_jsonl.py --pred $RUNS/test/inference/instances_predictions.pth --data-dir $DATA --out $RUNS/preds.jsonl
 wc -l $RUNS/preds.jsonl; cp $RUNS/config.yaml $RUNS/config_resolved.yaml 2>/dev/null || true
 touch $RUNS/CHAIN_DONE; echo "== $(date -u) CHAIN_DONE $V"

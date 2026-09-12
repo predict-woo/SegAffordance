@@ -26,6 +26,8 @@ PY
   pip install -q -r /tmp/req.txt || { echo "bulk install failed; retrying per package"; while read -r p; do pip install -q "$p" || echo "SKIP $p"; done < /tmp/req.txt; }
   pip install -q "numpy<2" cython pycocotools omegaconf==2.0.6 hydra-core==1.0.5 pytorch-lightning==1.7.2 torchmetrics==0.9.3 h5py python-dotenv usd-core open3d pyviz3d lmdb scipy
   pip install -q torch-scatter -f https://data.pyg.org/whl/torch-2.1.0+cu121.html
+  # environment.yml pins volumentations==0.1.8 (kumuji's 3D aug lib); PyPI's wheel fails to build, the git source works
+  pip install -q 'git+https://github.com/kumuji/volumentations.git' && pip install -q --force-reinstall --no-deps numpy==1.26.4
   pip install -q 'git+https://github.com/facebookresearch/detectron2.git@710e7795d0eeadf9def0e7ef957eea13532e34cf' --no-deps
   touch /root/.done_pip_usd; fi
 echo "== MinkowskiEngine"; if ! python -c "import MinkowskiEngine" 2>/dev/null; then
