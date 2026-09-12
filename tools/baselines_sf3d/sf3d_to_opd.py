@@ -409,7 +409,11 @@ def main(argv=None):
     ap.add_argument("--workers", type=int, default=32)
     ap.add_argument("--limit-frames", type=int, default=None, help="convert at most N frames per split (smoke)")
     ap.add_argument("--key-cache", default=C.KEY_CACHE)
+    ap.add_argument("--size", type=int, nargs=2, default=[256, 192], metavar=("W", "H"),
+                    help="output frame size; 256x192 = OPDMulti native, 512x384 = resolution-matched variant")
     a = ap.parse_args(argv)
+    global OUT_W, OUT_H
+    OUT_W, OUT_H = a.size  # module globals; Pool workers fork after this and inherit them
 
     out = Path(a.out)
     h5dir = out / "MotionDataset_h5"

@@ -156,6 +156,7 @@ def main(argv=None):
     ap.add_argument("--data-dir", required=True, help="sf3d_to_opd.py --out directory")
     ap.add_argument("--out", required=True, help="output JSONL")
     ap.add_argument("--key-cache", default=C.KEY_CACHE)
+    ap.add_argument("--workers", type=int, default=16)
     a = ap.parse_args(argv)
 
     data = Path(a.data_dir)
@@ -179,16 +180,35 @@ def main(argv=None):
     n_matched = 0
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
+    # Full-resolution IoU against up to 100 instances per frame is ~1 s per key single-threaded
+    # (85 min for the test split); fork a pool that inherits the loaded tables as globals.
+    global _G_KEY_TO_ANN, _G_PREDS, _G_IMAGE_FRAME
+    _G_KEY_TO_ANN, _G_PREDS, _G_IMAGE_FRAME = key_to_ann, preds_by_image, image_frame
+    workers = max(1, a.workers)
     with open(out, "w") as f:
-        for i, k in enumerate(present):
-            gt = key_to_ann[k]
-            image_id = int(gt["image_id"])
-            res = match_and_convert(gt, preds_by_image.get(image_id, []), image_frame[image_id])
+        if workers == 1:
+            it = map(_convert_key, present)
+        else:
+            from multiprocessing import Pool
+            pool = Pool(workers)
+            it = pool.imap(_convert_key, present, chunksize=16)
+        for i, (k, res) in enumerate(it):
             n_matched += bool(res["matched"])
             f.write(json.dumps({"key": k, **res}) + "\n")
             if i % 1000 == 0:
                 print(f"{i}/{len(present)}", flush=True)
+        if workers > 1:
+            pool.close(); pool.join()
     print(f"wrote {len(present)} lines to {out}; matched {n_matched}/{len(present)}", flush=True)
+
+
+_G_KEY_TO_ANN = _G_PREDS = _G_IMAGE_FRAME = None
+
+
+def _convert_key(k):
+    gt = _G_KEY_TO_ANN[k]
+    image_id = int(gt["image_id"])
+    return k, match_and_convert(gt, _G_PREDS.get(image_id, []), _G_IMAGE_FRAME[image_id])
 
 
 if __name__ == "__main__":
