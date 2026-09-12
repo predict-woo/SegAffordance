@@ -2,8 +2,10 @@
 
 Intended location: `~/Desktop/Research/AA3D/paper/draft.md` (this copy lives in the repo because the
 Desktop path is not writable from the assistant's process). Status: high-level outline only. Numbers
-are placeholders keyed to experiment IDs in `experiments/INDEX.md`. The final model is not fixed yet
-(one model will be picked; candidates are the dense-voting arms and the field model). TODO = open.
+are placeholders keyed to experiment IDs in `experiments/INDEX.md`. FINAL MODEL (fixed 2026-09-13):
+`20260913_joint4_decoder_l2anchor_dense_off` — CRIS trunk + dense hinge voting + per-pixel offset loss +
+analytic decoder on the L2 2pi + axis recipe (SF3D MA 46.0, ARCTIC hinge offset 0.029). The field model
+(all-fields redesign) is the research line, reported as an ablation. TODO = open.
 
 ## 0. The story in one paragraph
 
@@ -67,11 +69,14 @@ that also segments and localises the part.
     transformer decoder over word tokens -> one decoded map; dynamic-kernel projector -> mask, point
     and origin heatmaps. Depth input: optional encoder fused into the FPN (the depth arms); RGB-only is
     the default mode. TODO: confirm the RGB-D variant of the final model.
-4.2 Articulation as fields. Per-pixel rot axis, trans direction, type, hinge offset, log-depth, arc
-    length on the decoded map; readouts are part-weighted means (votes), soft-argmax for the point,
-    depth sampled at the point and the hinge, lifts with intrinsics. No pooled vector, no MLP heads.
-    (If the final model is the CRIS dense arm, this section describes the voting head on the CRIS
-    heads instead — TODO pick.)
+4.2 Dense hinge voting (the final model). A 1.8M conv head on the decoded map predicts, per pixel, a
+    rot axis, a trans direction, type logits and a 2D offset to the hinge; the part-weighted means
+    (GT mask in training, predicted mask at test) give the axis, the type and the hinge location
+    (origin_uv). A per-pixel offset loss pulls every part pixel's vote to the projected GT hinge on
+    3D data. The point comes from the point heatmap's soft-argmax; the depths z_p / z_q and the arc
+    length come from small MLPs on the pooled condition vector (point depth with a local feature
+    sample); lifts with intrinsics. Ablation: the all-fields variant (depth and length as fields, no
+    pooled vector, predicted-mask weighting, `model/field_model.py`).
 4.3 Analytic trajectory decoder. Rot: the arc about the axis line through the origin with angle L / r;
     trans: L d. The trajectory is a function of the parameters, never a free head.
 4.4 Losses and the matched landscape. 2D: projection loss of the decoded arc onto the hand track
