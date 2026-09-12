@@ -1,7 +1,7 @@
 # Learning 3D Articulation Affordances from Human Video — draft outline (v0, 2026-09-13)
 
-Intended location: `~/Desktop/Research/AA3D/paper/draft.md` (this copy lives in the repo because the
-Desktop path is not writable from the assistant's process). Status: high-level outline only. Numbers
+CANONICAL DRAFT: `~/Research/AA3D/paper/draft.md` (IEEEtran project; written 2026-09-13). This repo copy is
+the outline snapshot and is no longer updated. Status: high-level outline only. Numbers
 are placeholders keyed to experiment IDs in `experiments/INDEX.md`. FINAL MODEL (fixed 2026-09-13):
 `20260913_joint4_decoder_l2anchor_dense_off` — CRIS trunk + dense hinge voting + per-pixel offset loss +
 analytic decoder on the L2 2pi + axis recipe (SF3D MA 46.0, ARCTIC hinge offset 0.029). The field model
