@@ -50,9 +50,18 @@ print(best)")
 # hydra's override grammar chokes on '=' inside the checkpoint filename -> go through a symlink
 ln -sfn "$BEST" $RUNS/best_eval.ckpt; BEST=$RUNS/best_eval.ckpt
 rm -rf $RUNS/test
+# Export on the TEST scenes. USDNet's eval path ignores data.validation_mode overrides and always
+# reads "validation_database.yaml" + instance_gt/validation, so build a sibling data dir whose
+# validation set IS our 22-scene test split (database entries carry absolute paths).
+D2=${D}_evaltest; rm -rf $D2; mkdir -p $D2/instance_gt
+cp $D/label_database.yaml $D/color_mean_std.yaml $D/train_database.yaml $D2/
+cp $D/test_database.yaml $D2/validation_database.yaml
+ln -sfn $D/instance_gt/test $D2/instance_gt/validation
+ln -sfn $D2 $R/data/processed/articulate3d_challenge_mov
 python main_instance_segmentation_articulation.py $COMMON general.experiment_name=${NAME}_test general.save_dir=$RUNS/test \
-  general.train_mode=false general.debug=true general.checkpoint="$BEST" data.train_mode=train data.validation_mode=test data.cropping=false \
+  general.train_mode=false general.debug=true general.checkpoint="$BEST" data.train_mode=train data.cropping=false \
   > $LOGS/test_$NAME.log 2>&1 || true
+ln -sfn $D $R/data/processed/articulate3d_challenge_mov
 grep -E "MA|MO|MAO|ap_50|Error|Traceback" $LOGS/test_$NAME.log | tail -20
 ls -la $RUNS/test/debug/val_preds/preds.pkl
 cd /workspace/SegAffordance
