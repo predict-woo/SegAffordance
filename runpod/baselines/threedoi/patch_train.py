@@ -33,8 +33,16 @@ for f in ("monoarti/sam_transformer.py", "monoarti/transformer.py"):
     patch(f, [("valid_depth = depth[:, 0, 0] > 0", "valid_depth = (depth > 0).flatten(1).any(1)  # SF3D_PATCHED")], "SF3D_PATCHED")
 
 patch("train.py", [
-    ("import submitit\n", "try:\n    import submitit  # SF3D_PATCHED: optional\nexcept ImportError:\n    submitit = None\n"),
-    ("from visdom import Visdom\n", "try:\n    from visdom import Visdom\nexcept ImportError:\n    Visdom = None\n"),
+    ("from visdom import Visdom\n", "try:  # SF3D_PATCHED\n    from visdom import Visdom\nexcept ImportError:\n    Visdom = None\n"),
+    # Their validation walks the whole val split, and `epoch % interval == 0` fires at epoch 0, so a
+    # 3,495-frame pass costs ~1 h per validation. Nothing selects a checkpoint from it (train.py just
+    # overwrites checkpoint.pth every interval and we export from the last one), so cap the number of
+    # val batches. Training is untouched.
+    ("    for iteration, batch in enumerate(val_dataloader):\n        loss = 0.0\n",
+     "    for iteration, batch in enumerate(val_dataloader):\n"
+     "        if os.environ.get('SF3D_LIMIT_VAL_ITERS') and iteration >= int(os.environ['SF3D_LIMIT_VAL_ITERS']):\n"
+     "            break\n"
+     "        loss = 0.0\n"),
     ("        for iteration, batch in enumerate(train_dataloader):\n            optimizer.zero_grad()\n",
      "        for iteration, batch in enumerate(train_dataloader):\n"
      "            if os.environ.get('SF3D_LIMIT_ITERS') and iteration >= int(os.environ['SF3D_LIMIT_ITERS']):\n"
@@ -46,6 +54,3 @@ patch("monoarti/stats.py", [
     ("from visdom import Visdom\n", "try:\n    from visdom import Visdom  # SF3D_PATCHED: optional\nexcept ImportError:\n    Visdom = None\n"),
 ], "SF3D_PATCHED")
 
-patch("test.py", [
-    ("import submitit\n", "try:\n    import submitit  # SF3D_PATCHED: optional\nexcept ImportError:\n    submitit = None\n"),
-], "SF3D_PATCHED")

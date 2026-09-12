@@ -22,8 +22,12 @@ Metric definitions mirror train_SF3D_better.py::test_step / on_test_epoch_end
   origin_line_err_m  distance of q_hat to the GT axis line
                  (model.losses.twist.point_to_line_distance); same rows.
 
-Unmatched (matched=false, or key absent): IoU 0, type wrong, axis error 90
-deg (unsigned and signed), origin metrics absent.
+Segmentation and articulation are scored independently. IoU is computed
+whenever the row carries a mask_rle (0 otherwise, including a missing key);
+matched=false, or a null axis_cam/type, means "no articulation prediction" ->
+type wrong, axis error 90 deg (unsigned and signed), origin metrics absent.
+Detector-style baselines emit a mask only on matched rows, so this is the same
+as the older "unmatched -> IoU 0" rule for them.
 
 CLI: python tools/baselines_sf3d/score_predictions.py --preds P.jsonl --out
 metrics.json [--lmdb-root R --frame-cache F --key-cache K --limit N]
@@ -108,27 +112,37 @@ def score(preds, gt_iter):
         is_rot = t_gt == 1
         if is_rot:
             n_rot += 1
-        pr = preds.get(key)
-        if not pr or not pr.get("matched"):
-            ious.append(0.0)
+        pr = preds.get(key) or {}
+        # Segmentation and articulation are scored independently: IoU comes from mask_rle
+        # whenever the method produced a mask, while matched=false (or a null axis/type) means
+        # "no articulation prediction" -> type wrong, axis 90 deg. A point-prompted method such
+        # as 3DOI always segments but may decline to predict a joint ("freeform"), and would
+        # otherwise be charged IoU 0 for a perfectly good mask. Detector-style baselines emit a
+        # mask only on matched rows, so their scores are unchanged.
+        m_gt = np.asarray(m_gt).astype(bool)
+        if pr.get("mask_rle") is not None:
+            m_pr = C.rle_decode(pr["mask_rle"])
+            if m_pr.shape != m_gt.shape:
+                m_pr = C.nearest_resize(m_pr.astype(np.uint8), m_gt.shape).astype(bool)
+            iou = _mask_iou(m_pr, m_gt)
+        else:
+            iou = 0.0
+        ious.append(iou)
+        iou_matched = iou > IOU_THRESH
+        if iou_matched:
+            n_matched += 1
+
+        if not pr.get("matched") or pr.get("axis_cam") is None or pr.get("type") is None:
             type_ok.append(False)
             ma.append(False)
             ma_s.append(False)
             err_all.append(UNMATCHED_AXIS_ERR_DEG)
             err_s_all.append(UNMATCHED_AXIS_ERR_DEG)
+            if iou_matched:
+                err_matched.append(UNMATCHED_AXIS_ERR_DEG)
             if is_rot:
                 err_s_rot.append(UNMATCHED_AXIS_ERR_DEG)
             continue
-
-        m_gt = np.asarray(m_gt).astype(bool)
-        m_pr = C.rle_decode(pr["mask_rle"])
-        if m_pr.shape != m_gt.shape:
-            m_pr = C.nearest_resize(m_pr.astype(np.uint8), m_gt.shape).astype(bool)
-        iou = _mask_iou(m_pr, m_gt)
-        ious.append(iou)
-        iou_matched = iou > IOU_THRESH
-        if iou_matched:
-            n_matched += 1
 
         e = _angle_deg(pr["axis_cam"], a_gt, signed=False)
         es = _angle_deg(pr["axis_cam"], a_gt, signed=True)

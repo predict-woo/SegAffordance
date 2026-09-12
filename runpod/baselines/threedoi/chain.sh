@@ -11,6 +11,8 @@ MODE="${MODE:-train}"; NPROC="${NPROC:-$(nvidia-smi -L | wc -l)}"; EPOCHS="${EPO
 NAME="${NAME:-3doi}"; [ "$MODE" = "smoke" ] && NAME="${NAME}_smoke"
 RUNS=$B/runs/$NAME; mkdir -p $LOGS /workspace/tmp
 export TMPDIR=/workspace/tmp WANDB_MODE=offline OMP_NUM_THREADS=4 PYTHONUNBUFFERED=1
+# cap the (unused-for-selection) validation pass; see runpod/baselines/threedoi/patch_train.py
+export SF3D_LIMIT_VAL_ITERS="${SF3D_LIMIT_VAL_ITERS:-200}"
 SEG=/workspace/SegAffordance
 echo "== $(date -u) $MODE $NAME on $NPROC x $(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)"
 cd $R
@@ -32,9 +34,9 @@ export_preds() {  # $1 ckpt, $2 out jsonl, rest = extra args
 case $MODE in
   smoke)
     rm -rf $RUNS
-    SF3D_LIMIT_ITERS=30 train 1 validation_epoch_interval=1000 > $LOGS/train_$NAME.log 2>&1 || { tail -40 $LOGS/train_$NAME.log; exit 1; }
+    SF3D_LIMIT_ITERS=30 SF3D_LIMIT_VAL_ITERS=3 train 1 validation_epoch_interval=1000 > $LOGS/train_$NAME.log 2>&1 || { tail -40 $LOGS/train_$NAME.log; exit 1; }
     ls -la $RUNS/checkpoints; grep -E "loss|sec/it" $LOGS/train_$NAME.log | tail -3
-    SF3D_LIMIT_ITERS=10 train 2 validation_epoch_interval=1000 > $LOGS/train_${NAME}_resume.log 2>&1 || { tail -40 $LOGS/train_${NAME}_resume.log; exit 1; }
+    SF3D_LIMIT_ITERS=10 SF3D_LIMIT_VAL_ITERS=3 train 2 validation_epoch_interval=1000 > $LOGS/train_${NAME}_resume.log 2>&1 || { tail -40 $LOGS/train_${NAME}_resume.log; exit 1; }
     grep -E "Resuming|resuming" $LOGS/train_${NAME}_resume.log | tail -2; ls $RUNS/checkpoints
     export_preds $RUNS/checkpoints/checkpoint.pth $RUNS/preds_smoke.jsonl --limit 30 > $LOGS/export_$NAME.log 2>&1 || { tail -30 $LOGS/export_$NAME.log; exit 1; }
     tail -2 $LOGS/export_$NAME.log; wc -l $RUNS/preds_smoke.jsonl

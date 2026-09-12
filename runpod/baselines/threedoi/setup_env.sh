@@ -11,7 +11,9 @@ $VENV/bin/python -c "import torch; print('torch', torch.__version__, 'cuda', tor
 # their README list minus pytorch3d (3D viz only) and visdom/submitit (import-guarded by patch_train.py)
 # torchvision matching the image's torch (the RunPod images ship torch without torchvision)
 $VENV/bin/python -c "import torchvision" 2>/dev/null || $VENV/bin/pip install -q torchvision "torch==$($VENV/bin/python -c 'import torch; print(torch.__version__.split("+")[0])')" --index-url https://download.pytorch.org/whl/$($VENV/bin/python -c 'import torch; print("cu" + torch.version.cuda.replace(".", ""))')
-[ -f $VENV/.done_pip ] || { $VENV/bin/pip install -q accelerate hydra-core omegaconf scipy pycocotools packaging plotly imageio imageio-ffmpeg matplotlib h5py opencv-python-headless tqdm wandb lmdb && touch $VENV/.done_pip; }
+PKGS="accelerate hydra-core omegaconf scipy submitit pycocotools packaging plotly imageio imageio-ffmpeg matplotlib h5py opencv-python-headless tqdm wandb lmdb"
+# checked by import, not by a stamp file: the package list has grown more than once
+$VENV/bin/python -c "import accelerate, hydra, scipy, submitit, pycocotools, cv2, h5py, wandb, lmdb" 2>/dev/null || $VENV/bin/pip install -q $PKGS
 [ -d $R/3DOI/.git ] || git clone -q https://github.com/JasonQSY/3DOI $R/3DOI
 cd $R/3DOI && git checkout -q 9ff32ef && echo "3DOI @ $(git rev-parse --short HEAD)"
 python /workspace/SegAffordance/runpod/baselines/threedoi/patch_train.py $R/3DOI/monoarti

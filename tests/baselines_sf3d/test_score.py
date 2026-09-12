@@ -160,3 +160,29 @@ def test_origin_absent_when_null():
     r = score(preds, _gt())
     assert r["pass_rate_ma"] == 100.0
     assert r["origin_err_m"] is None and r["origin_line_err_m"] is None
+
+
+def _gt_one(mask, type_gt=1, axis=(0.0, 1.0, 0.0)):
+    import numpy as np
+    yield "k", mask, type_gt, np.asarray(axis), np.zeros(3), np.zeros(3)
+
+
+def test_mask_is_scored_even_without_an_articulation_prediction():
+    """A point-prompted method (3DOI) always segments but may decline to predict a joint."""
+    import numpy as np
+
+    from tools.baselines_sf3d import common as C
+    from tools.baselines_sf3d.score_predictions import score
+
+    m = np.zeros((512, 512), bool)
+    m[100:200, 100:200] = True
+    rle = C.rle_encode(m)
+    r = score({"k": {"key": "k", "matched": False, "mask_rle": rle, "type": None, "axis_cam": None}}, _gt_one(m))
+    assert r["p_det"] == 100.0 and r["mean_iou"] > 0.99          # the mask counts
+    assert r["pass_rate_m"] == 0.0 and r["pass_rate_ma"] == 0.0   # the joint does not
+    assert r["err_adir_all_deg"] == 90.0 and r["err_adir_matched_deg"] == 90.0
+    # no mask at all (or a missing key) still scores IoU 0
+    r2 = score({"k": {"key": "k", "matched": False, "mask_rle": None, "type": None, "axis_cam": None}}, _gt_one(m))
+    assert r2["p_det"] == 0.0 and r2["mean_iou"] == 0.0
+    r3 = score({}, _gt_one(m))
+    assert r3["p_det"] == 0.0 and r3["pass_rate_ma"] == 0.0
