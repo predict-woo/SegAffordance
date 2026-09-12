@@ -362,6 +362,14 @@ ssh is now `timeout 60` so the live clock check works — it caught a second lem
 hand-video votes are computed from a detached map so the projection loss trains the voting head but
 not the trunk — keep the SF3D record, protect the masks) and `query_w1024` (query readout x width
 1024). Pods jdec-dd2d / jdec-qw1024. Spend so far ~$55 done + 7 arms in flight (~$70) = ~$125 expected.
+**Option 1 (user, 10:30 local): `query_pos`** — location-conditioned queries (`readout_query_pos`: the
+point / hinge locations enter the depth, length and type-axis queries as sine codes on the keys' basis
+through a zero-initialised projection) with the depth heads' single bilinear grid samples REMOVED
+(`depth_local_sample: false`). Commit 325d3ca (47 tests green, real-stack smoke). Pod jdec-qpos.
+Design note on the sampling question: one stride-16 bilinear sample at a soft-argmax location has no
+context, may land between heatmap modes or off-object (hinge), and back-propagates into the location;
+the alternatives are location-conditioned queries (this arm), a deformable window, or a dense depth
+field supervised by SF3D's reconstructed depth (not yet used by RGB-only arms; the bet for origin).
 
 **Dense hinge voting (06:15):** per-pixel votes for axis / type / hinge offset, averaged under the part
 mask, are the biggest single jump in the project: every SF3D column at or beyond the previous best
