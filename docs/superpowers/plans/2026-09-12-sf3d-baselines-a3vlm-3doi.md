@@ -128,3 +128,53 @@
 
 - Coverage: both models (Tasks 2-6, 7-10), faithful recipes (their scripts verbatim, deviations listed: A3VLM effective batch matched via accum on 8 GPUs, our text-query task added alongside their box-query task, per-image depth normalisation as in their generator; 3DOI epoch count decided by the user in Task 9), single-shot guards (smoke gates, resume, frozen recipes), scoring with the existing protocol.
 - Placeholders: none; numeric contracts are explicit. Names consistent: `stage_us/{a3vlm,3doi}`, `results/{a3vlm,3doi}`, run ids `20260913_a3vlm`, `20260913_3doi`.
+
+---
+
+## Execution log (2026-09-12/13) — what the de-risking actually found
+
+The plan above was written before any code ran. These are the deviations, all forced by measurement:
+
+1. **A3VLM needs >= 4 GPUs; the 2-GPU smoke was impossible.** `--data_parallel sdp` shards the
+   optimizer over DATA-parallel ranks only. With `--model_parallel_size 2`, two GPUs give DP=1,
+   nothing is sharded, and each GPU needs ~75 GB for its half of the 13B AdamW state: measured OOM
+   at 74.87/79.19 GiB on 2 x H100. `chain.sh` now refuses DP<2. Consequence for the single-shot
+   protocol: the A3VLM smoke is only meaningful at the real width, so it runs on the full-size pod
+   as the first ~15 minutes of that pod's life, not on a cheap separate one.
+2. **A3VLM's repo is a partial overlay.** `changhaonan/A3VLM@436e715` ships `model/accessory`
+   without `llama.py`, `configs/global_configs.py` and others; it must be copied over an upstream
+   `Alpha-VLLM/LLaMA2-Accessory` checkout. Unpinned `open_clip_torch`/`timm`/`bitsandbytes` drag
+   torch to 2.14+cu130 on the torch-2.0.1 image, so they are pinned to their late-2023 releases.
+3. **Their evaluator uses one model-parallel group no matter how many GPUs exist.** A single call
+   would leave 6 of 8 GPUs idle for ~2 h of generation, so `evaluate()` shards the question JSON
+   into NPROC/MP pieces and runs one generation group per GPU pair, then merges. Same model,
+   prompts and sampling; only the work split differs.
+4. **Their evaluator cannot identify which element an answer belongs to.** It records image and
+   prompt only, and our chained questions for two elements of one frame can be byte-identical.
+   `runpod/baselines/a3vlm/patch_eval.py` threads our `key` through, and also disables the
+   resumption block that drops every question sharing an already-answered image.
+5. **The axis-segment length materially changes A3VLM's achievable score.** Their answer format
+   quantises (u, v, d) to 2 decimals, and on SF3D one depth step is ~2.4 cm. With the short
+   element-sized segments first generated (mean 0.135 m) the GT round trip already costs 5.09 deg
+   mean axis error and only 89.5% of elements fall inside the 10 deg MA threshold -- i.e. the
+   encoding alone would have capped A3VLM near MA 89. Emitting the longest segment that still
+   projects inside the padded square (`AXIS_LENGTHS`, mean 0.5 m) moves the round trip to
+   **1.21 deg mean / 99.9% within 10 deg**. The data was regenerated before any training.
+6. **3DOI validates at epoch 0 over the whole val split** (`epoch % interval == 0`), ~1 h per pass,
+   and nothing selects a checkpoint from it. Capped with `SF3D_LIMIT_VAL_ITERS` (default 200
+   batches); training is untouched.
+7. **3DOI needs a 40 GB+ card.** Batch 2 at 1024x768 peaks near 20 GB, and the resume leg (which
+   also loads the optimizer state) OOMed on the 24 GB dev GPU after the training leg had succeeded.
+8. **Scorer change:** IoU is now taken from `mask_rle` rather than from `matched`, so a
+   point-prompted method that segments but declines to predict a joint is not charged IoU 0 for a
+   good mask. Every existing baseline emits a mask only on matched rows, so all five published
+   numbers are provably unchanged.
+9. **Where each model runs.** The Euler per-user cap of 2 GPUs is real and enforced by a
+   client-side `cli_filter` (`--gpus=4` and `--gpus=8` are rejected before a job id exists), so
+   A3VLM cannot run there at all and stays on RunPod. 3DOI fits inside the cap and runs on Euler
+   (2 x RTX PRO 6000, 96 GB each, 5-day wall clock, self-requeueing), which removes what would have
+   been the single most expensive RunPod item.
+
+**Validated end to end before any full run:** both converters (unit tests + GT round trip), 3DOI
+train -> checkpoint -> resume -> export -> score (45 predictions, 43 above IoU 0.5, 15.2 deg matched
+axis error after 30 iterations), and the A3VLM answer encode/parse/export path.
