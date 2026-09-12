@@ -44,7 +44,7 @@ fi
 echo "== $(date -u) train done"; ls $RUNS | tail
 BEST=$(ls -t $RUNS/epoch=*val_mean_ap_50*.ckpt 2>/dev/null | python3 -c "
 import sys,re; fs=[l.strip() for l in sys.stdin if l.strip()]
-best=max(fs, key=lambda f: float(re.search(r'val_mean_ap_50=([0-9.]+)', f).group(1))) if fs else ''
+best=max(fs, key=lambda f: float(re.search(r'val_mean_ap_50=([0-9]+\.[0-9]+)', f).group(1))) if fs else ''
 print(best)")
 [ -n "$BEST" ] || BEST=$RUNS/last.ckpt; echo "eval ckpt: $BEST"; echo "$BEST" > $RUNS/eval_ckpt.txt
 rm -rf $RUNS/test
