@@ -64,6 +64,10 @@ class ModelOutputs:
     #: otherwise.
     origin_vote_uv: Optional[torch.Tensor] = None
     vote_weights: Optional[torch.Tensor] = None
+    #: Field model (model/field_model.py): per-pixel log-depth (B, 1, h, w) on
+    #: the decoded map, supervised by the SF3D depth map
+    #: (loss_params.depth_field_weight). None for CRIS.
+    depth_field: Optional[torch.Tensor] = None
     #: (B, num_points, 2) 2D track in normalised [0, 1] coords, relative to its
     #: own first point. The hand/contact path — a different quantity from
     #: `trajectory_pred`. None unless `use_2d_trajectory_head`.

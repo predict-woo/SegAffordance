@@ -317,6 +317,10 @@ class LossParams:
     # away from the masks. Meant as a per-source loss-profile override
     # (the trainer copies it onto the model before each batch's forward).
     dense_trunk_detach: bool = False
+    # 2026-09-13 field model (train_field_better.py): L1 on log-depth between
+    # the per-pixel depth field and the batch's depth map, pooled to the field
+    # resolution, valid pixels only. 0 = off. Only the field trainer reads it.
+    depth_field_weight: float = 0.0
     # MSE of the direct 3D interaction point vs GT trajectory_3d[0].
     # Replaces point_map+coord (both zero on the 3D path) at the same
     # total weight budget.
