@@ -39,18 +39,20 @@ for f in consolidated.00-of-02.model.pth consolidated.01-of-02.model.pth; do
   [ -f .done_$f ] || { curl -sL -C - -o $f "$HF/$f" && [ "$(stat -c %s $f)" = 19909875004 ] && touch .done_$f; } &
 done
 wait; ls -la $CK/sphinx1k; cat $CK/sphinx1k/config.json; echo
-# size alone cannot detect interleaved writes; confirm each shard actually deserialises
-for f in $CK/sphinx1k/consolidated.*.model.pth; do
-  python -c "
-import sys, torch
-p = sys.argv[1]
-try:
-    torch.load(p, map_location='meta' if hasattr(torch, 'device') else 'cpu', mmap=True, weights_only=True)
-    print('shard ok', p)
-except Exception as e:
-    print('SHARD CORRUPT', p, type(e).__name__, e); sys.exit(1)
-" "$f" || exit 1
-done
+# Size alone cannot detect interleaved writes (two concurrent `curl -C -` produce a right-sized,
+# wrong-content file). torch.save writes a zip, so reading the central directory catches truncation
+# and interleaving cheaply -- and without torch 2.1+ kwargs, since this env pins torch 2.0.1.
+python - "$CK/sphinx1k" <<'PYZIP' || exit 1
+import sys, zipfile, pathlib
+ok = True
+for f in sorted(pathlib.Path(sys.argv[1]).glob("consolidated.*.model.pth")):
+    try:
+        z = zipfile.ZipFile(f)
+        print(f"shard ok {f.name}: {len(z.namelist())} entries")
+    except Exception as e:
+        print(f"SHARD CORRUPT {f.name}: {type(e).__name__} {e}"); ok = False
+sys.exit(0 if ok else 1)
+PYZIP
 cd $R/LLaMA2-Accessory/accessory && python -c "import sys; sys.path.insert(0, '..'); from accessory.model.LLM import llama_ens5; from accessory.model.meta import MetaModel; print('a3vlm import ok')"
 touch $B/.env_ready   # artefact-based readiness flag (ENV_READY), see scripts/a3vlm_auto.sh
 echo "== a3vlm env done"
