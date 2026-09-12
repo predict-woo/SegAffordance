@@ -111,10 +111,11 @@ for t in ("rec", "joint"):
     d = json.load(open("$DATA/%s_test.json" % t)); json.dump(d[:20], open("$RUNS/data/%s_test.json" % t, "w"))
 open("$RUNS/data/smoke.yaml", "w").write("META:\n" + "".join("  -\n    path: '$RUNS/data/%s.json'\n    type: 'image_text'\n    ratio: 1\n" % t for t in ("det", "rec", "joint")))
 EOF
-    train $RUNS/data/smoke.yaml 1 5 > $LOGS/train_$NAME.log 2>&1 || { tail -40 $LOGS/train_$NAME.log; exit 1; }
+    # each save is ~103 GB / ~3 min, and the smoke only needs to prove one save + one resume
+    train $RUNS/data/smoke.yaml 1 "${SMOKE_SAVE_IT:-25}" > $LOGS/train_$NAME.log 2>&1 || { tail -40 $LOGS/train_$NAME.log; exit 1; }
     ls $RUNS; grep -E "effective batch|Epoch: \[0\]|loss" $LOGS/train_$NAME.log | tail -5
     # resume proof: a second epoch from the saved epoch0
-    train $RUNS/data/smoke.yaml 2 5 > $LOGS/train_${NAME}_resume.log 2>&1 || { tail -40 $LOGS/train_${NAME}_resume.log; exit 1; }
+    train $RUNS/data/smoke.yaml 2 "${SMOKE_SAVE_IT:-25}" > $LOGS/train_${NAME}_resume.log 2>&1 || { tail -40 $LOGS/train_${NAME}_resume.log; exit 1; }
     grep -E "resum|Epoch: \[1\]" $LOGS/train_${NAME}_resume.log | tail -3; ls $RUNS
     export_all "$(newest_epoch)" ${NAME}_flag $RUNS/data
     ;;
