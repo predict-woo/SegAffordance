@@ -381,8 +381,13 @@ docs/superpowers/specs/2026-09-13-field-model-design.md; exp `20260913_field_joi
 true), pod jdec-field. CRIS / legacy trainers / configs untouched (two defaulted dataclass fields added).
 Checkpoint keys are `model.core.*` (probe/viz tools need a FieldModel loader — TODO).
 
-**In flight (12:00):** `dense_d2d` (2D votes off the trunk, tests), `query_w1024` (tests), `query_pos`
-(option 1, epoch ~3), `field` (launching). Spend ~$105 done + ~$35 in flight.
+**dense_d2d (12:00):** MA 41.63 (dense 44-45), type 96.0, traj_dir 94.9, origin 0.302; HOI4D masks
+half-recovered (0.582), EPIC not (0.214), ARCTIC offset 0.072 — partial answer to the collapse.
+**query_w1024 (12:10):** MA 38.56 (best query arm) but masks/PDet/EPIC/hinge offset worse — width takes
+the trunk; the 2-layer/256 query arm stays the all-round one.
+
+**In flight (12:15):** `query_pos` (option 1, ETA ~16:30), `field` (relaunched after a lemon, ETA ~17:30).
+Spend ~$120 done + ~$20 in flight.
 
 ## IN FLIGHT 2026-09-12 evening: ARTICULATION READOUT arms (three pods) — the head-bottleneck test
 
