@@ -67,6 +67,7 @@ silent mid-run deaths with truncated ~4.35G ckpts = volume quota.
 
 | role | experiment | checkpoint |
 |---|---|---|
+| **THE SINGLE MODEL (2026-09-13 21:45): FIELD MODEL — SF3D articulation in the record band AND the best hand-video masks ever** | 20260913_field_joint4_l2anchor | best-epoch14-sf3dval1.0536 (keys `model.core.*`, `train_field_better.py` / `tools/arctic_axis_probe.py --field`) — SF3D MA 43.32 / 42.90, matched **10.7** / all 19.9 / signed-all **24.0** (records), all-flips **6.7** (record), rot flips 12.3, origin 0.269, radius 0.137, traj_dir **96.3**, mIoU 0.259 / PDet 19.1; HOI4D **0.683 / 83.6**, EPIC **0.404 / 28.3**, ARCTIC **0.652 / 79.3** (all records); ARCTIC hinge offset 0.048. Recipe `config/joint4_decoder_field.yaml` (l2anchor loss + offset 0.5 + depth field 0.5, 2D votes off the trunk). Single seed |
 | **ALL-TIME BEST SF3D ARTICULATION, NO DEPTH — dense hinge voting on the final recipe (REPLICATED: seed 7 = 20260913_joint4_decoder_l2anchor_dense_seed7 best-epoch19-sf3dval1.0205, MA 45.13 / 44.75, rot flips 4.6 record, origin 0.252)** | 20260913_joint4_decoder_l2anchor_dense | best-epoch13-sf3dval0.9789 — MA **44.01** / signed **42.69** (prev 36.73 / 36.14), type **96.0**, matched **11.4** / all **19.6** / signed-all **25.0** (all records), all-flips 7.6 / rot 12.7, origin **0.248** (= record band), radius 0.124, mIoU **0.2765** (record), PDet 22.5, traj_dir 94.8. Recipe `config/joint4_decoder_l2anchor_dense.yaml` = joint decoder, L2 2pi + axis 0.5 on SF3D, `articulation_readout: dense` (per-pixel votes). COST: hand-source masks collapse (HOI4D 0.508, EPIC 0.186, ARCTIC 0.509) and ARCTIC hinge transfer is worse (offset 0.112, flips 30 %) — not the hand-video model |
 | **best hand-video hinge transfer + near-record SF3D on the final recipe — query readout** | 20260913_joint4_decoder_l2anchor_query | best-epoch16-sf3dval1.1168 — MA 35.75 / 35.24, type 93.9, all-flips 8.1, PDet 23.35, traj_dir 93.5, EPIC masks 0.386 (best joint arm), ARCTIC probe flips 13.4 % (base 26.4) / axis 41.2; origin 0.308. Recipe `config/joint4_decoder_l2anchor_query.yaml` |
 | (prev) ALL-TIME BEST MA + all-round, NO DEPTH — joint decoder + cf_frame (seed 7) | 20260912_joint4_decoder_cfframe_seed7 | best-epoch17-sf3dval1.0880 — MA **36.03** / signed **35.91** (record band 36.0-36.7 across 3 runs; prev record 32.94), type 93.3, all-axis **22.5** / signed-all **29.6** (records), rot flips **9.5** (record), PDet **23.9** (record), mIoU 0.264, origin 0.305, roughness 0 (analytic decoder). Recipe: `config/joint4_decoder_cfframe.yaml` (joint4 recipe, analytic decoder, SF3D side = closed_form_frame 2:1, 2D side = projection loss on the decoded arc + type CE) |
@@ -399,6 +400,13 @@ the two extra terms). Its in-chain test passes failed at argparse (the field tra
 multi-source datamodule for `test`; fixed f074cd2 — `test` now binds the SF3D datamodule) and the pod
 was deleted by the watcher; the five test passes + ARCTIC probe (`--field` loader, f9368c6) are
 rerunning on the dev pod (logs/tests_devpod.log). Spend ~$145. Only the dev pod runs.
+
+**FIELD MODEL RESULT (21:45 + dev-pod tests):** SF3D MA 43.32 / 42.90 (dense band 44-46), matched axis
+10.7 / signed-all 24.0 / all-flips 6.7 (records), traj_dir 96.3, origin 0.269, PDet 19.1 (low) — AND
+HOI4D 0.683 / 83.6, EPIC 0.404, ARCTIC 0.652 / 79.3 (the best hand-video masks of any run; every dense
+arm had collapsed them). The first single model that holds both sides. ARCTIC hinge offset 0.048 (dense_off
+0.029), axis 55 deg / 41 % flips (the sign coin flip). Next: seed replicate + SF3D-only control on it
+(paper gap A), then RGB-D variant.
 
 ## IN FLIGHT 2026-09-12 evening: ARTICULATION READOUT arms (three pods) — the head-bottleneck test
 
