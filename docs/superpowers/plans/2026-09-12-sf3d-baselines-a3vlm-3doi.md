@@ -178,3 +178,26 @@ The plan above was written before any code ran. These are the deviations, all fo
 **Validated end to end before any full run:** both converters (unit tests + GT round trip), 3DOI
 train -> checkpoint -> resume -> export -> score (45 predictions, 43 above IoU 0.5, 15.2 deg matched
 axis error after 30 iterations), and the A3VLM answer encode/parse/export path.
+
+### Later additions (2026-09-13, during execution)
+
+10. **A3VLM checkpoints are ~103 GB each** (2 x 19.9 GB model shards + a consolidated optimizer
+    state of ~31.5 GB per model-parallel shard). At `--save_interval 1 --save_iteration_interval
+    500` a 3-epoch run writes ~9 of them. A 150 GB volume filled mid-write and the entire job tree
+    was killed with **no error in any log**: `df`/statvfs on a RunPod network volume reports the
+    underlying cluster filesystem, not the volume quota, so nothing warns you. Volume grown to
+    400 GB and `runpod/baselines/a3vlm/prune_ckpts.sh` keeps only the newest N checkpoints
+    (skipping any written in the last 10 minutes, so it can never delete one mid-write).
+11. **Concurrent setup runs corrupt the weights silently.** Two `setup_env.sh` instances each
+    start `curl -C -` per 19.9 GB shard; all four write the same two files at independent offsets,
+    producing a checkpoint of exactly the right size and wrong content, which the size check
+    accepts. `setup_env.sh` now takes an `flock` and verifies each shard's zip central directory
+    (not `torch.load(mmap=...)`, which does not exist in the torch 2.0.1 this env pins).
+12. **Hugging Face's downloader stores blobs and symlinks them.** `huggingface-cli download
+    --local-dir` leaves relative symlinks into its cache; moving them breaks the link and leaves
+    134-byte files. Resolve each shard to its blob and move the blob itself.
+13. **Where A3VLM actually ran.** No 8-GPU pod existed in ANY volume-capable RunPod datacenter
+    (probed with real create attempts, the only authoritative test), so the run uses the 4-GPU
+    fallback on 4 x H200 (141 GB) in AP-JP-1, volume `bl-apjp`. Measured peak memory is 79.6 GB
+    per GPU, i.e. the run would NOT have fitted on the 80 GB H100s that were the other option.
+    Measured steady-state smoke throughput: 1.29 s per optimizer step at effective batch 4.
