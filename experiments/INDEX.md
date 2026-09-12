@@ -6,6 +6,7 @@ Eval columns are on 300 fixed OPDMulti-val samples (seed 0) unless noted;
 
 | id | dataset | recipe | best val loss | mIoU | det% | type% | axis° | verdict |
 |---|---|---|---|---|---|---|---|---|
+| [20260913_joint4_decoder_l2anchor_attnpool](20260913_joint4_decoder_l2anchor_attnpool/) | SF3D+HOI4D+EPIC+ARCTIC (JOINT) | READOUT arm: one learned query attention-pools the decoded map (mask log-bias) in place of the mask mean; heads unchanged; l2anchor recipe otherwise | 1.1630 sf3d (ep19) | 0.273 | 22.0 | — | 25.5 (matched 17.9) | **MA 33.08 / signed 32.41** (l2anchor 31.05 / 30.27, +2.0), masks back to the base decoder's 0.273 / 22.0, hand masks +0.03..0.05 (HOI4D 0.622), flips 10.1 / rot 17.4; but origin 0.345 (0.294) / radius 0.168 and the ARCTIC hinge probe worse (axis 49.3, flips 34 %, offset 0.082) — a better feature selector, not a placement fix |
 | [20260721_opdreal_base](20260721_opdreal_base/) | OPDReal | from scratch, 30 ep, lr 2e-5 | 0.4069 (ep15) | 0.56* | 67%* | 100%* | 7.0* | pretrain ckpt for all OPDMulti runs |
 | [20260721_opdmulti_headsonly](20260721_opdmulti_headsonly/) | OPDMulti | freeze backbone+depth+neck, lr 1e-5 | 0.4917 (ep8) | 0.566 | 65.7% | 96.7% | 18.2 | worst of the three recipes |
 | [20260721_opdmulti_ft_full](20260721_opdmulti_ft_full/) | OPDMulti | full fine-tune, lr 1e-5 | 0.4601 (ep0!) | 0.592 | 68.0% | 97.7% | 17.3 | best val loss; overfits after 1 epoch |
