@@ -337,6 +337,26 @@ and VERIFY; ARCTIC hinge probe on every checkpoint. Plan: wave 1 = query / attnp
 dense hinge-voting head, built while stock is dry); wave 2 = the best readout on the cf_frame SF3D
 side (the MA record recipe), deeper/wider readout, combinations; keep the l2anchor baseline as the row.
 
+## NIGHT 2 RESULTS SO FAR (2026-09-13 06:15 local) + WAVE 2 IN FLIGHT
+
+| arm (l2anchor recipe unless noted) | SF3D MA / signed | rot flips | origin | mIoU / PDet | HOI4D / EPIC mIoU | ARCTIC probe axis / flips / offset |
+|---|---|---|---|---|---|---|
+| l2anchor base (2026-09-12) | 31.05 / 30.27 | 19.0 | 0.294 | 0.241 / 18.5 | 0.576 / 0.288 | 48.2 / 26.4 % / 0.070 |
+| attnpool | 33.08 / 32.41 | 17.4 | 0.345 | 0.273 / 22.0 | 0.622 / 0.312 | 49.3 / 34.0 % / 0.082 |
+| **query** (`20260913_joint4_decoder_l2anchor_query`, best-epoch16) | **35.75 / 35.24** | 15.7 (all 8.1) | 0.308 | 0.270 / **23.35** | 0.625 / **0.386** | **41.2 / 13.4 %** / 0.087 |
+| cf_frame + query (wave 2) | 33.77 / 33.45 (cf_frame alone 36.36) | 13.9 | 0.298 | 0.256 / 21.0 | **0.641 / 0.391** | 40.6 / 37.7 % / 0.095 |
+| dense, mlp1024 | pending (both at epoch 19) | | | | | |
+
+Readings: the QUERY readout is the structural win — +4.7 MA on the user's final loss (= the cf_frame
+record band), best flips / type / PDet / traj_dir of the family, EPIC masks 0.386, ARCTIC sign flips
+halved. It does NOT fix hinge PLACEMENT (origin / ARCTIC offset unchanged). attnpool = feature selector
+(+2 MA, masks) and worse placement. The readout INTERACTS with the SF3D loss: on cf_frame it costs 2.6 MA
+and leaves the sign wrong -> the readout line stays on l2anchor. Wave 2 launched 06:12: `query_seed7`
+(noise), `query_l4` (4 layers), `query_eps01` (mask bias floor 0.1 = hinge context reachable —
+placement hypothesis); pods jdec-qseed7 / jdec-ql4 / jdec-qeps01. Ops: one Workstation lemon (622 MHz
+at the 600 W cap) caught and swapped by the launcher's clock check; two chains crashed on the
+network-volume compile cache before the pod-local cache fix. Spend so far ~$55.
+
 ## IN FLIGHT 2026-09-12 evening: ARTICULATION READOUT arms (three pods) — the head-bottleneck test
 
 **Decisions (user, 2026-09-12):** the FINAL model recipe is the joint decoder with L2 2pi + direct axis
@@ -1539,3 +1559,52 @@ All four runs done, wrapped, pods deleted. The synthesis:
 - User prefs: questions are read-only; no Artifacts (local files only);
   all subagents on the session model; cost-sensitive — reconcile pods,
   report spend.
+
+## External baselines on SF3D (session ethz-workspace-34) — IN FLIGHT 2026-09-12 01:05 UTC
+
+**Mandate (user, 2026-09-11 ~23:00 local, asleep since):** retrain OPDFormer (C RGB-D, P RGB-D,
+P RGB), MOPD and USDNet FAITHFULLY (their code + recipe, edited only to fit our data) on the SF3D
+train split, score on our 5,088-sample test split with our metrics, in parallel. Plan:
+`docs/superpowers/plans/2026-09-12-sf3d-external-baselines.md`. Code: `tools/baselines_sf3d/`,
+`runpod/baselines/`, tests `tests/baselines_sf3d/` (all green on the dev pod). Pods, ids, GPUs:
+`experiments/baselines_sf3d/pods.md`. Everything on the volume under `/workspace/datasets/baselines/`.
+
+**State at 01:05 UTC:** four pods running (bl-opd-c, bl-opd-p: PRO 6000; bl-opd-prgb, bl-usdnet:
+A100). OPDFormer-C RGB-D at ~10k/60k iters (ETA ~05:00 UTC), P RGB-D restarted 01:00 after the
+extrinsic-recentring fix (ETA ~07:00), P RGB (A100, slower, ETA ~09:30) then MOPD 1k-iter fine-tune,
+USDNet 200 epochs at ~2.7 min/epoch (ETA ~10:00 UTC). Mac-side watchers (Monitor tool) copy
+`preds.jsonl` + logs to `$B/results/<run>/` and DELETE each pod on CHAIN_DONE — if this session died,
+check `runpodctl pod list` and `ls /workspace/datasets/baselines/runs/*/CHAIN_DONE` by hand.
+
+**Scoring (Task 10, not yet done):** for each run `python tools/baselines_sf3d/score_predictions.py
+--preds $B/results/<run>/preds.jsonl --out experiments/baselines_sf3d/<id>/metrics.json` on the dev
+pod (<10 min), then notes.md + a separate "Baselines" table at the bottom of experiments/INDEX.md.
+Oracle check of the scorer on GT-as-prediction: IoU 1.0, MA 100, origin_err_m 0.20 (annotation gauge).
+
+**Fit-to-data decisions (document in the paper):** SF3D frames are mixed orientation; portrait
+frames are rolled 90 deg (exact camera roll) so OPD's fixed 256x192 h5 works; OPD categories = the 8
+SF3D affordance labels; per-dataset pixel stats; masks as RLE (mapper patched for bitmask);
+OPDFormer-P's object pose = per-scene-recentred cam-to-world (laser frame offsets of 35-240 m made
+loss_extrinsic ~1500; after recentring 25); USDNet: laser scans downsampled 2 cm in a z-up frame,
+one instance per annotated element, 200 epochs (upstream yaml says 10,000; Mask3D uses 601), from
+the Mask3D scannet200 backbone; MOPD init = our OPDFormer-P RGB + public EfficientSAM ViT-S +
+geffnet ImageNet weights (their Baidu-only checkpoint is the same composition).
+
+**Ops lessons tonight:** `mutagen sync flush` hangs (another session stages files) — push scripts
+with `bash runpod/baselines/pods.sh scp-to <pod> <rel> /workspace/SegAffordance/<rel>` and verify by
+md5 on the dev pod; the Blackwell image `runpod/pytorch:1.0.3-cu1281-torch291` really ships torch
+2.12+cu130 on a 12.8 toolkit (extensions cannot build; setup installs torch 2.8.0+cu128) and is
+Ubuntu 24.04 (PEP 668: `PIP_BREAK_SYSTEM_PACKAGES=1`); a site-packages `tools` package shadows our
+`tools/` namespace inside upstream envs (`tools/baselines_sf3d/run.py`); NEVER put a pkill pattern in
+the same ssh command as text that matches it (killed my own relaunch twice); USDNet resumes from
+`<save_dir>/last-epoch.ckpt` whenever save_dir exists (never pre-create it) and names scenes by the
+last path component of `raw_filepath` (must be the scene FOLDER).
+
+**Finding 02:10 UTC — SF3D targets are tiny for the upstream recipes.** USDNet's 2 cm voxel scenes
+give SF3D functional elements a median of 11 points (p90 28; 97% under 50 points) vs thousands for
+Articulate3D doors/drawers; first USDNet validation (epoch 19/200) = AP50 0.000 (trans AP25 0.005).
+OPDFormer-C at 256x192 (elements ~12 px) after 10k/60k iters: segm AP50 4.8 / +type 4.1 / +axis 0.38.
+The faithful runs continue as commissioned; as documented alternatives for the user's decision I am
+pre-building (CPU only, no training launched): `data/usdnet_sf3d_v1cm` (converter `--voxel 0.01`)
+and `data/opd_sf3d_512` (converter `--size 512 384`, recentred). A resolution-matched OPDFormer at
+512x384 would cost ~4x the 256x192 run (~20 h on a PRO 6000).
