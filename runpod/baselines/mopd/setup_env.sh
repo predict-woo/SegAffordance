@@ -17,6 +17,7 @@ python -c "import torch, MultiScaleDeformableAttention" 2>/dev/null || { rm -rf 
 python -c "import torch, MultiScaleDeformableAttention, geffnet; print('mopd deps ok')"
 python -c "import uotod" 2>/dev/null || echo "NOTE: uotod unusable -> matcher patched to skip its (discarded) Sinkhorn block"
 python /workspace/SegAffordance/runpod/baselines/mopd/patch_matcher.py $R/MOPD/opdformer/mask2former/modeling/matcher.py
+python /workspace/SegAffordance/runpod/baselines/mopd/patch_model_load.py $R/MOPD/opdformer/mask2former/maskformer_model.py
 # EfficientSAM ViT-S release weights (zip on GitHub; no `unzip` binary on the images -> python)
 cd $B/ckpt; [ -f efficient_sam_vits.pt ] || { curl -sL -o efficient_sam_vits.pt.zip https://github.com/yformer/EfficientSAM/raw/main/weights/efficient_sam_vits.pt.zip && python -c "import zipfile; zipfile.ZipFile('efficient_sam_vits.pt.zip').extractall('.')" && rm -f efficient_sam_vits.pt.zip; }
 ls -la $B/ckpt/efficient_sam_vits.pt

@@ -1,0 +1,19 @@
+{
+ "n": 5088,
+ "p_det": 30.89622641509434,
+ "mean_iou": 0.32130876222932103,
+ "pass_rate_m": 67.55110062893081,
+ "pass_rate_ma": 13.305817610062892,
+ "pass_rate_ma_signed": 12.205188679245282,
+ "err_adir_all_deg": 47.84053057586687,
+ "err_adir_matched_deg": 32.24761420611101,
+ "err_adir_signed_all_deg": 57.802993432918,
+ "axis_flip_rate": 13.63993710691824,
+ "axis_flip_rate_rot": 22.56554307116105,
+ "origin_err_m": 0.7145730682374932,
+ "origin_line_err_m": 0.6635997900902167,
+ "n_matched": 1572,
+ "n_rot": 1068,
+ "preds_file": "/workspace/datasets/baselines/results/mopd_rgb/preds.jsonl",
+ "n_preds_in_file": 5088
+}

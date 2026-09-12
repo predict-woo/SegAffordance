@@ -1646,3 +1646,29 @@ The faithful runs continue as commissioned; as documented alternatives for the u
 pre-building (CPU only, no training launched): `data/usdnet_sf3d_v1cm` (converter `--voxel 0.01`)
 and `data/opd_sf3d_512` (converter `--size 512 384`, recentred). A resolution-matched OPDFormer at
 512x384 would cost ~4x the 256x192 run (~20 h on a PRO 6000).
+
+**DONE 2026-09-12 15:30 UTC — all five baselines complete, all baseline pods deleted (verified:
+only segaffordance-dev + the peer's pod remain). Spend ~$70 total (5 pods, ~34 pod-hours).**
+Results (our 5,088-sample test split, oracle best-IoU instance per GT element, no text; full
+tables in `experiments/INDEX.md` "Baselines" section + `experiments/baselines_sf3d/<id>/notes.md`):
+
+| model | PDet | mIoU | type % | MA | axis matched | origin (m) |
+|---|---|---|---|---|---|---|
+| OPDFormer-C RGB-D | 27.6 | 0.280 | 62.2 | 22.1 | 21.9 | 0.381 |
+| OPDFormer-P RGB-D | 24.6 | 0.276 | 66.3 | 12.9 | 34.3 | 0.771 |
+| OPDFormer-P RGB | 30.9 | 0.320 | 67.9 | 15.6 | 31.7 | 0.743 |
+| MOPD RGB (from P-RGB init) | 30.9 | 0.321 | 67.6 | 13.3 | 32.2 | 0.715 |
+| USDNet (2 cm scenes, per-frame projection) | 0.0 | 0.071 | 47.2 | 23.1 | n.a. | 0.988 |
+| ours (cfframe seed 7, text-grounded) | 23.9 | 0.264 | 93.3 | 36.0 | 17.6 | 0.305 |
+
+Readings: (1) with oracle instance selection the OPD detectors' masks are competitive or better
+than ours, but every baseline is far behind on articulation (MA 13-23 vs 36, type 47-68 vs 93,
+origin 0.38-0.99 vs 0.31 m); (2) the oracle protocol flatters detectors (their own test AP50 is
+1.5-5.5; only ~230-320 of the matched instances have confidence > 0.5) — a confidence-thresholded
+or top-1 protocol is a re-export from the kept `runs/<run>/test/inference/instances_predictions.pth`;
+(3) SF3D targets are tiny for the upstream recipes (256x192: ~12 px; 2 cm voxels: 11 points) —
+variant datasets `data/opd_sf3d_512` (complete, recentred) and `data/usdnet_sf3d_v1cm` (partial,
+resumable) are on the volume for resolution-matched runs (~$40 / ~$20) if the user wants them;
+(4) MOPD without its Baidu checkpoint equals its init. Open follow-ups: non-oracle protocol export;
+OPDFormer-C at 512x384; USDNet at 1 cm; second seeds. Untracked mutagen note: results/preds live
+under `datasets/baselines/results/` (volume only).
