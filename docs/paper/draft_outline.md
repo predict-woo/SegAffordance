@@ -123,7 +123,7 @@ that also segments and localises the part.
 
 ## Paper-blocking TODO
 
-- [ ] Pick the final model (dense + offset vs field) after `20260913_field_joint4_l2anchor`.
+- [x] Final model: dense + offset loss (`20260913_joint4_decoder_l2anchor_dense_off`); the field model is the research line.
 - [ ] SF3D-only control on the final model.
 - [ ] Seeds on headline rows.
 - [ ] RGB-D variant of the final model.

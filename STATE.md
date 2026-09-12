@@ -340,6 +340,19 @@ and VERIFY; ARCTIC hinge probe on every checkpoint. Plan: wave 1 = query / attnp
 dense hinge-voting head, built while stock is dry); wave 2 = the best readout on the cf_frame SF3D
 side (the MA record recipe), deeper/wider readout, combinations; keep the l2anchor baseline as the row.
 
+## FINAL MODEL FIXED (user, 2026-09-13 ~00:30 local, 09-14): `20260913_joint4_decoder_l2anchor_dense_off`
+
+Checkpoint `experiments/20260913_joint4_decoder_l2anchor_dense_off/checkpoints/best-epoch17-sf3dval1.1404.ckpt`,
+recipe `config/joint4_decoder_l2anchor_dense_off.yaml` = CRIS trunk (frozen DINOv3 + adapter + text-gated
+FPN + 3-layer decoder + dynamic-kernel projector) + DENSE HINGE VOTING head (`articulation_readout: dense`)
++ per-pixel offset loss 0.5 + pooled MLP heads for z_p / z_q / arc length + analytic decoder; SF3D side
+L2 2pi + axis 0.5, 2D side projection loss + type CE; joint4 data. SF3D MA 46.0 / 45.3 (all-time best),
+matched 12.3, origin 0.281, masks 0.247 / 20.3; ARCTIC hinge offset 0.029 (best); in the wild the dense
+family gives the most vertical / edge-near door hinge (`viz/20260913_iphone_model_zoo`). Single seed —
+replicate + SF3D-only control are the first paper runs. The field model stays the research line
+(best masks, radius collapse on hand video to fix). Chosen over field / query / l2anchor by the user
+after the ARCTIC and iPhone side-by-sides.
+
 ## NIGHT 2 RESULTS (2026-09-13 11:40 local) — 9 arms done, 4 in flight
 
 | arm (l2anchor recipe = L2 2pi + axis 0.5, joint decoder) | SF3D MA / signed | rot flips | origin | mIoU / PDet | HOI4D / EPIC mIoU | ARCTIC probe axis / flips / offset |
