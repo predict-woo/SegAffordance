@@ -68,6 +68,7 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 | [20260727_sf3d_reproc_debug](20260727_sf3d_reproc_debug/README.md) | One-off debug renders from the sf3d_processed_v2 rebuild (splat-mask A/B, arc-fix checks, per-frame inspections) | ad-hoc scripts, July 27–28 |
 | [20260727_sf3d_v1_dataset_audit](20260727_sf3d_v1_dataset_audit/README.md) | 100-sample audit of the v1 SF3D LMDB (frame/zoom/depth panels, contact sheet, geometry TSV) | `tools/sf3d_vis_samples.py` |
 | [20260720_opd_label_audits](20260720_opd_label_audits/README.md) | OPD sample renders + description-regeneration label audits | `tools/show_opd_samples.py`, `tools/label_render.py` |
+- `20260912_a3vlm_3doi_data_check` — A3VLM and 3DOI training targets decoded back onto their input images (converter sanity check before the single-shot runs).
 - `20260829_sf3d_cf_h1only_val_panels/` — GT | g19_fdiff (old record) | cf_h1only (new MA record, no traj head; yellow sweep = analytic decode of its articulation); 16 val samples seed 42421
 | 20260815_sf3d_mask_cutoff_curve | data-vs-cutoff curve for min_mask_area_frac (full-DB scan): 0.25%->19.3k, 0.10%->59.6k, 0.05%->120k, 0.01%->293k of 356.7k; knee sits in the useful range |
 | 20260815_sf3d_g8_closeup_panels_b2 | 16 more g8 close-up (seed 18827): relational grounding nailed ('top drawer next to bathtub', ax=21deg); the drawer/door annotation-vs-language conflict recurs (trans pull vs GT rot) |
