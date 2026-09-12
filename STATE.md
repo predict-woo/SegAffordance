@@ -67,7 +67,9 @@ silent mid-run deaths with truncated ~4.35G ckpts = volume quota.
 
 | role | experiment | checkpoint |
 |---|---|---|
-| **ALL-TIME BEST MA + all-round, NO DEPTH — joint decoder + cf_frame (seed 7)** | 20260912_joint4_decoder_cfframe_seed7 | best-epoch17-sf3dval1.0880 — MA **36.03** / signed **35.91** (record band 36.0-36.7 across 3 runs; prev record 32.94), type 93.3, all-axis **22.5** / signed-all **29.6** (records), rot flips **9.5** (record), PDet **23.9** (record), mIoU 0.264, origin 0.305, roughness 0 (analytic decoder). Recipe: `config/joint4_decoder_cfframe.yaml` (joint4 recipe, analytic decoder, SF3D side = closed_form_frame 2:1, 2D side = projection loss on the decoded arc + type CE) |
+| **ALL-TIME BEST SF3D ARTICULATION, NO DEPTH — dense hinge voting on the final recipe (SINGLE SEED, replicate running 2026-09-13)** | 20260913_joint4_decoder_l2anchor_dense | best-epoch13-sf3dval0.9789 — MA **44.01** / signed **42.69** (prev 36.73 / 36.14), type **96.0**, matched **11.4** / all **19.6** / signed-all **25.0** (all records), all-flips 7.6 / rot 12.7, origin **0.248** (= record band), radius 0.124, mIoU **0.2765** (record), PDet 22.5, traj_dir 94.8. Recipe `config/joint4_decoder_l2anchor_dense.yaml` = joint decoder, L2 2pi + axis 0.5 on SF3D, `articulation_readout: dense` (per-pixel votes). COST: hand-source masks collapse (HOI4D 0.508, EPIC 0.186, ARCTIC 0.509) and ARCTIC hinge transfer is worse (offset 0.112, flips 30 %) — not the hand-video model |
+| **best hand-video hinge transfer + near-record SF3D on the final recipe — query readout** | 20260913_joint4_decoder_l2anchor_query | best-epoch16-sf3dval1.1168 — MA 35.75 / 35.24, type 93.9, all-flips 8.1, PDet 23.35, traj_dir 93.5, EPIC masks 0.386 (best joint arm), ARCTIC probe flips 13.4 % (base 26.4) / axis 41.2; origin 0.308. Recipe `config/joint4_decoder_l2anchor_query.yaml` |
+| (prev) ALL-TIME BEST MA + all-round, NO DEPTH — joint decoder + cf_frame (seed 7) | 20260912_joint4_decoder_cfframe_seed7 | best-epoch17-sf3dval1.0880 — MA **36.03** / signed **35.91** (record band 36.0-36.7 across 3 runs; prev record 32.94), type 93.3, all-axis **22.5** / signed-all **29.6** (records), rot flips **9.5** (record), PDet **23.9** (record), mIoU 0.264, origin 0.305, roughness 0 (analytic decoder). Recipe: `config/joint4_decoder_cfframe.yaml` (joint4 recipe, analytic decoder, SF3D side = closed_form_frame 2:1, 2D side = projection loss on the decoded arc + type CE) |
 | **highest MA + sharpest sign — same at 3:1** | 20260912_joint4_decoder_cfframe_a3 | best-epoch19-sf3dval1.2559 — MA **36.73** / signed 36.14, matched 16.1, all-flips **7.8** (record); SF3D masks 0.247 / 18.5; best hand-source masks of the decoder arms (HOI4D 0.614) |
 | first record run (seed 42) | 20260912_joint4_decoder_cfframe | best-epoch17-sf3dval1.1178 — MA 36.36 / 35.73 |
 | **best MA (3D), single seed — NO DEPTH, DCT chain** | 20260910_sf3d_g19_dct_rgb_scalefree_ft_multi3dct | best-epoch24-valloss1.0178 — MA **32.80**/signed **32.43** (records by +1.7), origin 0.256 (0.006 off the record), point3d 0.248, rot flips 9.83 (= record), roughness 0.0081; RGB-only scale-free DCT-6 model, SF3D post-training from the multi3 DCT 2D arm (DCT at both stages, nothing re-initialised). PDet 20.7 / mIoU 0.254 (lowest of the recent arms) |
@@ -345,7 +347,18 @@ side (the MA record recipe), deeper/wider readout, combinations; keep the l2anch
 | attnpool | 33.08 / 32.41 | 17.4 | 0.345 | 0.273 / 22.0 | 0.622 / 0.312 | 49.3 / 34.0 % / 0.082 |
 | **query** (`20260913_joint4_decoder_l2anchor_query`, best-epoch16) | **35.75 / 35.24** | 15.7 (all 8.1) | 0.308 | 0.270 / **23.35** | 0.625 / **0.386** | **41.2 / 13.4 %** / 0.087 |
 | cf_frame + query (wave 2) | 33.77 / 33.45 (cf_frame alone 36.36) | 13.9 | 0.298 | 0.256 / 21.0 | **0.641 / 0.391** | 40.6 / 37.7 % / 0.095 |
-| dense, mlp1024 | pending (both at epoch 19) | | | | | |
+| **dense** (`20260913_joint4_decoder_l2anchor_dense`, best-epoch13) | **44.01 / 42.69** (ALL-TIME RECORD +7.3) | **12.7** (all 7.6) | **0.248** | **0.2765** / 22.5 | 0.508 / 0.186 (collapse) | 45.8 / 30.4 % / 0.112 (worse) |
+| mlp1024 | pending (epoch ~18) | | | | | |
+
+**Dense hinge voting (06:15):** per-pixel votes for axis / type / hinge offset, averaged under the part
+mask, are the biggest single jump in the project: every SF3D column at or beyond the previous best
+(matched axis 11.4 deg, type 96.0, origin 0.248, masks 0.2765) with NO per-pixel loss. The cost: the
+2D-only sources lose their masks (the projection loss reaches the map per pixel through the votes,
+uncontrolled without axis/origin GT) and ARCTIC hinge transfer is worse. Wave 3 launched 06:25:
+`dense_seed7` (replicate — mandatory at this effect size) and `dense_off` (per-pixel offset loss 0.5
+toward q*'s projection on SF3D); pods jdec-dseed7 / jdec-doff. Next structural question after that:
+the 2D-side handling of the votes (detach on 2D batches / lower projection weight / dense + attnpool
+for the scalar heads) so the SF3D gain keeps the hand masks.
 
 Readings: the QUERY readout is the structural win — +4.7 MA on the user's final loss (= the cf_frame
 record band), best flips / type / PDet / traj_dir of the family, EPIC masks 0.386, ARCTIC sign flips
