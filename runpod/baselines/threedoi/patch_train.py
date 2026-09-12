@@ -50,6 +50,46 @@ patch("train.py", [
      "            optimizer.zero_grad()\n"),
 ], "SF3D_PATCHED")
 
+# --- early stopping on validation loss (user request 2026-09-13) -------------------------------
+# Their val loop composes a per-batch loss and throws it away (`losses = []` is never appended to),
+# validates only every `validation_epoch_interval` epochs and always exports the LAST checkpoint.
+# We (a) accumulate the val loss and return it, (b) keep the best-val checkpoint separately, and
+# (c) stop when it has not improved for SF3D_EARLY_STOP_PATIENCE validations. Training maths,
+# losses and hyper-parameters are untouched; this only decides when to stop and which checkpoint
+# to export.
+patch("train.py", [
+    ("        loss += cfg.optimizer.lbd_mask * metrics['loss_mask']\n        loss += cfg.optimizer.lbd_dice * metrics['loss_dice']\n\n        # valid\n",
+     "        loss += cfg.optimizer.lbd_mask * metrics['loss_mask']\n        loss += cfg.optimizer.lbd_dice * metrics['loss_dice']\n"
+     "        losses.append(float(loss))  # SF3D_EARLYSTOP: their `losses` list is never filled\n\n        # valid\n"),
+    ("    if accelerator.is_local_main_process:\n        logger.info(\"-------------------------------------------------------\")\n        logger.info(\"validation results:\")\n",
+     "    val_results['loss'] = float(sum(losses) / max(len(losses), 1))  # SF3D_EARLYSTOP\n"
+     "    if accelerator.is_local_main_process:\n        logger.info(\"-------------------------------------------------------\")\n        logger.info(\"validation results:\")\n"),
+    ("        if epoch % cfg.validation_epoch_interval == 0:\n            evaluate(cfg, model, val_dataloader, accelerator, stats)\n",
+     "        if epoch % cfg.validation_epoch_interval == 0:\n"
+     "            _val = evaluate(cfg, model, val_dataloader, accelerator, stats)\n"
+     "            _vl = float(_val.get('loss', float('nan')))\n"
+     "            _pat = int(os.environ.get('SF3D_EARLY_STOP_PATIENCE', '0'))\n"
+     "            if _pat > 0 and _vl == _vl:\n"
+     "                if _vl < _best_val[0] - 1e-4:\n"
+     "                    _best_val[0], _best_val[1] = _vl, 0\n"
+     "                    if accelerator.is_main_process:\n"
+     "                        _bp = os.path.join(output_dir, 'checkpoints', 'checkpoint_best.pth')\n"
+     "                        torch.save({'model': accelerator.unwrap_model(model).state_dict(),\n"
+     "                                    'optimizer': optimizer.state_dict(), 'stats': pickle.dumps(stats),\n"
+     "                                    'val_loss': _vl, 'epoch': epoch}, _bp)\n"
+     "                        logger.info(f'SF3D_EARLYSTOP new best val loss {_vl:.4f} at epoch {epoch} -> {_bp}')\n"
+     "                else:\n"
+     "                    _best_val[1] += 1\n"
+     "                    logger.info(f'SF3D_EARLYSTOP val loss {_vl:.4f} did not beat {_best_val[0]:.4f} '\n"
+     "                                f'({_best_val[1]}/{_pat} validations without improvement)')\n"
+     "                    if _best_val[1] >= _pat:\n"
+     "                        logger.info('SF3D_EARLYSTOP stopping: validation loss has stopped falling')\n"
+     "                        break\n"),
+    ("    # Run the main training loop.\n    for epoch in range(start_epoch, cfg.optimizer.max_epochs):\n",
+     "    # Run the main training loop.\n    _best_val = [float('inf'), 0]  # SF3D_EARLYSTOP: [best val loss, validations since]\n"
+     "    for epoch in range(start_epoch, cfg.optimizer.max_epochs):\n"),
+], "SF3D_EARLYSTOP")
+
 patch("monoarti/stats.py", [
     ("from visdom import Visdom\n", "try:\n    from visdom import Visdom  # SF3D_PATCHED: optional\nexcept ImportError:\n    Visdom = None\n"),
 ], "SF3D_PATCHED")

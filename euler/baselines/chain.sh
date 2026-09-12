@@ -59,17 +59,19 @@ print('repathed', p.name)" "$f" "$DATA"
   RUNS=$BASE/runs/$NAME
   export WANDB_MODE=offline OMP_NUM_THREADS=4 PYTHONUNBUFFERED=1
   export SF3D_LIMIT_VAL_ITERS="${SF3D_LIMIT_VAL_ITERS:-200}"
+# stop once the validation loss stops falling; export the best-val checkpoint, not the last
+export SF3D_EARLY_STOP_PATIENCE="${SF3D_EARLY_STOP_PATIENCE:-4}"
   cd $R
   resume=(); [ -f $RUNS/checkpoints/checkpoint.pth ] && resume=(checkpoint_path=$RUNS/checkpoints/checkpoint.pth) && echo "resuming"
   if [ "$MODE" = "export" ]; then
     $V/bin/python $SEG/tools/baselines_sf3d/run.py $SEG/tools/baselines_sf3d/threedoi_export.py \
-      --repo $R --ckpt "${CKPT:-$RUNS/checkpoints/checkpoint.pth}" --data $D --out $RUNS/preds.jsonl --batch 2 --workers 4 \
+      --repo $R --ckpt "${CKPT:-$([ -f $RUNS/checkpoints/checkpoint_best.pth ] && echo $RUNS/checkpoints/checkpoint_best.pth || echo $RUNS/checkpoints/checkpoint.pth)}" --data $D --out $RUNS/preds.jsonl --batch 2 --workers 4 \
       2>&1 | tee -a $LOGS/export_$NAME.log
   else
     $V/bin/accelerate launch --num_processes $NPROC --mixed_precision fp16 \
       --main_process_port $(( ((RANDOM<<15)|RANDOM) % 49152 + 10000 )) \
       train.py --config-name sam_sf3d hydra.run.dir=$RUNS output_dir=$RUNS \
-      optimizer.max_epochs="${EPOCHS:-200}" "${resume[@]}" 2>&1 | tee -a $LOGS/train_$NAME.log
+      optimizer.max_epochs="${EPOCHS:-62}" validation_epoch_interval="${VAL_EVERY:-2}" "${resume[@]}" 2>&1 | tee -a $LOGS/train_$NAME.log
   fi
   ;;
 *) echo "unknown: $WHICH" >&2; exit 1 ;;

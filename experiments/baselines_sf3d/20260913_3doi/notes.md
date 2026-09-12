@@ -20,6 +20,13 @@ budget: **62 epochs at effective batch 8** = 1.99M presentations = 250,000 steps
 2 GPUs, so the effective batch is reproduced with batch 4 per GPU, which also preserves their
 learning-rate-to-batch ratio. Everything else in `optimizer:` is theirs verbatim.
 
+**Early stopping (user request).** Their loop trains a fixed number of epochs and exports the LAST
+checkpoint; it also composes a validation loss per batch and throws it away (`losses = []` is never
+appended to). We accumulate that loss, validate every 2 epochs, keep `checkpoint_best.pth` whenever
+it improves, stop after 4 validations without improvement, and export from the best checkpoint.
+This changes only when training stops and which checkpoint is scored -- no loss, optimiser or
+hyper-parameter is touched -- and it can only reduce compute relative to the 62-epoch budget above.
+
 **Deviations (all documented, none touch the training math).**
 - `SF3D_LIMIT_VAL_ITERS=200`: their validation walks the whole val split and fires at epoch 0
   (`epoch % interval == 0`), ~1 h per pass on our 3,495-frame bvalid split. Nothing selects a

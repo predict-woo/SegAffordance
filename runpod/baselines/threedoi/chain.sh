@@ -13,6 +13,10 @@ RUNS=$B/runs/$NAME; mkdir -p $LOGS /workspace/tmp
 export TMPDIR=/workspace/tmp WANDB_MODE=offline OMP_NUM_THREADS=4 PYTHONUNBUFFERED=1
 # cap the (unused-for-selection) validation pass; see runpod/baselines/threedoi/patch_train.py
 export SF3D_LIMIT_VAL_ITERS="${SF3D_LIMIT_VAL_ITERS:-200}"
+# stop once the validation loss stops falling; export the best-val checkpoint, not the last
+export SF3D_EARLY_STOP_PATIENCE="${SF3D_EARLY_STOP_PATIENCE:-4}"
+# batch 2 at 1024x768 peaks near 20 GB/GPU (measured); needs a 40 GB+ card. Reduce fragmentation.
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 SEG=/workspace/SegAffordance
 echo "== $(date -u) $MODE $NAME on $NPROC x $(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)"
 cd $R
@@ -47,12 +51,12 @@ case $MODE in
       touch $RUNS/.train_done
     fi
     echo "== $(date -u) train done"; ls $RUNS/checkpoints | tail -3
-    export_preds "${CKPT:-$RUNS/checkpoints/checkpoint.pth}" $RUNS/preds.jsonl > $LOGS/export_$NAME.log 2>&1
+    export_preds "${CKPT:-$([ -f $RUNS/checkpoints/checkpoint_best.pth ] && echo $RUNS/checkpoints/checkpoint_best.pth || echo $RUNS/checkpoints/checkpoint.pth)}" $RUNS/preds.jsonl > $LOGS/export_$NAME.log 2>&1
     tail -1 $LOGS/export_$NAME.log; wc -l $RUNS/preds.jsonl
     touch $RUNS/CHAIN_DONE; echo "== $(date -u) CHAIN_DONE $NAME"
     ;;
   export)
-    export_preds "${CKPT:-$RUNS/checkpoints/checkpoint.pth}" $RUNS/preds.jsonl > $LOGS/export_$NAME.log 2>&1
+    export_preds "${CKPT:-$([ -f $RUNS/checkpoints/checkpoint_best.pth ] && echo $RUNS/checkpoints/checkpoint_best.pth || echo $RUNS/checkpoints/checkpoint.pth)}" $RUNS/preds.jsonl > $LOGS/export_$NAME.log 2>&1
     tail -1 $LOGS/export_$NAME.log; touch $RUNS/CHAIN_DONE
     ;;
 esac
