@@ -4,6 +4,11 @@
 # torch 2.0.1 pin of LLaMA2-Accessory's requirements.txt). Idempotent.
 set -euo pipefail
 B=/workspace/bl; R=$B/repos; CK=$B/ckpt; mkdir -p $R $CK $B/logs $B/runs $B/data /workspace/tmp
+# Single-instance lock. Two concurrent runs each start their own `curl -C -` per weight shard, all
+# writing the SAME 19.9 GB files at independent offsets -- the result is a corrupt checkpoint that
+# still has the right size, so the size check below would not catch it. Seen 2026-09-13 on bl-a3vlm.
+exec 9> /workspace/bl/.setup_env.lock
+flock -n 9 || { echo "setup_env.sh is already running (lock held); refusing to start a second copy" >&2; exit 3; }
 export PIP_BREAK_SYSTEM_PACKAGES=1 TMPDIR=/workspace/tmp
 python -c "import torch; print('torch', torch.__version__, 'cuda', torch.cuda.is_available(), torch.cuda.device_count(), 'gpus')"
 # LLaMA2-Accessory requirements.txt minus the torch lines (already in the image) + our converter deps.
@@ -34,6 +39,18 @@ for f in consolidated.00-of-02.model.pth consolidated.01-of-02.model.pth; do
   [ -f .done_$f ] || { curl -sL -C - -o $f "$HF/$f" && [ "$(stat -c %s $f)" = 19909875004 ] && touch .done_$f; } &
 done
 wait; ls -la $CK/sphinx1k; cat $CK/sphinx1k/config.json; echo
+# size alone cannot detect interleaved writes; confirm each shard actually deserialises
+for f in $CK/sphinx1k/consolidated.*.model.pth; do
+  python -c "
+import sys, torch
+p = sys.argv[1]
+try:
+    torch.load(p, map_location='meta' if hasattr(torch, 'device') else 'cpu', mmap=True, weights_only=True)
+    print('shard ok', p)
+except Exception as e:
+    print('SHARD CORRUPT', p, type(e).__name__, e); sys.exit(1)
+" "$f" || exit 1
+done
 cd $R/LLaMA2-Accessory/accessory && python -c "import sys; sys.path.insert(0, '..'); from accessory.model.LLM import llama_ens5; from accessory.model.meta import MetaModel; print('a3vlm import ok')"
 touch $B/.env_ready   # artefact-based readiness flag (ENV_READY), see scripts/a3vlm_auto.sh
 echo "== a3vlm env done"
