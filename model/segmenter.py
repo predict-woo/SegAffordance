@@ -436,6 +436,9 @@ class CRIS(nn.Module):
                 in_dim=model_params.fpn_out[1], hidden=getattr(model_params, "dense_hidden", 256)
             )
             self.motion_mlp = None
+        # Set per batch by the trainer from the loss profile (loss_params.
+        # dense_trunk_detach): votes from a detached map on 2D-only sources.
+        self.dense_trunk_detach = False
 
         if self.channels_last:
             self.to(memory_format=torch.channels_last)
@@ -588,7 +591,7 @@ class CRIS(nn.Module):
         if self.dense_head is not None:
             # Dense hinge voting: the origin the lifts / condition / decoder
             # use is the part's vote, not the heatmap's soft-argmax.
-            dense_out = self.dense_head(fq, mask_for_pooling)
+            dense_out = self.dense_head(fq.detach() if self.dense_trunk_detach else fq, mask_for_pooling)
             origin_uv = dense_out["origin_uv"].to(fq.dtype)
         if self.readout is not None:
             # (B, K, C): query 0 takes the pooled slot; the other queries are

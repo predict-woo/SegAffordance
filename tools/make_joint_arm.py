@@ -56,7 +56,7 @@ def main():
     for p in a.profile:
         prof, kv = p.split(":", 1)
         k, v = kv.split("=", 1)
-        _set(cfg["model"]["source_profiles"][prof], k, v)
+        _set(cfg["model"]["loss_profiles"][prof], k, v)
     text = yaml.safe_dump(cfg, sort_keys=False, width=120)
     text = text.replace(base_exp, a.exp)
     header = f"# JOINT decoder arm `{a.tag}` ({a.exp[:8]}): {a.what}. Derived from {a.base} by tools/make_joint_arm.py; overrides: {' '.join(a.set + a.profile) or 'none'}.\n"

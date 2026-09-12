@@ -239,6 +239,12 @@ class OPDRealTrainingModule(pl.LightningModule):
         motion_gt = targets.motion
         motion_type_gt = targets.motion_type
 
+        # 2026-09-13: per-batch model flag from the active loss profile — the
+        # dense voting head reads a detached map on sources whose profile says so.
+        core = getattr(self.model, "_orig_mod", self.model)
+        if getattr(core, "dense_head", None) is not None:
+            core.dense_trunk_detach = bool(getattr(self.loss_params, "dense_trunk_detach", False))
+
         tokenized_words = self.model.tokenize(
             list(word_str_list), self.model_params.word_len
         ).to(self.device)

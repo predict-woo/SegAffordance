@@ -301,6 +301,12 @@ class LossParams:
     # revolute + in-frame rows only. 0 = off (votes learn only through the
     # averaged origin).
     dense_offset_weight: float = 0.0
+    # 2026-09-13 dense voting on 2D-only sources: compute the votes from a
+    # DETACHED feature map, so the projection loss (the only articulation
+    # signal on hand video) trains the voting head but cannot pull the trunk
+    # away from the masks. Meant as a per-source loss-profile override
+    # (the trainer copies it onto the model before each batch's forward).
+    dense_trunk_detach: bool = False
     # MSE of the direct 3D interaction point vs GT trajectory_3d[0].
     # Replaces point_map+coord (both zero on the 3D path) at the same
     # total weight budget.

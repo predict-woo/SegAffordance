@@ -48,6 +48,37 @@ def test_dense_offset_loss_is_logged_finite_and_trains_the_votes():
     assert last.weight.grad[8:].abs().sum() > 0          # the offset channels got gradient
 
 
+def test_dense_trunk_detach_keeps_vote_gradients_off_the_trunk():
+    from tests.test_split_heads import _inputs
+    assert {f.name: f.default for f in dataclasses.fields(LossParams)}["dense_trunk_detach"] is False
+    m = _dense_module(0.0).model
+    m.train()
+    img, depth, word, mask = _inputs(B=2, size=64)
+    K = torch.tensor([[[1.0, 0.0, 0.5], [0.0, 1.0, 0.5], [0.0, 0.0, 1.0]]]).repeat(2, 1, 1)
+    trunk = next(m.neck.parameters())
+    m.dense_trunk_detach = True
+    out = m(img, depth, word, mask, None, None, None, K)
+    (out.motion_pred_rot.sum() + out.origin_uv.sum()).backward()      # vote-only objective
+    assert m.dense_head.net[-1].weight.grad is not None and m.dense_head.net[-1].weight.grad.abs().sum() > 0
+    assert trunk.grad is None or trunk.grad.abs().sum() == 0
+    m.zero_grad(set_to_none=True)
+    m.dense_trunk_detach = False
+    out = m(img, depth, word, mask, None, None, None, K)
+    (out.motion_pred_rot.sum() + out.origin_uv.sum()).backward()
+    assert trunk.grad is not None and trunk.grad.abs().sum() > 0
+
+
+def test_trainer_copies_the_profile_flag_onto_the_model():
+    m = _dense_module(0.0)
+    m.log = lambda *a, **k: None
+    m.loss_params = dataclasses.replace(m.loss_params, dense_trunk_detach=True)
+    m._common_step(_g7_batch(), 0, "train")
+    assert m.model.dense_trunk_detach is True
+    m.loss_params = dataclasses.replace(m.loss_params, dense_trunk_detach=False)
+    m._common_step(_g7_batch(), 0, "train")
+    assert m.model.dense_trunk_detach is False
+
+
 def test_dense_offset_loss_absent_when_off():
     m = _dense_module(0.0)
     logged = {}
