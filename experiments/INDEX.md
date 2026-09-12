@@ -6,6 +6,7 @@ Eval columns are on 300 fixed OPDMulti-val samples (seed 0) unless noted;
 
 | id | dataset | recipe | best val loss | mIoU | det% | type% | axis° | verdict |
 |---|---|---|---|---|---|---|---|---|
+| [20260913_joint4_decoder_l2anchor_query_pos](20260913_joint4_decoder_l2anchor_query_pos/) | SF3D+HOI4D+EPIC+ARCTIC (JOINT) | OPTION 1: location-conditioned queries (point / hinge sine codes into the depth, length and axis queries) with the depth heads' grid samples removed | 1.1439 (ep19) | 0.251 | 20.4 | — | 24.7 (matched 17.6) | MA 34.98 / 34.34 (query seeds 35.75 / 33.57 — neutral), point3d 0.292, HOI4D 0.630 / ARCTIC 0.606 masks (best query arm), hinge offset 0.088 (=) — the grid sample was not load-bearing; no placement gain from location alone |
 | [20260913_joint4_decoder_l2anchor_query_w1024](20260913_joint4_decoder_l2anchor_query_w1024/) | SF3D+HOI4D+EPIC+ARCTIC (JOINT) | query readout x head width 1024 | 1.0775 (ep19) | 0.249 | 20.8 | — | 23.8 (matched 16.8) | MA 38.56 / 37.56 (best query arm) but masks/PDet down to the mlp1024 level, EPIC 0.222, ARCTIC offset 0.108 — width takes the trunk for MA; 2-layer/256 stays the all-round query arm |
 | [20260913_joint4_decoder_l2anchor_dense_d2d](20260913_joint4_decoder_l2anchor_dense_d2d/) | SF3D+HOI4D+EPIC+ARCTIC (JOINT) | dense hinge voting with the hand-video votes computed from a DETACHED map (2d profile: dense_trunk_detach) | 1.0920 (ep13) | 0.269 | 20.5 | — | 20.6 (matched 12.5) | MA 41.63 / 40.72 (dense 44-45), type 96.0, traj_dir 94.9, origin 0.302 (dense 0.25); HOI4D masks half-recovered (0.582 vs 0.51-0.55), EPIC not (0.214); ARCTIC offset 0.072 — partial answer to the mask collapse |
 | [20260913_joint4_decoder_l2anchor_dense_off](20260913_joint4_decoder_l2anchor_dense_off/) | SF3D+HOI4D+EPIC+ARCTIC (JOINT) | dense hinge voting + per-pixel offset loss toward q*'s projection (0.5) on SF3D | 1.1404 (ep17) | 0.247 | 20.3 | — | 20.3 (matched 12.3) | MA **45.97 / 45.32** (best of all arms), origin 0.281 (dense 0.25), masks lower; **ARCTIC hinge-line offset 0.029** (every other arm 0.07-0.16) — the first transferable hinge PLACEMENT; sign still unstable (55 % flips) |
@@ -146,3 +147,22 @@ SigLIP 2 ep24 reaches 69.2% vs ep17's 68.4%. Treat cross-model det gaps under
 | 20260907_sf3d_g19_dct_ft_hoi4d_plain | SF3D | g19_dct recipe (3D-DCT, full data, 30 ep) initialized from HOI4D v2 baseline (plain head; traj head output re-init) | 0.9957 | 0.231 | 17.6 | — | 27.8 (matched 16.4) | MA 27.14 (+1.2 over scratch, below both DCT inits), masks down (PDet 17.6 vs 21.7); plain-head init transfers less; single seed |
 | 20260907_sf3d_g19_dct_ft_hoi4d_tf_plain | SF3D | g19_dct recipe (3D-DCT, full data, 30 ep) initialized from HOI4D v2 teacher_forcing_plain (plain head + GT anchor; traj head output re-init) | 0.9768 | 0.256 | 20.0 | — | 28.0 (matched 20.0) | MA 30.62 (2nd best init), roughness 0.0079; teacher-forced HOI4D arms transfer better than detach arms on both heads; single seed |
 | 20260907_xeval_sf3d_on_hoi4d | HOI4D v2 held-out (eval only) | cross-eval: SF3D-trained ckpts tested on HOI4D with the teacher_forcing config | — | 0.044 / 0.131 / 0.113 | 0.2 / 2.4 / 2.0 | — | — | pure SF3D → HOI4D: zero transfer; SF3D post-training forgets HOI4D (0.727/88.0 → ~0.12/2); HOI4D pretraining = better init, not a two-domain model |
+
+## Baselines (external models retrained on SF3D)
+
+Session ethz-workspace-34, 2026-09-12. Each row = the upstream code and recipe retrained on our SF3D
+train split (182 scenes; 20 more held out for their own checkpoint cadence) and scored on our
+5,088-sample test split with our metric definitions (`tools/baselines_sf3d/score_predictions.py`).
+Detectors have no text input: per GT element the predicted instance with the highest mask IoU is
+taken (ORACLE matching); unmatched elements fail every column. Details, deviations and their own
+evaluator numbers in `experiments/baselines_sf3d/<id>/notes.md`; plan in
+`docs/superpowers/plans/2026-09-12-sf3d-external-baselines.md`.
+
+| id | method | input | recipe | PDet | mIoU | type% | MA / signed | axis all / matched (deg) | flips all / rot | origin (m) | notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| [20260912_opdformer_c_rgbd](baselines_sf3d/20260912_opdformer_c_rgbd/) | OPDFormer-C (OPDMulti) | RGB-D 256x192 | their 60k-iter R50 Mask2Former recipe, 8 SF3D classes | 27.6 | 0.280 | 62.2 | 22.1 / 20.1 | 47.2 / 21.9 | 9.7 / 24.0 | 0.381 | best OPD articulation; own segm AP50 2.6 on test (elements ~12 px) |
+| [20260912_opdformer_p_rgbd](baselines_sf3d/20260912_opdformer_p_rgbd/) | OPDFormer-P (BMOC_V1) | RGB-D 256x192 | same + object pose = per-scene-recentred scene pose | 24.6 | 0.276 | 66.3 | 12.9 / 11.7 | 51.7 / 34.3 | 14.4 / 19.7 | 0.771 | world-frame + predicted pose halves MA |
+| [20260912_opdformer_p_rgb](baselines_sf3d/20260912_opdformer_p_rgb/) | OPDFormer-P (BMOC_V1) | RGB 256x192 | same, RGB only (MOPD init) | 30.9 | 0.320 | 67.9 | 15.6 / 14.4 | 47.6 / 31.7 | 13.7 / 21.8 | 0.743 | best OPD masks (oracle) |
+| [20260912_usdnet](baselines_sf3d/20260912_usdnet/) | USDNet (Articulate3D) | scene laser scan, 2 cm voxels | their train_mov.sh recipe, 200 ep from Mask3D scannet200, per-frame projection | 0.0 | 0.071 | 47.2 | 23.1 / 21.8 | 55.7 / n.a. | 5.6 / 9.4 | 0.988 | cannot segment 11-point elements (val AP50 0.035); axis votes transfer |
+| 20260912_mopd_rgb | MOPD (Locate n' Rotate) | RGB 256x192 | their 1k-iter lr 5e-6 fine-tune from OPDFormer-P RGB + EfficientSAM ViT-S | pending | | | | | | | MOPD-only layers from init (their ckpt is Baidu-only) |
+| reference | ours, 20260912_joint4_decoder_cfframe_seed7 | RGB 512 + text | joint decoder + cf_frame | 23.9 | 0.264 | 93.3 | 36.0 / 35.9 | 22.5 / 17.6 | 9.5 (rot) | 0.305 | text-grounded, no oracle matching |

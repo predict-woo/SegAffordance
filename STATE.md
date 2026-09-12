@@ -386,8 +386,11 @@ half-recovered (0.582), EPIC not (0.214), ARCTIC offset 0.072 — partial answer
 **query_w1024 (12:10):** MA 38.56 (best query arm) but masks/PDet/EPIC/hinge offset worse — width takes
 the trunk; the 2-layer/256 query arm stays the all-round one.
 
-**In flight (12:15):** `query_pos` (option 1, ETA ~16:30), `field` (relaunched after a lemon, ETA ~17:30).
-Spend ~$120 done + ~$20 in flight.
+**query_pos / option 1 (16:00):** MA 34.98 (query seed band 33.6-35.8 — neutral), point3d 0.292, best
+HOI4D / ARCTIC masks of the query family (0.630 / 0.606), hinge offset 0.088 (=): the single-pixel grid
+samples were not load-bearing; location conditioning alone does not buy placement.
+
+**In flight (16:05):** `field` (the clean field model; ETA ~17:30). Spend ~$130 done + ~$10 in flight.
 
 ## IN FLIGHT 2026-09-12 evening: ARTICULATION READOUT arms (three pods) — the head-bottleneck test
 
