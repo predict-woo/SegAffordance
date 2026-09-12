@@ -17,13 +17,19 @@ data:
   image_size: [768, 1024]
   num_workers: 4
 train:
-  batch_size: 2
+  # Their recipe is batch 2 x 4 GPUs = effective batch 8. Euler caps us at 2 GPUs, so batch 4 per
+  # GPU reproduces the same effective batch (and therefore the same lr-to-batch ratio) on 2 cards.
+  batch_size: 4
   depth_on: True
 test:
   mode: 'export_imgs'
   split: 'val'
 optimizer:
-  max_epochs: 200
+  # 62 epochs over our 32,171 frames = 1.99M image-presentations = 250,000 steps at effective
+  # batch 8, i.e. exactly the optimisation budget of their released 200 epochs over their 10,000
+  # images ("over 50K objects across 10K images", Qian & Fouhey ICCV'23 Sec. 4). Their literal 200
+  # epochs on our larger set would be 3.2x their budget (~15 days on 2 GPUs).
+  max_epochs: 62
   name: 'AdamW'
   mixed_precision: 'fp16'
   lr: 1e-4

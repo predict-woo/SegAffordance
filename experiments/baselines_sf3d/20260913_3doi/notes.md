@@ -11,6 +11,15 @@ depth 1.0, clip 0.1, 200 epochs). Our copy: `config/baselines/3doi_sam_sf3d.yaml
 except the dataset names, the basic (non-Slurm) launcher, checkpointing every epoch and
 `validation_epoch_interval: 10`.
 
+**Epoch count / optimisation budget.** Their released recipe is 200 epochs over the 3DOI train
+set, which the paper sizes at "over 50K objects across 10K images" (Qian & Fouhey, ICCV'23), at
+effective batch 8 (batch 2 x 4 GPUs) = 2.00M image-presentations = 250,000 optimizer steps. Our
+train split is 32,171 frames, 3.2x theirs, so their literal 200 epochs would be 6.43M
+presentations -- 3.2x their optimisation budget and ~15 days on 2 GPUs. We instead match the
+budget: **62 epochs at effective batch 8** = 1.99M presentations = 250,000 steps. Euler caps us at
+2 GPUs, so the effective batch is reproduced with batch 4 per GPU, which also preserves their
+learning-rate-to-batch ratio. Everything else in `optimizer:` is theirs verbatim.
+
 **Deviations (all documented, none touch the training math).**
 - `SF3D_LIMIT_VAL_ITERS=200`: their validation walks the whole val split and fires at epoch 0
   (`epoch % interval == 0`), ~1 h per pass on our 3,495-frame bvalid split. Nothing selects a
