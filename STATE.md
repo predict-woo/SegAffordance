@@ -1746,5 +1746,14 @@ encode/parse/export path. Two findings worth keeping:
   Every earlier baseline emits a mask only on matched rows, so all five published numbers are
   provably unchanged.
 
-**Status 2026-09-13 ~22:15 UTC:** 3DOI queued on Euler (smoke 13967514, full 13968368); A3VLM
-approved and waiting on 8- or 4-GPU stock in EU-FR-1 (the volume is locked to that datacenter).
+**A3VLM oracle ceiling** (GT answers through the real exporter + scorer): MA 99.9, type 100,
+axis 1.19 deg — but **PDet 34.1 / mIoU 0.408**, because their only spatial output is a 3D box and
+its 2D hull is a coarse mask for a thin functional element. Read their segmentation against 34.1.
+
+**Status 2026-09-13 ~23:15 UTC:** 3DOI queued on Euler (job 13971778, 2 x RTX PRO 6000, est. start
+slipped to ~09-15; smoke 13967514 passed end to end incl. resume). A3VLM: no 8-GPU pod exists in
+ANY volume-capable RunPod datacenter (probed by real create attempts), so the run uses the
+sanctioned 4-GPU fallback on a new volume `bl-apjp` (18bdh0pzec, AP-JP-1): pod bl-a3vlm,
+**4 x H200 141 GB, $18.36/h**, staging then smoke then the 3-epoch run, chained so the pod never
+idles. The EU-FR-1 volume `bl-eufr` is now redundant and should be deleted once this run is past
+its smoke.

@@ -18,6 +18,18 @@ around each element's back-projected mask, serialised as their 8 projected verti
 d normalised per image by the valid depth range. Train 129,291 samples/epoch (32,171 det + 48,560
 rec + 48,560 joint), test 5,088 elements over 3,313 frames.
 
+**Oracle ceiling (measured through the real exporter + scorer).** Feeding the GT answer strings
+through `a3vlm_preds_to_jsonl.py` and scoring them is the ceiling A3VLM can reach on our protocol:
+
+| | MA | type % | PDet | mIoU | axis all | axis matched | origin (m) |
+|---|---|---|---|---|---|---|---|
+| A3VLM oracle (GT answers) | 99.9 | 100.0 | 34.1 | 0.408 | 1.19 | 1.14 | 0.279 |
+
+Two things to carry into the results table: the answer format costs essentially nothing on the
+axis once long segments are used (1.19 deg mean, MA ceiling 99.9), but **PDet tops out at 34.1**
+because A3VLM's only spatial output is a 3D box, whose 2D hull is a coarse mask for a thin
+functional element. Their segmentation number must be read against that 34.1, not against 100.
+
 **Encoding ceiling (measured).** Their answer format quantises (u,v,d) to 2 decimals and one depth
 step is ~2.4 cm on SF3D, so the axis endpoints must be far apart or the format itself dominates the
 error. With element-sized segments (mean 0.135 m) a perfect model would score only 89.5% within the
