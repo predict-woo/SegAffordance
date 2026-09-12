@@ -34,7 +34,15 @@ def unwrap_opd(opd_ckpt):
 
 
 def compose(opd_state, esam_state, normal_state=None):
-    out = dict(opd_state)
+    from collections import OrderedDict
+
+    out = OrderedDict(opd_state)
+    # Keep detectron2's per-module version metadata: without it MaskFormerHead's
+    # legacy-format converter (_load_from_state_dict) re-prefixes the pixel-decoder
+    # keys ("sem_seg_head.pixel_decoder." -> ".pixel_decoder.pixel_decoder.") and the
+    # strict load in MOPD's constructor fails.
+    if hasattr(opd_state, "_metadata"):
+        out._metadata = dict(opd_state._metadata)
     out.update(remap_esam(esam_state))
     if normal_state:
         out.update({("normal_encoder." + k if not k.startswith("normal_encoder.") else k): v for k, v in normal_state.items()})
