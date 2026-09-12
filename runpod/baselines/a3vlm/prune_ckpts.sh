@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Keep only the newest N A3VLM checkpoint dirs. Each one is ~103 GB (40 GB model shards +
 # 63 GB consolidated optimizer state), so an unpruned 3-epoch run with per-500-iteration saves
-# would need ~900 GB. Runs alongside training; never touches a dir younger than $MIN_AGE_MIN
+# would need ~1.2 TB (measured: 135 GB per checkpoint, not the 103 GB the file sizes suggest --
+# the "other"/rank-specific files add ~30 GB). Never touches a dir younger than $MIN_AGE_MIN
 # minutes, so a checkpoint being written is safe.
 #   KEEP=2 RUNS=/workspace/bl/runs/a3vlm bash prune_ckpts.sh
 set -uo pipefail
