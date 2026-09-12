@@ -9,6 +9,7 @@
 #SBATCH --mem-per-cpu=6G
 #SBATCH --time=120:00:00
 #SBATCH --open-mode=append
+#SBATCH --requeue
 #SBATCH --signal=B:USR1@900
 # 3DOI (SAM ViT-B) on SF3D, released recipe. 2 GPUs is the hard per-user cap of the
 # INFK-cvg-leonhard-students QOS (a cli_filter rejects --gpus>2 outright), and RTX PRO 6000
