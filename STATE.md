@@ -367,8 +367,22 @@ ARCTIC flip rates are therefore NOT evidence; the hinge-line offset and mean axi
 (5) Ops: 3 power-capped Workstation pods caught (launcher clock check), 2 compile-cache crashes fixed,
 one 30-min Mac network outage (watchers now tolerate 2 h). Spend ~$95 done + 4 in flight (~$40).
 
-**In flight (11:40):** `dense_off` (per-pixel offset loss, epoch 19), `dense_d2d` (2D votes off the trunk),
-`query_w1024` (readout x width), `query_pos` (option 1: location-conditioned queries, no grid samples).
+**dense_off (11:40):** MA **45.97 / 45.32** (best of all arms), matched 12.3, origin 0.281 (dense 0.25), masks
+0.247; **ARCTIC hinge-line offset 0.029** (every other arm 0.07-0.16) — the per-pixel offset loss is the
+first thing that transfers hinge PLACEMENT to hand video (an image-space geometric rule); sign still
+unstable (55 %).
+
+**FIELD MODEL launched 12:00 (user: build the clean design now, new files only):** `model/field_model.py`
++ `train_field_better.py` — one decoded map, per-pixel fields (axis / type / hinge offset / log-depth /
+arc length) read out geometrically, predicted-mask weighting, depth field supervised by SF3D depth,
+2D votes off the trunk, no pooled vector / MLP heads / legacy modes (55M trainable vs 71M). Spec
+docs/superpowers/specs/2026-09-13-field-model-design.md; exp `20260913_field_joint4_l2anchor`
+(`config/joint4_decoder_field.yaml`: l2anchor loss + dense_offset 0.5 + depth_field 0.5, load_depth
+true), pod jdec-field. CRIS / legacy trainers / configs untouched (two defaulted dataclass fields added).
+Checkpoint keys are `model.core.*` (probe/viz tools need a FieldModel loader — TODO).
+
+**In flight (12:00):** `dense_d2d` (2D votes off the trunk, tests), `query_w1024` (tests), `query_pos`
+(option 1, epoch ~3), `field` (launching). Spend ~$105 done + ~$35 in flight.
 
 ## IN FLIGHT 2026-09-12 evening: ARTICULATION READOUT arms (three pods) — the head-bottleneck test
 
