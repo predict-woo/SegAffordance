@@ -1,0 +1,24 @@
+# Documentation copy: how OPDFormer / MOPD are trained on SF3D (runpod/baselines/opd/chain.sh).
+# The models run with THEIR configs unchanged (OPDMulti/opdformer/configs/opd_{c,p}_real.yaml ->
+# opd_base.yaml -> maskformer2_R50_bs16_50ep.yaml): R50 Mask2Former, 100 queries, batch 16,
+# AdamW 1e-4 (backbone x0.1), wd 0.05, 60k iters, steps (36k, 48k), AMP, COCO Mask2Former init.
+# Only the fit-to-data overrides below are passed via --opts:
+upstream:
+  repo: https://github.com/3dlg-hcvc/OPDMulti   # MOPD: https://github.com/lisiqi-zju/MOPD (their opd_base.yaml: lr 5e-6, 1000 iters, from a full checkpoint)
+  configs: {c_rgbd: configs/opd_c_real.yaml, p_rgbd: configs/opd_p_real.yaml, p_rgb: configs/opd_p_real.yaml}
+  input_format: {c_rgbd: RGBD, p_rgbd: RGBD, p_rgb: RGB}
+overrides:
+  MODEL.SEM_SEG_HEAD.NUM_CLASSES: 8            # SF3D affordance labels (foot_push, hook_pull, hook_turn, key_press, pinch_pull, plug_in, tip_push, unplug)
+  MODEL.PIXEL_MEAN: from data/opd_sf3d/stats.json   # per-dataset RGB(+depth mm) stats, as their per-dataset configs do
+  MODEL.PIXEL_STD: from data/opd_sf3d/stats.json
+  INPUT.MASK_FORMAT: bitmask                   # SF3D masks are sparse splat footprints (RLE), not polygons; mapper patched (runpod/baselines/opd/patch_mapper.py)
+  DATALOADER.NUM_WORKERS: 8
+  DATASETS.TEST: MotionNet_valid (during training) / MotionNet_test (final evaluate_on_log.py)
+data:
+  converter: tools/baselines_sf3d/sf3d_to_opd.py   # 256x192, portrait frames rolled 90 deg CW (exact camera roll), OPD y/z-flipped camera frame
+  splits: experiments/baselines_sf3d/splits.json   # train 182 scenes / valid 20 (checkpoint selection only) / test = our 22-scene 5,088-sample split
+  object_pose: cam_to_world (scene pose) for every part; diagonal = element bbox diagonal (m), floor 0.05
+code_patches:
+  - runpod/baselines/opd/patch_mapper.py          # bitmask GT
+  - runpod/baselines/opd/patch_numpy_aliases.py   # np.float -> float in their evaluator (numpy >= 1.24)
+  - MSDeformAttn: AT_DISPATCH_FLOATING_TYPES(value.type()) -> value.scalar_type() (torch >= 2.x), applied in setup_env.sh
