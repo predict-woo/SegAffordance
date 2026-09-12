@@ -1,0 +1,18 @@
+command: tools/sf3d_vis_val.py --model l2anchor config/sf3d_test_decoder_rgb_scalefree.yaml
+  experiments/20260912_joint4_decoder_l2anchor/checkpoints/best-epoch17-sf3dval1.1495.ckpt
+  --model query config/sf3d_test_decoder_rgb_scalefree_query.yaml experiments/20260913_joint4_decoder_l2anchor_query/checkpoints/best-epoch16-sf3dval1.1168.ckpt
+  --model dense config/sf3d_test_decoder_rgb_scalefree_dense.yaml experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
+  --out viz/20260913_readout_arms_hand_panels/sf3d --num 12 --seed 7 --scale 2 --ray-len
+  0.5
+tool_commit: 6eb9ecc
+generated: '2026-09-12T05:17:48+00:00'
+models:
+- name: l2anchor
+  config: config/sf3d_test_decoder_rgb_scalefree.yaml
+  ckpt: experiments/20260912_joint4_decoder_l2anchor/checkpoints/best-epoch17-sf3dval1.1495.ckpt
+- name: query
+  config: config/sf3d_test_decoder_rgb_scalefree_query.yaml
+  ckpt: experiments/20260913_joint4_decoder_l2anchor_query/checkpoints/best-epoch16-sf3dval1.1168.ckpt
+- name: dense
+  config: config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  ckpt: experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
