@@ -1,0 +1,13 @@
+command: tools/sf3d_vis_val.py --model dense config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
+  --model l2anchor config/sf3d_test_decoder_rgb_scalefree.yaml experiments/20260912_joint4_decoder_l2anchor/checkpoints/best-epoch17-sf3dval1.1495.ckpt
+  --out viz/20260914_dense_vs_l2anchor_sf3d_val --num 20 --seed 3
+tool_commit: 23aa8c7
+generated: '2026-09-13T23:34:13+00:00'
+models:
+- name: dense
+  config: config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  ckpt: experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
+- name: l2anchor
+  config: config/sf3d_test_decoder_rgb_scalefree.yaml
+  ckpt: experiments/20260912_joint4_decoder_l2anchor/checkpoints/best-epoch17-sf3dval1.1495.ckpt
