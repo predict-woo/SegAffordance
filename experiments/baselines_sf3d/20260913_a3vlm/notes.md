@@ -60,13 +60,15 @@ stopping at micro-step ~12,500 and resuming from the complete checkpoint at 12,4
 seen twice). Steady-state 0.83 s per micro-step of 4 samples after the change.
 
 **Training curve.** Causal-LM loss (`closs`, running average) 1.58 at the first steps -> 0.22 at
-micro-step 16,480 -> 0.20 at 24,480 -> 0.15 at the end of epoch 0 (32,320) -> 0.10 at the start of
-epoch 1: still descending, so epoch 1 is not wasted. Learning-rate schedule: the resume was
-launched with `--epochs 2`, so the cosine schedule anneals to `min_lr 0` at the end of epoch 1 (a
-proper 2-epoch schedule, lr 1.5e-5 at the end of epoch 0 from the 2e-5 peak). The first 12,479
-micro-steps ran under the original 3-epoch schedule and therefore at a learning rate a few percent
-above what a from-scratch 2-epoch schedule would have used at those steps; noted for completeness,
-not material.
+micro-step 16,480 -> 0.20 at 24,480 -> 0.15 at the end of epoch 0 (32,320) -> ~0.15 throughout
+epoch 1 (fluctuating 0.14-0.17, grad norm ~0.3). **Learning-rate schedule — correction.** The
+restart was meant to run with `--epochs 2`, but the chain's train branch hardcoded 3, so the run
+used the recipe's 3-epoch cosine throughout (lr 1.5e-5 at the end of epoch 0, 0.5e-5 at the end of
+epoch 1) and, unnoticed for ~1.5 h, continued into a third epoch (to micro-step 5,810, ~$27) before
+being stopped. The evaluated model is therefore **the end-of-epoch-1 checkpoint of a 3-epoch
+schedule, i.e. 2 of 3 epochs at the recipe's own learning-rate curve** — the "stopped early"
+reading, not a re-annealed 2-epoch run. An earlier version of these notes claimed the latter; it
+was wrong. The partial third-epoch checkpoint was deleted and is not used anywhere.
 
-**Status.** Training since 01:14 UTC 2026-09-13; epoch 0 finished 10:52 UTC; expected to finish epoch 1 ~19:20 UTC, eval + export
+**Status.** Training 01:14-18:53 UTC 2026-09-13 (epoch 0 done 10:52, epoch 1 done 18:53; epoch 1 took 7:54); evaluation + export from `epoch1` launched 20:20 UTC; expected to finish epoch 1 ~19:20 UTC, eval + export
 ~20:50 UTC. Results below when it finishes.
