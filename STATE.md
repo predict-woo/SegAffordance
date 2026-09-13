@@ -1851,3 +1851,14 @@ Workstation Edition => loaded-clock lemon check pending (background poll). Expec
 tests. Answers paper gap A; INDEX row + notes on completion.
 Also observed 16:00: peer-session pods `bl-a3vlm` (4x H200, $18.36/hr) and `bl-3doi` (2 GPU,
 $9.18/hr) RUNNING — not this session's; flagged to the user.
+
+## IN FLIGHT (2026-09-13 17:40 local): loss ablation arms on the final recipe (paper contribution 3)
+
+`20260914_joint4_decoder_dense_directloss` (SF3D side: closed-form weight 0, only axis 1-cos 0.5 +
+hinge-to-q* 0.5 + 3D point 0.5) and `20260914_joint4_decoder_dense_sampledtraj` (closed form replaced
+by `analytic_trajectory_weight 1.0`, the sampled 20-point decode loss = the closed form's teacher);
+everything else = `config/joint4_decoder_l2anchor_dense.yaml` (seed 42, joint4 data). fast_dev_run
+smoke passed on the dev pod for both. Launchers `launch_arm.sh jdec-direct` / `jdec-sampled`
+(scratchpad, nohup) are POLLING for PRO 6000 stock (all three SKUs unavailable at 17:35; 36 attempts
+x 5 min). Paper: Table V "3D loss" block has blank rows for them. The SF3D-only control
+(`jdec-sf3donly`) is at epoch 11/20 at 17:34, ~10 min/epoch, ETA train ~19:05, tests ~19:45.
