@@ -138,7 +138,10 @@ EOF
     ;;
   train)
     if [ ! -f $RUNS/.train_done ]; then
-      train $SEG/config/baselines/a3vlm_sf3d.yaml 3 "${SAVE_IT:-500}" --cache_ann_on_disk > $LOGS/train_$NAME.log 2>&1
+      # EPOCHS was hardcoded to 3 here while the smoke path used variables; the 2-epoch restart on
+      # 2026-09-13 therefore ran a third epoch for ~1.4 h ($26) before being caught, and its LR
+      # schedule was the 3-epoch cosine throughout.
+      train $SEG/config/baselines/a3vlm_sf3d.yaml "${EPOCHS:-3}" "${SAVE_IT:-500}" --cache_ann_on_disk > $LOGS/train_$NAME.log 2>&1
       touch $RUNS/.train_done
     fi
     echo "== $(date -u) train done"; ls $RUNS
