@@ -1862,3 +1862,12 @@ smoke passed on the dev pod for both. Launchers `launch_arm.sh jdec-direct` / `j
 (scratchpad, nohup) are POLLING for PRO 6000 stock (all three SKUs unavailable at 17:35; 36 attempts
 x 5 min). Paper: Table V "3D loss" block has blank rows for them. The SF3D-only control
 (`jdec-sf3donly`) is at epoch 11/20 at 17:34, ~10 min/epoch, ETA train ~19:05, tests ~19:45.
+
+## DONE (2026-09-13 18:54 local): SF3D-only control of the final model — human video buys generalisation, not SF3D MA
+
+`20260913_sf3d_decoder_l2anchor_dense` finished (pod deleted by the watcher). SF3D signed MA 43.75 vs the
+joint final 42.69 (equal within seed noise), matched axis 15.2 vs 11.4 deg, origin 0.262 vs 0.248, mIoU
+0.262 vs 0.277. Zero-shot on hand video the control finds nothing (mIoU 0.012 / 0.010 / 0.034; ARCTIC
+axis 56.6 deg, type 40 %). Paper consequence (written 2026-09-14): the "does human video help" section
+says training on hand tracks costs nothing on SF3D and is what makes the model work outside scanned
+scenes; no claim that it raises SF3D MA. Results in the experiment's notes.md / INDEX row.
