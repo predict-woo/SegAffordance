@@ -40,8 +40,11 @@ print('repathed', p.name)" "$f" "$DATA"
   done
   cd $R
   PORT=$(( ((RANDOM<<15)|RANDOM) % 49152 + 10000 ))
-  last=$(ls -d $RUNS/epoch* 2>/dev/null | sort -V | tail -1); resume=()
-  [ -n "$last" ] && resume=(--resume "$last") && echo "resuming from $last"
+  # `|| true`: see runpod/baselines/a3vlm/chain.sh -- a failing pipeline in an assignment is
+  # fatal under `set -e` + `pipefail`, and silently so.
+  last=$(ls -d $RUNS/epoch* 2>/dev/null | sort -V | tail -1 || true); resume=()
+  # see runpod/baselines/a3vlm/chain.sh: `[ cond ] && ...` is fatal under set -e when false
+  if [ -n "$last" ]; then resume=(--resume "$last"); echo "resuming from $last"; fi
   $V/bin/torchrun --nproc_per_node $NPROC --master_port $PORT main_finetune.py \
     --output_dir $RUNS --epochs "${EPOCHS:-3}" --warmup_epochs 0.03 \
     --batch_size 2 --accum_iter $ACCUM --num_workers 4 --max_words 2048 \
@@ -62,7 +65,8 @@ print('repathed', p.name)" "$f" "$DATA"
 # stop once the validation loss stops falling; export the best-val checkpoint, not the last
 export SF3D_EARLY_STOP_PATIENCE="${SF3D_EARLY_STOP_PATIENCE:-4}"
   cd $R
-  resume=(); [ -f $RUNS/checkpoints/checkpoint.pth ] && resume=(checkpoint_path=$RUNS/checkpoints/checkpoint.pth) && echo "resuming"
+  resume=()
+  if [ -f $RUNS/checkpoints/checkpoint.pth ]; then resume=(checkpoint_path=$RUNS/checkpoints/checkpoint.pth); echo "resuming"; fi
   if [ "$MODE" = "export" ]; then
     $V/bin/python $SEG/tools/baselines_sf3d/run.py $SEG/tools/baselines_sf3d/threedoi_export.py \
       --repo $R --ckpt "${CKPT:-$([ -f $RUNS/checkpoints/checkpoint_best.pth ] && echo $RUNS/checkpoints/checkpoint_best.pth || echo $RUNS/checkpoints/checkpoint.pth)}" --data $D --out $RUNS/preds.jsonl --batch 2 --workers 4 \

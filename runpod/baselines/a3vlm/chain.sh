@@ -27,12 +27,17 @@ python $SEG/runpod/baselines/a3vlm/patch_eval.py $R/eval_affordance_v2.py
 PORT=$(( ((RANDOM<<15)|RANDOM) % 49152 + 10000 ))
 cd $R
 
-newest_epoch() { ls -d $RUNS/epoch* 2>/dev/null | sort -V | tail -1; }
+# `|| true` is load-bearing: with `set -o pipefail` the ls fails when no checkpoint exists yet,
+# so the pipeline returns non-zero, so `last=$(newest_epoch)` is a failing assignment, which
+# `set -e` treats as fatal -- killing the run silently before torchrun, leaving a 0-byte log.
+newest_epoch() { ls -d $RUNS/epoch* 2>/dev/null | sort -V | tail -1 || true; }
 
 train() {  # $1 = data yaml, $2 = epochs, $3 = save_iteration_interval, rest = extra args
   local yaml=$1 epochs=$2 save_it=$3; shift 3
   local resume=(); local last; last=$(newest_epoch)
-  [ -n "$last" ] && resume=(--resume "$last") && echo "resuming from $last"
+  # NB: `[ cond ] && a && b` as a bare statement returns 1 when cond is false, which under
+  # `set -e` kills the script -- silently, before torchrun ever starts. Use an if.
+  if [ -n "$last" ]; then resume=(--resume "$last"); echo "resuming from $last"; fi
   torchrun --nproc_per_node $NPROC --master_port $PORT main_finetune.py \
     --output_dir $RUNS --epochs $epochs --warmup_epochs 0.03 \
     --batch_size 2 --accum_iter $ACCUM --num_workers 4 --max_words 2048 \

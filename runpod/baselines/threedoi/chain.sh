@@ -24,7 +24,7 @@ cd $R
 train() {  # $1 epochs, rest = hydra overrides
   local epochs=$1; shift
   local resume=()
-  [ -f $RUNS/checkpoints/checkpoint.pth ] && resume=(checkpoint_path=$RUNS/checkpoints/checkpoint.pth) && echo "resuming from $RUNS/checkpoints/checkpoint.pth"
+  if [ -f $RUNS/checkpoints/checkpoint.pth ]; then resume=(checkpoint_path=$RUNS/checkpoints/checkpoint.pth); echo "resuming from $RUNS/checkpoints/checkpoint.pth"; fi
   $VENV/bin/accelerate launch --num_processes $NPROC --mixed_precision fp16 --main_process_port $(( ((RANDOM<<15)|RANDOM) % 49152 + 10000 )) \
     train.py --config-name sam_sf3d hydra.run.dir=$RUNS output_dir=$RUNS optimizer.max_epochs=$epochs "${resume[@]}" "$@"
 }
