@@ -1,0 +1,9 @@
+command: tools/sf3d_vis_val.py --model dense config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
+  --out viz/20260914_dense_final_sf3d_val_panels --num 20 --seed 3
+tool_commit: 383fbe5
+generated: '2026-09-13T23:27:40+00:00'
+models:
+- name: dense
+  config: config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  ckpt: experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
