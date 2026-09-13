@@ -1836,3 +1836,18 @@ on `bl-apjp` (EU-RO-1 had no 2/4-GPU stock for 40 min of polling; data rsynced t
 effective batch 8, 62-epoch budget with early stopping. The Euler job stays queued as a free
 replicate. A3VLM: 2 epochs confirmed at the corrected ~$400; save interval 500 -> 4000 (0.40 s/step
 of I/O removed); epoch 0 done 10:52 UTC, epoch 1 ETA ~18:50 UTC, eval ~20:20 UTC.
+
+## IN FLIGHT (2026-09-13 16:03 local): SF3D-only control of the final model
+
+`20260913_sf3d_decoder_l2anchor_dense` on pod `segaffordance-jdec-sf3donly` (id 0lw2ljy1jcnqpl, RTX PRO
+6000 Workstation Edition, $2.19/hr; Server Edition out of stock). Config
+`config/joint4_decoder_l2anchor_dense_sf3donly.yaml` = final recipe minus the hand sources (54,086
+SF3D samples/epoch, 20 epochs, seed 42); chain `run_joint4dec_l2anchor_dense_sf3donly_chain.sh`
+tests SF3D + zero-shot HOI4D / EPIC / ARCTIC. fast_dev_run smoke passed on the dev pod. The
+scratchpad launcher died with the tool timeout right after `pod create` (the pod's ssh alias was
+written by hand; a broken alias briefly corrupted ~/.ssh/config, fixed), so the chain was started
+manually and `watch_arm.sh` (watch-only, deletes the pod at CHAIN_DONE) runs detached on the Mac;
+Workstation Edition => loaded-clock lemon check pending (background poll). Expected ~2.5 h train +
+tests. Answers paper gap A; INDEX row + notes on completion.
+Also observed 16:00: peer-session pods `bl-a3vlm` (4x H200, $18.36/hr) and `bl-3doi` (2 GPU,
+$9.18/hr) RUNNING — not this session's; flagged to the user.
