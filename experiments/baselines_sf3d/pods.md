@@ -19,3 +19,14 @@ Status 12:20 UTC 2026-09-12: bl-opd-c deleted 07:10, bl-opd-p deleted 08:05, bl-
 (all by their watchers after CHAIN_DONE); bl-opd-prgb still running the MOPD fine-tune. The 1 cm
 USDNet variant conversion (`data/usdnet_sf3d_v1cm`) was paused during training and died with the
 pod at 87/182 train scenes; `sf3d_to_usdnet.py --voxel 0.01` resumes it (idempotent per scene).
+
+## A3VLM + 3DOI pods (2026-09-12/13)
+
+| pod | id | GPU | DC / volume | image / torch | $/hr | runs |
+|---|---|---|---|---|---|---|
+| bl-a3vlm-smoke | 0mrzcrjfoe37m7 | 2 x H100 SXM | EU-FR-1 / bl-eufr (5pw4vigftc) | pytorch:2.0.1-cu118 | 6.98 | env + SPHINX download; smoke OOMed (DP=1 shards nothing); deleted 2026-09-12 23:0x |
+| bl-a3vlm | f2sxrh69pz4gfp | 4 x H200 141 GB | AP-JP-1 / bl-apjp (18bdh0pzec, grown 150->400->700 GB) | pytorch:2.0.1-cu118 | 18.36 | A3VLM smoke + 2-epoch run (from 22:59 UTC 2026-09-12); teardown watcher deletes on CHAIN_DONE |
+| bl-3doi | 92w42sw5njjf6r | 2 x H200 141 GB | AP-JP-1 / bl-apjp | pytorch:1.0.3-cu1281 (torch 2.9.1) | 9.18 | 3DOI 62-epoch budget w/ early stopping (from 13:45 UTC 2026-09-13); no EU-RO-1 stock at 2 or 4 GPUs for A100/PRO 6000 |
+
+Volumes to delete once results are verified and copied to the main volume: bl-apjp (18bdh0pzec,
+700 GB, ~$105/month) and the unused bl-eufr (5pw4vigftc, 150 GB, ~$22/month).

@@ -59,4 +59,14 @@ export -> score all pass. Export of 30 test frames gives 45 predictions, 43 of t
 matched-row axis error 15.2 deg — SAM is pretrained and prompted with the GT element point, so
 strong masks are expected from the start and PDet should be the model's strongest number.
 
-**Status.** Job 13993189 queued 2026-09-13, estimated start ~22:20 UTC. Results below when it finishes.
+**RunPod run (user decision 2026-09-13 ~13:00 UTC).** Euler's queue estimate slipped to ~22:20 UTC and
+the login node then became unreachable, so the user chose to run 3DOI on RunPod as well and keep the
+free Euler job queued. Pod `bl-3doi`, **2 x H200** in AP-JP-1 on volume `bl-apjp` (no 2- or 4-GPU
+A100 / RTX PRO 6000 stock in EU-RO-1 for ~40 min of polling; the 17 GB dataset was rsynced to the
+Japan volume from the dev pod), $9.18/h. Per-GPU batch 4 x 2 GPUs = effective batch 8 (recipe),
+62-epoch budget, validation every 2 epochs, early stopping patience 4, export from the best-val
+checkpoint. Expected ~$170-400 depending on where early stopping triggers. Whichever of the two
+runs finishes first is the one reported; the other is a free replicate.
+
+**Status.** RunPod run launching 2026-09-13 ~13:50 UTC; Euler job 13993189 queued (login node
+unreachable since ~13:00 UTC). Results below when one finishes.

@@ -1829,3 +1829,10 @@ ARCTIC's 3D labels are genuinely evaluation-only for this model (2d profile
 zeroes every loss that reads them; offset weight 0). Consequences for the
 paper: no hinge-placement-transfer claim (offset 0.11 = base level); the
 offset loss is dropped from the Method; dense_off remains an INDEX row.
+
+**3DOI on RunPod too (user decision 13:00 UTC 2026-09-13):** Euler's estimate slipped to ~22:20 UTC and
+its login node then went unreachable, so 3DOI also runs on RunPod: pod `bl-3doi`, 2 x H200 in AP-JP-1
+on `bl-apjp` (EU-RO-1 had no 2/4-GPU stock for 40 min of polling; data rsynced to Japan), $9.18/h,
+effective batch 8, 62-epoch budget with early stopping. The Euler job stays queued as a free
+replicate. A3VLM: 2 epochs confirmed at the corrected ~$400; save interval 500 -> 4000 (0.40 s/step
+of I/O removed); epoch 0 done 10:52 UTC, epoch 1 ETA ~18:50 UTC, eval ~20:20 UTC.
