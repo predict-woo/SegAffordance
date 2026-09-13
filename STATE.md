@@ -1788,3 +1788,28 @@ the user, who confirmed 2 epochs. Retuning the save interval then brought it to 
 --gpus=nvidia_rtx_pro_6000:2` (the submit plugin rewrites the partition list) and OOMed 7 min in.
 Resubmitted as 13993189 constraining by `--gres=gpumem:80g`, with a VRAM guard that exits before
 training rather than OOM-ing after a queue wait.
+
+## CORRECTION (2026-09-13, paper writing): the dense offset loss trained on ARCTIC hinges
+
+While writing the Method section I checked which records feed `L_dense_offset`
+(`train_OPDReal_better.py`, gated only by `valid_q` = projected q* in frame AND
+GT type revolute). The `2d` loss profile zeroes `origin_map_weight`,
+`origin_weight`, `vae_weight`, `point_3d_weight` but NOT `dense_offset_weight`,
+which `config/joint4_decoder_l2anchor_dense_off.yaml` sets to 0.5 globally.
+ARCTIC records carry a REAL camera-frame origin / axis / 3D track (object
+models), so `project_q_star` is valid for them: probe on the dev pod, 39/40
+sampled ARCTIC records have an in-frame q* (HOI4D 0/30, EPIC 0/30: their 3D
+fields are zeros). Consequence: THE FINAL MODEL (`..._dense_off`) supervised
+its hinge votes on ARCTIC's GT hinge projections (weight 0.5, all ARCTIC
+training rows), not on SF3D only. The ARCTIC hinge-line offset 0.029 is
+therefore partly in-domain (held-out OBJECTS, but same source and same label
+type in training), and the claim "ARCTIC 3D labels are used for evaluation
+only" is false for this run. The `dense` / `dense_seed7` arms (offset weight 0)
+are unaffected; the field model (`depth_field` + offset) shares the leak.
+Options (user decision, not launched): (a) rerun dense_off with
+`loss_profiles.2d.dense_offset_weight: 0.0` (~$10) and report that as the
+final model; (b) keep the run and state in the paper that ARCTIC hinge labels
+supervise the votes on training objects (then ARCTIC is a 2.5D source, not a
+2D one, and the transfer claim must be reworded to HOI4D / EPIC / in-the-wild).
+Paper text (`~/Research/AA3D/paper/sections/problem_data.tex`) currently says
+"evaluation only" and must change under either option.
