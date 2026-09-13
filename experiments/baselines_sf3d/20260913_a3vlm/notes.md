@@ -59,5 +59,14 @@ every ~11 min cost 0.40 s/step, 3.6 h of I/O per epoch; the flag counts micro-ba
 stopping at micro-step ~12,500 and resuming from the complete checkpoint at 12,479 (~80 samples
 seen twice). Steady-state 0.83 s per micro-step of 4 samples after the change.
 
-**Status.** Training since 01:14 UTC 2026-09-13; expected to finish epoch 1 ~19:20 UTC, eval + export
+**Training curve.** Causal-LM loss (`closs`, running average) 1.58 at the first steps -> 0.22 at
+micro-step 16,480 -> 0.20 at 24,480 -> 0.15 at the end of epoch 0 (32,320) -> 0.10 at the start of
+epoch 1: still descending, so epoch 1 is not wasted. Learning-rate schedule: the resume was
+launched with `--epochs 2`, so the cosine schedule anneals to `min_lr 0` at the end of epoch 1 (a
+proper 2-epoch schedule, lr 1.5e-5 at the end of epoch 0 from the 2e-5 peak). The first 12,479
+micro-steps ran under the original 3-epoch schedule and therefore at a learning rate a few percent
+above what a from-scratch 2-epoch schedule would have used at those steps; noted for completeness,
+not material.
+
+**Status.** Training since 01:14 UTC 2026-09-13; epoch 0 finished 10:52 UTC; expected to finish epoch 1 ~19:20 UTC, eval + export
 ~20:50 UTC. Results below when it finishes.
