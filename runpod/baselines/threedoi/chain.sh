@@ -51,7 +51,10 @@ case $MODE in
       # carries batch 4 for Euler's 2-GPU cap, so pin the per-GPU batch here from the GPU count.
       BATCH="${BATCH:-$(( 8 / NPROC ))}"; [ "$BATCH" -ge 1 ] || BATCH=1
       echo "effective batch: $BATCH x $NPROC GPUs = $((BATCH * NPROC)) (recipe: 8)"
-      train $EPOCHS train.batch_size=$BATCH validation_epoch_interval="${VAL_EVERY:-2}" > $LOGS/train_$NAME.log 2>&1
+      # Input-bound at their num_workers 4 (GPU util flapping 0-90% with 160 idle cores on the
+      # H200 pod): more loader workers per process. Data ORDER comes from the sampler, not the
+      # worker count, so this changes throughput only.
+      train $EPOCHS train.batch_size=$BATCH validation_epoch_interval="${VAL_EVERY:-2}" data.num_workers="${WORKERS:-16}" > $LOGS/train_$NAME.log 2>&1
       touch $RUNS/.train_done
     fi
     echo "== $(date -u) train done"; ls $RUNS/checkpoints | tail -3
