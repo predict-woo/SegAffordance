@@ -69,22 +69,31 @@ def question_text(prompt):
 
 
 def results_by_key(results, questions):
-    """Eval outputs carry image + question only; join them with the question JSON (which has our key)."""
-    lookup = {}
-    for q in questions:
-        lookup[(q["image"], q["conversations"][0]["value"].strip())] = q["key"]
+    """Join eval answers to our questions. Match on (key, question text) first: their eval
+    script names every output file after the shard file and, when it finds one already there,
+    appends the OLD answers to the new ones, so a merged results file can hold answers to several
+    question sets for the same key (rec, joint-by-GT-box and joint-by-predicted-box all appeared
+    in one file on 2026-09-13). The question text disambiguates; the key alone is the fallback
+    for outputs whose prompt does not match any question (e.g. unpatched scripts)."""
+    by_key_q = {}
+    for r in results:
+        k = r.get("key")
+        qt = question_text(r.get("question", ""))
+        by_key_q[(k, qt)] = r
+        by_key_q.setdefault(("__image__", r.get("image"), qt), r)
     out = {}
     n_miss = 0
-    for r in results:
-        k = r.get("key")  # written by the patched eval script (runpod/baselines/a3vlm/patch_eval.py)
-        if k is None:  # unpatched outputs: join on (image, question); ambiguous when two elements share a question
-            k = lookup.get((r["image"], question_text(r["question"])))
-        if k is None:
+    for q in questions:
+        qt = q["conversations"][0]["value"].strip()
+        r = by_key_q.get((q["key"], qt))
+        if r is None:  # unkeyed outputs: fall back to (image, question); ambiguous for identical questions
+            r = by_key_q.get(("__image__", q["image"], qt))
+        if r is None:
             n_miss += 1
             continue
-        out[k] = r
+        out[q["key"]] = r
     if n_miss:
-        print(f"WARNING: {n_miss} results could not be joined to a key", file=sys.stderr)
+        print(f"WARNING: {n_miss} questions have no matching answer", file=sys.stderr)
     return out
 
 

@@ -92,7 +92,8 @@ def test_without_threaded_keys_identical_questions_would_collide():
     unkeyed = [{"image": IMG, "question": q_text, "answer": ax},
                {"image": IMG, "question": q_text, "answer": ax}]
     by_key = results_by_key(unkeyed, jq)
-    assert len(by_key) == 1, "documents the ambiguity that threading the key removes"
+    # both elements resolve to the SAME (image, question) answer: the ambiguity threading the key removes
+    assert by_key["s/v/1.0/a"] is by_key["s/v/1.0/b"]
 
 
 def test_answers_json_round_trips_through_a_file():

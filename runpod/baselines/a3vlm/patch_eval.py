@@ -35,6 +35,9 @@ edits = [
      "                for question_id, answer, annotation, question, image_path, key in zip(question_ids, results,\n                                                        annotations, _prompt, image_paths, keys):\n"),
     ("                        \"image\": image_path,\n                        \"fail\": failed_flag\n                    })\n",
      "                        \"image\": image_path,\n                        \"fail\": failed_flag,\n                        \"key\": key,\n                        \"raw_answer\": raw_answer\n                    })\n"),
+    # never merge a pre-existing results file into this run's outputs (it appends old answers)
+    ("    if os.path.exists(results_file):\n        with open(results_file, 'r') as f:\n            result = json.load(f)\n",
+     "    if False:  # SF3D_PATCHED: do not append a previous run's answers to this one\n        pass\n"),
     # their post-processing deletes every '.' from the answer (their 2D-box parser re-inserts them
     # heuristically for 4-number boxes); our [u,v,d] format needs the original string.
     ("                    answer = answer.split('###')[0]\n                    answer = answer.replace('.', '').strip()\n",

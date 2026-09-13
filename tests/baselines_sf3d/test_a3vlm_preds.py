@@ -89,3 +89,21 @@ def test_dot_stripped_answers_are_recovered():
     assert answer_text({"answer": "021", "raw_answer": "<axis>revolute</axis>[0.21,0.5,0.5,0.2,0.6,0.5]"}).startswith("<axis>")
     assert answer_text({"answer": "<axis>revolute</axis>[0.21,0.50,0.50,0.20,0.60,0.50]"}) == "<axis>revolute</axis>[0.21,0.50,0.50,0.20,0.60,0.50]"
     assert answer_text({"answer": "I cannot tell"}) == "I cannot tell"
+
+
+
+def test_accumulated_results_file_is_disambiguated_by_question_text():
+    """Their eval script appends older answers to newer ones under the same key; the join must
+    pick the answer to THIS question set, not the last one written."""
+    from tools.baselines_sf3d.a3vlm_preds_to_jsonl import results_by_key
+    box = fmt_box(project_uvd(box_points([0.2, 0.0, 2.0], [0.2, 0.6, 0.1]), K, META["pad"], 1.0, 4.0))
+    ax = fmt_axis("revolute", project_uvd(np.array([[0.2, -0.3, 2.0], [0.2, 0.3, 2.0]]), K, META["pad"], 1.0, 4.0))
+    joint_q = [vqa(IMG, JOINT_INSTRUCT.format(REF=box), ax, key="s/v/1.0/a")]
+    results = [  # new answers first, then the appended older REC answer for the same key
+        {"image": IMG, "question": _prompt(JOINT_INSTRUCT.format(REF=box)), "answer": ax, "key": "s/v/1.0/a"},
+        {"image": IMG, "question": _prompt(REC_INSTRUCT + "open the door"), "answer": box, "key": "s/v/1.0/a"},
+    ]
+    r = results_by_key(results, joint_q)
+    assert r["s/v/1.0/a"]["answer"] == ax
+    lines = export(results, joint_q, {"s_v_1.0.jpg": META}, gt_box=True)
+    assert lines[0]["matched"] and lines[0]["type"] == 1

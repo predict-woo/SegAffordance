@@ -71,7 +71,9 @@ train() {  # $1 = data yaml, $2 = epochs, $3 = save_iteration_interval, rest = e
 evaluate() {  # $1 = question json, $2 = ckpt dir, $3 = flag ; results -> $R/vqa_logs/$3/<name>.json
   local q=$1 ck=$2 flag=$3 base; base=$(basename ${q%.json})
   local shards=$((NPROC / MP)) sd=$RUNS/eval/shards/$base
-  rm -rf $sd $R/vqa_logs/$flag/$base.json; mkdir -p $sd $R/vqa_logs/$flag
+  # their script names every output after the shard file and appends any existing one, so the
+  # per-shard result dirs must be cleared between question sets or answers accumulate.
+  rm -rf $sd $R/vqa_logs/$flag/$base.json; for i in $(seq 0 $((shards - 1))); do rm -rf $R/vqa_logs/${flag}_s$i; done; mkdir -p $sd $R/vqa_logs/$flag
   python - "$q" "$sd" "$shards" <<'PYSPLIT'
 import json, sys
 q, sd, n = sys.argv[1], sys.argv[2], int(sys.argv[3])
