@@ -24,6 +24,7 @@ first axis endpoint for revolute joints and the segment midpoint for prismatic.
 """
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -42,6 +43,22 @@ from tools.baselines_sf3d.sf3d_to_a3vlm import (  # noqa: E402
 )
 
 TYPE_ID = {"revolute": 1, "prismatic": 0}
+_STRIPPED_NUM = re.compile(r"(?<![\d.])(\d{3})(?![\d.])")
+
+
+def answer_text(r):
+    """The answer string to parse. eval_affordance_v2.py deletes every '.' from `answer` before
+    saving it (its own 2D-box parser re-inserts them); our patch keeps the original in
+    `raw_answer`. For outputs from an unpatched script, every number we emit is "{:.2f}" in [0, 1],
+    so a dot-stripped answer consists of 3-digit tokens ("0.21" -> "021", "1.00" -> "100") and the
+    value is token / 100."""
+    raw = r.get("raw_answer")
+    if raw:
+        return raw
+    a = r.get("answer") or ""
+    if "." in a or not _STRIPPED_NUM.search(a):
+        return a
+    return _STRIPPED_NUM.sub(lambda m: f"{int(m.group(1)) / 100:.2f}", a)
 
 
 def question_text(prompt):
@@ -79,7 +96,7 @@ def make_joint_questions(rec_results, rec_questions):
     for q in rec_questions:
         key = q["key"]
         r = by_key.get(key)
-        box = parse_box(r["answer"]) if r else None
+        box = parse_box(answer_text(r)) if r else None
         failed = box is None
         box_str = fmt_box(box) if box is not None else q["conversations"][1]["value"]
         item = vqa(q["image"], JOINT_INSTRUCT.format(REF=box_str), None, key=key)
@@ -135,9 +152,9 @@ def export(joint_results, joint_questions, metas, rec_results=None, gt_box=False
             box = None if q.get("rec_failed") else parse_box(q["box_pred"])
         else:
             rr = rec_by_key.get(key)
-            box = parse_box(rr["answer"]) if rr else None
+            box = parse_box(answer_text(rr)) if rr else None
         matched = r is not None and not q.get("rec_failed", False)
-        p = to_prediction(key, r["answer"] if r else "", box, meta, matched=matched)
+        p = to_prediction(key, answer_text(r) if r else "", box, meta, matched=matched)
         n_ok += p["matched"]
         lines.append(p)
     print(f"{len(lines)} predictions, {n_ok} parsed", file=sys.stderr)

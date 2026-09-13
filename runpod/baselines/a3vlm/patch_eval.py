@@ -34,7 +34,11 @@ edits = [
     ("                for question_id, answer, annotation, question, image_path in zip(question_ids, results,\n                                                        annotations, _prompt, image_paths):\n",
      "                for question_id, answer, annotation, question, image_path, key in zip(question_ids, results,\n                                                        annotations, _prompt, image_paths, keys):\n"),
     ("                        \"image\": image_path,\n                        \"fail\": failed_flag\n                    })\n",
-     "                        \"image\": image_path,\n                        \"fail\": failed_flag,\n                        \"key\": key\n                    })\n"),
+     "                        \"image\": image_path,\n                        \"fail\": failed_flag,\n                        \"key\": key,\n                        \"raw_answer\": raw_answer\n                    })\n"),
+    # their post-processing deletes every '.' from the answer (their 2D-box parser re-inserts them
+    # heuristically for 4-number boxes); our [u,v,d] format needs the original string.
+    ("                    answer = answer.split('###')[0]\n                    answer = answer.replace('.', '').strip()\n",
+     "                    answer = answer.split('###')[0]\n                    raw_answer = answer.strip()  # SF3D_PATCHED: before the dot-stripping below\n                    answer = answer.replace('.', '').strip()\n"),
 ]
 for old, new in edits:
     assert s.count(old) == 1, old

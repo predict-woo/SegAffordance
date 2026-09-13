@@ -2,6 +2,7 @@ import numpy as np
 
 from tools.baselines_sf3d import common as C
 from tools.baselines_sf3d.a3vlm_preds_to_jsonl import export, make_joint_questions, question_text, to_prediction
+from tools.baselines_sf3d.sf3d_to_a3vlm import parse_box
 from tools.baselines_sf3d.sf3d_to_a3vlm import (
     JOINT_INSTRUCT,
     REC_INSTRUCT,
@@ -73,3 +74,18 @@ def test_export_gtbox_uses_question_box():
     res = [{"image": IMG, "question": _prompt(qs[0]["conversations"][0]["value"]), "answer": ans}]
     lines = export(res, qs, {"s_v_1.0.jpg": META}, gt_box=True)
     assert lines[0]["matched"] and lines[0]["type"] == 0 and lines[0]["mask_rle"] is not None
+
+
+
+def test_dot_stripped_answers_are_recovered():
+    """eval_affordance_v2.py saves answer.replace('.', ''); our numbers are all "{:.2f}" in [0, 1]."""
+    from tools.baselines_sf3d.a3vlm_preds_to_jsonl import answer_text
+    stripped = {"answer": "<axis>prismatic</axis>[026,037,029,028,058,035]"}
+    assert answer_text(stripped) == "<axis>prismatic</axis>[0.26,0.37,0.29,0.28,0.58,0.35]"
+    box = {"answer": "[[021,047,023],[029,047,023],[021,049,023],[023,047,027],[030,049,027],[023,049,027],[030,047,027],[029,049,027]]"}
+    assert parse_box(answer_text(box)) is not None and abs(parse_box(answer_text(box))[0, 0] - 0.21) < 1e-9
+    assert answer_text({"answer": "[[100,000,050]]"}).startswith("[[1.00,0.00,0.50]]")
+    # the patched script's raw answer wins, and normal answers pass through untouched
+    assert answer_text({"answer": "021", "raw_answer": "<axis>revolute</axis>[0.21,0.5,0.5,0.2,0.6,0.5]"}).startswith("<axis>")
+    assert answer_text({"answer": "<axis>revolute</axis>[0.21,0.50,0.50,0.20,0.60,0.50]"}) == "<axis>revolute</axis>[0.21,0.50,0.50,0.20,0.60,0.50]"
+    assert answer_text({"answer": "I cannot tell"}) == "I cannot tell"
