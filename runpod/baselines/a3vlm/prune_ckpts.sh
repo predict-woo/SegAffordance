@@ -6,20 +6,23 @@
 # minutes, so a checkpoint being written is safe.
 #   KEEP=2 RUNS=/workspace/bl/runs/a3vlm bash prune_ckpts.sh
 set -uo pipefail
-RUNS="${RUNS:-/workspace/bl/runs/a3vlm}"; KEEP="${KEEP:-2}"; MIN_AGE_MIN="${MIN_AGE_MIN:-10}"
+# ROOT, not a single run dir: the smoke writes to runs/a3vlm_smoke and the real run to runs/a3vlm,
+# and a pruner pointed at one silently lets the other grow (it did, to 612 GB, on 2026-09-13).
+ROOT="${ROOT:-/workspace/bl/runs}"; KEEP="${KEEP:-2}"; MIN_AGE_MIN="${MIN_AGE_MIN:-8}"
 while true; do
-  if [ -d "$RUNS" ]; then
-    mapfile -t dirs < <(ls -dt "$RUNS"/epoch* 2>/dev/null)
+  for RUNS in "$ROOT"/*/; do
+    [ -d "$RUNS" ] || continue
+    mapfile -t dirs < <(ls -dt "$RUNS"epoch* 2>/dev/null)
     if [ "${#dirs[@]}" -gt "$KEEP" ]; then
       for d in "${dirs[@]:$KEEP}"; do
         if [ -z "$(find "$d" -maxdepth 1 -newermt "-${MIN_AGE_MIN} minutes" -print -quit 2>/dev/null)" ]; then
-          echo "[$(date -u +%H:%M)] pruning $(basename "$d") ($(du -sh "$d" 2>/dev/null | cut -f1))"
+          echo "[$(date -u +%H:%M)] pruning $d ($(du -sh "$d" 2>/dev/null | cut -f1))"
           rm -rf "$d"
         fi
       done
     fi
-    df_used=$(du -sb /workspace 2>/dev/null | cut -f1)
-    echo "[$(date -u +%H:%M)] volume $((${df_used:-0}/1073741824)) GB, checkpoints: $(ls -d "$RUNS"/epoch* 2>/dev/null | wc -l)"
-  fi
+  done
+  used=$(du -sb /workspace 2>/dev/null | cut -f1)
+  echo "[$(date -u +%H:%M)] volume $((${used:-0}/1073741824)) GB, checkpoint dirs: $(ls -d "$ROOT"/*/epoch* 2>/dev/null | wc -l)"
   sleep 300
 done
