@@ -4,7 +4,8 @@
 #SBATCH --error=/cluster/scratch/%u/baselines/logs/%x-%j.out
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --gpus=nvidia_rtx_pro_6000:2
+#SBATCH --gpus=2
+#SBATCH --gres=gpumem:80g
 #SBATCH --cpus-per-task=12
 #SBATCH --mem-per-cpu=6G
 #SBATCH --time=24:00:00
@@ -12,8 +13,11 @@
 #SBATCH --requeue
 #SBATCH --signal=B:USR1@900
 # 3DOI (SAM ViT-B) on SF3D, released recipe. 2 GPUs is the hard per-user cap of the
-# INFK-cvg-leonhard-students QOS (a cli_filter rejects --gpus>2 outright), and RTX PRO 6000
-# (96 GB, ~2.5 h queue) beats the A100 80GB (~12 h queue) for this job.
+# INFK-cvg-leonhard-students QOS (a cli_filter rejects --gpus>2 outright).
+# Constrain by MEMORY, not GPU type: `--partition=cuda13pr.24h --gpus=nvidia_rtx_pro_6000:2` was
+# silently rerouted by Euler's submit plugin onto 40 GB A100s, where batch 4 at 1024x768 OOMs
+# after ~7 minutes (job 13971778). `--gres=gpumem:80g` is the documented Euler mechanism and
+# guarantees the card regardless of which partition the plugin picks.
 # 24 h rather than the 5-day maximum on purpose: the .120h partitions are heavily contended
 # (est. start ~9 h vs ~1.6 h for .24h), and the job checkpoints every epoch and requeues itself
 # on timeout, so a shorter slot costs only an extra queue wait every 24 h.

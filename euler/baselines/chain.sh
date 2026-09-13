@@ -65,6 +65,14 @@ print('repathed', p.name)" "$f" "$DATA"
 # stop once the validation loss stops falling; export the best-val checkpoint, not the last
 export SF3D_EARLY_STOP_PATIENCE="${SF3D_EARLY_STOP_PATIENCE:-4}"
   cd $R
+  # Fail fast on an under-sized card: batch 4 at 1024x768 needs ~40 GB, and an OOM 7 minutes into
+  # a job that waited hours in the queue is the worst way to find out.
+  vram=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1)
+  if [ "${vram:-0}" -lt 70000 ]; then
+    echo "ERROR: need >= 70 GB per GPU for batch 4 at 1024x768; this node has ${vram} MiB." >&2
+    echo "Resubmit with --gres=gpumem:80g, or lower train.batch_size (which changes the effective batch)." >&2
+    exit 5
+  fi
   resume=()
   if [ -f $RUNS/checkpoints/checkpoint.pth ]; then resume=(checkpoint_path=$RUNS/checkpoints/checkpoint.pth); echo "resuming"; fi
   if [ "$MODE" = "export" ]; then
