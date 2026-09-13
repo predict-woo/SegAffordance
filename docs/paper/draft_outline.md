@@ -1,4 +1,6 @@
-# Learning 3D Articulation Affordances from Human Video — draft outline (v0, 2026-09-13)
+# ARTHUR: Learning 3D Articulation Affordances from Human Video — draft outline (v0, 2026-09-13)
+
+Method name: ARTHUR = ARTiculation affordances from HUman Recordings (chosen 2026-09-13).
 
 CANONICAL DRAFT: `~/Research/AA3D/paper/draft.md` (IEEEtran project; written 2026-09-13). This repo copy is
 the outline snapshot and is no longer updated. Status: high-level outline only. Numbers
