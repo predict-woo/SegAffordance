@@ -1757,3 +1757,34 @@ sanctioned 4-GPU fallback on a new volume `bl-apjp` (18bdh0pzec, AP-JP-1): pod b
 **4 x H200 141 GB, $18.36/h**, staging then smoke then the 3-epoch run, chained so the pod never
 idles. The EU-FR-1 volume `bl-eufr` is now redundant and should be deleted once this run is past
 its smoke.
+
+
+### A3VLM run log (2026-09-13)
+
+Pod `bl-a3vlm`, 4 x H200 141 GB in AP-JP-1 on volume `bl-apjp` (700 GB), $18.36/h. 8-GPU pods did
+not exist in any volume-capable RunPod datacenter (probed with real create attempts), so this is
+the sanctioned 4-GPU fallback; measured peak is 79.6 GB/GPU, so it would NOT have fitted on the
+80 GB H100s that were the alternative.
+
+**User decision:** 2 epochs, not the released 3 — the measured cost of 3 epochs was ~$519 against
+an approved ~$230-300. My first estimate (~$372 for 2 epochs) was taken from the first 200 steps
+at 0.893 s/step before the rate settled at 1.294 s; the corrected figure of ~$496 was put back to
+the user, who confirmed 2 epochs. Retuning the save interval then brought it to ~$370.
+
+**Findings that cost real money, all now fixed in the scripts:**
+- `--save_iteration_interval 500` counts micro-steps -> a 135 GB checkpoint every ~11 min, 3.6 h of
+  I/O per epoch. Set to 4000.
+- `newest_epoch` is `ls | sort | tail`; with `pipefail` the failing `ls` makes `last=$(...)` a
+  failing assignment, which `set -e` treats as fatal -- the real run died silently with a 0-byte
+  log while the smoke survived only because it calls the same function inside `|| { }`.
+- A random master port collided with Docker's embedded DNS (127.0.0.11); now picks a verified-free
+  range covering the eval shards.
+- Two concurrent `setup_env.sh` runs each start `curl -C -` per weight shard and silently corrupt
+  them at the right size; now `flock`ed and integrity-checked.
+- Monitoring watched for progress and errors but not for ABSENCE of activity, so a disk-full kill
+  went unnoticed for ~50 min (~$16). Watches now break on a stalled log with no processes.
+
+**Euler 3DOI:** job 13971778 was placed on 40 GB A100s despite `--partition=cuda13pr.24h
+--gpus=nvidia_rtx_pro_6000:2` (the submit plugin rewrites the partition list) and OOMed 7 min in.
+Resubmitted as 13993189 constraining by `--gres=gpumem:80g`, with a VRAM guard that exits before
+training rather than OOM-ing after a queue wait.
