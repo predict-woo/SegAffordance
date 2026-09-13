@@ -36,6 +36,13 @@ config = open(path).read() if os.path.exists(path) else ""
 block = re.compile(rf"^Host {re.escape(alias)}\n(?:^[ \t]+.*\n?)*", re.M)
 config = block.sub("", config).rstrip("\n")
 config = (config + "\n\n" if config else "") + entry
-open(path, "w").write(config)
+# Atomic replace: a plain open(path, "w") truncates first, and any ssh that starts during the
+# write sees a half-written file ("no argument after keyword port"). With several sessions running
+# pod commands every few minutes, that race hit real commands on 2026-09-13.
+tmp = path + ".tmp"
+with open(tmp, "w") as f:
+    f.write(config + "\n")
+os.chmod(tmp, 0o600)
+os.replace(tmp, path)
 print(f"updated {path}: {alias} -> {info['ip']}:{info['port']}")
 PY
