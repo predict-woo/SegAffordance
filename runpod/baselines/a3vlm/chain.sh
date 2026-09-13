@@ -61,6 +61,9 @@ train() {  # $1 = data yaml, $2 = epochs, $3 = save_iteration_interval, rest = e
     --save_interval 1 --save_iteration_interval $save_it "${resume[@]}" "$@"
 }
 
+# --max_gen_len: their default is 2048 new tokens; our longest answer (an 8-vertex box) is ~130 tokens.
+# Without a cap the fine-tuned model ran every batch to 2048 tokens (92 s/batch, ~24 h for the test
+# set, measured 2026-09-13). Truncation can only affect answers that would not have parsed anyway.
 # eval_affordance_v2.py generates on ONE model-parallel group (rank 0 drives, the rest follow),
 # so a single call uses only $MP GPUs. Shard the question file into NPROC/MP pieces and run one
 # group per GPU pair concurrently, then concatenate. Same model, same prompts, same generation
@@ -84,6 +87,7 @@ PYSPLIT
       --llama_type llama_ens5 --llama_config $CK/config.json --tokenizer_path $CK/tokenizer.model \
       --pretrained_path $ck --dataset $sd/shard$i.json --batch_size "${EVAL_BS:-8}" --input_size 448 \
       --model_parallel_size $MP --addition_flag ${flag}_s$i --sampled_num 1000000 --remove_space \
+      --max_gen_len "${MAX_GEN:-192}" \
       > $LOGS/eval_${base}_s${i}_$NAME.log 2>&1 &
     pids+=($!)
   done
