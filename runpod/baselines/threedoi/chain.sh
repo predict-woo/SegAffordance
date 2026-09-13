@@ -7,7 +7,7 @@
 #   MODE=export bash chain.sh  # export only (CKPT=... to pick a checkpoint)
 set -euo pipefail
 B=/workspace/datasets/baselines; R=$B/repos/3DOI/monoarti; D=$B/stage/3doi; LOGS=$B/logs; VENV=/opt/venv_3doi
-MODE="${MODE:-train}"; NPROC="${NPROC:-$(nvidia-smi -L | wc -l)}"; EPOCHS="${EPOCHS:-200}"
+MODE="${MODE:-train}"; NPROC="${NPROC:-$(nvidia-smi -L | wc -l)}"; EPOCHS="${EPOCHS:-62}"  # iteration-matched to their 200 epochs x ~10k images, see experiments/baselines_sf3d/20260913_3doi/notes.md
 NAME="${NAME:-3doi}"; [ "$MODE" = "smoke" ] && NAME="${NAME}_smoke"
 RUNS=$B/runs/$NAME; mkdir -p $LOGS /workspace/tmp
 export TMPDIR=/workspace/tmp WANDB_MODE=offline OMP_NUM_THREADS=4 PYTHONUNBUFFERED=1
@@ -47,7 +47,11 @@ case $MODE in
     ;;
   train)
     if [ ! -f $RUNS/.train_done ]; then
-      train $EPOCHS > $LOGS/train_$NAME.log 2>&1
+      # Their recipe is effective batch 8 (batch 2 x 4 GPUs). config/baselines/3doi_sam_sf3d.yaml
+      # carries batch 4 for Euler's 2-GPU cap, so pin the per-GPU batch here from the GPU count.
+      BATCH="${BATCH:-$(( 8 / NPROC ))}"; [ "$BATCH" -ge 1 ] || BATCH=1
+      echo "effective batch: $BATCH x $NPROC GPUs = $((BATCH * NPROC)) (recipe: 8)"
+      train $EPOCHS train.batch_size=$BATCH validation_epoch_interval="${VAL_EVERY:-2}" > $LOGS/train_$NAME.log 2>&1
       touch $RUNS/.train_done
     fi
     echo "== $(date -u) train done"; ls $RUNS/checkpoints | tail -3
