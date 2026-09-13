@@ -1813,3 +1813,19 @@ supervise the votes on training objects (then ARCTIC is a 2.5D source, not a
 2D one, and the transfer claim must be reworded to HOI4D / EPIC / in-the-wild).
 Paper text (`~/Research/AA3D/paper/sections/problem_data.tex`) currently says
 "evaluation only" and must change under either option.
+
+## FINAL MODEL CHANGED (user, 2026-09-13 ~10:30 local): `20260913_joint4_decoder_l2anchor_dense` (seed 42)
+
+Because `dense_off`'s offset loss trained on ARCTIC hinges (correction above),
+the user moved the paper's final model to the PLAIN dense-voting arm, seed 42:
+`experiments/20260913_joint4_decoder_l2anchor_dense/` (checkpoint = INDEX best,
+config `config/joint4_decoder_l2anchor_dense.yaml`; identical to dense_off
+minus `dense_offset_weight`). Headline numbers to quote: SF3D MA 44.01 /
+signed 42.69, matched axis 11.4 deg, origin 0.248, mIoU 0.277 / PDet 22.5,
+type 96.0, rot flips 12.7; ARCTIC probe axis 45.8 deg / 30 % flips / hinge
+offset 0.112; HOI4D 0.508 / EPIC 0.186 masks. Paper convention (user): report
+this single seed, no two-seed statements (dense_seed7 stays in INDEX only).
+ARCTIC's 3D labels are genuinely evaluation-only for this model (2d profile
+zeroes every loss that reads them; offset weight 0). Consequences for the
+paper: no hinge-placement-transfer claim (offset 0.11 = base level); the
+offset loss is dropped from the Method; dense_off remains an INDEX row.

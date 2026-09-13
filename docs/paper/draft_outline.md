@@ -4,9 +4,10 @@ Method name: ARTHUR = ARTiculation affordances from HUman Recordings (chosen 202
 
 CANONICAL DRAFT: `~/Research/AA3D/paper/draft.md` (IEEEtran project; written 2026-09-13). This repo copy is
 the outline snapshot and is no longer updated. Status: high-level outline only. Numbers
-are placeholders keyed to experiment IDs in `experiments/INDEX.md`. FINAL MODEL (fixed 2026-09-13):
-`20260913_joint4_decoder_l2anchor_dense_off` — CRIS trunk + dense hinge voting + per-pixel offset loss +
-analytic decoder on the L2 2pi + axis recipe (SF3D MA 46.0, ARCTIC hinge offset 0.029). The field model
+are placeholders keyed to experiment IDs in `experiments/INDEX.md`. FINAL MODEL (changed 2026-09-13, see STATE.md):
+`20260913_joint4_decoder_l2anchor_dense` (seed 42) — CRIS trunk + dense hinge voting (no offset loss) +
+analytic decoder on the L2 2pi + axis recipe (SF3D MA 44.0, ARCTIC hinge offset 0.112). dense_off was
+dropped because its offset loss also trained on ARCTIC hinges. The field model
 (all-fields redesign) is the research line, reported as an ablation. TODO = open.
 
 ## 0. The story in one paragraph
