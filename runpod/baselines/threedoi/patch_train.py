@@ -62,7 +62,9 @@ patch("train.py", [
      "        loss += cfg.optimizer.lbd_mask * metrics['loss_mask']\n        loss += cfg.optimizer.lbd_dice * metrics['loss_dice']\n"
      "        losses.append(float(loss))  # SF3D_EARLYSTOP: their `losses` list is never filled\n\n        # valid\n"),
     ("    if accelerator.is_local_main_process:\n        logger.info(\"-------------------------------------------------------\")\n        logger.info(\"validation results:\")\n",
-     "    val_results['loss'] = float(sum(losses) / max(len(losses), 1))  # SF3D_EARLYSTOP\n"
+     "    _vt = torch.tensor([float(sum(losses)), float(len(losses))], device=accelerator.device)  # SF3D_EARLYSTOP\n"
+     "    _vt = accelerator.reduce(_vt, reduction='sum')  # SF3D_EARLYSTOP: one GLOBAL val loss, identical on every rank\n"
+     "    val_results['loss'] = float(_vt[0].item() / max(_vt[1].item(), 1.0))\n"
      "    if accelerator.is_local_main_process:\n        logger.info(\"-------------------------------------------------------\")\n        logger.info(\"validation results:\")\n"),
     ("        if epoch % cfg.validation_epoch_interval == 0:\n            evaluate(cfg, model, val_dataloader, accelerator, stats)\n",
      "        if epoch % cfg.validation_epoch_interval == 0:\n"
@@ -70,6 +72,7 @@ patch("train.py", [
      "            _vl = float(_val.get('loss', float('nan')))\n"
      "            _pat = int(os.environ.get('SF3D_EARLY_STOP_PATIENCE', '0'))\n"
      "            if _pat > 0 and _vl == _vl:\n"
+     "                _bvp = os.path.join(output_dir, 'checkpoints', 'best_val.json')\n"
      "                if _vl < _best_val[0] - 1e-4:\n"
      "                    _best_val[0], _best_val[1] = _vl, 0\n"
      "                    if accelerator.is_main_process:\n"
@@ -80,14 +83,29 @@ patch("train.py", [
      "                        logger.info(f'SF3D_EARLYSTOP new best val loss {_vl:.4f} at epoch {epoch} -> {_bp}')\n"
      "                else:\n"
      "                    _best_val[1] += 1\n"
-     "                    logger.info(f'SF3D_EARLYSTOP val loss {_vl:.4f} did not beat {_best_val[0]:.4f} '\n"
-     "                                f'({_best_val[1]}/{_pat} validations without improvement)')\n"
-     "                    if _best_val[1] >= _pat:\n"
+     "                    if accelerator.is_main_process:\n"
+     "                        logger.info(f'SF3D_EARLYSTOP val loss {_vl:.4f} did not beat {_best_val[0]:.4f} '\n"
+     "                                    f'({_best_val[1]}/{_pat} validations without improvement)')\n"
+     "                if accelerator.is_main_process:\n"
+     "                    __import__('json').dump({'best': _best_val[0], 'since': _best_val[1], 'epoch': epoch}, open(_bvp, 'w'))\n"
+     "                if _best_val[1] >= _pat:\n"
+     "                    if accelerator.is_main_process:\n"
      "                        logger.info('SF3D_EARLYSTOP stopping: validation loss has stopped falling')\n"
-     "                        break\n"),
+     "                    break\n"),
     ("    # Run the main training loop.\n    for epoch in range(start_epoch, cfg.optimizer.max_epochs):\n",
      "    # Run the main training loop.\n    _best_val = [float('inf'), 0]  # SF3D_EARLYSTOP: [best val loss, validations since]\n"
+     "    _bvp0 = os.path.join(output_dir, 'checkpoints', 'best_val.json')\n"
+     "    if os.path.isfile(_bvp0):  # SF3D_EARLYSTOP: a resumed/requeued run keeps its early-stop state\n"
+     "        try:\n"
+     "            _bj = __import__('json').load(open(_bvp0)); _best_val = [float(_bj['best']), int(_bj.get('since', 0))]\n"
+     "            logger.info(f'SF3D_EARLYSTOP restored best val loss {_best_val[0]:.4f} ({_best_val[1]} validations since)')\n"
+     "        except Exception as _e:\n"
+     "            logger.info(f'SF3D_EARLYSTOP could not read {_bvp0}: {_e}')\n"
      "    for epoch in range(start_epoch, cfg.optimizer.max_epochs):\n"),
+    # (d) their resume restores the model and the epoch counter but leaves the optimizer state
+    # commented out (test.py loads it). Restore it, so a requeue does not reset AdamW's moments.
+    ("        # optimizer_state_dict = loaded_data[\"optimizer\"]\n",
+     "        optimizer_state_dict = loaded_data[\"optimizer\"]  # SF3D_EARLYSTOP: restore AdamW state on resume\n"),
 ], "SF3D_EARLYSTOP")
 
 patch("monoarti/stats.py", [

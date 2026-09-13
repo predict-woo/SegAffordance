@@ -26,6 +26,15 @@ appended to). We accumulate that loss, validate every 2 epochs, keep `checkpoint
 it improves, stop after 4 validations without improvement, and export from the best checkpoint.
 This changes only when training stops and which checkpoint is scored -- no loss, optimiser or
 hyper-parameter is touched -- and it can only reduce compute relative to the 62-epoch budget above.
+Two fixes found in the RunPod run at epoch 2 (2026-09-13 18:33 UTC): (i) each DDP rank had been
+computing the val loss over its own shard and deciding independently (0.5087 vs 0.4970 at epoch 2),
+which could make one rank stop while the other hangs -- the loss is now all-reduced (sum/count) so
+every rank sees one global number, and the best value + counter are persisted to
+`checkpoints/best_val.json` so a resume/requeue keeps its early-stop state; (ii) their `train.py`
+resume restores the model and epoch counter but has the optimizer-state load commented out (their
+`test.py` loads it), so every requeue would have reset AdamW's moments -- restored. The RunPod run
+was restarted from the end-of-epoch-2 checkpoint with these fixes; the epoch-0/2 validations before
+the restart were shard-local numbers and the early-stop baseline starts fresh from epoch 4.
 
 **Deviations (all documented, none touch the training math).**
 - `SF3D_LIMIT_VAL_ITERS=200`: their validation walks the whole val split and fires at epoch 0
