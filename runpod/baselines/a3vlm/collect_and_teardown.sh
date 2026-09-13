@@ -17,12 +17,19 @@ while true; do
     echo "== copying results to the main volume"
     bash "$P" run "$POD" "rsync -a -e 'ssh $SSH_OPTS' /workspace/bl/runs/a3vlm/eval/ root@$DEV_IP:/workspace/datasets/baselines/results/a3vlm/ && \
       rsync -a -e 'ssh $SSH_OPTS' /workspace/bl/logs/ root@$DEV_IP:/workspace/datasets/baselines/results/a3vlm/logs/ && echo COPIED"
-    # keep the final checkpoint metadata only (the 13B shards are ~40 GB and are not worth storing)
+    # Keep the trained MODEL (2 x 19.9 GB shards + tokenizer/config) on the main EU-RO volume: it
+    # cost ~$400 to produce and re-evaluation or a 3rd-epoch continuation would need it. The 63 GB
+    # optimizer state is dropped.
+    echo "== copying the final model shards to the main volume (~40 GB)"
+    bash "$P" run "$POD" "last=\$(ls -d /workspace/bl/runs/a3vlm/epoch* | sort -V | tail -1); echo \"final checkpoint: \$last\"; \
+      rsync -a --info=progress2 -e 'ssh $SSH_OPTS' --include='*.model.pth' --include='tokenizer.model' --include='config.json' --include='meta.json' --exclude='*' \
+      \$last/ root@$DEV_IP:/workspace/datasets/baselines/results/a3vlm/final_model/ 2>&1 | tail -2 && echo MODEL_COPIED"
     bash "$P" run "$POD" "ls -la /workspace/bl/runs/a3vlm | tail -5"
     if [ "$NODELETE" != "--no-delete" ]; then
       bash "$P" delete "$POD"
-      echo "== pod deleted. Remember: 'runpodctl network-volume rm 18bdh0pzec' (bl-apjp) once the"
-      echo "   results are verified, and 'runpodctl network-volume rm 5pw4vigftc' (bl-eufr, unused)."
+      echo "== pod deleted. The AP-JP-1 volume bl-apjp (18bdh0pzec, 700 GB, ~\$105/month) and the unused"
+      echo "   EU-FR-1 volume bl-eufr (5pw4vigftc, 150 GB) should be deleted once results are verified:"
+      echo "   runpodctl network-volume delete 18bdh0pzec ; runpodctl network-volume delete 5pw4vigftc"
     fi
     exit 0
   fi
