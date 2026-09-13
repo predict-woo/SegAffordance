@@ -24,7 +24,19 @@ if [ "$MODE" != "eval" ] && [ "$DP" -lt 2 ]; then
 fi
 echo "== $(date -u) $MODE $NAME on $NPROC x $(nvidia-smi --query-gpu=name --format=csv,noheader | head -1); dp=$DP accum=$ACCUM"
 python $SEG/runpod/baselines/a3vlm/patch_eval.py $R/eval_affordance_v2.py
-PORT=$(( ((RANDOM<<15)|RANDOM) % 49152 + 10000 ))
+# Pick a base port with a free range [PORT, PORT+NPROC/MP] -- the eval shards use PORT+1+i.
+# A bare random pick collided with Docker's embedded DNS (127.0.0.11:44453) on 2026-09-13 and
+# torchrun died with "failed to bind". Their own scripts loop on nc -z for the same reason.
+port_free() { ! (ss -tln 2>/dev/null || netstat -tln 2>/dev/null) | grep -qE "[:.]$1 "; }
+PORT=0
+for _try in $(seq 1 50); do
+  cand=$(( ((RANDOM<<15)|RANDOM) % 20000 + 20000 ))
+  ok=1
+  for off in $(seq 0 $(( NPROC / MP ))); do port_free $(( cand + off )) || ok=0; done
+  [ "$ok" = "1" ] && { PORT=$cand; break; }
+done
+[ "$PORT" != "0" ] || { echo "no free port range found" >&2; exit 4; }
+echo "using master port $PORT"
 cd $R
 
 # `|| true` is load-bearing: with `set -o pipefail` the ls fails when no checkpoint exists yet,
