@@ -48,5 +48,16 @@ dataset was regenerated with the long segments before training.
 over data-parallel ranks only, so 2 GPUs (the hard Euler per-user cap) give DP=1 and ~75 GB/GPU of
 AdamW state — measured OOM at 74.87/79.19 GiB on 2 x H100.
 
-**Status.** Approved 2026-09-13, waiting on 8- or 4-GPU stock in EU-FR-1 (the volume is locked to
-that datacenter). Results below when it finishes.
+**As actually run (2026-09-13).** Pod `bl-a3vlm`, **4 x H200 141 GB** in AP-JP-1 on volume
+`bl-apjp` (700 GB), $18.36/h — no 8-GPU pod existed in any volume-capable RunPod datacenter (probed
+by real create attempts). With model_parallel 2 that is DP=2, so `--accum_iter 32` keeps the
+effective batch at 128 as in the recipe. Measured peak memory 79.6 GB/GPU (would not fit 80 GB
+H100s). **2 epochs, not the recipe's 3**: the measured cost of 3 was ~$519 against an approved
+~$230-300 and the user chose 2 (~$400 with the fixes below). Two operational deviations, neither
+touching the training maths: `--save_iteration_interval 4000` instead of 500 (a 135 GB checkpoint
+every ~11 min cost 0.40 s/step, 3.6 h of I/O per epoch; the flag counts micro-batches), applied by
+stopping at micro-step ~12,500 and resuming from the complete checkpoint at 12,479 (~80 samples
+seen twice). Steady-state 0.83 s per micro-step of 4 samples after the change.
+
+**Status.** Training since 01:14 UTC 2026-09-13; expected to finish epoch 1 ~19:20 UTC, eval + export
+~20:50 UTC. Results below when it finishes.

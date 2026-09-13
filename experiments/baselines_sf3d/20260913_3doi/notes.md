@@ -45,14 +45,18 @@ Depth is supervised from our input depth through an omnidata-style tree, which t
 up because the images are named `taskonomy_*`. Splits: train 32,171 frames / 48,560 instances,
 val (our bvalid) 3,495 / 5,526, test 3,313 / 5,088. Every instance has a valid 2D axis line.
 
-**Where it runs.** ETHZ Euler, 2 x RTX PRO 6000 (96 GB), `euler/baselines/3doi.sbatch`.
-The per-user cap of 2 GPUs is enforced by a client-side cli_filter, so 2 is the maximum; the job
-checkpoints every epoch, self-requeues on the 5-day wall clock and resumes from
-`checkpoints/checkpoint.pth`. Jobs: smoke 13967514 (1 x A100), full 13968368.
+**Where it runs.** ETHZ Euler, 2 GPUs with `--gres=gpumem:80g` (A100 80 GB or RTX PRO 6000),
+`euler/baselines/3doi.sbatch`. The per-user cap of 2 GPUs is enforced by a client-side cli_filter,
+so 2 is the maximum; the job checkpoints every epoch, self-requeues on the 24 h wall clock and
+resumes from `checkpoints/checkpoint.pth`. Jobs: smoke 13967514 (1 x A100 40 GB, passed incl.
+resume); 13971778 was placed on 40 GB A100s despite asking for RTX PRO 6000 by type (Euler's submit
+plugin rewrites the partition list) and OOMed at batch 4 after 7 min; **13993189** is the live
+submission, constrained by GPU memory, with a VRAM guard in the chain that exits before training
+on an under-sized card.
 
 **Validation before the run** (RunPod dev pod, 30 iterations): train -> checkpoint -> resume ->
 export -> score all pass. Export of 30 test frames gives 45 predictions, 43 of them above IoU 0.5,
 matched-row axis error 15.2 deg — SAM is pretrained and prompted with the GT element point, so
 strong masks are expected from the start and PDet should be the model's strongest number.
 
-**Status.** Queued 2026-09-13. Results below when it finishes.
+**Status.** Job 13993189 queued 2026-09-13, estimated start ~22:20 UTC. Results below when it finishes.
