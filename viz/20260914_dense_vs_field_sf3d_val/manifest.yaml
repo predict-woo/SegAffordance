@@ -1,0 +1,13 @@
+command: tools/sf3d_vis_val.py --model dense config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
+  --model field config/joint4_decoder_field.yaml experiments/20260913_field_joint4_l2anchor/checkpoints/best-epoch14-sf3dval1.0536.ckpt
+  --field-names field --out viz/20260914_dense_vs_field_sf3d_val --num 20 --seed 3
+tool_commit: 1d986fa
+generated: '2026-09-14T09:33:06+00:00'
+models:
+- name: dense
+  config: config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  ckpt: experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
+- name: field
+  config: config/joint4_decoder_field.yaml
+  ckpt: experiments/20260913_field_joint4_l2anchor/checkpoints/best-epoch14-sf3dval1.0536.ckpt
