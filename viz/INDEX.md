@@ -8,6 +8,7 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
 |---|---|---|
+| [20260914_dense_sf3d_val_200](20260914_dense_sf3d_val_200/README.md) | Final dense model on 200 random SF3D val frames (100 rot + 100 trans, seed 5), `[GT | dense]` panels at 2x; first batch with a tracked `preds.jsonl` prediction dump so any subset can be redrawn on CPU by `tools/sf3d_render_preds.py` (verified pixel-equal up to the mask contour). | `tools/sf3d_vis_val.py --dump`, `20260913_joint4_decoder_l2anchor_dense` best-epoch13 |
 | [20260914_sf3d_model_zoo](20260914_sf3d_model_zoo/README.md) | 27 checkpoints (DCT era, decoder loss variants, readout variants, dense family, control, loss ablations, field) on the same 20 SF3D val frames; one labelled 7-column grid per frame with GT first; for eyeballing which models resolve the sense of rotation and where hinges land | runpod/sf3d_zoo.sh |
 | [20260914_dense_vs_field_sf3d_val](20260914_dense_vs_field_sf3d_val/README.md) | final dense model vs the field model on the same 20 SF3D val frames: field better on 3 (oven door 32 vs 65), worse on 8 (glass door 84, cabinet 29), ties elsewhere; field masks messier (blob on the cabinet front); hinge lines similar | tools/sf3d_vis_val.py --field-names |
 | [20260914_paper_figures](20260914_paper_figures/README.md) | composed paper Figs. 4-6 (SF3D GT/OPDFormer-C/ARTHUR; hand video GT/SF3D-only/ARTHUR; phone photos) from the three batches below | compose script |

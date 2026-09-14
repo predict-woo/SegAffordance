@@ -2083,3 +2083,14 @@ Baseline OPD-C 512 (peer CSV): PDet 37.7 / MA 26.0 / MAO 23.9 / PDet+MAO 14.6 / 
 is now within 0.4 of ours (its masks are oracle-matched), but its hinge placement on revolute rows stays near zero.
 Readings: seed noise on the joint rates ~2 points; every readout variant (pooled, h1anchor, attnpool, query) sits at
 9-12 PDet+MAO vs 13-15 for the two dense seeds; the OPD detectors' MAO is carried by prismatic rows (MAO_rot 0.2-3.5).
+
+## DONE (2026-09-14 ~19:00 UTC): 200-frame dense visualisation + GPU-free prediction dump
+
+`viz/20260914_dense_sf3d_val_200`: final dense model on 200 random SF3D val frames (seed 5, 100 rot + 100 trans),
+`[GT | dense]` panels. NEW: `tools/sf3d_vis_val.py --dump preds.jsonl` writes one record per model x frame
+(`tools/sf3d_preds_io.py`: mask RLE, type logits, point 3D/uv, axis, hinge 3D/uv, decoded trajectory) and
+`tools/sf3d_render_preds.py` redraws any subset on CPU from the LMDB + the JSONL, same drawing code, no checkpoint
+(verified: ~0.01 % of pixels differ, mask contour only). `preds.jsonl` is now git-tracked under `viz/*/` (.gitignore
+exception). sf3d_vis_val.py also gained `--idx` (explicit val indices) and `--no-panels` (dump only), and its panel
+filenames are now 3-digit (`NNN_rot_valJ.png`). Next time a zoo or a paper-figure batch is rendered, run with `--dump`
+so figures can be re-cut later without the GPU.

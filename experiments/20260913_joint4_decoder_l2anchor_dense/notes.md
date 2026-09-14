@@ -50,3 +50,4 @@ per-pixel offset loss on SF3D). Best ckpt: `checkpoints/best-epoch13-sf3dval0.97
 5,088 test frames (signed axis <= 10 deg; origin ignored for prismatic): dense PDet 22.9 / M 96.0 /
 MA 42.7 / MAO(line <= 0.25 m) 40.5 / PDet+MAO 15.0; revolute-only MAO(line <= 0.10 m) 21.8. The pooled
 l2anchor ancestor: 18.8 / 91.5 / 30.4 / 28.9 / 9.1 / 14.2. Full table in STATE.md.
+- vis: viz/20260914_dense_sf3d_val_200 (200 random val frames, GT | dense, + tracked preds.jsonl for GPU-free re-rendering)
