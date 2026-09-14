@@ -2061,3 +2061,14 @@ AP50 10.3 vs 2.6. Camera-frame axis head benefits from resolution where P's worl
 best detector baseline on articulation (still far from A3VLM 43.8 / ours 42.7). conf > 0.5: PDet 4.6 / mIoU
 0.040 (256: 1.7 / 0.020). Remaining: MOPD 512 (~Sep 15 23:00 UTC), USDNet 1 cm (epoch ~92/200, ~Sep 15 05:00),
 3DOI (epoch 17, best val 0.5917 @ epoch 10, patience 3/4 — likely stops after epoch 18's validation ~18:40 UTC).
+
+## Paper + probe (2026-09-14 ~18:05 UTC, paper session)
+
+Table II: OPDFormer-C 512 row filled (Overleaf 4e75b2a) + reading sentence ("resolution helps detection, not
+articulation; C gains six points to 26.0, P unchanged"); caption's thresholded-PDet range now 1.7 to 4.6; todo left
+for the MOPD / USDNet rows. In flight on the dev pod (~17:46-18:40 UTC): `runpod/mao_probe_extra.sh`, the per-sample
+SF3D probe for dense_seed7 / h1anchor / query / attnpool in ONE process -> `sf3d_per_sample_metrics_extra4.csv`
+(rows to be appended to `sf3d_per_sample_metrics.csv`; four parallel processes were slower in aggregate because the
+network-volume LMDB read is the bottleneck, and one was OOM-killed under the 31 GB cap). Lesson: never `pkill -f
+<pattern>` inside a `dev.sh run` command whose own text contains the pattern (it kills the session shell); use
+bracket patterns like `"name.p[y]"` and launch from a script file. User decision: no GPU-free rendering dump for now.
