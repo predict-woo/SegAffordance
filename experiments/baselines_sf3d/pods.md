@@ -41,5 +41,5 @@ DELETE the pod on CHAIN_DONE.
 |---|---|---|---|---|---|
 | bl-opd512-c | 6w98k0sr3v4cma | A100-SXM4-80GB | 1.59 | opd512_c_rgbd (OPDFormer-C RGB-D 512x384) | 00:26 |
 | bl-mopd512 | az2ad8iqoruhd5 | A100 80GB PCIe | 1.59 | mopd512_rgb (MOPD, OPDFormer schedule, 512x384) | ~00:33 |
-| bl-opd512-prgb | 9r6p29cxu5gwtt | A100 80GB PCIe | 1.59 | opd512_p_rgb (OPDFormer-P RGB 512x384) | ~00:36 |
+| bl-opd512-prgb | 9r6p29cxu5gwtt | A100 80GB PCIe | 1.59 | opd512_p_rgb (OPDFormer-P RGB 512x384) | ~00:36; CHAIN_DONE 13:39, deleted 13:40 UTC (~$21) |
 | bl-usdnet1cm | d2z37fxh1uwutg | A100 80GB PCIe | 1.59 | usdnet_v1cm (USDNet 1 cm; conversion on the dev pod) | ~00:39 |

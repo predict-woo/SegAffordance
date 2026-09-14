@@ -2030,3 +2030,15 @@ In-the-wild finding to keep in mind: the SF3D-only control ALSO works on the doo
 (in-distribution categories); human video's gain in the wild is the laptop (category coverage), not
 hinge accuracy. Peer pods still running: bl-opd512-c / -prgb, bl-mopd512, bl-usdnet1cm, bl-3doi.
 Dev pod: free (probe + chain finished 03:19 UTC), still running ($0.57/h) per the keep-running rule.
+
+## DONE (2026-09-14 13:58 UTC): OPDFormer-P RGB at 512x384 — resolution fixes masks/type, not articulation
+
+`20260914_opdformer_p_rgb_512` (bl-opd512-prgb, ~$21, deleted): signed MA **14.4** (256: 14.4), type 74.7
+(67.9), matched axis 30.4 deg (31.7), origin 0.725 m (0.743), PDet **40.2** (30.9), mIoU 0.372 (0.320); their
+own test segm AP50 11.6 vs 5.5. Confidence-thresholded (conf > 0.5) PDet 4.0 / mIoU 0.033 (256: 2.5 / 0.027):
+the detector is confident about a matching instance for ~6.5 % of elements, so the oracle protocol stays
+the readable one; both reported (`thresholded.json`, `per_sample_metrics.csv`). Still running: OPD-C 512
+(~16:30 UTC), MOPD 512 (~Sep 15 23:00), USDNet 1 cm (epoch ~60/200, ~Sep 15 05:00; after four OOMs it runs with
+3.0 m crops + a 450 k training-point cap — inherent to USDNet's O(points x queries) articulation head at 1 cm,
+documented in its notes), 3DOI (epoch 15, best val 0.5917 @ epoch 10, patience 2/4). Scoring helper:
+`runpod/baselines/score_run.sh <run> <exp> <model>` (metrics.json + per-sample CSV + thresholded.json).
