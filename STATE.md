@@ -1938,3 +1938,33 @@ to 512 for consistency). Variant plumbing: `OPD_DATA / RUN_NAME / IMG_SIZE` (opd
 OOM-killed the paper session's GPU probes. CPU-heavy conversions go to the target training pod (or <= 8
 workers on the dev pod). 3DOI RunPod: epoch 7, best val 0.5994 (epoch 4), epoch 6 = 0.6039 (1/4 patience).
 Euler replicate 13993189 started 00:49 UTC.
+
+## NIGHT 3 (2026-09-14 03:10 local, user asleep): what changed and what is running
+
+- **A3VLM baseline (peer session pod-copy-and-protocol-scoring)**: full fine-tune of 13.05B params, 2/3
+  epochs, ~$430. Text-only chained protocol (our description -> REC box -> joint): signed MA **43.8**,
+  type 96.3, matched axis 17.5 deg, origin 0.434 m, box-hull PDet 12.3 / mIoU 0.240 (ceiling 34.1 /
+  0.408). Given the GT box: 45.7 / 20.8 deg / 0.361 m. => level with our 42.7 on signed MA (seed noise),
+  worse on axis (+6 deg), hinge (+19 cm), localisation. Paper abstract reworded: "outperforms prior
+  articulation estimators ... and matches a 13B VLM on motion accuracy with far more accurate axes,
+  hinges and part masks at a fraction of its size" (no bare SOTA claim). Table II has both A3VLM rows.
+- **Per-sample CSVs**: baselines re-exported to `experiments/baselines_sf3d/<id>/per_sample_metrics*.csv`
+  in the `tools/sf3d_mao_probe.py` schema (+ matched, confidence). Our five checkpoints
+  (dense, l2anchor, sf3d_only, directloss, sampledtraj) are being probed on the dev pod ->
+  `experiments/20260913_joint4_decoder_l2anchor_dense/sf3d_per_sample_metrics.csv` (streamed; ~65 min;
+  earlier attempts were OOM-killed by the peer's 16-worker USDNet conversion under the dev pod's 31 GB
+  cgroup cap — conversions now go to the training pods).
+- **ARCTIC probe fixes** (`tools/arctic_axis_probe.py`, commit 809d61f): (1) per-stroke GT sign — the
+  LMDB stores the object-fixed axis for every stroke while the model's sign follows the motion, so
+  signed numbers on CLOSE strokes were inverted; all earlier ARCTIC flip rates are contaminated and are
+  not in the paper; (2) new `hinge_point_offset_frac` (projected predicted hinge foot vs projected GT
+  foot) — the line offset rewards any line through the part centre (control 0.084 with chance axes vs
+  dense 0.112). Rerun for the five checkpoints queued after the MAO probe
+  (`arctic_axis_probe_signfix.csv`).
+- **Resolution-matched baselines**: pods bl-opd512-c, bl-opd512-prgb, bl-mopd512 (A100, $1.59/h each)
+  training; bl-usdnet1cm converting then training; bl-3doi epoch 6/62 with early stopping. bl-a3vlm deleted.
+- **Queued GPU chain on the dev pod (after the probe)**: ARCTIC probe (5 ckpts) -> hand-video panels
+  control vs dense (`viz/20260914_handvideo_control_vs_dense/{hoi4d,epic,arctic}`) -> phone photos
+  control vs dense (`viz/20260914_iphone_control_vs_dense`) -> Fig. 4 panels GT | OPDFormer-C oracle
+  instance | ours (`viz/20260914_fig4_sf3d_gt_baseline_ours`, tool `tools/sf3d_vis_baseline_vs_ours.py`).
+  Then: assemble Figs 4-6 for the paper, write their captions from what the panels show.
