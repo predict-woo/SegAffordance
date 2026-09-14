@@ -40,14 +40,14 @@ def summarize(csv_path, axis_deg=10.0, iou_t=0.5):
     with open(csv_path) as f:
         for r in csv.DictReader(f):
             by.setdefault(r["model"], []).append(r)
-    print(f"{os.path.basename(csv_path)}: axis <= {axis_deg:.0f} deg (signed), PDet gate IoU > {iou_t}")
+    print(f"{os.path.basename(csv_path)}: axis <= {axis_deg:.0f} deg (signed), PDet gate IoU >= {iou_t}")
     print(f"{'model':12s} {'n':>5s} {'PDet':>6s} {'M':>6s} {'MA':>6s}" + "".join(f" {'MAO_l' + str(t):>9s}" for t in THRESH_M)
           + "".join(f" {'MAO_q' + str(t):>9s}" for t in THRESH_M) + f" {'PDet+MA':>8s} {'PDet+MAO_l.25':>13s} {'MAO_rot_l.10':>12s}")
     for name, rs in by.items():
         g = np.array([int(r["gt_type"]) for r in rs]); p = np.array([int(r["pred_type"]) for r in rs])
         s_ = np.array([float(r["axis_signed_deg"]) for r in rs]); le = np.array([float(r["origin_line_err_m"]) for r in rs])
         qe = np.array([float(r["origin_qstar_err_m"]) for r in rs]); iou = np.array([float(r["mask_iou"]) for r in rs])
-        M = g == p; MA = M & (s_ <= axis_deg); rot = g == 1; det = iou > iou_t
+        M = g == p; MA = M & (s_ <= axis_deg); rot = g == 1; det = iou >= iou_t   # >= : the harness IoU is (inter+eps)/(union+eps), so an exact tie counts as detected
         def mao(err, t):
             return MA & np.where(rot, err <= t, True)
         pct = lambda x: 100.0 * float(np.mean(x))
