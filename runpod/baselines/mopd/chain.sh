@@ -10,8 +10,13 @@ set -euo pipefail
 B=/workspace/datasets/baselines; DATA="${OPD_DATA:-$B/data/opd_sf3d}"; NAME="${RUN_NAME:-mopd_rgb}"; RUNS=$B/runs/$NAME; LOGS=$B/logs; R=$B/repos/MOPD/opdformer
 INIT_RUN="${INIT_RUN:-$B/runs/opd_p_rgb}"
 export TMPDIR=/workspace/tmp; mkdir -p $RUNS $LOGS /workspace/tmp
+# Data-parallel + resume (2026-09-14): IMS_PER_BATCH stays the recipe's 16 in total; detectron2 splits
+# it over $NPROC GPUs and averages gradients, patch_ddp.py converts the B5 encoder's BatchNorm to
+# SyncBatchNorm so the batch statistics are unchanged. RESUME=1 continues from $RUNS/last_checkpoint.
+NPROC="${NPROC:-$(nvidia-smi -L | wc -l)}"
+python /workspace/SegAffordance/runpod/baselines/mopd/patch_ddp.py $R/train.py
 while [ ! -f $INIT_RUN/model_final.pth ]; do echo "$(date -u +%H:%M) waiting for opd_p_rgb model_final.pth"; sleep 300; done
-echo "== $(date -u) MOPD chain ($NAME, data $DATA, init $INIT_RUN, schedule ${SCHEDULE:-mopd}) on $(nvidia-smi --query-gpu=name --format=csv,noheader)"
+echo "== $(date -u) MOPD chain ($NAME, data $DATA, init $INIT_RUN, schedule ${SCHEDULE:-mopd}, gpus $NPROC, resume ${RESUME:-0}) on $(nvidia-smi --query-gpu=name --format=csv,noheader)"
 cd /workspace/SegAffordance
 [ -f $RUNS/init.pth ] || python tools/baselines_sf3d/run.py tools/baselines_sf3d/mopd_compose_ckpt.py --opd $INIT_RUN/model_final.pth --esam $B/ckpt/efficient_sam_vits.pt --mopd-repo $B/repos/MOPD --out $RUNS/init.pth
 read -r MEAN STD <<<"$(python - <<PY
@@ -34,8 +39,9 @@ if [ "${SCHEDULE:-mopd}" = "opdformer" ]; then
 fi
 if [ ! -f $RUNS/model_final.pth ]; then
   python train.py --config-file configs/opd_p_real.yaml --output-dir $RUNS --data-path $DATA/MotionDataset_h5 --input-format RGB \
+    --num-gpus $NPROC ${RESUME:+--resume} \
     --model_attr_path $DATA/obj_info.json --opts MODEL.WEIGHTS $RUNS/init.pth $COMMON_OPTS DATASETS.TEST "('MotionNet_valid',)" ${EXTRA_OPTS:-} \
-    > $LOGS/train_$NAME.log 2>&1
+    >> $LOGS/train_$NAME.log 2>&1
 fi
 echo "== $(date -u) train done"
 python evaluate_on_log.py --config-file configs/opd_p_real.yaml --output-dir $RUNS/test --data-path $DATA/MotionDataset_h5 --input-format RGB \

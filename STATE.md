@@ -2146,3 +2146,12 @@ Peer-confirmed paths for the two pending Fig. 4 columns: MOPD 512 -> `/workspace
 USDNet 1 cm -> `.../results/usdnet_v1cm/preds.jsonl` (+ per_sample CSVs as before). Raw outputs for nearest-instance
 fallbacks survive on the main volume: `runs/opd512_{c_rgbd,p_rgb}/test/inference/instances_predictions.pth`,
 `runs/usdnet_v1cm/test/debug/val_preds/preds.pkl` (scene-level; frame mapping in `tools/baselines_sf3d/usdnet_preds_to_jsonl.py`).
+
+## NOTE (2026-09-14 22:20 UTC): MOPD 512 cannot be sped up with more GPUs on RunPod A100 hosts
+
+User asked to speed up the 44-h MOPD 512 run (maths unchanged). The step is CPU-bound in their per-image /
+per-query Python loops (1 thread at 107 %, GPU 18 %). Built and verified a 2-GPU resume path
+(`runpod/baselines/mopd/patch_ddp.py`: --resume, SyncBN, DataParallel pass-through, find_unused_parameters;
+validation reproduces the 1-GPU run), but 2 x A100 PCIe gave 3.1 s/iter vs 2.67 on 1 GPU: the landed host was a
+CPU-quota VM 1.7x slower per thread, and DDP adds ~0.6 s/iter of sync; projected gain on a fast host ~1.3x only.
+Extra pod deleted (~$3); original run untouched, ETA ~23:30 UTC Sep 15. Details in the run's notes.

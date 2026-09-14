@@ -22,4 +22,19 @@ extra handling. Fit-to-env patches as in `20260912_mopd_rgb` (matcher Sinkhorn s
 **Run.** Pod `bl-mopd512` (az2ad8iqoruhd5, A100 80GB PCIe, $1.59/h), chain started ~00:33 UTC
 2026-09-14. Run dir `runs/mopd512_rgb`, results `results/mopd512_rgb/`.
 
+**Speed-up attempt (2026-09-14 21:10 - 22:20 UTC, abandoned).** The run is CPU-bound: one Python
+thread at ~107 %, GPU 18 % / 90 W, `data_time` 0.2 s of a 2.6 s step (their per-image / per-query
+loops launch small kernels and synchronise). To halve the wall clock with identical maths, a second
+pod `bl-mopd512x2` (2 x A100 PCIe) was brought up with `runpod/baselines/mopd/patch_ddp.py` (`--resume`,
+SyncBatchNorm for the B5 encoder's 116 BN layers so batch statistics stay over 16 images, the
+EfficientSAM `nn.DataParallel` wrapper replaced by an equivalent pass-through, DDP with
+`find_unused_parameters`). The resume path is correct — 40 iterations from `model_0019999.pth` on 2
+GPUs gave validation segm AP50 9.7 vs 10.1 for the 1-GPU run at the same point — but not faster:
+3.1 s/iter on 2 GPUs. Measured on that host: single process 8 images 2.5 s, 16 images 4.5 s (a
+virtualised "EPYC-Genoa" host with a CPU quota, 1.7x slower per thread than the original pod's
+bare-metal EPYC 7543), so the per-step cost is ~0.25 s/image + ~0.5 s fixed, and DDP adds ~0.6 s of
+synchronisation (SyncBN + gradient all-reduce). Even on a fast host the projected gain was ~1.3x;
+not worth a second lottery. Pod deleted 22:20 UTC (~$3); the original single-GPU run was never
+interrupted. The DDP tooling is kept (it works) for future multi-GPU MOPD runs.
+
 **Result.** pending.
