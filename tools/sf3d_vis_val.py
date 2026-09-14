@@ -42,6 +42,7 @@ def main():
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--scale", type=float, default=2.0)
     ap.add_argument("--ray-len", type=float, default=0.5)
+    ap.add_argument("--field-names", default="", help="comma-separated model NAMEs that are FieldModel checkpoints (model/field_model.py)")
     a = ap.parse_args()
     device = "cuda" if torch.cuda.is_available() else "cpu"
     r, m, d = get_default_transforms(image_size=(512, 512))
@@ -63,7 +64,9 @@ def main():
     rot = [j for j, ty in enumerate(types) if ty in ("rot", "rotation")]
     trans = [j for j, ty in enumerate(types) if ty not in ("rot", "rotation")]
     picks = [int(x) for x in rng.choice(trans, a.num // 2, replace=False)] + [int(x) for x in rng.choice(rot, a.num - a.num // 2, replace=False)]
-    models = [(n, *load_model(c, k, device)) for n, c, k in a.model]
+    from arctic_axis_probe import load_field_model
+    field_names = {x for x in a.field_names.split(",") if x}
+    models = [(n, *(load_field_model if n in field_names else load_model)(c, k, device)) for n, c, k in a.model]
     os.makedirs(a.out, exist_ok=True)
     for n_i, j in enumerate(picks):
         it = va[j]
