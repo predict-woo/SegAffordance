@@ -2142,3 +2142,7 @@ Fig. 4 v5 (`viz/20260914_paper_figures/fig_sf3d_qual_v5.png`): 3DOI column real 
 (reads instances_predictions.pth; oracle if any overlap, else nearest by mask centroid, flagged `fallback: nearest`;
 renderer labels it). OPDFormer-P oven door: nearest 37 px, score 0.00, 83 deg. Remaining placeholders: MOPD 512
 (~Sep 15 23:00 UTC), USDNet 1 cm (~Sep 15 08:00 UTC) -> rerun the batch README command, recompose, copy, drop the \todo.
+Peer-confirmed paths for the two pending Fig. 4 columns: MOPD 512 -> `/workspace/datasets/baselines/results/mopd512_rgb/preds.jsonl`,
+USDNet 1 cm -> `.../results/usdnet_v1cm/preds.jsonl` (+ per_sample CSVs as before). Raw outputs for nearest-instance
+fallbacks survive on the main volume: `runs/opd512_{c_rgbd,p_rgb}/test/inference/instances_predictions.pth`,
+`runs/usdnet_v1cm/test/debug/val_preds/preds.pkl` (scene-level; frame mapping in `tools/baselines_sf3d/usdnet_preds_to_jsonl.py`).
