@@ -1989,3 +1989,28 @@ is clearly ahead (21.8 vs 15.5) — human video sharpens hinge placement on SF3D
 (3) PDet-gated rates are low for everyone (15 %) because PDet is ~23 %: mask resolution, not articulation.
 (4) baselines (peer CSVs, oracle-matched): OPDFormer-P RGB MAO_l0.25 10.2, USDNet 18.0, A3VLM GT-box 43.6 /
 chain pending in this metric.
+
+## ARCTIC probe rerun with the per-stroke sign + point offset (2026-09-14 03:15 UTC): the sign is NOT motion-locked
+
+`arctic_axis_probe_signfix.csv` (5 ckpts, 329 held-out revolute strokes). Unsigned axis mean / median,
+%<10, flip % (GT negated on close strokes), line offset, POINT offset, radius median, type %:
+
+| model | mean | med | <10 | flip | line off | point off | r_med | type |
+|---|---|---|---|---|---|---|---|---|
+| dense (final) | 45.8 | 42.8 | 6.4 | **62.3** | 0.112 | 0.287 | 0.71 | 99.7 |
+| sf3d_only | 56.6 | 60.9 | 1.2 | 52.6 | 0.084 | 0.201 | 0.14 | 40.4 |
+| l2anchor | 48.2 | 45.7 | 2.7 | 52.3 | 0.070 | 0.210 | 0.69 | 100 |
+| directloss | 50.3 | 52.7 | 2.4 | 42.9 | 0.076 | 0.387 | 1.55 | 100 |
+| sampledtraj | 48.4 | 51.4 | 5.2 | 46.5 | 0.201 | 0.255 | 0.10 | 100 |
+
+Readings: (1) with the GT sign made to follow the stroke direction, flips are AT OR ABOVE chance for
+every model (dense 62 %: box / laptop lids 100 % flipped, phone 91 %) while under the object-fixed sign
+dense had 30 %. So the model's sign on hand video tracks the OBJECT (hinge-side prior from SF3D
+doors/lids), not the motion direction — exactly the (n, hinge side) ambiguity: a mirrored hinge side
+reproduces the same arc. Consequence: NO signed ARCTIC number is meaningful; the paper reports
+unsigned axis error only (Table IV rewritten: axis mean / median + chance 57.3 deg) and the offset
+columns are gone. (2) Hinge placement metrics: the point offset ALSO favours the control (0.201 vs
+0.287) because its predicted radius is tiny (0.14 m: hinge at the knuckle) while dense over-shoots
+(0.71 m); in image space a hinge at the part beats a hinge far outside it. Neither is right;
+hand-video hinge placement remains unsolved and the paper says so (Table IV caption TODO + limitations).
+(3) Unsigned axis: dense best on box (18.9) and laptop (19.4) lids, worst on scissors (67) / espresso (49).
