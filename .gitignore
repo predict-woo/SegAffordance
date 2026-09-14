@@ -30,3 +30,4 @@ viz/**
 !viz/*/manifest.yaml
 !viz/*/*.csv
 !viz/*/preds.jsonl
+!viz/*/preds_*.jsonl

@@ -1,0 +1,29 @@
+command: tools/viz_fig4_panels.py --ours dense viz/20260914_dense_sf3d_val_200/preds.jsonl
+  --baseline OPDFormer-C /workspace/datasets/baselines/results/opd512_c_rgbd/preds.jsonl
+  --baseline OPDFormer-P /workspace/datasets/baselines/results/opd512_p_rgb/preds.jsonl
+  --baseline MOPD pending --baseline USDNet pending --baseline A3VLM /workspace/datasets/baselines/results/a3vlm/preds_chain.jsonl
+  --baseline 3DOI pending --idx 1684 113 3726 403 --out viz/20260914_fig4v4_all_baselines
+tool_commit: eb59aaa
+generated: '2026-09-14T20:44:21+00:00'
+ours:
+- - dense
+  - viz/20260914_dense_sf3d_val_200/preds.jsonl
+baselines:
+- - OPDFormer-C
+  - /workspace/datasets/baselines/results/opd512_c_rgbd/preds.jsonl
+- - OPDFormer-P
+  - /workspace/datasets/baselines/results/opd512_p_rgb/preds.jsonl
+- - MOPD
+  - pending
+- - USDNet
+  - pending
+- - A3VLM
+  - /workspace/datasets/baselines/results/a3vlm/preds_chain.jsonl
+- - 3DOI
+  - pending
+picks:
+- 1684
+- 113
+- 3726
+- 403
+extent: gt

@@ -2105,3 +2105,16 @@ no checkpoint. Batch `viz/20260914_fig4v3_style`; composite `viz/20260914_paper_
 Overleaf `figures/fig_sf3d_qual.png` (2e2bc7c), caption rewritten (door: both 5 deg; oven 28 vs 4; drawers 15/24 vs 8/7).
 Style scale `--k 2.0` matches Fig. 3's ~4 pt badge text in print. Sync gotcha: edits take 10-30 s to reach the pod;
 wait for a grep of the new code before launching (`for i in $(seq 12); do grep -q ... && break; sleep 5; done`).
+
+## DONE (2026-09-14 ~20:30 UTC): Fig. 4 final layout — one frame per row, every baseline a column, GT-extent motion
+
+User feedback: (1) the decoded trajectory's learned extent is meaningless on SF3D (only articulation parameters are
+supervised) and made ARTHUR's motion look too short -> `tools/viz_fig4_panels.py --extent gt` (default) now draws the
+motion implied by the PREDICTED axis / hinge / point over the GT track's sweep angle or travel length (90 deg / 0.70 m
+on these frames, the writer's constants); (2) show all resolution-matched baselines + A3VLM chain + 3DOI, one frame per
+row -> 8 columns GT | OPDFormer-C 512 | OPDFormer-P 512 | MOPD 512 | USDNet 1 cm | A3VLM | 3DOI | ARTHUR, grey
+`(pending)` placeholders for MOPD / USDNet / 3DOI (`--baseline NAME pending`); (3) raw predictions saved with the
+figure: `viz/20260914_fig4v4_all_baselines/preds_{ours,OPDFormer-C,OPDFormer-P,A3VLM}.jsonl` (tracked; .gitignore
+exception `!viz/*/preds_*.jsonl`). No GPU was needed (all from dumps). Composite `fig_sf3d_qual_v4.png` -> Overleaf
+`figures/fig_sf3d_qual.png` (b1b1b03), caption rewritten with a \todo for the three pending columns.
+TODO when the peer's runs land: rerun the README command with the three preds.jsonl paths, recompose, copy, drop the \todo.
