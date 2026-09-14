@@ -2118,3 +2118,14 @@ figure: `viz/20260914_fig4v4_all_baselines/preds_{ours,OPDFormer-C,OPDFormer-P,A
 exception `!viz/*/preds_*.jsonl`). No GPU was needed (all from dumps). Composite `fig_sf3d_qual_v4.png` -> Overleaf
 `figures/fig_sf3d_qual.png` (b1b1b03), caption rewritten with a \todo for the three pending columns.
 TODO when the peer's runs land: rerun the README command with the three preds.jsonl paths, recompose, copy, drop the \todo.
+
+## DONE (2026-09-14 20:50 UTC): 3DOI scored — best masks of any baseline (point-prompted), axis sign is structural
+
+`20260913_3doi` (bl-3doi, 2 x H200, ~31 h, ~$283, deleted 20:33): early-stopped after epoch 18 (global val loss
+best 0.5917 at epoch 10, then 0.70 / 0.67 / 0.68 / 0.90), exported from checkpoint_best. Signed MA **23.2**
+(unsigned 35.7), type 84.4 (rotational rows only 45.5 % — under-calls hinges), matched axis 31.3 deg, origin 0.811 m,
+PDet **72.2** / mIoU 0.595 (SAM prompted with the GT element point → "part given" row like A3VLM GT-box). The
+signed/unsigned gap is structural: 3DOI's axis is an undirected 2D line, so 33 % of lifted directions point the
+wrong way — paper should footnote it. No detection score → no thresholded columns. Results + best checkpoint on
+the main volume `results/3doi_runpod/`; Euler replicate 13993189 unread (VPN down since ~02:00 UTC).
+Campaign spend so far: A3VLM ~$440, 3DOI ~$283, OPD 512 x2 ~$48; MOPD 512 and USDNet 1 cm still running.

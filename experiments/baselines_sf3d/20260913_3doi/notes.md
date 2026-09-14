@@ -77,5 +77,44 @@ Japan volume from the dev pod), $9.18/h. Per-GPU batch 4 x 2 GPUs = effective ba
 checkpoint. Expected ~$170-400 depending on where early stopping triggers. Whichever of the two
 runs finishes first is the one reported; the other is a free replicate.
 
-**Status.** RunPod run launching 2026-09-13 ~13:50 UTC; Euler job 13993189 queued (login node
-unreachable since ~13:00 UTC). Results below when one finishes.
+**RunPod run, as it happened.** 13:45 UTC 2026-09-13 - 20:33 UTC 2026-09-14 (~31 h, ~$283; above
+the $170-250 estimate because their training loop is CPU-bound — ~1.5 s per step of 8 images with
+the GPUs mostly idle — and because of the restart at epoch 2 with the early-stopping fixes). Global
+(all-reduced, 200-iteration) validation loss every 2 epochs: 0.5994 (epoch 4, best), 0.6039, 0.6034,
+**0.5917 (epoch 10, best)**, 0.6979, 0.6703, 0.6831, 0.8950 → early stop after epoch 18 (4/4
+validations without improvement; the loss was rising, not plateauing). Exported from
+`checkpoint_best.pth` (epoch 10): 5,088 predictions, 4,486 with a lifted axis (602 answered
+"freeform", i.e. no joint → counted as type-wrong / axis 90 deg), 350 s. Results, logs and the best
+checkpoint are on the main volume under `results/3doi_runpod/`. Pod deleted 20:33 UTC.
+
+**Our protocol (point-prompted: 3DOI receives the GT interaction point; 5,088 elements; signed MA first):**
+
+| signed MA | MA (unsigned) | type % | axis all / matched | origin_err_m | origin_line_err_m | PDet | mIoU | flips all / rot |
+|---|---|---|---|---|---|---|---|---|
+| **23.2** | 35.7 | 84.4 | 30.4 / 31.3 deg | 0.811 | 0.720 | **72.2** | **0.595** | 33.1 / 21.4 |
+
+**Reading.**
+- *Masks:* the strongest segmentation number of any baseline by far (PDet 72.2, mIoU 0.595; 3,671 of
+  5,088 elements above IoU 0.5) — a pretrained SAM prompted with the GT element point. This row is
+  "given the part location", comparable to A3VLM's GT-box row, not to the detectors.
+- *Type:* 84.4 % overall, but strongly biased to translation: 604 revolute predictions vs 1,068
+  rotational GT (rotational rows: 45.5 % correct, 508 of them answered translation or freeform;
+  prismatic rows: 94.7 %). 3DOI's kinematic head was trained on 3DOI's web images where most
+  movables translate; on SF3D it under-calls hinges.
+- *Axis — the signed/unsigned gap is structural.* 3DOI predicts an undirected 2D line (two image
+  endpoints); the lifted 3D direction's sign is whichever endpoint order the model emitted, so 33 %
+  of the axes point the wrong way (signed error > 90 deg; 37 % on prismatic, 41 % on rotational
+  rows). Unsigned MA is 35.7 (40.5 over the 4,486 rows with a joint); the paper's signed convention
+  gives 23.2. Both are reported; the paper should footnote that 3DOI's axis has no sign.
+- *Origin:* 0.81 m mean (0.45 m median line distance over the 560 rotational rows with a joint) —
+  the hinge position comes from lifting 2D endpoints through a RANSAC depth plane, which is
+  ill-conditioned for hinges seen edge-on.
+- Overall, on articulation 3DOI sits between the OPD detectors (signed MA 14-26) and A3VLM / ours
+  (43.8 / 42.7), while dominating on masks it was handed the location of.
+
+**Confidence-thresholded columns** do not apply: 3DOI emits one mask per prompt with no detection
+score (`thresholded.json` records conf = 1 for every row). Per-sample CSV: `per_sample_metrics.csv`.
+
+**Euler replicate.** Job 13993189 started 00:49 UTC 2026-09-14 (2 GPUs, ~3x faster per epoch than the
+RunPod pod); the login node has been unreachable (VPN) since ~02:00 UTC — to be read out when it is
+back. Its result is a free replicate; the RunPod run above is the one reported.
