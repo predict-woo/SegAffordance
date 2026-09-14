@@ -2052,3 +2052,12 @@ elements at either resolution. Reading: resolution buys masks + type, not articu
 through predicted pose is the bottleneck). Paper Table II row filled; caption now states AP50 1.5-11.6 and
 thresholded PDet 2.5-4.0. Pending: OPD-C 512 (~16:30 UTC), MOPD 512 (Sep 15 ~23:00 UTC), USDNet 1 cm
 (Sep 15 ~05:00; needed 3 m crops + 450k-point cap after OOMs), 3DOI (epoch 15, early stopping 2/4).
+
+## DONE (2026-09-14 17:53 UTC): OPDFormer-C RGB-D at 512x384 — everything improves, incl. articulation
+
+`20260914_opdformer_c_rgbd_512` (bl-opd512-c, ~$27, deleted): signed MA **26.0** (256: 20.1), type 65.6 (62.2),
+matched axis 19.1 deg (21.9), origin 0.370 m (0.381), PDet **37.7** (27.6), mIoU 0.340 (0.280); their test segm
+AP50 10.3 vs 2.6. Camera-frame axis head benefits from resolution where P's world-frame head did not. Now the
+best detector baseline on articulation (still far from A3VLM 43.8 / ours 42.7). conf > 0.5: PDet 4.6 / mIoU
+0.040 (256: 1.7 / 0.020). Remaining: MOPD 512 (~Sep 15 23:00 UTC), USDNet 1 cm (epoch ~92/200, ~Sep 15 05:00),
+3DOI (epoch 17, best val 0.5917 @ epoch 10, patience 3/4 — likely stops after epoch 18's validation ~18:40 UTC).
