@@ -2042,3 +2042,13 @@ the readable one; both reported (`thresholded.json`, `per_sample_metrics.csv`). 
 3.0 m crops + a 450 k training-point cap — inherent to USDNet's O(points x queries) articulation head at 1 cm,
 documented in its notes), 3DOI (epoch 15, best val 0.5917 @ epoch 10, patience 2/4). Scoring helper:
 `runpod/baselines/score_run.sh <run> <exp> <model>` (metrics.json + per-sample CSV + thresholded.json).
+
+## Resolution-matched baselines, first row (2026-09-14, peer session): OPDFormer-P RGB 512x384
+
+signed MA 14.4 (= 256), type 74.7 (67.9), matched axis 30.4 (31.7), origin 0.725 (0.743), oracle PDet 40.2
+(30.9) / mIoU 0.372 (0.320); own AP50 11.6 (5.5). Confidence-thresholded (best-IoU instance counts only if
+conf > t): PDet 4.0 / mIoU 0.033 at t=0.5 (256: 2.5 / 0.027) — the detector is confident on ~6.5 % of
+elements at either resolution. Reading: resolution buys masks + type, not articulation (world-frame axis
+through predicted pose is the bottleneck). Paper Table II row filled; caption now states AP50 1.5-11.6 and
+thresholded PDet 2.5-4.0. Pending: OPD-C 512 (~16:30 UTC), MOPD 512 (Sep 15 ~23:00 UTC), USDNet 1 cm
+(Sep 15 ~05:00; needed 3 m crops + 450k-point cap after OOMs), 3DOI (epoch 15, early stopping 2/4).
