@@ -59,11 +59,11 @@ def summarize(csv_path, axis_deg=10.0, iou_t=0.5):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", nargs=3, action="append", required=True, metavar=("NAME", "CONFIG", "CKPT"))
+    ap.add_argument("--model", nargs=3, action="append", default=None, metavar=("NAME", "CONFIG", "CKPT"))
     ap.add_argument("--data-root", default="/workspace/datasets/sf3d_processed_v3")
     ap.add_argument("--frame-cache-path", default="/workspace/datasets/sf3d_frames_512.lmdb")
     ap.add_argument("--key-cache", default="/workspace/cache/sf3d_v2_keys_cutoff05_minrad010_maskfrac0010_edge05.pkl")
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out", default=None)
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--axis-deg", type=float, default=10.0)
     ap.add_argument("--iou", type=float, default=0.5, help="PDet threshold for the gated columns")
@@ -72,6 +72,8 @@ def main():
     if a.summarize:
         summarize(a.summarize, a.axis_deg, a.iou)
         return
+    if not a.model or not a.out:
+        ap.error("--model and --out are required unless --summarize is given")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     r, m, d = get_default_transforms(image_size=(512, 512))
     ds = SF3DDataset(
