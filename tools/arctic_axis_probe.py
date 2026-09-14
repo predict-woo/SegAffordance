@@ -9,6 +9,7 @@ z_p is unsupervised on hand video), and the predicted radius median.
   python tools/arctic_axis_probe.py --model NAME CONFIG CKPT [...] --out viz/<batch>/arctic_axis_probe.csv
 """
 import argparse
+import pickle
 import math
 import os
 import sys
@@ -91,6 +92,15 @@ def main():
         og = o3.numpy().astype(np.float64)
         key = ds.item_keys[idx].decode()
         obj = key.split("_")[1] if "_" in key else "?"
+        # Per-stroke sign (2026-09-14): the LMDB stores the OBJECT-FIXED canonical axis for every
+        # stroke, but the model's axis sign follows the observed motion (the decoder renders a
+        # positive rotation about n along the track), so on a "close" stroke the correct prediction
+        # is -axis_GT. Flip the GT for close strokes so signed metrics compare like with like.
+        with ds.env.begin() as txn:
+            rec = pickle.loads(txn.get(ds.item_keys[idx]))
+        verb = (rec.get("arctic") or {}).get("verb", "open")
+        if verb == "close":
+            dg = -dg
         for name, model, mp in models:
             with torch.no_grad():
                 word = model.tokenize([desc], 77).to(device)
@@ -108,22 +118,34 @@ def main():
             r = float(np.linalg.norm(p3 - cq))
             # offset measured with the GT-signed axis direction (a line has no sign)
             off = line_offset(K_norm, q, d, og)
-            rows[name].append((obj, unsigned, signed, p_rev, r, off, float(p3[2])))
+            # 2026-09-14: POINT offset (stricter than the line offset, which a random line through the
+            # part centre passes): image distance between the projected predicted hinge foot cq and the
+            # projected GT hinge foot (GT axis point nearest the GT interaction point), image fraction.
+            p0g = _rest[0][0].numpy().astype(np.float64) if len(_rest) and _rest[0] is not None else og
+            qg = og + np.dot(p0g - og, dg) * dg
+            pts = np.stack([cq, qg])
+            if (pts[:, 2] > 0.05).all():
+                uv = project_points(K_norm, torch.from_numpy(pts).float()[None])[0].numpy()
+                point_off = float(np.linalg.norm(uv[0] - uv[1]))
+            else:
+                point_off = float("nan")
+            rows[name].append((obj, unsigned, signed, p_rev, r, off, float(p3[2]), verb, point_off))
         if j % 50 == 0:
             print(f"{j}/{len(idxs)}", flush=True)
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     with open(a.out, "w") as f:
-        f.write("model,object,axis_unsigned_deg,axis_signed_deg,p_rev,radius_m,hinge_offset_frac,z_p\n")
+        f.write("model,object,axis_unsigned_deg,axis_signed_deg,p_rev,radius_m,hinge_offset_frac,z_p,verb,hinge_point_offset_frac\n")
         for name, rs in rows.items():
             for r in rs:
-                f.write(f"{name},{r[0]},{r[1]:.3f},{r[2]:.3f},{r[3]:.4f},{r[4]:.4f},{r[5]:.4f},{r[6]:.3f}\n")
+                f.write(f"{name},{r[0]},{r[1]:.3f},{r[2]:.3f},{r[3]:.4f},{r[4]:.4f},{r[5]:.4f},{r[6]:.3f},{r[7]},{r[8]:.4f}\n")
     print(f"\n{len(next(iter(rows.values())))} revolute ARCTIC val records")
-    print(f"{'model':14s} {'mean':>6s} {'med':>6s} {'<10':>5s} {'<20':>5s} {'flip':>5s} {'offs':>6s} {'r_med':>6s} {'type':>5s}")
+    print(f"{'model':14s} {'mean':>6s} {'med':>6s} {'<10':>5s} {'<20':>5s} {'flip':>5s} {'offs':>6s} {'poff':>6s} {'r_med':>6s} {'type':>5s}")
+    print("  (signed metrics use the per-stroke GT sign: close strokes negate the stored object-fixed axis)")
     for name, rs in rows.items():
         u = np.array([r[1] for r in rs]); s = np.array([r[2] for r in rs]); pr = np.array([r[3] for r in rs])
-        rad = np.array([r[4] for r in rs]); off = np.array([r[5] for r in rs])
+        rad = np.array([r[4] for r in rs]); off = np.array([r[5] for r in rs]); poff = np.array([r[8] for r in rs])
         print(f"{name:14s} {u.mean():6.1f} {np.median(u):6.1f} {100*(u<10).mean():5.1f} {100*(u<20).mean():5.1f} "
-              f"{100*(s>90).mean():5.1f} {np.nanmedian(off):6.3f} {np.median(rad):6.2f} {100*(pr>0.5).mean():5.1f}")
+              f"{100*(s>90).mean():5.1f} {np.nanmedian(off):6.3f} {np.nanmedian(poff):6.3f} {np.median(rad):6.2f} {100*(pr>0.5).mean():5.1f}")
     print("per object (unsigned mean / flip %):")
     objs = sorted({r[0] for rs in rows.values() for r in rs})
     print(f"{'model':14s} " + " ".join(f"{o[:9]:>11s}" for o in objs))
