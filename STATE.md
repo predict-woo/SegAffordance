@@ -2072,3 +2072,14 @@ SF3D probe for dense_seed7 / h1anchor / query / attnpool in ONE process -> `sf3d
 network-volume LMDB read is the bottleneck, and one was OOM-killed under the 31 GB cap). Lesson: never `pkill -f
 <pattern>` inside a `dev.sh run` command whose own text contains the pattern (it kills the session shell); use
 bracket patterns like `"name.p[y]"` and launch from a script file. User decision: no GPU-free rendering dump for now.
+
+## DONE (2026-09-14 18:27 UTC): per-sample SF3D probe for four more checkpoints — nine of ours in one CSV
+
+`sf3d_per_sample_metrics.csv` now holds dense, dense_seed7, l2anchor, h1anchor, attnpool, query, sf3d_only,
+directloss, sampledtraj (5,088 rows each; `--summarize` recomputes). OPD-style rates (PDet gate IoU >= 0.5, MAO_l 0.25):
+dense_seed7 21.4 / MA 44.8 / MAO 42.2 / PDet+MAO 13.3 / MAO_rot_l0.1 22.9 (vs dense 22.9 / 42.7 / 40.4 / 15.0 / 21.8);
+h1anchor 22.5 / 29.9 / 28.7 / 11.3 / 18.7; attnpool 22.4 / 32.4 / 30.7 / 11.7 / 17.1; query 24.1 / 35.3 / 34.3 / 12.0 / 18.4.
+Baseline OPD-C 512 (peer CSV): PDet 37.7 / MA 26.0 / MAO 23.9 / PDet+MAO 14.6 / MAO_rot 3.5 — the joint PDet+MAO rate
+is now within 0.4 of ours (its masks are oracle-matched), but its hinge placement on revolute rows stays near zero.
+Readings: seed noise on the joint rates ~2 points; every readout variant (pooled, h1anchor, attnpool, query) sits at
+9-12 PDet+MAO vs 13-15 for the two dense seeds; the OPD detectors' MAO is carried by prismatic rows (MAO_rot 0.2-3.5).
