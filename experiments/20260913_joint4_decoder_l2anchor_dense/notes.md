@@ -44,3 +44,9 @@ arc project onto the knuckle track, at the expense of the masks. Single seed: th
 jump makes a replicate mandatory, and the 2D-side handling is the next structural question
 (vote-detach or lower projection weight on 2D batches; dense + attnpool for the scalar heads; the
 per-pixel offset loss on SF3D). Best ckpt: `checkpoints/best-epoch13-sf3dval0.9789.ckpt`.
+
+
+**Per-sample probe (2026-09-14, `sf3d_per_sample_metrics.csv`, 5 models).** OPD-style joint rates on the
+5,088 test frames (signed axis <= 10 deg; origin ignored for prismatic): dense PDet 22.9 / M 96.0 /
+MA 42.7 / MAO(line <= 0.25 m) 40.5 / PDet+MAO 15.0; revolute-only MAO(line <= 0.10 m) 21.8. The pooled
+l2anchor ancestor: 18.8 / 91.5 / 30.4 / 28.9 / 9.1 / 14.2. Full table in STATE.md.

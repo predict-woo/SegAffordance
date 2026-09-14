@@ -1968,3 +1968,24 @@ Euler replicate 13993189 started 00:49 UTC.
   control vs dense (`viz/20260914_iphone_control_vs_dense`) -> Fig. 4 panels GT | OPDFormer-C oracle
   instance | ours (`viz/20260914_fig4_sf3d_gt_baseline_ours`, tool `tools/sf3d_vis_baseline_vs_ours.py`).
   Then: assemble Figs 4-6 for the paper, write their captions from what the panels show.
+
+## OPD-style joint pass rates (2026-09-14 04:00 local): per-sample probe, 5 checkpoints, SF3D held-out 5,088
+
+`tools/sf3d_mao_probe.py` -> `experiments/20260913_joint4_decoder_l2anchor_dense/sf3d_per_sample_metrics.csv`
+(one row per model x frame; `--summarize` recomputes any table). Signed axis <= 10 deg; origin ignored
+for prismatic rows (OPD convention); MAO_l = origin-to-GT-axis-line <= t m, MAO_q = to q* <= t m.
+
+| model | PDet | M | MA | MAO_l0.1 | MAO_l0.25 | MAO_q0.25 | PDet+MA | PDet+MAO_l0.25 | MAO_rot_l0.1 (rev only) |
+|---|---|---|---|---|---|---|---|---|---|
+| dense (final) | 22.9 | 96.0 | 42.7 | 36.0 | 40.5 | 40.0 | 15.6 | 15.0 | 21.8 |
+| l2anchor (pooled) | 18.8 | 91.5 | 30.4 | 26.0 | 28.9 | 28.4 | 9.1 | 9.1 | 14.2 |
+| sf3d_only (control) | 22.6 | 93.6 | 43.7 | 35.6 | 41.6 | 41.3 | 14.3 | 14.0 | 15.5 |
+| directloss | 25.2 | 95.4 | 36.8 | 28.5 | 34.8 | 34.2 | 14.1 | 13.7 | 17.8 |
+| sampledtraj | 17.7 | 96.1 | 42.3 | 34.6 | 40.0 | 39.2 | 11.6 | 11.2 | 18.6 |
+
+Readings: (1) dense vs l2anchor: every joint rate ~1.4x (MAO_l0.25 40.5 vs 28.9; PDet+MAO 15.0 vs 9.1).
+(2) dense vs control: equal on MA/MAO; on REVOLUTE rows with the 10 cm hinge criterion the joint model
+is clearly ahead (21.8 vs 15.5) — human video sharpens hinge placement on SF3D even though MA ties.
+(3) PDet-gated rates are low for everyone (15 %) because PDet is ~23 %: mask resolution, not articulation.
+(4) baselines (peer CSVs, oracle-matched): OPDFormer-P RGB MAO_l0.25 10.2, USDNet 18.0, A3VLM GT-box 43.6 /
+chain pending in this metric.
