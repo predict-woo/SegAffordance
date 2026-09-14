@@ -86,6 +86,7 @@ def main():
         idx = idx[: a.limit]
     models = [(n, *load_model(c, k, device)) for n, c, k in a.model]
     rows = {n: [] for n, _, _ in models}
+    fout = open(a.out, "w"); fout.write(HEADER + "\n"); fout.flush()   # streamed: a killed run keeps its rows
     for j in idx:
         it = va[j]
         (img_t, depth_t, desc, mask_t, _bbox, pt_gt, motion_gt, type_gt, img_size, _fn, origin_3d, K, traj3d, _t2, _v2) = it
@@ -125,15 +126,15 @@ def main():
                 rel_p = p3 - q; radius = float(np.linalg.norm(rel_p - np.dot(rel_p, dpred) * dpred))
             else:
                 radius = float("nan")
-            rows[name].append((j, key, gt_type, pred_type, p_rev, signed, unsigned, line_err, qstar_err, p3_err, pt_err, iou, z_p, radius))
+            r_ = (j, key, gt_type, pred_type, p_rev, signed, unsigned, line_err, qstar_err, p3_err, pt_err, iou, z_p, radius)
+            rows[name].append(r_)
+            fout.write(",".join([name, str(r_[0]), r_[1], str(r_[2]), str(r_[3])] + [f"{v:.4f}" for v in r_[4:]]) + "\n")
+        if (j + 1) % 100 == 0:
+            fout.flush()
         if (j + 1) % 500 == 0:
             print(f"  {j + 1}/{len(idx)}", flush=True)
 
-    with open(a.out, "w") as f:
-        f.write(HEADER + "\n")
-        for name, rs in rows.items():
-            for r_ in rs:
-                f.write(",".join([name, str(r_[0]), r_[1], str(r_[2]), str(r_[3])] + [f"{v:.4f}" for v in r_[4:]]) + "\n")
+    fout.close()
     summarize(a.out, a.axis_deg, a.iou)
 
 
