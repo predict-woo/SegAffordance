@@ -1871,3 +1871,18 @@ joint final 42.69 (equal within seed noise), matched axis 15.2 vs 11.4 deg, orig
 axis 56.6 deg, type 40 %). Paper consequence (written 2026-09-14): the "does human video help" section
 says training on hand tracks costs nothing on SF3D and is what makes the model work outside scanned
 scenes; no claim that it raises SF3D MA. Results in the experiment's notes.md / INDEX row.
+
+## DONE (2026-09-13 ~23:00 local): loss ablation arms on the final recipe (paper contribution 3)
+
+| 3D loss (dense recipe, seed 42) | signed MA | matched axis | origin | mIoU / PDet | HOI4D / EPIC / ARCTIC mIoU |
+|---|---|---|---|---|---|
+| direct parameter losses (`dense_directloss`) | 36.73 | 16.3 | 0.305 | 0.270 / 24.9 | 0.613 / 0.267 / 0.544 |
+| sampled 20-pt trajectory loss (`dense_sampledtraj`) | 42.26 | 10.2 | 0.236 | 0.224 / 17.2 | 0.479 / 0.204 / 0.479 |
+| closed form (final, `l2anchor_dense`) | 42.69 | 11.4 | 0.248 | 0.277 / 22.5 | 0.508 / 0.186 / 0.509 |
+
+Reading: motion-based supervision (sampled or closed form) beats direct parameter losses by 6 MA; the
+closed form equals the sampled loss on articulation (within seed noise) and avoids its mask cost.
+Contribution 3 in the paper reworded accordingly (no longer "improves over the sampled loss").
+Both pods deleted by their launchers (22:31 / 22:58). ARCTIC probes pending: the dev pod OOM-kills GPU
+python jobs while the baselines session's 16-worker USDNet 1 cm conversion runs there (exit 137 even
+on a 3-frame probe); rerun `wrap_arm.sh` probes + `tools/sf3d_mao_probe.py` once it finishes.
