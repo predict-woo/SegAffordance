@@ -10,9 +10,19 @@ set -euo pipefail
 B=/workspace/datasets/baselines; R=$B/repos/USDNet; VOXEL="${VOXEL:-0.02}"; D="${USD_DATA:-$B/data/usdnet_sf3d}"; SCANS=$B/data/sf3d_scans; LOGS=$B/logs; CKPT=$B/ckpt
 EPOCHS="${EPOCHS:-200}"; NAME="${NAME:-usdnet}"; [ "${SMOKE:-0}" = "1" ] && NAME=usdnet_smoke
 RUNS=$B/runs/$NAME; export TMPDIR=/workspace/tmp OMP_NUM_THREADS=3 WANDB_MODE=offline; mkdir -p $LOGS /workspace/tmp
+# 1 cm scenes OOMed an 80 GB A100 at epoch 0 with 61 GB allocated / 79 GB reserved (2026-09-14):
+# the caching allocator fragments on MinkowskiEngine's variable-size sparse tensors. Allocator
+# setting only, no numerical effect.
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
+# ... and with that setting it still OOMed (iterations 93 / 41 / 1 with crop_length 5.5 / 4.0 / 3.0):
+# USDNet's articulation head is O(points x queries) per decoder layer and 1 cm crops reach 0.7-2.2 M
+# points. For the 1 cm run: CROP_LENGTH=3.0 plus SF3D_MAX_POINTS (training-only random subsample of
+# crops above the cap, runpod/baselines/usdnet/patch_max_points.py). The 2 cm recipe keeps 5.5 / no cap.
 # NOTE: never pre-create $RUNS — USDNet's main resumes from <save_dir>/last-epoch.ckpt whenever save_dir exists.
 while [ ! -f $SCANS/.done_download ]; do echo "$(date -u +%H:%M) waiting for scans"; sleep 120; done
-echo "== $(date -u) chain $NAME (data $D, voxel $VOXEL) on $(nvidia-smi --query-gpu=name --format=csv,noheader)"
+echo "== $(date -u) chain $NAME (data $D, voxel $VOXEL, crop ${CROP_LENGTH:-5.5}, max_points ${SF3D_MAX_POINTS:-0}) on $(nvidia-smi --query-gpu=name --format=csv,noheader)"
+python /workspace/SegAffordance/runpod/baselines/usdnet/patch_max_points.py $R/datasets/semseg.py
+export SF3D_MAX_POINTS="${SF3D_MAX_POINTS:-0}"
 cd /workspace/SegAffordance
 if [ ! -f $D/.done_convert ]; then
   if [ "${CONVERT_HERE:-1}" = "1" ]; then
@@ -27,7 +37,7 @@ mkdir -p $R/data/processed && ln -sfn $D $R/data/processed/articulate3d_challeng
 cd $R
 COMMON="data/datasets=articulate3d_challenge_mov general.num_targets=4 general.eval_on_segments=false general.train_on_segments=false \
 general.eval_articulation=true general.eval_hierarchy_inter=false data.num_labels=3 data.batch_size=1 data.voxel_size=$VOXEL \
-data.load_articulation=true data.use_hierarchy=false data.cropping=true data.crop_length=5.5 data.crop_min_size=75000 \
+data.load_articulation=true data.use_hierarchy=false data.cropping=true data.crop_length=${CROP_LENGTH:-5.5} data.crop_min_size=75000 \
 data.use_coarse_to_fine=true data.c2f_rad=0.1 data.c2f_decay=0.4 data.c2f_alpha=100 model.num_queries=100 \
 model.predict_articulation_mode=2 model.predict_hierarchy_interaction=false model.predict_articulation=true \
 loss.regular_arti_loss=false loss.losses=[labels,masks,articulations] logging=minimal general.project_name=sf3d_baselines +general.experiment_id=sf3d +general.version=0"
