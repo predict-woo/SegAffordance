@@ -2014,3 +2014,19 @@ columns are gone. (2) Hinge placement metrics: the point offset ALSO favours the
 (0.71 m); in image space a hinge at the part beats a hinge far outside it. Neither is right;
 hand-video hinge placement remains unsolved and the paper says so (Table IV caption TODO + limitations).
 (3) Unsigned axis: dense best on box (18.9) and laptop (19.4) lids, worst on scissors (67) / espresso (49).
+
+## NIGHT 3 WRAP (2026-09-14 05:40 local)
+
+Done overnight: (1) per-sample SF3D metrics + OPD-style MAO table for 5 checkpoints; (2) ARCTIC probe
+rerun with per-stroke sign + point offset -> signed ARCTIC numbers are meaningless (sign tracks the
+object), offset metrics dropped from the paper; (3) qualitative figures rendered and wired into the
+paper: Fig. 4 SF3D GT | OPDFormer-C oracle instance | ARTHUR (`viz/20260914_fig4_sf3d_gt_baseline_ours`),
+Fig. 5 hand video GT | SF3D-only | ARTHUR (`viz/20260914_handvideo_control_vs_dense`), Fig. 6 phone
+photos (`viz/20260914_iphone_control_vs_dense`); composed images in `viz/20260914_paper_figures`;
+(4) overview Fig. 2 = collaborator's `figures/method_overview.pdf`; (5) A3VLM rows + reworded claim;
+(6) loss-ablation rows. Paper: 9 pages, compiles clean, remaining TODOs = teaser figure, author block,
+resolution-matched + 3DOI rows, Analysis + Conclusion (blanked by the user), Table IV placement metric.
+In-the-wild finding to keep in mind: the SF3D-only control ALSO works on the door / closet photos
+(in-distribution categories); human video's gain in the wild is the laptop (category coverage), not
+hinge accuracy. Peer pods still running: bl-opd512-c / -prgb, bl-mopd512, bl-usdnet1cm, bl-3doi.
+Dev pod: free (probe + chain finished 03:19 UTC), still running ($0.57/h) per the keep-running rule.
