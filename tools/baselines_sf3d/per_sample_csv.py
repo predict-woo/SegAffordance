@@ -13,7 +13,8 @@ unmatched row (or a null axis/type) is "no articulation prediction" -> pred_type
 90 deg; origin errors only for revolute GT rows with an origin prediction, else NaN. Baselines
 have no interaction-point, z_p or radius outputs, so those columns are NaN; p_rev is NaN (they
 emit hard types). `python tools/sf3d_mao_probe.py --summarize FILE.csv` runs on the output
-unchanged (its M/MA use pred_type and axis_signed_deg; extra columns are ignored).
+unchanged (its M/MA use pred_type and axis_signed_deg; extra columns are ignored). PDet from the
+CSV can be a few rows lower than metrics.json: see `_fmt` (exact IoU ties).
 
   python tools/baselines_sf3d/per_sample_csv.py \\
       --model opd_c_rgbd /workspace/datasets/baselines/results/opd_c_rgbd/preds.jsonl OUT.csv \\
@@ -78,8 +79,10 @@ def row(model, idx, key, pr, m_gt, t_gt, a_gt, o_gt, p_gt):
 
 
 def _fmt(v):
-    # 6 decimals: with 4, an IoU of 0.50004 prints as 0.5000 and drops out of `iou > 0.5`
-    # (PDet 34.04 vs the scorer's 34.14 on the A3VLM GT-box file).
+    # 6 decimals. Known residual vs metrics.json: the harness IoU is (inter+1e-7)/(union+1e-7), so an
+    # exact tie (2*inter == union) is 0.5 + ~1e-12 and the scorer counts it as > 0.5, while the CSV
+    # value prints as 0.500000 and fails a strict `> 0.5`. On the A3VLM files that is 5 of 5,088 rows
+    # (PDet 34.04 from the CSV vs 34.14 in metrics.json); metrics.json stays the number of record.
     if isinstance(v, float):
         return "nan" if math.isnan(v) else f"{v:.6f}"
     return str(v)
