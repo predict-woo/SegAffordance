@@ -1,0 +1,24 @@
+command: tools/sf3d_vis_baseline_vs_ours.py --model ours config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
+  --baseline OPDFormer-C /workspace/datasets/baselines/results/opd_c_rgbd/preds.jsonl
+  --val-idx 1696 1773 529 4233 283 501 1140 1246 4193 615 --out viz/20260914_fig4_sf3d_gt_baseline_ours
+tool_commit: 95d86fd
+generated: '2026-09-14T03:18:47+00:00'
+models:
+- name: ours
+  config: config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  ckpt: experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
+baselines:
+- name: OPDFormer-C
+  preds: /workspace/datasets/baselines/results/opd_c_rgbd/preds.jsonl
+picks:
+- 1696
+- 1773
+- 529
+- 4233
+- 283
+- 501
+- 1140
+- 1246
+- 4193
+- 615
