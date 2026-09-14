@@ -89,7 +89,7 @@ def implied_motion(point, d, origin, mtype, extent, n=40):
     return p[None] + np.linspace(0.0, extent, n)[:, None] * d[None]
 
 
-def render(frame_rgb, mask, axis, track, point, mtype, err_deg, out_png, k=2.0, dpi=150, crop=None, placeholder=None):
+def render(frame_rgb, mask, axis, track, point, mtype, err_deg, out_png, k=2.0, dpi=150, crop=None, placeholder=None, note=""):
     """frame_rgb (H, W, 3) uint8; mask (H, W) 0/1 or None; axis: (uv array (N,2) normalised, hinge uv or None) or None;
     track: uv (N,2) normalised or None; point: uv normalised or None; mtype 0/1 or None; err_deg float or None;
     placeholder: text -> grey panel with that text and nothing else."""
@@ -134,8 +134,9 @@ def render(frame_rgb, mask, axis, track, point, mtype, err_deg, out_png, k=2.0, 
     if mtype is not None:
         ax.text(ox + 0.03 * W, oy + 0.045 * H, TYPE_NAME[int(mtype)], ha="left", va="top", fontsize=11 * k, color="white", fontweight="bold",
                 zorder=7, bbox=dict(boxstyle="round,pad=0.3,rounding_size=0.8", fc=TYPE_COLOR[int(mtype)], ec="none", alpha=0.95))
-    if err_deg is not None:
-        ax.text(ox + 0.03 * W, oy + 0.955 * H, f"axis error {err_deg:.0f}°", ha="left", va="bottom", fontsize=9.5 * k, color="white",
+    if err_deg is not None or note:
+        txt = f"{note}axis error {err_deg:.0f}°" if err_deg is not None else note.rstrip(", ")
+        ax.text(ox + 0.03 * W, oy + 0.955 * H, txt, ha="left", va="bottom", fontsize=9.5 * k, color="white",
                 zorder=7, bbox=dict(boxstyle="round,pad=0.25,rounding_size=0.8", fc=(0, 0, 0, 0.55), ec="none"))
     fig.savefig(out_png, dpi=dpi, facecolor="white"); plt.close(fig)
 
@@ -205,10 +206,16 @@ def main():
                 render(frame, None, None, None, None, None, None, f, a.k, crop=crop, placeholder=f"{name}\n(pending)"); panels.append(f); continue
             r = preds.get(key); used[name].append(r if r else {"key": key, "matched": False})
             if not r or not r.get("matched"):
-                render(frame, None, None, None, None, None, None, f, a.k, crop=crop, placeholder=f"{name}\nno instance"); panels.append(f); continue
+                if r and r.get("mask_rle"):   # e.g. 3DOI "freeform": a mask but no joint
+                    bm = cv2.resize(mask_utils.decode(r["mask_rle"]).astype(np.uint8), (PW, PH), interpolation=cv2.INTER_NEAREST)
+                    render(frame, bm, None, None, None, None, None, f, a.k, crop=crop, note="no joint predicted")
+                else:
+                    render(frame, None, None, None, None, None, None, f, a.k, crop=crop, placeholder=f"{name}\nno instance")
+                panels.append(f); continue
             bm = cv2.resize(mask_utils.decode(r["mask_rle"]).astype(np.uint8), (PW, PH), interpolation=cv2.INTER_NEAREST)
             t = int(r["type"]); d = np.asarray(r["axis_cam"], np.float64)
-            render(frame, bm, axis_for(t, d, r.get("origin_cam"), p0), None, None, t, angle(d, gt_dir), f, a.k, crop=crop); panels.append(f)
+            note = "nearest instance, " if r.get("fallback") == "nearest" else ""
+            render(frame, bm, axis_for(t, d, r.get("origin_cam"), p0), None, None, t, angle(d, gt_dir), f, a.k, crop=crop, note=note); panels.append(f)
         # ours
         for name, _ in a.ours:
             r = ours[(name, j)]; used_ours.append(r); f = f"{a.out}/{tag}_{name}.png"

@@ -2129,3 +2129,16 @@ signed/unsigned gap is structural: 3DOI's axis is an undirected 2D line, so 33 %
 wrong way — paper should footnote it. No detection score → no thresholded columns. Results + best checkpoint on
 the main volume `results/3doi_runpod/`; Euler replicate 13993189 unread (VPN down since ~02:00 UTC).
 Campaign spend so far: A3VLM ~$440, 3DOI ~$283, OPD 512 x2 ~$48; MOPD 512 and USDNet 1 cm still running.
+
+## DONE (2026-09-14 ~21:30 UTC): 3DOI in (peer) + Fig. 4 v5 with 3DOI column and nearest-instance fallback
+
+Peer: 3DOI (point-prompted, epoch-10 ckpt, early-stopped at 18; pod deleted, ~$283): signed MA 23.2, unsigned 35.7
+(its axis is an undirected 2D line -> sign is arbitrary, 33 % flipped), type 84.4 (rotational rows only 45.5 %: 602
+elements answered "freeform" = type-wrong, 604 revolute preds vs 1,068 GT), matched axis 31.3 deg, origin 0.811 m,
+PDet 72.2 / mIoU 0.595 (SAM at the GT point), no detection score. Paper: Table II row in the "given the GT part
+location" block with a § footnote (undirected axis, 35.7 unsigned); results text sentence; Overleaf f88d2c8.
+Fig. 4 v5 (`viz/20260914_paper_figures/fig_sf3d_qual_v5.png`): 3DOI column real ("no joint predicted" on the door);
+"no instance" cells replaced by the detector's NEAREST raw detection via new `tools/baselines_sf3d/opd_nearest_instance.py`
+(reads instances_predictions.pth; oracle if any overlap, else nearest by mask centroid, flagged `fallback: nearest`;
+renderer labels it). OPDFormer-P oven door: nearest 37 px, score 0.00, 83 deg. Remaining placeholders: MOPD 512
+(~Sep 15 23:00 UTC), USDNet 1 cm (~Sep 15 08:00 UTC) -> rerun the batch README command, recompose, copy, drop the \todo.

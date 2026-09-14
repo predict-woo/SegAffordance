@@ -21,6 +21,14 @@ so their panels show mask + axis only.
 size, type, axis_cam, origin_cam). All git-tracked. Full-split sources: `viz/20260914_dense_sf3d_val_200/preds.jsonl`
 and `/workspace/datasets/baselines/results/{opd512_c_rgbd,opd512_p_rgb}/preds.jsonl`, `a3vlm/preds_chain.jsonl`.
 
+**Update (same evening).** (1) 3DOI landed -> real column from `$R/3doi_runpod/preds.jsonl` (point-prompted; on the
+door it answers "free-form", so its panel shows the SAM mask with "no joint predicted"; axis errors 14 / 108 / 10 deg
+on the other three). (2) "no instance" cells replaced: `tools/baselines_sf3d/opd_nearest_instance.py` re-reads the
+detector's raw `instances_predictions.pth` and exports, per figure key, the oracle instance if any overlaps the element,
+else the NEAREST one (mask centroid to GT centroid) flagged `fallback: nearest` -> `preds_nearest_opd512_{p_rgb,c_rgbd}.jsonl`
+here; the renderer labels such panels "nearest instance, axis error N". OPDFormer-P on the oven door: 100 detections
+in the frame, nearest 37 px away at score 0.00, axis error 83 deg. Composite now `fig_sf3d_qual_v5.png` (Overleaf f88d2c8).
+
 **Files.** `NN_<rot|trans>_valJ.png` = 8-panel strip; `..._<column>.png` single panels. Composite with column labels:
 `viz/20260914_paper_figures/fig_sf3d_qual_v4.png` = Overleaf `figures/fig_sf3d_qual.png` (commit b1b1b03).
 
