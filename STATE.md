@@ -2094,3 +2094,14 @@ Readings: seed noise on the joint rates ~2 points; every readout variant (pooled
 exception). sf3d_vis_val.py also gained `--idx` (explicit val indices) and `--no-panels` (dump only), and its panel
 filenames are now 3-digit (`NNN_rot_valJ.png`). Next time a zoo or a paper-figure batch is rendered, run with `--dump`
 so figures can be re-cut later without the GPU.
+
+## DONE (2026-09-14 ~19:40 UTC): Fig. 4 replaced with the user's picks, Fig. 3 style, rendered from dumps
+
+User picked val 1684 (door), 113 (oven door), 3726 and 403 (drawers) from `viz/20260914_dense_sf3d_val_200`. New
+`tools/viz_fig4_panels.py` draws GT | baseline | ours in the dataset-figure style (matplotlib: 4:3 crop around the
+interaction point, red mask + outline, yellow axis with hinge foot, green track with arrowhead, white point, type badge,
+axis-error label) from `preds.jsonl` dumps only (ours: the 200-frame dump; baseline: peer's opd512_c_rgbd preds) — CPU,
+no checkpoint. Batch `viz/20260914_fig4v3_style`; composite `viz/20260914_paper_figures/fig_sf3d_qual_v3.png` ->
+Overleaf `figures/fig_sf3d_qual.png` (2e2bc7c), caption rewritten (door: both 5 deg; oven 28 vs 4; drawers 15/24 vs 8/7).
+Style scale `--k 2.0` matches Fig. 3's ~4 pt badge text in print. Sync gotcha: edits take 10-30 s to reach the pod;
+wait for a grep of the new code before launching (`for i in $(seq 12); do grep -q ... && break; sleep 5; done`).

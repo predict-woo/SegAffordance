@@ -1,0 +1,16 @@
+command: tools/viz_fig4_panels.py --ours dense viz/20260914_dense_sf3d_val_200/preds.jsonl
+  --baseline OPDFormer-C /workspace/datasets/baselines/results/opd512_c_rgbd/preds.jsonl
+  --idx 1684 113 3726 403 --out viz/20260914_fig4v3_style
+tool_commit: c9ccc9b
+generated: '2026-09-14T19:32:06+00:00'
+ours:
+- - dense
+  - viz/20260914_dense_sf3d_val_200/preds.jsonl
+baselines:
+- - OPDFormer-C
+  - /workspace/datasets/baselines/results/opd512_c_rgbd/preds.jsonl
+picks:
+- 1684
+- 113
+- 3726
+- 403

@@ -6,3 +6,8 @@ column labels added; the compose code is in STATE.md's night-3 log / `tools/comp
 `fig_sf3d_qual.png` (2 x [GT | OPDFormer-C | ARTHUR] x 2 rows), `fig_handvideo_qual.png` (rows HOI4D / EPIC /
 ARCTIC, 2 examples each, GT | SceneFun3D only | ARTHUR), `fig_wild_qual.png` (door, laptop: photo |
 SceneFun3D only | ARTHUR). Copied to the Overleaf project as `figures/fig_*_qual.png` (2026-09-14).
+
+**Fig. 4 replaced (2026-09-14 evening):** `fig_sf3d_qual_v3.png` = the user's picks val 1684 / 113 / 3726 / 403 in the
+Fig. 3 style, rendered from prediction dumps by `tools/viz_fig4_panels.py` (batch `20260914_fig4v3_style`, baseline
+OPDFormer-C at 512), now the Overleaf `figures/fig_sf3d_qual.png`. `fig_sf3d_qual.png` (old samples, old style) and
+`fig_sf3d_qual_v2.png` (new samples, old style) are kept for reference.
