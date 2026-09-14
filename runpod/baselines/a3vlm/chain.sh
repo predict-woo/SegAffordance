@@ -158,4 +158,12 @@ EOF
     export_all "${EVAL_CKPT:-$(newest_epoch)}" ${NAME}_test $DATA
     touch $RUNS/CHAIN_DONE; echo "== $(date -u) CHAIN_DONE $NAME (eval)"
     ;;
+  eval_joint_pred)
+    # Re-generate ONLY the chained REG-Joint answers for a corrected question file ($JOINT_Q).
+    # Needed 2026-09-13: the chain's make-joint ran with a pre-e68b5da exporter that parsed their
+    # dot-stripped REC answers ("021" -> 21.0), so the chained questions carried boxes scaled x100.
+    # rec_test / joint_test answers are untouched; export is redone from the dev pod afterwards.
+    evaluate "${JOINT_Q:?}" "${EVAL_CKPT:-$(newest_epoch)}" ${NAME}_test
+    touch $RUNS/JOINT_PRED_DONE; echo "== $(date -u) JOINT_PRED_DONE $NAME"
+    ;;
 esac

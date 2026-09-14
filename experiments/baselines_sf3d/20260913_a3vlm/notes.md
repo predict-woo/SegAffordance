@@ -70,5 +70,46 @@ schedule, i.e. 2 of 3 epochs at the recipe's own learning-rate curve** — the "
 reading, not a re-annealed 2-epoch run. An earlier version of these notes claimed the latter; it
 was wrong. The partial third-epoch checkpoint was deleted and is not used anywhere.
 
-**Status.** Training 01:14-18:53 UTC 2026-09-13 (epoch 0 done 10:52, epoch 1 done 18:53; epoch 1 took 7:54); evaluation + export from `epoch1` launched 20:20 UTC; expected to finish epoch 1 ~19:20 UTC, eval + export
-~20:50 UTC. Results below when it finishes.
+**Status.** Training 01:14-18:53 UTC 2026-09-13 (epoch 0 done 10:52, epoch 1 done 18:53; epoch 1
+took 7:54). Evaluation + export from `epoch1` 20:20-23:09 UTC. Both question sets parsed 5,088/5,088.
+
+**Results (our protocol, `score_predictions.py`, 5,088 test elements).**
+
+| protocol | MA | MA signed | type % | axis all / matched | flips all / rot | origin_err_m | origin_line_err_m | PDet | mIoU |
+|---|---|---|---|---|---|---|---|---|---|
+| GT box -> REG-Joint (their protocol) | 47.4 | 45.7 | 96.5 | 18.7 / 20.8 deg | 9.4 / 8.6 | 0.361 | 0.198 | 34.1 | 0.408 |
+| description -> REC -> REG-Joint (chained, text only) | 45.5 | 43.8 | 96.3 | 20.3 / 17.5 deg | 10.2 / 10.6 | 0.434 | 0.291 | 12.3 | 0.240 |
+| oracle ceiling (GT answers) | 99.9 | | 100.0 | 1.19 / 1.14 | | 0.279 | | 34.1 | 0.408 |
+
+The GT-box row's PDet/mIoU are the GT box hull by construction (identical to the ceiling): they say
+nothing about detection and are kept only so the row is complete. Read the row as "articulation
+with the part given": type 96.5 %, MA 47.4 vs 12.9-23.1 for the five cheaper baselines and 36.0 for
+ours; axis 18.7 deg and origin 0.36 m are in the same band as ours (17.6 deg / 0.31 m).
+
+The chained row is the text-only protocol (image + our description, nothing else). The joint head
+is almost insensitive to whether the box is predicted or given (signed MA 43.8 vs 45.7, type 96.3
+vs 96.5); text grounding costs +7 cm of origin error and shows mainly in localisation: the REC
+boxes' hulls reach PDet 12.3 / mIoU 0.240 against the 34.1 / 0.408 that a perfect box would give
+(627 of 5,088 elements matched at IoU > 0.5; predicted-box vs GT-box hull IoU 0.51 mean). Paper
+convention: lead with the signed MA (43.8 text-only, 45.7 given the GT box).
+
+**Chained protocol: first run invalid, regenerated (2026-09-13 23:44 - 2026-09-14 00:28 UTC).** The first chained export
+scored MA 35.5 / type 95.8 but PDet 0.0 with every mask empty. Cause: the pod's copy of
+`a3vlm_preds_to_jsonl.py` predates e68b5da, so `make-joint` parsed their dot-stripped REC answers
+("021" -> 21.0) and the REG-Joint questions fed to the model carried boxes scaled x100
+(`[[21.00,47.00,23.00],...]`), i.e. references the model never saw in training. The REC answers
+themselves are good: 0/5,088 parse failures, predicted-box hull vs GT-box hull IoU 0.509 mean,
+58.2 % > 0.5 (first 500). The joint questions were rebuilt from the same REC answers with the fixed
+parser (`/workspace/tmp/a3vlm_fix/joint_pred_test.json`, boxes in [0,1]) and only the joint
+generation was re-run on bl-a3vlm (`MODE=eval_joint_pred` in chain.sh, 41 min, GPUs otherwise idle
+while the final model copied off the pod); export + scoring redone on the dev pod with
+`runpod/baselines/a3vlm/export_chain_fix.sh`. The x100 question file is kept as
+`eval/joint_pred_test.scaled100.json`; its answers are not used anywhere.
+
+**Artefacts.** Main volume `results/a3vlm/`: `preds_gtbox.jsonl`, `preds_chain.jsonl`, `metrics_*.json`,
+all question/answer JSONs (`vqa_logs/`), eval + train logs, tfevents, and `final_model/` (the
+end-of-epoch-1 weights, 2 x 19.9 GB + tokenizer/config; the 63 GB optimizer state was dropped). The
+invalid first chained pass is kept as `*.scaled100.*` for the record. Per-sample CSVs:
+`per_sample_metrics_gtbox.csv`, `per_sample_metrics_chain.csv` (this dir). Pod bl-a3vlm deleted
+00:39 UTC 2026-09-14; total A3VLM spend ~$440 (incl. the smoke pod and ~$27 of the unwanted third
+epoch). Volume `bl-apjp` (700 GB, AP-JP-1) still holds the original copy until the user releases it.

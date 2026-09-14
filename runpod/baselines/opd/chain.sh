@@ -3,12 +3,14 @@
 # evaluate on MotionNet_test -> export shared JSONL -> CHAIN_DONE.
 #   OWNER=1 bash chain.sh c_rgbd      # also runs the LMDB -> h5 converter
 #   bash chain.sh p_rgbd | p_rgb       # waits for the converter's .done_all
+#   OPD_DATA=$B/data/opd_sf3d_512 RUN_NAME=opd512_c_rgbd IMG_SIZE=512 bash chain.sh c_rgbd
+#                                      # resolution-matched variant on the 512x384 h5
 # Upstream recipe (configs/opd_{c,p}_real.yaml -> opd_base.yaml): R50 Mask2Former,
 # batch 16, AdamW 1e-4, 60k iters, steps (36k,48k), COCO Mask2Former init.
 # Fit-to-data overrides only: 8 SF3D affordance classes, per-dataset pixel stats.
 set -euo pipefail
 V="${1:?variant c_rgbd|p_rgbd|p_rgb}"
-B=/workspace/datasets/baselines; DATA=$B/data/opd_sf3d; RUNS=$B/runs/opd_$V; LOGS=$B/logs
+B=/workspace/datasets/baselines; DATA="${OPD_DATA:-$B/data/opd_sf3d}"; NAME="${RUN_NAME:-opd_$V}"; RUNS=$B/runs/$NAME; LOGS=$B/logs
 REPO="${OPD_REPO:-OPDMulti}"; R=$B/repos/$REPO/opdformer
 export TMPDIR=/workspace/tmp; mkdir -p $RUNS $LOGS /workspace/tmp
 case $V in
@@ -17,7 +19,7 @@ case $V in
   p_rgb)  CFG=configs/opd_p_real.yaml; FMT=RGB;;
   *) echo "bad variant $V"; exit 1;;
 esac
-echo "== $(date -u) chain $V on $(nvidia-smi --query-gpu=name --format=csv,noheader)"
+echo "== $(date -u) chain $V ($NAME, data $DATA) on $(nvidia-smi --query-gpu=name --format=csv,noheader)"
 if [ "${OWNER:-0}" = "1" ]; then
   if [ ! -f $DATA/.done_all ]; then
     cd /workspace/SegAffordance
@@ -43,17 +45,24 @@ PY
 echo "pixel stats $FMT: $MEAN $STD"
 cd $R
 COMMON_OPTS="MODEL.SEM_SEG_HEAD.NUM_CLASSES 8 MODEL.PIXEL_MEAN $MEAN MODEL.PIXEL_STD $STD DATALOADER.NUM_WORKERS 8 INPUT.MASK_FORMAT bitmask"
+# Resolution-matched variant on the 512x384 h5 (sf3d_to_opd.py --size 512 384). Their
+# MotionDatasetMapper applies NO resize (flip/brightness/contrast only; frames are consumed at the
+# stored h5 size), so the data alone sets the resolution; opd_base.yaml's INPUT.*SIZE* = 256 are
+# lifted to match for anything that reads them. Model, schedule and batch stay the released recipe.
+if [ -n "${IMG_SIZE:-}" ]; then
+  COMMON_OPTS="$COMMON_OPTS INPUT.IMAGE_SIZE $IMG_SIZE INPUT.MIN_SIZE_TRAIN ($IMG_SIZE,) INPUT.MAX_SIZE_TRAIN $IMG_SIZE INPUT.MIN_SIZE_TEST $IMG_SIZE INPUT.MAX_SIZE_TEST $IMG_SIZE"
+fi
 if [ ! -f $RUNS/model_final.pth ]; then
   python train.py --config-file $CFG --output-dir $RUNS --data-path $DATA/MotionDataset_h5 --input-format $FMT \
     --model_attr_path $DATA/obj_info.json --opts $COMMON_OPTS DATASETS.TEST "('MotionNet_valid',)" ${EXTRA_OPTS:-} \
-    > $LOGS/train_opd_$V.log 2>&1
+    > $LOGS/train_$NAME.log 2>&1
 fi
 echo "== $(date -u) train done"; ls $RUNS | tail -5
 python evaluate_on_log.py --config-file $CFG --output-dir $RUNS/test --data-path $DATA/MotionDataset_h5 --input-format $FMT \
   --model_attr_path $DATA/obj_info.json --opts MODEL.WEIGHTS $RUNS/model_final.pth $COMMON_OPTS DATASETS.TEST "('MotionNet_test',)" \
-  > $LOGS/test_opd_$V.log 2>&1
-echo "== $(date -u) test done"; grep -E "AP|motion" $LOGS/test_opd_$V.log | tail -20
+  > $LOGS/test_$NAME.log 2>&1
+echo "== $(date -u) test done"; grep -E "AP|motion" $LOGS/test_$NAME.log | tail -20
 cd /workspace/SegAffordance
 python tools/baselines_sf3d/run.py tools/baselines_sf3d/opd_preds_to_jsonl.py --pred $RUNS/test/inference/instances_predictions.pth --data-dir $DATA --out $RUNS/preds.jsonl
 wc -l $RUNS/preds.jsonl; cp $RUNS/config.yaml $RUNS/config_resolved.yaml 2>/dev/null || true
-touch $RUNS/CHAIN_DONE; echo "== $(date -u) CHAIN_DONE $V"
+touch $RUNS/CHAIN_DONE; echo "== $(date -u) CHAIN_DONE $NAME"

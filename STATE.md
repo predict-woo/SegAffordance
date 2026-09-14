@@ -1886,3 +1886,55 @@ Contribution 3 in the paper reworded accordingly (no longer "improves over the s
 Both pods deleted by their launchers (22:31 / 22:58). ARCTIC probes pending: the dev pod OOM-kills GPU
 python jobs while the baselines session's 16-worker USDNet 1 cm conversion runs there (exit 137 even
 on a 3-frame probe); rerun `wrap_arm.sh` probes + `tools/sf3d_mao_probe.py` once it finishes.
+
+## DONE (2026-09-14 00:56 UTC): A3VLM scored, both protocols; bl-a3vlm deleted
+
+A3VLM (2 of 3 epochs, end-of-epoch-1 checkpoint of the 3-epoch cosine; 5,088/5,088 answers parsed in both
+protocols). Paper convention from here on: lead with SIGNED MA.
+
+| protocol | signed MA | type % | axis all / matched | origin (m) | PDet / mIoU |
+|---|---|---|---|---|---|
+| text only (description -> REC box -> REG-Joint) | **43.8** | 96.3 | 20.3 / 17.5 | 0.434 | 12.3 / 0.240 (box hull; ceiling 34.1 / 0.408) |
+| given the GT 3D box (their REG-Joint protocol) | **45.7** | 96.5 | 18.7 / 20.8 | 0.361 | = ceiling by construction |
+| five cheaper baselines (best column-wise) | 21.8 | 67.9 | 47.2 / 21.9 | 0.381 | 30.9 / 0.321 |
+| ours, final `20260913_joint4_decoder_l2anchor_dense` | 42.7 | — | — / 11.4 | 0.248 | 22.5 / 0.277 |
+
+Reading: a 13B VLM fine-tuned on 129k SF3D samples gets the joint TYPE and AXIS about as well as our model
+(signed MA 43.8 text-only vs 42.7), with worse origins (0.43 vs 0.25 m) and much weaker localisation (its
+only spatial output is a 3D box; hull PDet 12.3 against a 34.1 ceiling). The joint head barely cares whether
+the box is predicted or given (MA 43.8 vs 45.7). Cost ~$440 total.
+
+**Incident (fixed, documented in the notes):** the first chained pass fed the model boxes scaled x100 — the
+pod's copy of `a3vlm_preds_to_jsonl.py` predated e68b5da and parsed their dot-stripped REC answers
+("021" -> 21.0). Caught by PDet 0.0 with all-empty masks; the joint questions were rebuilt with the fixed
+parser and ONLY the joint generation was re-run on the still-alive pod (41 min, `MODE=eval_joint_pred` in
+`runpod/baselines/a3vlm/chain.sh`, GPUs otherwise idle while the 38 GB final model copied off). Lesson: the
+training pod's `/workspace/SegAffordance` is a stale copy — verify by md5 (or push the script) before any
+on-pod post-processing. Final weights + all answers/logs are on the main volume `results/a3vlm/`; `bl-apjp`
+(700 GB) still holds the originals until the user releases it; `bl-eufr` (150 GB) is unused.
+
+**Per-sample CSVs (paper session request):** `tools/baselines_sf3d/per_sample_csv.py` writes
+`experiments/baselines_sf3d/<id>/per_sample_metrics*.csv` in `tools/sf3d_mao_probe.py`'s schema (+ `matched`,
+`confidence` for the oracle protocol) so metrics can be recomputed / thresholded without re-running inference;
+`--summarize` reproduces the stored metrics.json exactly. Written for the 5 finished baselines + A3VLM (both
+protocols); 3DOI and the new runs follow as they land.
+
+## IN FLIGHT (2026-09-14 00:21 UTC): resolution-matched baselines (user-approved via the paper session)
+
+Four pods on the main volume (A100 80 GB, $1.59/h each; watchers copy results and delete on CHAIN_DONE;
+records in `experiments/baselines_sf3d/pods.md` and `20260914_*/notes.md`):
+- `bl-opd512-c` OPDFormer-C RGB-D on `data/opd_sf3d_512` (512x384) — ETA ~14.5 h (~0.9 s/iter).
+- `bl-opd512-prgb` OPDFormer-P RGB 512x384 — ETA ~11.5 h; losses at iter 700 match the 256 run.
+- `bl-mopd512` MOPD TRAINED with OPDFormer's schedule (lr 1e-4, 60k, steps 36k/48k) at 512x384 from the
+  composed init (EXISTING 256 P-RGB weights + EfficientSAM + EffNet-B5; confirmed with the paper session) —
+  2.67 s/iter -> ~44 h, ~$70 (flagged to the user; H100 would halve the time at similar cost).
+- `bl-usdnet1cm` USDNet at 1 cm voxels; the conversion (`--voxel 0.01`, 38 % done from Sep 12) runs ON THAT
+  POD (32 workers, 1 TB RAM) and the chain waits for `.done_convert`.
+Their `MotionDatasetMapper` applies no resize, so the 512 h5 alone sets the resolution (INPUT.*SIZE* lifted
+to 512 for consistency). Variant plumbing: `OPD_DATA / RUN_NAME / IMG_SIZE` (opd, mopd), `SCHEDULE=opdformer`
+(mopd), `VOXEL / USD_DATA / CONVERT_HERE` (usdnet).
+
+**Dev pod lesson (2026-09-14):** the container has a 31 GB cgroup memory cap; a 16-worker converter there
+OOM-killed the paper session's GPU probes. CPU-heavy conversions go to the target training pod (or <= 8
+workers on the dev pod). 3DOI RunPod: epoch 7, best val 0.5994 (epoch 4), epoch 6 = 0.6039 (1/4 patience).
+Euler replicate 13993189 started 00:49 UTC.

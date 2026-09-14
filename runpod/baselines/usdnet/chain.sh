@@ -4,23 +4,29 @@
 # test predictions (general.debug=true -> preds.pkl) -> per-frame shared JSONL.
 #   bash chain.sh            # full run
 #   SMOKE=1 bash chain.sh    # 40-step smoke into runs/usdnet_smoke
+#   VOXEL=0.01 USD_DATA=$B/data/usdnet_sf3d_v1cm NAME=usdnet_v1cm CONVERT_HERE=0 bash chain.sh
+#                            # 1 cm variant; CONVERT_HERE=0 waits for a conversion running elsewhere
 set -euo pipefail
-B=/workspace/datasets/baselines; R=$B/repos/USDNet; D=$B/data/usdnet_sf3d; SCANS=$B/data/sf3d_scans; LOGS=$B/logs; CKPT=$B/ckpt
+B=/workspace/datasets/baselines; R=$B/repos/USDNet; VOXEL="${VOXEL:-0.02}"; D="${USD_DATA:-$B/data/usdnet_sf3d}"; SCANS=$B/data/sf3d_scans; LOGS=$B/logs; CKPT=$B/ckpt
 EPOCHS="${EPOCHS:-200}"; NAME="${NAME:-usdnet}"; [ "${SMOKE:-0}" = "1" ] && NAME=usdnet_smoke
 RUNS=$B/runs/$NAME; export TMPDIR=/workspace/tmp OMP_NUM_THREADS=3 WANDB_MODE=offline; mkdir -p $LOGS /workspace/tmp
 # NOTE: never pre-create $RUNS — USDNet's main resumes from <save_dir>/last-epoch.ckpt whenever save_dir exists.
 while [ ! -f $SCANS/.done_download ]; do echo "$(date -u +%H:%M) waiting for scans"; sleep 120; done
-echo "== $(date -u) chain $NAME on $(nvidia-smi --query-gpu=name --format=csv,noheader)"
+echo "== $(date -u) chain $NAME (data $D, voxel $VOXEL) on $(nvidia-smi --query-gpu=name --format=csv,noheader)"
 cd /workspace/SegAffordance
 if [ ! -f $D/.done_convert ]; then
-  python tools/baselines_sf3d/run.py tools/baselines_sf3d/sf3d_to_usdnet.py --scans $SCANS --out $D --splits experiments/baselines_sf3d/splits.json --workers "${CONVERT_WORKERS:-16}" > $LOGS/convert_usdnet.log 2>&1
-  tail -5 $LOGS/convert_usdnet.log; touch $D/.done_convert
+  if [ "${CONVERT_HERE:-1}" = "1" ]; then
+    python tools/baselines_sf3d/run.py tools/baselines_sf3d/sf3d_to_usdnet.py --scans $SCANS --out $D --splits experiments/baselines_sf3d/splits.json --workers "${CONVERT_WORKERS:-16}" --voxel $VOXEL > $LOGS/convert_$NAME.log 2>&1
+    tail -5 $LOGS/convert_$NAME.log; touch $D/.done_convert
+  else
+    while [ ! -f $D/.done_convert ]; do echo "$(date -u +%H:%M) waiting for $D/.done_convert"; sleep 300; done
+  fi
 fi
 # USDNet's dataset configs hard-code data/processed/articulate3d_challenge_mov; point that path at our data.
 mkdir -p $R/data/processed && ln -sfn $D $R/data/processed/articulate3d_challenge_mov
 cd $R
 COMMON="data/datasets=articulate3d_challenge_mov general.num_targets=4 general.eval_on_segments=false general.train_on_segments=false \
-general.eval_articulation=true general.eval_hierarchy_inter=false data.num_labels=3 data.batch_size=1 data.voxel_size=0.02 \
+general.eval_articulation=true general.eval_hierarchy_inter=false data.num_labels=3 data.batch_size=1 data.voxel_size=$VOXEL \
 data.load_articulation=true data.use_hierarchy=false data.cropping=true data.crop_length=5.5 data.crop_min_size=75000 \
 data.use_coarse_to_fine=true data.c2f_rad=0.1 data.c2f_decay=0.4 data.c2f_alpha=100 model.num_queries=100 \
 model.predict_articulation_mode=2 model.predict_hierarchy_interaction=false model.predict_articulation=true \
