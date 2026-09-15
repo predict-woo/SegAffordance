@@ -2431,3 +2431,13 @@ Results (point / end): sf3d_only HOI4D 0.217/0.361, EPIC 0.203/0.356, ARCTIC 0.2
 per-sample CSVs: 0.113 / 0.111 / 0.108 (3D: 0.276 / 0.272 / 0.310 m). Reading: without the projection loss the point is placed
 as well but the decoded motion ends >1 track length away (0.245 vs 0.056 on HOI4D) -> the trajectory loss is the only
 motion channel. Table III is now a table* with per-dataset groups (SF3D: axis/origin/point; each video source: mIoU/point/end/axis).
+
+## Depth-input ablation launched (2026-09-16)
+
+User wants to know whether a depth input helps the final model. Arm `20260916_joint4_decoder_dense_depth` = final recipe +
+`use_depth true` + `load_depth true`, nothing else (details + per-source depth facts in its notes.md: SF3D / HOI4D sensor
+depth, ARCTIC object-only render, EPIC zeros). Smoke on the dev pod passed the model/loop (died only on the full 20 GB
+overlay at the end). Launch via the scratchpad launcher (poll RTX PRO 6000 stock, run the chain detached). After the run:
+score with the Table II protocol; NOTE every probe tool builds SF3DDataset with load_depth=False -> for this checkpoint
+pass real depth (sf3d_mao_probe / handvideo_point_probe / hoi4d_axis_probe need a --load-depth switch) or the numbers are
+for a zero depth map. Dev pod overlay is 98 % full (/root caches) — clean before the next smoke there.
