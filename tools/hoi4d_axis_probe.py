@@ -1,4 +1,4 @@
-"""HOI4D 3D axis probe: score checkpoints on the HOI4D test records that have an official ground-truth
+"""HOI4D / EPIC 3D axis probe (pass --root/--keys/--split-config/--gt for EPIC; GT from tools/epic_axis_annotator.py export): score checkpoints on the HOI4D test records that have an official ground-truth
 articulation axis (experiments/hoi4d_test_gt_articulation.json, from tools/hoi4d_gt_articulation.py: the
 laptop, storage-furniture, safe and trash-can records, 325 of 438). Same protocol as the ARCTIC probe:
 unsigned angle between the GT-routed axis head (rot head for revolute GT, trans head for prismatic GT)
@@ -36,14 +36,16 @@ def main():
     ap.add_argument("--gt", default="experiments/hoi4d_test_gt_articulation.json")
     ap.add_argument("--out", required=True)
     ap.add_argument("--split-config", default="config/hoi4d_v2_rgb_scalefree.yaml")
+    ap.add_argument("--root", default=ROOT, help="LMDB root (EPIC: /workspace/datasets/epic_processed_2d)")
+    ap.add_argument("--keys", default=KEYS, help="key cache (EPIC: /workspace/cache/epic_2d_keys_v1.pkl)")
     ap.add_argument("--limit", type=int, default=0)
     a = ap.parse_args()
     device = "cuda" if torch.cuda.is_available() else "cpu"
     gt = json.load(open(a.gt))
     dcfg = yaml.safe_load(open(a.split_config))["data"]
     ds = SF3DDataset(
-        lmdb_data_root=ROOT, lmdb_path=f"{ROOT}/data.lmdb", frame_cache_path=f"{ROOT}/frames.lmdb",
-        key_cache_path=KEYS, image_size_for_mask_reconstruction=(512, 512), return_trajectory_2d=True,
+        lmdb_data_root=a.root, lmdb_path=f"{a.root}/data.lmdb", frame_cache_path=f"{a.root}/frames.lmdb",
+        key_cache_path=a.keys, image_size_for_mask_reconstruction=(512, 512), return_trajectory_2d=True,
         point_source="element", fast_pipeline=True, load_depth=True,
         min_revolute_radius=0.0, min_mask_area_frac=0.0, edge_margin_frac=0.0, sensor_max_occluded_frac=0.5,
     )
@@ -74,7 +76,7 @@ def main():
             d = head[0].cpu().float().numpy().astype(np.float64); d /= max(np.linalg.norm(d), 1e-8)
             c = float(np.clip(np.dot(d, dg), -1, 1)); signed = math.degrees(math.acos(c)); unsigned = min(signed, 180.0 - signed)
             p_rev = float(torch.softmax(out.motion_type_logits[0].float(), -1)[1])
-            rows[name].append((key, g["category"], g["type"], g.get("moving", ""), unsigned, signed, p_rev, int((p_rev > 0.5) == gt_rot), hinge_dist))
+            rows[name].append((key, g.get("category", key.split("/")[0].split("_")[0]), g["type"], g.get("moving", ""), unsigned, signed, p_rev, int((p_rev > 0.5) == gt_rot), hinge_dist))
         if j % 50 == 0:
             print(f"{j}/{len(idxs)}", flush=True)
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
