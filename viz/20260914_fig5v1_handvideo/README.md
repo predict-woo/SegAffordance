@@ -37,5 +37,6 @@ for spec in "arctic 270 1224" "epic 226" "hoi4d 2366 633"; do set -- $spec; src=
 python tools/compose_panels.py --out viz/20260914_paper_figures/fig_handvideo_qual_v2.png --panel-aspect 1.33333 --row-height 220 --gap 6 \
   --labels "Ground truth,OPDFormer-C,OPDFormer-P,MOPD,USDNet,A3VLM,3DOI,SceneFun3D only,ARTHUR" \
   --row-labels "out of distribution,in distribution,in distribution,out of distribution,in distribution" \
+  --col-groups "Baselines:1-6,Ours:7-8" --row-groups "ARCTIC:0-1,EPIC:2,HOI4D:3-4" \
   $S/00_arctic_rot_270.png $S/01_arctic_rot_1224.png $S/00_epic_trans_226.png $S/00_hoi4d_trans_2366.png $S/01_hoi4d_trans_633.png
 ```
