@@ -2243,3 +2243,16 @@ Overleaf 10 pages, floats OK (Table II + Fig. 4 on p6).
 Pod jdec-noproj CREATED 02:31 UTC on try 7 (RTX PRO 6000 Server Edition, id 4j5y4u3qjw99jo, $2.09/h, alias segaff-jdec-noproj);
 chain `run_joint4dec_dense_noproj_chain.sh` launched by the poller (log experiments/20260915_joint4_decoder_dense_noproj/chain.log).
 ETA ~5 h train + ~25 min tests (~08:00 UTC). DELETE THE POD after CHAIN_DONE (`bash runpod/train_pod.sh delete jdec-noproj`) and verify.
+
+## PAPER METRIC PROTOCOL CHANGED (2026-09-15 ~03:20 UTC, user): PDet at IoU 0.25, hinge test at 10 cm
+
+Reason (appendix B): the parts we segment are interactable elements (handles, knobs), much smaller than OPD's whole
+parts, so detection is made easier (IoU 0.25, was 0.5) and the hinge test harder (10 cm, was 25 cm). Table II recomputed
+from the per-sample CSVs (ours: PDet 51.9, +M 49.9, +MA 29.1, +MAO 24.8, MA 42.7, MAO 35.9; best detector OPD-C 512:
+57.5† / 53.8 / 22.8 / 19.2 / 26.0 / 21.6; A3VLM chain 46.9‡ / 45.5 / 22.6 / 20.3 / 43.8 / 35.5; A3VLM GT box PDet ceiling
+77.1; 3DOI unsigned 96.2 / 81.1 / 33.5 / 31.0 / 35.7 / 33.1). Dependent text updated: A3VLM "46.9 against a 77.1 ceiling",
+detectors' conf>0.5 PDet "3.9 to 7.1", ablation sentence (sampled-trajectory arm PDet 42.2 vs 51.9). Table layout: rules
+after origin and after +MAO; "not comparable" note over the mask/detection columns of the GT-location block. When the
+pending rows (MOPD 512, USDNet 1 cm) land, compute them with IoU 0.25 / 10 cm from their CSVs. Any other PDet in the
+paper (Table V ablations, Table III) is mIoU-only or unaffected; `tools/sf3d_mao_probe.py --summarize` still defaults
+to 0.5 / 0.25 — pass `--iou 0.25` and read the 0.10 column for paper numbers.
