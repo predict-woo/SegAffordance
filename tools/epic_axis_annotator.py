@@ -10,7 +10,9 @@ annotations in the schema of experiments/hoi4d_test_gt_articulation.json.
   python tools/epic_axis_annotator.py export --clouds ... --out ... --json experiments/epic_test_gt_articulation.json
 
 API: GET /api/records (list + annotation status), GET /api/cloud/<i> (binary: uint32 meta length, meta
-JSON, float32 xyz, uint8 rgb, uint8 in_mask), POST /api/annot/<i> ({p1, p2, type, note} -> <out>/<key>.json).
+JSON, float32 xyz, uint8 rgb, uint8 in_mask, then — when tools/epic_fields_overlay.py has added the EPIC-Fields
+reconstruction to the npz — float32 xyz_fields, uint8 rgb_fields; meta.n_fields is 0 when absent),
+POST /api/annot/<i> ({p1, p2, type, note} -> <out>/<key>.json).
 Annotations and the export are in the camera frame of the cloud (OpenCV: x right, y down, z forward, m):
 axis_cam = normalised p2 - p1, origin_cam = p1. Records without an annotation get valid=false.
 """
@@ -78,9 +80,16 @@ def encode_cloud(npz_path, rec):
     rgb = np.ascontiguousarray(z["rgb"], np.uint8)
     msk = np.ascontiguousarray(z["in_mask"], np.uint8)
     meta = dict(i=rec["i"], key=str(z["key"]), desc=str(z["desc"]), type_label=int(z["type_label"]), n=int(xyz.shape[0]),
-                point_uv=z["point_uv"].tolist(), K_render=z["K_render"].tolist(), size=z["size"].tolist())
+                point_uv=z["point_uv"].tolist(), K_render=z["K_render"].tolist(), size=z["size"].tolist(), n_fields=0)
+    tail = b""
+    if "xyz_fields" in z.files and z["xyz_fields"].shape[0] > 0:  # EPIC-Fields overlay (tools/epic_fields_overlay.py)
+        xf = np.ascontiguousarray(z["xyz_fields"], np.float32)
+        rf = np.ascontiguousarray(z["rgb_fields"], np.uint8)
+        meta.update(n_fields=int(xf.shape[0]), fields_scale=float(z["fields_scale"]), fields_frame=str(z["fields_frame"]),
+                    fields_offset=int(z["fields_offset"]), fields_agree_frac=float(z["fields_agree_frac"]))
+        tail = xf.tobytes() + rf.tobytes()
     mb = json.dumps(meta).encode()
-    return struct.pack("<I", len(mb)) + mb + xyz.tobytes() + rgb.tobytes() + msk.tobytes()
+    return struct.pack("<I", len(mb)) + mb + xyz.tobytes() + rgb.tobytes() + msk.tobytes() + tail
 
 
 def make_handler(clouds_dir, out_dir):

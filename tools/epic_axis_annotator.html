@@ -2,8 +2,10 @@
 <!-- Point-cloud axis annotator page served by tools/epic_axis_annotator.py (three.js 0.160.0 from cdnjs).
      Fly: WASD move, Q/E (or R/F) down/up, drag = look, wheel = speed. Click (no drag) picks the nearest point:
      1st = p1, 2nd = p2 (axis drawn), 3rd starts over. T rot/trans, U undo, Enter save, N/P next/prev, Home reset,
-     M mask tint, [ ] point size. Cloud is in the OpenCV camera frame; the page shows it with y and z flipped so
-     three's default camera (origin, looking down -z) sees the photo viewpoint. Picked points are stored unflipped. -->
+     M mask tint, [ ] point size, L / G toggle the depth cloud / the EPIC-Fields cloud (second THREE.Points, 1.5x
+     point size, present when meta.n_fields > 0; picking searches all visible points of both clouds). Clouds are in
+     the OpenCV camera frame; the page shows them with y and z flipped so three's default camera (origin, looking
+     down -z) sees the photo viewpoint. Picked points are stored unflipped. -->
 <html><head><meta charset="utf-8"><title>EPIC axis annotator</title>
 <style>
  body{margin:0;overflow:hidden;background:#111;color:#ddd;font:13px/1.4 system-ui,sans-serif}
@@ -22,7 +24,8 @@
 <div id="help">WASD move  Q/E down/up  drag look  wheel speed
 click p1, click p2, click again = restart
 T rot/trans  U undo  Enter save  N/P next/prev
-Home reset view  M mask tint  [ ] point size</div>
+Home reset view  M mask tint  [ ] point size
+L depth cloud on/off  G EPIC-Fields cloud on/off</div>
 <div id="bar">loading…</div>
 <script type="module">
 import * as THREE from "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js";
@@ -37,7 +40,9 @@ addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; cam
 
 // ---- state ----------------------------------------------------------------------------------------
 let records = [], cur = 0, meta = null, xyz = null, rgb = null, msk = null, points = null;
+let fxyz = null, fpoints = null, showDepth = true, showFields = true;   // EPIC-Fields cloud (meta.n_fields > 0)
 let picks = [], type = "rot", saved = null, speed = 0.6, maskTint = true, ptSize = 0.004;
+const FIELDS_SIZE = 1.5;   // fields point size relative to the depth cloud's
 const yaw = {v: 0}, pitch = {v: 0}, keys = {};
 const toWorld = p => new THREE.Vector3(p[0], -p[1], -p[2]);   // OpenCV cam frame -> three world
 const toCam = v => [v.x, -v.y, -v.z];
@@ -57,7 +62,10 @@ function status() {
   bar.innerHTML = `record <b>${cur + 1}/${records.length}</b>  key <b>${r.key}</b>  label ${tl}  |  ` +
     `type <b class="${type}">${type}</b>  picks ${picks.length}/2  ` +
     (saved ? `<span class="ok">saved ${saved.saved_at} (${saved.type})</span>` : `<span class="no">not saved</span>`) +
-    `  |  speed ${speed.toFixed(2)} m/s  size ${(ptSize * 1000).toFixed(1)} mm\n${r.desc || ""}`;
+    `  |  speed ${speed.toFixed(2)} m/s  size ${(ptSize * 1000).toFixed(1)} mm  |  depth[L] ${showDepth ? "on" : "off"}  ` +
+    (meta && meta.n_fields > 0 ? `fields[G] ${showFields ? "on" : "off"}: ${meta.n_fields} pts, scale ${meta.fields_scale.toFixed(3)}` +
+      ` (${meta.fields_frame}${meta.fields_offset ? ", off " + meta.fields_offset : ""}, agree ${meta.fields_agree_frac.toFixed(2)})` : "fields: none") +
+    `\n${r.desc || ""}`;
   listEl.querySelectorAll("div").forEach((d, i) => d.className = i === cur ? "cur" : "");
 }
 
@@ -111,15 +119,27 @@ async function load(i) {
   let off = 4 + ml;
   xyz = new Float32Array(buf.slice(off, off + meta.n * 12)); off += meta.n * 12;
   rgb = new Uint8Array(buf, off, meta.n * 3); off += meta.n * 3;
-  msk = new Uint8Array(buf, off, meta.n);
-  const pos = new Float32Array(meta.n * 3);
-  for (let k = 0; k < meta.n; k++) { pos[3 * k] = xyz[3 * k]; pos[3 * k + 1] = -xyz[3 * k + 1]; pos[3 * k + 2] = -xyz[3 * k + 2]; }
+  msk = new Uint8Array(buf, off, meta.n); off += meta.n;
+  const flipped = src => { const p = new Float32Array(src.length); for (let k = 0; k < src.length; k += 3) { p[k] = src[k]; p[k + 1] = -src[k + 1]; p[k + 2] = -src[k + 2]; } return p; };
   if (points) { scene.remove(points); points.geometry.dispose(); }
   const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setAttribute("position", new THREE.BufferAttribute(flipped(xyz), 3));
   g.setAttribute("color", new THREE.BufferAttribute(colors(), 3));
   points = new THREE.Points(g, new THREE.PointsMaterial({size: ptSize, vertexColors: true, sizeAttenuation: true}));
-  scene.add(points);
+  points.visible = showDepth; scene.add(points);
+  // second cloud: EPIC-Fields COLMAP points, already in this camera frame and scaled to metres by the overlay tool
+  if (fpoints) { scene.remove(fpoints); fpoints.geometry.dispose(); fpoints = null; fxyz = null; }
+  const nf = meta.n_fields || 0;
+  if (nf > 0) {
+    fxyz = new Float32Array(buf.slice(off, off + nf * 12)); off += nf * 12;
+    const frgb = new Uint8Array(buf, off, nf * 3), fc = new Float32Array(nf * 3);
+    for (let k = 0; k < nf * 3; k++) fc[k] = frgb[k] / 255;
+    const fg = new THREE.BufferGeometry();
+    fg.setAttribute("position", new THREE.BufferAttribute(flipped(fxyz), 3));
+    fg.setAttribute("color", new THREE.BufferAttribute(fc, 3));
+    fpoints = new THREE.Points(fg, new THREE.PointsMaterial({size: ptSize * FIELDS_SIZE, vertexColors: true, sizeAttenuation: true}));
+    fpoints.visible = showFields; scene.add(fpoints);
+  }
   const a = records[i].annot;
   picks = a ? [a.p1, a.p2] : []; type = a ? a.type : (meta.type_label === 1 ? "rot" : "trans"); saved = a || null;
   thumbnail(); resetView(); drawAxis();
@@ -132,38 +152,46 @@ async function save() {
   listEl.children[cur].textContent = `✓ ${cur} ${records[cur].key}`; status();
 }
 
-// ---- picking: screen-space nearest point (prefer the closest-to-camera point within a pixel radius) -----------
+// ---- picking: screen-space nearest point over all VISIBLE points of both clouds (prefer the closest-to-camera
+//      point within a pixel radius); returns the unflipped camera-frame coordinates ------------------------------
 function pick(px, py) {
   const m = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse), e = m.elements;
-  const pos = points.geometry.attributes.position.array, R = 8, w2 = innerWidth / 2, h2 = innerHeight / 2;
-  let best = -1, bestZ = 1e9, near = -1, nearD = 1e9;
-  for (let i = 0; i < meta.n; i++) {
-    const x = pos[3 * i], y = pos[3 * i + 1], z = pos[3 * i + 2];
-    const cw = e[3] * x + e[7] * y + e[11] * z + e[15]; if (cw <= 0) continue;
-    const sx = (e[0] * x + e[4] * y + e[8] * z + e[12]) / cw * w2 + w2, sy = -(e[1] * x + e[5] * y + e[9] * z + e[13]) / cw * h2 + h2;
-    const d = Math.hypot(sx - px, sy - py);
-    if (d < nearD) { nearD = d; near = i; }
-    if (d < R && cw < bestZ) { bestZ = cw; best = i; }
+  const R = 8, w2 = innerWidth / 2, h2 = innerHeight / 2;
+  const clouds = [[points, xyz], [fpoints, fxyz]].filter(([p]) => p && p.visible);
+  let best = null, bestZ = 1e9, near = null, nearD = 1e9;
+  for (const [p, src] of clouds) {
+    const pos = p.geometry.attributes.position.array, n = pos.length / 3;
+    for (let i = 0; i < n; i++) {
+      const x = pos[3 * i], y = pos[3 * i + 1], z = pos[3 * i + 2];
+      const cw = e[3] * x + e[7] * y + e[11] * z + e[15]; if (cw <= 0) continue;
+      const sx = (e[0] * x + e[4] * y + e[8] * z + e[12]) / cw * w2 + w2, sy = -(e[1] * x + e[5] * y + e[9] * z + e[13]) / cw * h2 + h2;
+      const d = Math.hypot(sx - px, sy - py);
+      if (d < nearD) { nearD = d; near = [src, i]; }
+      if (d < R && cw < bestZ) { bestZ = cw; best = [src, i]; }
+    }
   }
-  const j = best >= 0 ? best : near;
-  return j >= 0 ? [xyz[3 * j], xyz[3 * j + 1], xyz[3 * j + 2]] : null;
+  const h = best || near;
+  return h ? [h[0][3 * h[1]], h[0][3 * h[1] + 1], h[0][3 * h[1] + 2]] : null;
 }
 
 // ---- input ----------------------------------------------------------------------------------------
 let down = null, dragged = false;
-const cv = renderer.domElement;
-cv.addEventListener("pointerdown", e => { down = [e.clientX, e.clientY]; dragged = false; cv.setPointerCapture(e.pointerId); });
+const cv = renderer.domElement; cv.tabIndex = 0; cv.style.outline = "none";
+cv.addEventListener("pointerdown", e => { cv.focus(); down = [e.clientX, e.clientY]; dragged = false; try { cv.setPointerCapture(e.pointerId); } catch (_) {} });
+cv.addEventListener("pointercancel", () => { down = null; });
+cv.addEventListener("lostpointercapture", () => { down = null; });
 cv.addEventListener("pointermove", e => {
   if (!down) return;
   if (Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4) dragged = true;
   if (dragged) { yaw.v -= e.movementX * 0.003; pitch.v = Math.max(-1.55, Math.min(1.55, pitch.v - e.movementY * 0.003)); camera.rotation.set(pitch.v, yaw.v, 0); }
 });
 cv.addEventListener("pointerup", e => {
-  if (down && !dragged && points) {
+  try { cv.releasePointerCapture(e.pointerId); } catch (_) {}
+  const wasClick = down && !dragged; down = null;
+  if (wasClick && (points || fpoints)) {
     const p = pick(e.clientX, e.clientY);
     if (p) { if (picks.length >= 2) picks = []; picks.push(p); saved = null; drawAxis(); }
   }
-  down = null;
 });
 cv.addEventListener("wheel", e => { speed *= Math.pow(1.15, -Math.sign(e.deltaY)); status(); e.preventDefault(); }, {passive: false});
 addEventListener("keydown", e => {
@@ -176,10 +204,15 @@ addEventListener("keydown", e => {
   else if (k === "p") { if (cur > 0) load(cur - 1); }
   else if (k === "home" || k === "h") { resetView(); }
   else if (k === "m") { maskTint = !maskTint; points.geometry.setAttribute("color", new THREE.BufferAttribute(colors(), 3)); thumbnail(); }
-  else if (k === "[" || k === "]") { ptSize *= k === "]" ? 1.25 : 0.8; points.material.size = ptSize; status(); }
+  else if (k === "[" || k === "]") { ptSize *= k === "]" ? 1.25 : 0.8; points.material.size = ptSize; if (fpoints) fpoints.material.size = ptSize * FIELDS_SIZE; status(); }
+  else if (k === "l") { showDepth = !showDepth; if (points) points.visible = showDepth; status(); }
+  else if (k === "g") { showFields = !showFields; if (fpoints) fpoints.visible = showFields; status(); }
   if (["Space", "ArrowUp", "ArrowDown"].includes(e.code)) e.preventDefault();
 });
 addEventListener("keyup", e => { keys[e.code] = false; });
+addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
+addEventListener("error", e => { bar.innerHTML = `<span class="no">JS error: ${e.message} (${e.filename}:${e.lineno})</span>`; });
+addEventListener("unhandledrejection", e => { bar.innerHTML = `<span class="no">JS error: ${e.reason}</span>`; });
 
 // ---- loop: WASD fly in the camera's own frame -------------------------------------------------------------
 let last = performance.now();
@@ -187,7 +220,7 @@ function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const v = new THREE.Vector3((keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0), (keys.KeyE || keys.KeyR ? 1 : 0) - (keys.KeyQ || keys.KeyF ? 1 : 0), (keys.KeyS ? 1 : 0) - (keys.KeyW ? 1 : 0));
   if (v.lengthSq() > 0) camera.position.add(v.normalize().multiplyScalar(speed * dt * (keys.ShiftLeft ? 3 : 1)).applyQuaternion(camera.quaternion));
-  renderer.render(scene, camera);
+  try { renderer.render(scene, camera); } catch (err) { bar.innerHTML = `<span class="no">render error: ${err.message}</span>`; }
   requestAnimationFrame(frame);
 }
 loadRecords().then(() => load(0)).then(() => requestAnimationFrame(frame));

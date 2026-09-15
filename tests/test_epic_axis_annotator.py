@@ -14,12 +14,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 from epic_axis_annotator import build_export, encode_cloud, list_records, load_annotations, safe_name  # noqa: E402
 
 
-def _write_cloud(d, key, n=1000):
+def _write_cloud(d, key, n=1000, n_fields=0):
     rng = np.random.default_rng(0)
-    np.savez_compressed(os.path.join(d, safe_name(key) + ".npz"), xyz=rng.normal(size=(n, 3)).astype(np.float32),
-                        rgb=rng.integers(0, 255, (n, 3), dtype=np.uint8), in_mask=rng.random(n) < 0.1,
-                        point_uv=np.array([100.0, 50.0], np.float32), desc="open the drawer", key=key, type_label=0,
-                        K_render=np.eye(3, dtype=np.float32), size=np.array([1024, 576], np.int32))
+    rec = dict(xyz=rng.normal(size=(n, 3)).astype(np.float32), rgb=rng.integers(0, 255, (n, 3), dtype=np.uint8),
+               in_mask=rng.random(n) < 0.1, point_uv=np.array([100.0, 50.0], np.float32), desc="open the drawer", key=key,
+               type_label=0, K_render=np.eye(3, dtype=np.float32), size=np.array([1024, 576], np.int32))
+    if n_fields:  # what tools/epic_fields_overlay.py adds
+        rec.update(xyz_fields=rng.normal(size=(n_fields, 3)).astype(np.float32), rgb_fields=rng.integers(0, 255, (n_fields, 3), dtype=np.uint8),
+                   fields_scale=np.float32(0.25), fields_frame=np.str_("frame_0000004354.jpg"), fields_offset=np.int32(1),
+                   fields_n=np.int32(n_fields), fields_inside_frac=np.float32(0.2), fields_agree_frac=np.float32(0.7))
+    np.savez_compressed(os.path.join(d, safe_name(key) + ".npz"), **rec)
 
 
 def test_export_schema():
@@ -56,7 +60,25 @@ def test_cloud_encoding_roundtrip():
         msk = np.frombuffer(buf[off + 150:off + 200], np.uint8)
         z = np.load(os.path.join(td, rec["file"]))
         assert np.array_equal(xyz, z["xyz"]) and np.array_equal(msk.astype(bool), z["in_mask"])
+        assert meta["n_fields"] == 0 and len(buf) == 4 + ml + 50 * 16  # backward compatible: nothing appended
+
+
+def test_cloud_encoding_with_fields():
+    with tempfile.TemporaryDirectory() as td:
+        _write_cloud(td, "P01_03/P01_03_27", n=50, n_fields=30)
+        rec = list_records(td)[0]
+        buf = encode_cloud(os.path.join(td, rec["file"]), rec)
+        ml = struct.unpack_from("<I", buf, 0)[0]
+        meta = json.loads(buf[4:4 + ml])
+        assert meta["n"] == 50 and meta["n_fields"] == 30 and meta["fields_frame"] == "frame_0000004354.jpg"
+        assert abs(meta["fields_scale"] - 0.25) < 1e-6 and meta["fields_offset"] == 1 and abs(meta["fields_agree_frac"] - 0.7) < 1e-6
+        off = 4 + ml + 50 * 16  # xyz + rgb + in_mask of the depth cloud
+        xf = np.frombuffer(buf[off:off + 30 * 12], np.float32).reshape(30, 3); off += 30 * 12
+        rf = np.frombuffer(buf[off:off + 90], np.uint8).reshape(30, 3); off += 90
+        assert off == len(buf)
+        z = np.load(os.path.join(td, rec["file"]))
+        assert np.array_equal(xf, z["xyz_fields"]) and np.array_equal(rf, z["rgb_fields"])
 
 
 if __name__ == "__main__":
-    test_export_schema(); test_cloud_encoding_roundtrip(); print("ok")
+    test_export_schema(); test_cloud_encoding_roundtrip(); test_cloud_encoding_with_fields(); print("ok")
