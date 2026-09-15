@@ -2334,3 +2334,17 @@ Same story as ARCTIC (56.6 / 57.1 / 45.8): only the trajectory loss carries arti
 HOI4D axis column next to ARCTIC (Overleaf 6000bf4); text updated. Not yet done: HOI4D GT for TRAINING records (user:
 validation only), hinge metrics on HOI4D (3D hinge available now: origin_cam in the JSON; the model's hand-video depth is
 scale-free, so a projected-hinge metric would be the option). CPU pod segaff-hoi4d-gt DELETED after this (verify).
+
+## EPIC-KITCHENS manual axis annotator (2026-09-15 ~13:00 UTC, subagent-built, reviewed)
+
+EPIC has no released 3D articulation GT (checked: EPIC-Fields = poses only; 3DOI = 2D lines on 2K frames; HD-EPIC twins /
+PAWS EgoArti / Arti4D / EgoFun3D = other recordings or unreleased). User chose to annotate the 53 EPIC test records by hand.
+Tools: `tools/epic_cloud_precompute.py` (Depth Anything V2 Metric-Indoor-Large via transformers, GPU; 53 clouds of 400k
+points in 48 s -> `/workspace/datasets/epic_gt_annot/clouds/*.npz` + index.json), `tools/epic_axis_annotator.py serve|export`
+(stdlib server) + `tools/epic_axis_annotator.html` (three.js fly explorer: WASD/QE move, drag look, wheel speed, two clicks =
+axis, T type, U undo, Enter save, N/P records, Home reset, M mask tint, [ ] point size), `tests/test_epic_axis_annotator.py`.
+Server runs detached on the dev pod (port 8080, log /workspace/epic_annot.log); Mac: `ssh -N -L 8080:localhost:8080
+segaff-dev` then http://localhost:8080. Annotations -> `/workspace/datasets/epic_gt_annot/annotations/<key>.json`; export
+with `export --json experiments/epic_test_gt_articulation.json` (HOI4D schema) and score with a copy of
+`tools/hoi4d_axis_probe.py` pointed at the EPIC LMDB (TODO once annotated). Caveat: monocular metric depth -> directions
+trustworthy, absolute scale approximate. transformers is not in requirements.lock (reinstall for a re-run).
