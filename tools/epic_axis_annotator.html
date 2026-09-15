@@ -1,11 +1,15 @@
 <!doctype html>
 <!-- Point-cloud axis annotator page served by tools/epic_axis_annotator.py (three.js 0.160.0 from cdnjs).
-     Fly: WASD move, Q/E (or R/F) down/up, drag = look, wheel = speed. Click (no drag) picks the nearest point:
-     1st = p1, 2nd = p2 (axis drawn), 3rd starts over. T rot/trans, U undo, Enter save, N/P next/prev, Home reset,
-     M mask tint, [ ] point size, L / G toggle the depth cloud / the EPIC-Fields cloud (second THREE.Points, 1.5x
-     point size, present when meta.n_fields > 0; picking searches all visible points of both clouds). Clouds are in
-     the OpenCV camera frame; the page shows them with y and z flipped so three's default camera (origin, looking
-     down -z) sees the photo viewpoint. Picked points are stored unflipped. -->
+     Minecraft-style: click the view once to lock the mouse (Esc releases); the mouse steers the view, the
+     crosshair at the centre picks points on left click; WASD moves on the horizontal plane in the facing
+     direction, Space / Shift move straight up / down (world-up never changes; Q/E and R/F also work; Ctrl = 3x);
+     wheel changes speed. Modes (X toggles): AXIS = two clicks give the axis; FACE = three clicks define a plane
+     (drawn as a translucent triangle), a fourth click on that plane plants the axis as the plane normal through
+     the clicked point (normal chosen to face the camera). T rot/trans, U undo, Enter save, N/P next/prev,
+     Home reset view, M mask tint, L depth cloud on/off, G EPIC-Fields cloud on/off, [ ] point size.
+     Cloud is in the OpenCV camera frame; shown with y and z flipped so three's camera (origin, looking down -z)
+     sees the photo viewpoint; picked points are stored unflipped. Payload: uint32 meta length, meta JSON,
+     float32 xyz, uint8 rgb, uint8 in_mask, then (if meta.n_fields > 0) float32 xyz_fields, uint8 rgb_fields. -->
 <html><head><meta charset="utf-8"><title>EPIC axis annotator</title>
 <style>
  body{margin:0;overflow:hidden;background:#111;color:#ddd;font:13px/1.4 system-ui,sans-serif}
@@ -15,22 +19,26 @@
  #thumbbox{position:fixed;left:8px;top:8px;background:rgba(0,0,0,.6);padding:6px}
  #thumb{display:block;border:1px solid #666}
  #desc{max-width:320px;margin-top:4px;font-size:14px}
- .rot{color:#ffb347}.trans{color:#7fd0ff}.ok{color:#8f8}.no{color:#f88}
+ .rot{color:#ffb347}.trans{color:#7fd0ff}.ok{color:#8f8}.no{color:#f88}.mode{color:#fd7}
  #list{position:fixed;left:8px;top:260px;bottom:60px;overflow:auto;width:180px;font-size:11px;background:rgba(0,0,0,.5)}
  #list div{padding:1px 4px;cursor:pointer}#list .cur{background:#345}
+ #cross{position:fixed;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;pointer-events:none;display:none}
+ #cross:before,#cross:after{content:"";position:absolute;background:#fff;mix-blend-mode:difference}
+ #cross:before{left:10px;top:0;width:2px;height:22px}#cross:after{top:10px;left:0;height:2px;width:22px}
 </style></head><body>
 <div id="thumbbox"><canvas id="thumb"></canvas><div id="desc"></div></div>
 <div id="list"></div>
-<div id="help">WASD move  Q/E down/up  drag look  wheel speed
-click p1, click p2, click again = restart
-T rot/trans  U undo  Enter save  N/P next/prev
-Home reset view  M mask tint  [ ] point size
-L depth cloud on/off  G EPIC-Fields cloud on/off</div>
+<div id="cross"></div>
+<div id="help">click view = lock mouse (Esc frees)   WASD move   Space/Shift up/down   Ctrl fast   wheel speed
+AXIS mode: click p1, click p2        FACE mode: click 3 pts = plane, 4th click = axis through it
+X axis/face mode   T rot/trans   U undo   Enter save   N/P next/prev
+Home reset view   M mask tint   L depth cloud   G EPIC-Fields cloud   [ ] point size</div>
 <div id="bar">loading…</div>
 <script type="module">
 import * as THREE from "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js";
 
-const bar = document.getElementById("bar"), listEl = document.getElementById("list");
+const FIELDS_SIZE = 1.5;
+const bar = document.getElementById("bar"), listEl = document.getElementById("list"), cross = document.getElementById("cross");
 const renderer = new THREE.WebGLRenderer({antialias: true});
 renderer.setPixelRatio(devicePixelRatio); renderer.setSize(innerWidth, innerHeight); document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
@@ -39,33 +47,37 @@ camera.rotation.order = "YXZ";
 addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
 // ---- state ----------------------------------------------------------------------------------------
-let records = [], cur = 0, meta = null, xyz = null, rgb = null, msk = null, points = null;
-let fxyz = null, fpoints = null, showDepth = true, showFields = true;   // EPIC-Fields cloud (meta.n_fields > 0)
-let picks = [], type = "rot", saved = null, speed = 0.6, maskTint = true, ptSize = 0.004;
-const FIELDS_SIZE = 1.5;   // fields point size relative to the depth cloud's
+let records = [], cur = 0, meta = null, xyz = null, rgb = null, msk = null, fxyz = null;
+let points = null, fpoints = null, showDepth = true, showFields = true;
+let mode = "axis", picks = [], face = [], type = "rot", saved = null, speed = 0.6, maskTint = true, ptSize = 0.004;
 const yaw = {v: 0}, pitch = {v: 0}, keys = {};
 const toWorld = p => new THREE.Vector3(p[0], -p[1], -p[2]);   // OpenCV cam frame -> three world
 const toCam = v => [v.x, -v.y, -v.z];
 
-// axis visuals: two spheres + one long line
+// axis visuals: two spheres + one long line; face visuals: three small spheres + a translucent triangle
 const sphGeo = new THREE.SphereGeometry(0.012, 16, 12);
 const sph = [new THREE.Mesh(sphGeo, new THREE.MeshBasicMaterial({color: 0x00ff66})), new THREE.Mesh(sphGeo, new THREE.MeshBasicMaterial({color: 0xff3366}))];
 sph.forEach(s => { s.visible = false; scene.add(s); });
 const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
 const line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({color: 0xffff00})); line.visible = false; line.frustumCulled = false; scene.add(line);
+const faceSph = [0, 1, 2].map(() => { const m = new THREE.Mesh(new THREE.SphereGeometry(0.008, 12, 8), new THREE.MeshBasicMaterial({color: 0x66ccff})); m.visible = false; scene.add(m); return m; });
+const triGeo = new THREE.BufferGeometry(); triGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(9), 3));
+const tri = new THREE.Mesh(triGeo, new THREE.MeshBasicMaterial({color: 0x66ccff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false}));
+tri.visible = false; tri.frustumCulled = false; scene.add(tri);
 
 function resetView() { camera.position.set(0, 0, 0); yaw.v = 0; pitch.v = 0; camera.rotation.set(0, 0, 0); }
+const locked = () => document.pointerLockElement === renderer.domElement;
 
 function status() {
   const r = records[cur] || {};
   const tl = r.type_label === 1 ? "rot" : "trans";
-  bar.innerHTML = `record <b>${cur + 1}/${records.length}</b>  key <b>${r.key}</b>  label ${tl}  |  ` +
-    `type <b class="${type}">${type}</b>  picks ${picks.length}/2  ` +
+  const fields = meta && meta.n_fields ? `fields[G] ${showFields ? "on" : "off"}: ${meta.n_fields} pts, scale ${(+meta.fields_scale).toFixed(3)} (${meta.fields_frame}, off ${meta.fields_offset}, agree ${(+meta.fields_agree_frac).toFixed(2)})` : "fields: none";
+  const prog = mode === "axis" ? `picks ${picks.length}/2` : `face ${face.length}/3` + (face.length === 3 ? (picks.length === 2 ? ", axis set" : ", now click the face") : "");
+  bar.innerHTML = `record <b>${cur + 1}/${records.length}</b>  key <b>${r.key}</b>  label ${tl}  |  mode <b class="mode">${mode.toUpperCase()}</b>  ` +
+    `type <b class="${type}">${type}</b>  ${prog}  ` +
     (saved ? `<span class="ok">saved ${saved.saved_at} (${saved.type})</span>` : `<span class="no">not saved</span>`) +
-    `  |  speed ${speed.toFixed(2)} m/s  size ${(ptSize * 1000).toFixed(1)} mm  |  depth[L] ${showDepth ? "on" : "off"}  ` +
-    (meta && meta.n_fields > 0 ? `fields[G] ${showFields ? "on" : "off"}: ${meta.n_fields} pts, scale ${meta.fields_scale.toFixed(3)}` +
-      ` (${meta.fields_frame}${meta.fields_offset ? ", off " + meta.fields_offset : ""}, agree ${meta.fields_agree_frac.toFixed(2)})` : "fields: none") +
-    `\n${r.desc || ""}`;
+    `  |  ${locked() ? "mouse locked (Esc frees)" : "click the view to lock the mouse"}  speed ${speed.toFixed(2)} m/s  size ${(ptSize * 1000).toFixed(1)} mm` +
+    `  depth[L] ${showDepth ? "on" : "off"}  ${fields}\n${r.desc || ""}`;
   listEl.querySelectorAll("div").forEach((d, i) => d.className = i === cur ? "cur" : "");
 }
 
@@ -76,7 +88,24 @@ function drawAxis() {
     const a = toWorld(picks[0]), b = toWorld(picks[1]), d = b.clone().sub(a).normalize().multiplyScalar(4);
     lineGeo.setFromPoints([a.clone().sub(d), b.clone().add(d)]);
   }
+  faceSph.forEach((s, i) => { s.visible = mode === "face" && i < face.length; if (i < face.length) s.position.copy(toWorld(face[i])); });
+  tri.visible = mode === "face" && face.length === 3;
+  if (tri.visible) {
+    const arr = triGeo.attributes.position.array;
+    face.forEach((p, i) => { const w = toWorld(p); arr[3 * i] = w.x; arr[3 * i + 1] = w.y; arr[3 * i + 2] = w.z; });
+    triGeo.attributes.position.needsUpdate = true; triGeo.computeBoundingSphere();
+  }
   status();
+}
+
+function faceNormalCam() {   // unit normal of the picked plane in the camera frame, chosen to face the camera
+  const a = new THREE.Vector3(...face[0]), b = new THREE.Vector3(...face[1]), c = new THREE.Vector3(...face[2]);
+  const n = b.clone().sub(a).cross(c.clone().sub(a));
+  if (n.lengthSq() < 1e-12) return null;
+  n.normalize();
+  const cp = toCam(camera.position), toEye = new THREE.Vector3(cp[0] - a.x, cp[1] - a.y, cp[2] - a.z);
+  if (n.dot(toEye) < 0) n.negate();
+  return n;
 }
 
 // ---- data -----------------------------------------------------------------------------------------
@@ -97,7 +126,7 @@ function colors() {
   return c;
 }
 
-function thumbnail() {  // project the cloud back through K_render onto a small canvas (mask tinted, point_uv circled)
+function thumbnail() {  // project the depth cloud back through K_render onto a small canvas (mask tinted, point_uv circled)
   const [W, H] = meta.size, s = 300 / W, cw = 300, ch = Math.round(H * s), K = meta.K_render;
   const cv = document.getElementById("thumb"); cv.width = cw; cv.height = ch;
   const ctx = cv.getContext("2d"), img = ctx.createImageData(cw, ch), d = img.data, col = colors();
@@ -111,6 +140,14 @@ function thumbnail() {  // project the cloud back through K_render onto a small 
   document.getElementById("desc").textContent = meta.desc;
 }
 
+const flipped = src => { const p = new Float32Array(src.length); for (let k = 0; k < src.length; k += 3) { p[k] = src[k]; p[k + 1] = -src[k + 1]; p[k + 2] = -src[k + 2]; } return p; };
+function makePoints(src, colorArr, size) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(flipped(src), 3));
+  g.setAttribute("color", new THREE.BufferAttribute(colorArr, 3));
+  return new THREE.Points(g, new THREE.PointsMaterial({size, vertexColors: true, sizeAttenuation: true}));
+}
+
 async function load(i) {
   cur = i; bar.textContent = `loading record ${i}…`;
   const buf = await (await fetch("/api/cloud/" + i)).arrayBuffer();
@@ -120,34 +157,27 @@ async function load(i) {
   xyz = new Float32Array(buf.slice(off, off + meta.n * 12)); off += meta.n * 12;
   rgb = new Uint8Array(buf, off, meta.n * 3); off += meta.n * 3;
   msk = new Uint8Array(buf, off, meta.n); off += meta.n;
-  const flipped = src => { const p = new Float32Array(src.length); for (let k = 0; k < src.length; k += 3) { p[k] = src[k]; p[k + 1] = -src[k + 1]; p[k + 2] = -src[k + 2]; } return p; };
-  if (points) { scene.remove(points); points.geometry.dispose(); }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.BufferAttribute(flipped(xyz), 3));
-  g.setAttribute("color", new THREE.BufferAttribute(colors(), 3));
-  points = new THREE.Points(g, new THREE.PointsMaterial({size: ptSize, vertexColors: true, sizeAttenuation: true}));
-  points.visible = showDepth; scene.add(points);
-  // second cloud: EPIC-Fields COLMAP points, already in this camera frame and scaled to metres by the overlay tool
-  if (fpoints) { scene.remove(fpoints); fpoints.geometry.dispose(); fpoints = null; fxyz = null; }
-  const nf = meta.n_fields || 0;
+  for (const p of [points, fpoints]) if (p) { scene.remove(p); p.geometry.dispose(); }
+  points = makePoints(xyz, colors(), ptSize); points.visible = showDepth; scene.add(points);
+  fpoints = null; fxyz = null;
+  const nf = meta.n_fields || 0;   // second cloud: EPIC-Fields COLMAP points, already in this camera frame and scaled to metres
   if (nf > 0) {
     fxyz = new Float32Array(buf.slice(off, off + nf * 12)); off += nf * 12;
     const frgb = new Uint8Array(buf, off, nf * 3), fc = new Float32Array(nf * 3);
     for (let k = 0; k < nf * 3; k++) fc[k] = frgb[k] / 255;
-    const fg = new THREE.BufferGeometry();
-    fg.setAttribute("position", new THREE.BufferAttribute(flipped(fxyz), 3));
-    fg.setAttribute("color", new THREE.BufferAttribute(fc, 3));
-    fpoints = new THREE.Points(fg, new THREE.PointsMaterial({size: ptSize * FIELDS_SIZE, vertexColors: true, sizeAttenuation: true}));
-    fpoints.visible = showFields; scene.add(fpoints);
+    fpoints = makePoints(fxyz, fc, ptSize * FIELDS_SIZE); fpoints.visible = showFields; scene.add(fpoints);
   }
   const a = records[i].annot;
-  picks = a ? [a.p1, a.p2] : []; type = a ? a.type : (meta.type_label === 1 ? "rot" : "trans"); saved = a || null;
+  picks = a ? [a.p1, a.p2] : []; face = a && a.face ? a.face : []; if (a) mode = a.face ? "face" : "axis";
+  type = a ? a.type : (meta.type_label === 1 ? "rot" : "trans"); saved = a || null;
   thumbnail(); resetView(); drawAxis();
 }
 
 async function save() {
-  if (picks.length !== 2) { bar.innerHTML = '<span class="no">pick two points first</span>'; return; }
-  const res = await (await fetch("/api/annot/" + cur, {method: "POST", body: JSON.stringify({p1: picks[0], p2: picks[1], type, note: ""})})).json();
+  if (picks.length !== 2) { bar.innerHTML = '<span class="no">no axis yet: two points (AXIS mode) or a face plus a point on it (FACE mode)</span>'; return; }
+  const body = {p1: picks[0], p2: picks[1], type, note: mode === "face" ? "face-normal" : "", mode};
+  if (mode === "face" && face.length === 3) body.face = face;
+  const res = await (await fetch("/api/annot/" + cur, {method: "POST", body: JSON.stringify(body)})).json();
   saved = res.annot; records[cur].annot = res.annot; records[cur].annotated = true;
   listEl.children[cur].textContent = `✓ ${cur} ${records[cur].key}`; status();
 }
@@ -174,39 +204,57 @@ function pick(px, py) {
   return h ? [h[0][3 * h[1]], h[0][3 * h[1] + 1], h[0][3 * h[1] + 2]] : null;
 }
 
-// ---- input ----------------------------------------------------------------------------------------
+function addPick(p) {
+  if (!p) return;
+  saved = null;
+  if (mode === "axis") { if (picks.length >= 2) picks = []; picks.push(p); }
+  else if (face.length < 3) { face.push(p); picks = []; }
+  else {
+    const n = faceNormalCam();
+    if (!n) { face = []; picks = []; }
+    else picks = [p, [p[0] + 0.2 * n.x, p[1] + 0.2 * n.y, p[2] + 0.2 * n.z]];   // axis = plane normal through the clicked point
+  }
+  drawAxis();
+}
+
+// ---- input: Minecraft-style pointer lock (crosshair picks); drag-look works as a fallback while unlocked ------------
 let down = null, dragged = false;
 const cv = renderer.domElement; cv.tabIndex = 0; cv.style.outline = "none";
-cv.addEventListener("pointerdown", e => { cv.focus(); down = [e.clientX, e.clientY]; dragged = false; try { cv.setPointerCapture(e.pointerId); } catch (_) {} });
+cv.addEventListener("pointerdown", e => {
+  cv.focus();
+  if (locked()) { if (e.button === 0) addPick(pick(innerWidth / 2, innerHeight / 2)); return; }
+  down = [e.clientX, e.clientY]; dragged = false; try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+});
 cv.addEventListener("pointercancel", () => { down = null; });
 cv.addEventListener("lostpointercapture", () => { down = null; });
 cv.addEventListener("pointermove", e => {
+  if (locked()) { look(e.movementX, e.movementY); return; }
   if (!down) return;
   if (Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4) dragged = true;
-  if (dragged) { yaw.v -= e.movementX * 0.003; pitch.v = Math.max(-1.55, Math.min(1.55, pitch.v - e.movementY * 0.003)); camera.rotation.set(pitch.v, yaw.v, 0); }
+  if (dragged) look(e.movementX, e.movementY);
 });
 cv.addEventListener("pointerup", e => {
   try { cv.releasePointerCapture(e.pointerId); } catch (_) {}
   const wasClick = down && !dragged; down = null;
-  if (wasClick && (points || fpoints)) {
-    const p = pick(e.clientX, e.clientY);
-    if (p) { if (picks.length >= 2) picks = []; picks.push(p); saved = null; drawAxis(); }
-  }
+  if (!locked() && wasClick && points) cv.requestPointerLock();   // first click locks the mouse; picking uses the crosshair
 });
+document.addEventListener("pointerlockchange", () => { cross.style.display = locked() ? "block" : "none"; status(); });
+function look(dx, dy) { yaw.v -= dx * 0.0025; pitch.v = Math.max(-1.55, Math.min(1.55, pitch.v - dy * 0.0025)); camera.rotation.set(pitch.v, yaw.v, 0); }
 cv.addEventListener("wheel", e => { speed *= Math.pow(1.15, -Math.sign(e.deltaY)); status(); e.preventDefault(); }, {passive: false});
 addEventListener("keydown", e => {
   if (e.repeat) return; keys[e.code] = true;
   const k = e.key.toLowerCase();
-  if (k === "t") { type = type === "rot" ? "trans" : "rot"; saved = null; status(); }
-  else if (k === "u") { picks.pop(); saved = null; drawAxis(); }
-  else if (k === "enter") save();  // (S is WASD-backward, so Enter is the only save key)
+  if (k === "x") { mode = mode === "axis" ? "face" : "axis"; picks = []; face = []; saved = null; drawAxis(); }
+  else if (k === "t") { type = type === "rot" ? "trans" : "rot"; saved = null; status(); }
+  else if (k === "u") { if (mode === "face" && picks.length === 2) picks = []; else if (mode === "face") face.pop(); else picks.pop(); saved = null; drawAxis(); }
+  else if (k === "enter") save();
   else if (k === "n") { if (cur + 1 < records.length) load(cur + 1); }
   else if (k === "p") { if (cur > 0) load(cur - 1); }
   else if (k === "home" || k === "h") { resetView(); }
-  else if (k === "m") { maskTint = !maskTint; points.geometry.setAttribute("color", new THREE.BufferAttribute(colors(), 3)); thumbnail(); }
-  else if (k === "[" || k === "]") { ptSize *= k === "]" ? 1.25 : 0.8; points.material.size = ptSize; if (fpoints) fpoints.material.size = ptSize * FIELDS_SIZE; status(); }
+  else if (k === "m") { maskTint = !maskTint; if (points) points.geometry.setAttribute("color", new THREE.BufferAttribute(colors(), 3)); thumbnail(); }
   else if (k === "l") { showDepth = !showDepth; if (points) points.visible = showDepth; status(); }
   else if (k === "g") { showFields = !showFields; if (fpoints) fpoints.visible = showFields; status(); }
+  else if (k === "[" || k === "]") { ptSize *= k === "]" ? 1.25 : 0.8; if (points) points.material.size = ptSize; if (fpoints) fpoints.material.size = ptSize * FIELDS_SIZE; status(); }
   if (["Space", "ArrowUp", "ArrowDown"].includes(e.code)) e.preventDefault();
 });
 addEventListener("keyup", e => { keys[e.code] = false; });
@@ -214,12 +262,17 @@ addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
 addEventListener("error", e => { bar.innerHTML = `<span class="no">JS error: ${e.message} (${e.filename}:${e.lineno})</span>`; });
 addEventListener("unhandledrejection", e => { bar.innerHTML = `<span class="no">JS error: ${e.reason}</span>`; });
 
-// ---- loop: WASD fly in the camera's own frame -------------------------------------------------------------
+// ---- loop: Minecraft-style movement (horizontal in the facing direction, vertical along world up) ---------------
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
-  const v = new THREE.Vector3((keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0), (keys.KeyE || keys.KeyR ? 1 : 0) - (keys.KeyQ || keys.KeyF ? 1 : 0), (keys.KeyS ? 1 : 0) - (keys.KeyW ? 1 : 0));
-  if (v.lengthSq() > 0) camera.position.add(v.normalize().multiplyScalar(speed * dt * (keys.ShiftLeft ? 3 : 1)).applyQuaternion(camera.quaternion));
+  const fwdIn = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), rightIn = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
+  const upIn = ((keys.Space || keys.KeyE || keys.KeyR) ? 1 : 0) - ((keys.ShiftLeft || keys.ShiftRight || keys.KeyQ || keys.KeyF) ? 1 : 0);
+  if (fwdIn || rightIn || upIn) {
+    const fwd = new THREE.Vector3(-Math.sin(yaw.v), 0, -Math.cos(yaw.v)), right = new THREE.Vector3(Math.cos(yaw.v), 0, -Math.sin(yaw.v));
+    const v = fwd.multiplyScalar(fwdIn).add(right.multiplyScalar(rightIn)).add(new THREE.Vector3(0, upIn, 0));
+    if (v.lengthSq() > 0) camera.position.add(v.normalize().multiplyScalar(speed * dt * ((keys.ControlLeft || keys.ControlRight) ? 3 : 1)));
+  }
   try { renderer.render(scene, camera); } catch (err) { bar.innerHTML = `<span class="no">render error: ${err.message}</span>`; }
   requestAnimationFrame(frame);
 }

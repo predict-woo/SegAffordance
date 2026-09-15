@@ -128,7 +128,10 @@ def make_handler(clouds_dir, out_dir):
             i = int(p.rsplit("/", 1)[1])
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
             a = dict(key=records[i]["key"], p1=[float(v) for v in body["p1"]], p2=[float(v) for v in body["p2"]],
-                     type=body.get("type", "rot"), note=body.get("note", ""), saved_at=time.strftime("%Y-%m-%dT%H:%M:%S"))
+                     type=body.get("type", "rot"), note=body.get("note", ""), saved_at=time.strftime("%Y-%m-%dT%H:%M:%S"),
+                     mode=body.get("mode", "axis"))
+            if body.get("face"):   # face mode: the three clicked points that defined the plane (axis = its normal)
+                a["face"] = [[float(v) for v in p] for p in body["face"]]
             os.makedirs(out_dir, exist_ok=True)
             with open(os.path.join(out_dir, safe_name(a["key"]) + ".json"), "w") as f:
                 json.dump(a, f, indent=1)
