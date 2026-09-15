@@ -2418,3 +2418,16 @@ MOPD RGB 512 = axis 31.0 / origin 0.666 / mIoU 0.357† / PDet 61.4† / +M 56.5
 (conf>0.5 PDet@0.25 = 5.4, inside the "3.9 to 7.1" range already in the text). Fig. 4 = `fig_sf3d_qual_v10.png`, Fig. 5 =
 `fig_handvideo_qual_v5.png`, all columns real. Every Table II / Fig. 4 / Fig. 5 todo is gone; remaining red todos: the
 conclusion and a commented analysis note. No baseline pods remain (peer).
+
+## Hand-video interaction-point / endpoint probe (2026-09-16) -> Table III point and end columns
+
+Supervisor asked for an interaction-point metric and an arc-length metric. Tool `tools/handvideo_point_probe.py` (full test
+split of hoi4d / epic / arctic, three checkpoints; CSV `experiments/20260913_joint4_decoder_l2anchor_dense/handvideo_point_probe.csv`,
+written to /root then copied). Definitions (normalised image coords): point_err = |point_uv_pred - hand first position|;
+end_err = |projected decoded-trajectory end (z_p-scaled) - last valid track point| (extent + direction + shape, scale-free);
+disp_err = same with the start removed; mask_iou reproduces the Table III mIoUs exactly (0.508/0.186/0.509 etc.).
+Results (point / end): sf3d_only HOI4D 0.217/0.361, EPIC 0.203/0.356, ARCTIC 0.213/0.391; noproj 0.017/0.245, 0.043/0.445,
+0.063/0.284; dense 0.020/0.056, 0.055/0.219, 0.060/0.164. GT track lengths 0.171 / 0.338 / 0.302. SF3D 2D point error from the
+per-sample CSVs: 0.113 / 0.111 / 0.108 (3D: 0.276 / 0.272 / 0.310 m). Reading: without the projection loss the point is placed
+as well but the decoded motion ends >1 track length away (0.245 vs 0.056 on HOI4D) -> the trajectory loss is the only
+motion channel. Table III is now a table* with per-dataset groups (SF3D: axis/origin/point; each video source: mIoU/point/end/axis).
