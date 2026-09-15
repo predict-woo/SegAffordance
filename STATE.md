@@ -2382,3 +2382,10 @@ test metric said 43.8) and mIoU 0.263 (0.262); the paper now uses the CSV values
 trajectory loss wins only the axis (and +M) and costs ~4 MA / ~5 MAO, said plainly in the text.
 Table IV = hand-video columns only (mIoU HOI4D/EPIC, axis HOI4D/EPIC*/ARCTIC). Headers without arrows and short row
 labels to fit; "EPIC" not \epic in headers (macro expands to EPIC-KITCHENS and overflows).
+
+## Paper: masks-and-types (noproj) model dropped from the paper (2026-09-16, Overleaf 9dce410)
+
+User decision after seeing the full-protocol Table III (noproj best on 7/9 SF3D columns): the `20260915_joint4_decoder_dense_noproj`
+row is OUT of Tables III/IV and the text ("the channel is the trajectory loss" paragraph removed). Tables now have two rows,
+"SceneFun3D only" and "+ human video". The experiment, its CSVs and the probe numbers stay in the repo (STATE entries above)
+in case it comes back as an ablation.
