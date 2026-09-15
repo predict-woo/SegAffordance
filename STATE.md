@@ -2309,3 +2309,28 @@ arctic_axis_probe.csv, sf3d_per_sample_metrics.csv in the experiment dir. Probes
 (no NUL corruption). 2.07 it/s on the Server Edition (faster than the 1.48 first minutes suggested).
 Paper renamed 2026-09-15: \method = AFUN, title "AFUN: Towards an Affordance Foundation Model for Functionality
 Understanding" (Overleaf 6c68d6f); Figs 4-6 relabelled (v7 / v3 / v2 composites).
+
+## DONE (2026-09-15 ~10:40 UTC): HOI4D 3D ARTICULATION GT from the official part poses + axis probe (Table III column)
+
+User: HOI4D ships per-frame category-level PART poses (`objpose/*.json`, dataList per part: Dustbinbase/Dustbincover,
+Laptopkeyboard/Laptopdisplay, Safebox/Safedoor, Lockerbody/Lockerdrawer/Lockersldingdoor) + CAD `mobility_v2.json`. We
+now derive a GT axis WITHOUT the CAD frames: the moving part's motion relative to the body between the record's frame f
+and the frame of maximal relative displacement is a screw in the body frame; its axis (rotation axis or translation
+direction) and a point on it are mapped into frame f's camera by the body pose. `tools/hoi4d_gt_articulation.py` (ran
+on a CPU pod on the HOI4D volume f2h0jczstn after unzipping objpose for the 135 test sequences from HOI4D_annotations.zip
+into /workspace/ext; CAD zip also extracted to /workspace/ext/CAD) -> `experiments/hoi4d_test_gt_articulation.json`
+(438 test records: 325 valid = laptop 41, furniture 87, safe 85, trash can 112; 276 rot / 49 trans; toy car / lamp / mug
+are rigid -> no joint). Sanity: projected GT hinge 0.12 of the image from the interaction point (median); motion type
+agrees with our rule labels 87 %. `tools/hoi4d_axis_probe.py` (GT-routed head, unsigned) on the dev pod ->
+`experiments/20260913_joint4_decoder_l2anchor_dense/hoi4d_axis_probe.csv`:
+
+| model | HOI4D axis (325) | median | type % | trashcan | laptop | furniture | safe |
+|---|---|---|---|---|---|---|---|
+| sf3d_only | 53.4 | 57.1 | 42.8 | 72.7 | 48.2 | 39.7 | 44.4 |
+| noproj (masks+types) | 51.4 | 54.3 | 87.1 | 63.4 | 63.7 | 34.4 | 47.1 |
+| dense (final) | **42.9** | 42.2 | 86.8 | 52.4 | 37.1 | 35.2 | 41.2 |
+
+Same story as ARCTIC (56.6 / 57.1 / 45.8): only the trajectory loss carries articulation. Paper: Table III now has a
+HOI4D axis column next to ARCTIC (Overleaf 6000bf4); text updated. Not yet done: HOI4D GT for TRAINING records (user:
+validation only), hinge metrics on HOI4D (3D hinge available now: origin_cam in the JSON; the model's hand-video depth is
+scale-free, so a projected-hinge metric would be the option). CPU pod segaff-hoi4d-gt DELETED after this (verify).

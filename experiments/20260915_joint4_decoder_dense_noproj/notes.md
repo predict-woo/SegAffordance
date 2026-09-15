@@ -39,3 +39,4 @@ did in the final model.
 
 **Decision.** Row added to the paper's Table III ("+ video, no trajectory loss") with a sentence in Sec. IV-C.
 Vis: none yet (dumps not made for this arm; `tools/hoi4d_predict_articulation.py --dump` if needed).
+- HOI4D official-pose axis probe (2026-09-15): unsigned 42.9 (final) vs 51.4 (noproj) vs 53.4 (sf3d_only) on 325 articulated test records; CSV experiments/20260913_joint4_decoder_l2anchor_dense/hoi4d_axis_probe.csv
