@@ -2229,3 +2229,14 @@ exports ~19:00 UTC (was ~23:30); paths unchanged. USDNet 1 cm ETA ~08:30 UTC.
 - ETA: training end ~18:00 UTC (20:00 CEST), test + preds ~18:30 UTC; scoring, CSV, INDEX/notes and
   the Fig. 5 hand-video export (needs an OPD-env pod: `handvideo_opd.sh mopd512_rgb mopd_rgb` +
   `handvideo_export.py opd --nearest ...`) follow. Peer session informed.
+
+## Paper Table II rebuilt (2026-09-15 ~02:40 UTC, user): OPD-style cumulative rates, full width
+
+Columns: axis (matched, deg) | origin (m) | mIoU | PDet | +M | +MA | +MAO | MA | MAO. +M/+MA/+MAO gated by PDet (IoU >= 0.5),
+MA/MAO ungated; hinge threshold 25 cm (defined in appendix B, not in the header). Rates from the per-sample CSVs
+(`python3` one-liner over experiments/baselines_sf3d/*/per_sample_metrics*.csv + ours; see the LaTeX comment above the
+table). 3DOI scored with its UNSIGNED axis as the main entry (user rule: metrics favour the baseline), marked §, signed
+23.2 in the caption; A3VLM GT-box row keeps n.a. in the gated columns. Bold = best text-grounded row (A3VLM chain wins
+MA 43.8 vs 42.7; ours wins the rest). Ours: axis/origin/mIoU/PDet from the experiment metrics (22.5 PDet), the rates
+from the probe CSV (22.9 PDet there; 0.4 gap = probe vs trainer test path, noted). Pending rows: MOPD 512, USDNet 1 cm.
+Overleaf 10 pages, floats OK (Table II + Fig. 4 on p6).
