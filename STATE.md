@@ -2396,3 +2396,16 @@ User reversed both earlier decisions: noproj row is BACK, and the split table is
 (SceneFun3D only / + video: masks, types / + video: + trajectories) with SF3D axis + origin (Table II definitions:
 16.5/0.262, 14.2/0.232, 13.9/0.248) beside mIoU HOI4D/EPIC and axis HOI4D/EPIC*/ARCTIC. No MA/PDet/MAO columns for the
 controls in the paper; the full-protocol numbers for noproj/sf3d_only remain in the entry above for reference.
+
+## 2026-09-15 19:30 UTC — MOPD 512 DONE; all SF3D external-baseline rows complete
+
+- `mopd512_rgb` finished on the H200 (training end 18:26 UTC; pod deleted 18:45 UTC, ~$80 H200 +
+  ~$41 A100). Scored: PDet 37.6 / mIoU 0.357 / type 71.6 / MA 19.0 (signed 17.2) / axis 45.1 (matched
+  30.1) / origin 0.666 m; conf>0.5 PDet 3.6. vs OPDFormer-P RGB 512: +2.8 signed MA, better origin,
+  slightly weaker masks. Files: `experiments/baselines_sf3d/20260914_mopd_rgb_512_full/`, preds
+  `results/mopd512_rgb/preds.jsonl`, Fig. 5 exports `results/mopd512_rgb/handvideo_preds{,_nearest}.jsonl`.
+  Lesson: a chain on a non-main volume cannot run `opd_preds_to_jsonl.py` (needs `/workspace/cache`);
+  `runpod/baselines/mopd/finish_mopd512.sh` does export + scoring on the dev pod after a copy-back.
+- No baseline pods remain (only segaffordance-dev). Open: Euler 3DOI replicate read-out (VPN still
+  down), volumes bl-apjp / bl-eufr pending the user's OK to delete (bl-apjp now also holds the 23 GB
+  opd_sf3d_512 RGB copy and the MOPD checkpoints).

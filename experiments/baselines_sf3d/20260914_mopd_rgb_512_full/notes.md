@@ -53,4 +53,29 @@ no errors and identical memory. Training end ~18:00 UTC 2026-09-15 (was ~23:00 U
 Results (`model_final.pth`, `test/`, `preds.jsonl`, logs) are copied back to the main volume's
 `runs/mopd512_rgb` / `results/mopd512_rgb` when the chain finishes.
 
-**Result.** pending.
+**Result (2026-09-15; training ended 18:26 UTC on the H200, test 18:35, export + scoring on the dev pod
+19:17 UTC; H200 pod deleted 18:45 UTC, ~17.5 h x $4.59 = ~$80 + ~$41 of A100 time = ~$121 total).**
+The chain's own export step died on the AP-JP-1 volume (`opd_preds_to_jsonl.py` needs the SF3D GT
+cache under `/workspace/cache`, main volume only), so `model_final.pth`, `test/inference/*` and the logs
+were rsynced back to the main volume and `runpod/baselines/mopd/finish_mopd512.sh` did the export +
+scoring there. Their evaluator on MotionNet_test: bbox AP50 12.5, segm AP50 8.9 (OPDFormer-P RGB 512:
+segm AP50 11.6). Ours (`metrics.json`, `per_sample_metrics.csv`, `thresholded.json`):
+
+| | OPDFormer-P RGB 512 (init's recipe) | MOPD 512, 60k OPDFormer schedule | MOPD 256, their 1k fine-tune |
+|---|---|---|---|
+| PDet / mean IoU | 40.2 / 0.372 | 37.6 / 0.357 | 30.9 / 0.321 |
+| type accuracy | 74.7 | 71.6 | 67.6 |
+| MA unsigned / signed | 15.4 / 14.4 | 19.0 / 17.2 | 13.3 / 12.2 |
+| axis err all / matched (deg) | 45.4 / 30.4 | 45.1 / 30.1 | 47.8 / 32.2 |
+| flips all / rot | 11.8 / 20.0 | 13.0 / 24.5 | 13.6 / 22.6 |
+| origin err (m) | 0.725 | 0.666 | 0.715 |
+| conf > 0.5: kept / PDet | -- / 4.0 | 339 / 3.6 | -- |
+
+Reading: trained for the full schedule at 512x384, MOPD's extra branches (EfficientSAM prompt encoder
++ B5 "normal" encoder) buy +2.8 signed MA and a 6 cm better origin over the OPDFormer-P RGB 512 run it
+was initialised from, at the cost of slightly weaker masks / type (its 256 fine-tune had been within
+noise of its init). Validation segm AP50 along the run: 10.1 (20k) -> 11.7 (40k). Note MOPD trains
+from the 256 P-RGB init (see Setup); the 512 P-RGB run is the resolution-matched comparison.
+Hand-video (Fig. 5): `results/mopd512_rgb/handvideo_preds.jsonl` (oracle, 87/150 frames with a
+matching instance) and `handvideo_preds_nearest.jsonl` (5 figure samples, 3 nearest-centroid
+fallbacks), produced on the H200 pod by `runpod/baselines/handvideo_opd.sh mopd512_rgb mopd_rgb`.
