@@ -2348,3 +2348,14 @@ segaff-dev` then http://localhost:8080. Annotations -> `/workspace/datasets/epic
 with `export --json experiments/epic_test_gt_articulation.json` (HOI4D schema) and score with a copy of
 `tools/hoi4d_axis_probe.py` pointed at the EPIC LMDB (TODO once annotated). Caveat: monocular metric depth -> directions
 trustworthy, absolute scale approximate. transformers is not in requirements.lock (reinstall for a re-run).
+
+## EPIC manual GT: re-annotation round 1 (2026-09-16)
+
+User re-annotated 6 of the flagged records (P02_121_95, P06_05_125/138, P22_107_148/225/39; five of them moved ~90 deg, i.e.
+the first pass had the drawer/cupboard axis along the wrong direction). Export re-run (53/53 valid, 29 rot / 24 trans) and
+`tools/hoi4d_axis_probe.py` re-run on the EPIC LMDB (CSV in `experiments/20260913_joint4_decoder_l2anchor_dense/epic_axis_probe.csv`).
+Unsigned axis error, mean (median) [rot / trans]: sf3d_only 35.7 (26.8) [43.0 / 26.7]; noproj 39.9 (33.1) [47.9 / 30.2];
+dense 36.7 (31.2) [43.5 / 28.5]; chance 57.3. Previous pass: 40.0 / 40.6 / 43.4. Still NOT the HOI4D/ARCTIC ordering
+(the SF3D-only model is level with the final model on EPIC); the noproj model is worst, as on HOI4D/ARCTIC. Revolute records
+are the weak half for every model (43-48 deg); cupboard doors in P06_05 and P18/P20 remain the largest errors. Not in the
+paper. Remaining flagged records not re-saved: 0 (P01_03), 15 (P02_121_57), 21-24 (P06_05), 35 (P18_02), 36 (P20_03), 40 (P22_107).
