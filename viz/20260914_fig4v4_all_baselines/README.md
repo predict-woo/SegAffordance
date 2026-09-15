@@ -50,3 +50,11 @@ CUDA_VISIBLE_DEVICES= python tools/viz_fig4_panels.py --ours dense viz/20260914_
 python tools/compose_panels.py --out viz/20260914_paper_figures/fig_sf3d_qual_v4.png --panel-width 1024 --row-height 240 \
   --gap 6 --labels "Ground truth,OPDFormer-C,OPDFormer-P,MOPD,USDNet,A3VLM,3DOI,ARTHUR" $S/00_*.png $S/01_*.png $S/02_*.png $S/03_*.png
 ```
+
+**Update (2026-09-15 ~08:00 UTC).** Column order changed (user): GT | AFUN | baselines. Composite `fig_sf3d_qual_v8.png`
+(Overleaf, Fig. 4):
+```
+python tools/compose_panels.py --out viz/20260914_paper_figures/fig_sf3d_qual_v8.png --panel-aspect 1.33333 --cols 0,7,1,2,3,4,5,6 \
+  --row-height 240 --gap 6 --labels "Ground truth,AFUN,OPDFormer-C,OPDFormer-P,MOPD,USDNet,A3VLM,3DOI" --col-groups "Ours:1-1,Baselines:2-7" \
+  $S/00_sf3d_rot_1684.png $S/01_sf3d_rot_113.png $S/02_sf3d_trans_3726.png $S/03_sf3d_trans_403.png
+```
