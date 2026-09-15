@@ -2370,3 +2370,15 @@ Affordances from Egocentric Human Interaction Videos" (set by the user on Overle
 (Wang et al. 2026, arXiv:2606.02551), cited in related work. Figures re-composed with the new label (no re-render of strips):
 Fig. 4 = `viz/20260914_paper_figures/fig_sf3d_qual_v9.png`, Fig. 5 = `fig_handvideo_qual_v4.png` (same compose commands as
 v8/v3 with label EgoArt; MOPD still pending). Table III tabcolsep 1.6 -> 1.0pt to fit the ninth column.
+
+## Paper: human-video ablation split into two tables (2026-09-16, Overleaf b413760)
+
+Table III = the three models (SceneFun3D only / + masks, types / + trajectories) under the full Table II protocol on SF3D
+(axis, origin, mIoU, PDet, +M, +MA, +MAO, MA, MAO), computed from the per-sample CSVs with the Table II definitions
+(IoU 0.25 gate, 10 cm hinge, unsigned axis on detected frames, q* origin over revolute frames):
+sf3d_only 16.5 / 0.262 / 0.263 / 48.8 / 44.9 / 26.5 / 21.6 / 43.7 / 35.6; noproj 14.2 / 0.232 / 0.291 / 52.5 / 49.0 / 30.7 / 27.5 / 47.0 / 40.5;
+dense 13.9 / 0.248 / 0.277 / 51.9 / 49.9 / 29.1 / 24.8 / 42.7 / 35.9. Note: the CSV gives sf3d_only MA 43.7 (the trainer's
+test metric said 43.8) and mIoU 0.263 (0.262); the paper now uses the CSV values. noproj is best on most SF3D columns; the
+trajectory loss wins only the axis (and +M) and costs ~4 MA / ~5 MAO, said plainly in the text.
+Table IV = hand-video columns only (mIoU HOI4D/EPIC, axis HOI4D/EPIC*/ARCTIC). Headers without arrows and short row
+labels to fit; "EPIC" not \epic in headers (macro expands to EPIC-KITCHENS and overflows).
