@@ -2214,3 +2214,5 @@ reports; VERIFY the pod list afterwards (creates can silently succeed). After CH
 `tools/arctic_axis_probe.py` on the best ckpt (unsigned axis mean = the table's number; the chain's test_arctic log is
 not the same metric), fill notes/INDEX, add the row to the paper's Table III (or a new line in the transfer text).
 Paper: float placement fixed (main.tex float fractions/counters, [!t]) — Tables II-IV had drifted to the last page.
+Peer update (2026-09-15 02:10 UTC): MOPD 512 moved to an H200 (user request), training end ~18:00 UTC, preds/CSV/hand-video
+exports ~19:00 UTC (was ~23:30); paths unchanged. USDNet 1 cm ETA ~08:30 UTC.
