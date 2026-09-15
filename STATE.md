@@ -2287,3 +2287,12 @@ mlp1024 per-sample probe DONE (rerun on pod-local disk, 5,088 rows, no NULs) and
   per_sample_metrics.csv, thresholded.json); INDEX row added; deviations (crop 3.0 m, 450 k cap) in
   its notes. Peer informed. Remaining baseline in flight: MOPD 512 on `bl-mopd-h200` (iter ~39.4k at
   07:11 UTC, ETA ~17:10 UTC).
+
+## DONE (2026-09-15 ~06:00 UTC, peer): USDNet 1 cm — masks appear, articulation collapses
+
+`20260914_usdnet_v1cm` (peer; train crops 3.0 m + 450k-point cap forced by the articulation head's memory at 1 cm; best-val
+epoch 139): under the paper protocol axis@0.25 41.9, origin 1.551 m, mIoU 0.135, PDet 21.3 (2 cm: 5.4), +M 17.9, +MA 0.6,
++MAO 0.6, MA 7.8 (2 cm: 21.8), MAO 7.8. Table II row filled, reading sentence added ("starts to segment the elements but
+its axis votes flip more often"), Fig. 4 USDNet column rendered from `results/usdnet_v1cm/preds.jsonl` (v6 composite, now
+with the Baselines/Ours header) — Overleaf 09d0332. Only MOPD 512 pending (peer ETA ~18:30 UTC). Deviations to state in
+the paper's baseline appendix if we add one: crops/point cap for USDNet 1 cm.

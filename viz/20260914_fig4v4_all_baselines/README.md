@@ -29,6 +29,11 @@ else the NEAREST one (mask centroid to GT centroid) flagged `fallback: nearest` 
 here; the renderer labels such panels "nearest instance, axis error N". OPDFormer-P on the oven door: 100 detections
 in the frame, nearest 37 px away at score 0.00, axis error 83 deg. Composite now `fig_sf3d_qual_v5.png` (Overleaf f88d2c8).
 
+**Update (2026-09-15 ~06:00 UTC).** USDNet 1 cm landed -> real column from `$R/usdnet_v1cm/preds.jsonl` (its scene
+instances projected; no instance on the oven door). Composite `fig_sf3d_qual_v6.png` (Overleaf 09d0332) now also carries
+the Baselines / Ours column-group header (`compose_panels --col-groups "Baselines:1-6,Ours:7-7"`). Strips are now named
+`NN_sf3d_<rot|trans>_J.png` (renderer prefixes the source). Only MOPD 512 is still a placeholder.
+
 **Files.** `NN_<rot|trans>_valJ.png` = 8-panel strip; `..._<column>.png` single panels. Composite with column labels:
 `viz/20260914_paper_figures/fig_sf3d_qual_v4.png` = Overleaf `figures/fig_sf3d_qual.png` (commit b1b1b03).
 
