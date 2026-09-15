@@ -2216,3 +2216,16 @@ not the same metric), fill notes/INDEX, add the row to the paper's Table III (or
 Paper: float placement fixed (main.tex float fractions/counters, [!t]) — Tables II-IV had drifted to the last page.
 Peer update (2026-09-15 02:10 UTC): MOPD 512 moved to an H200 (user request), training end ~18:00 UTC, preds/CSV/hand-video
 exports ~19:00 UTC (was ~23:30); paths unchanged. USDNet 1 cm ETA ~08:30 UTC.
+
+## 2026-09-15 02:15 UTC — MOPD 512 moved to a single H200 (user request)
+
+- `bl-mopd-h200` (t0ht94598bv263, H200, AP-JP-1 volume `bl-apjp`, $4.59/h) resumed `mopd512_rgb` from
+  `model_0029999.pth` at 02:02 UTC: 1.9-2.0 s/iter vs 2.73 on the A100 (faster host CPU + GPU; the
+  step is CPU-bound). Timing tool: `runpod/baselines/mopd/time_smoke.sh`. RGB train/valid/test h5 +
+  annotations copied to the JP volume (md5-verified); A100 pod `bl-mopd512` killed at iter 32.5k and
+  deleted once the H200 passed 30.2k cleanly. Watcher `watch_chain.sh bl-mopd-h200` copies results to
+  the JP volume's `results/mopd512_rgb` and deletes the pod; results then need copying back to the
+  main volume (`runs/mopd512_rgb`, `results/mopd512_rgb`) before scoring / hand-video export.
+- ETA: training end ~18:00 UTC (20:00 CEST), test + preds ~18:30 UTC; scoring, CSV, INDEX/notes and
+  the Fig. 5 hand-video export (needs an OPD-env pod: `handvideo_opd.sh mopd512_rgb mopd_rgb` +
+  `handvideo_export.py opd --nearest ...`) follow. Peer session informed.

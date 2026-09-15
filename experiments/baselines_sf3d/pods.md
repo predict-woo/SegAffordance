@@ -40,7 +40,8 @@ DELETE the pod on CHAIN_DONE.
 | pod | id | GPU | $/hr | run | started (UTC) |
 |---|---|---|---|---|---|
 | bl-opd512-c | 6w98k0sr3v4cma | A100-SXM4-80GB | 1.59 | opd512_c_rgbd (OPDFormer-C RGB-D 512x384) | 00:26; CHAIN_DONE 17:21, deleted 17:22 UTC (~$27) |
-| bl-mopd512 | az2ad8iqoruhd5 | A100 80GB PCIe | 1.59 | mopd512_rgb (MOPD, OPDFormer schedule, 512x384) | ~00:33 |
+| bl-mopd512 | az2ad8iqoruhd5 | A100 80GB PCIe | 1.59 | mopd512_rgb (MOPD, OPDFormer schedule, 512x384) | ~00:33 Sep 14; killed at iter ~32.5k 02:12 UTC Sep 15 (moved to bl-mopd-h200 from model_0029999), deleted (~$41) |
+| bl-mopd-h200 | t0ht94598bv263 | H200 (AP-JP-1, volume bl-apjp; Xeon 8460Y+ host) | 4.59 | mopd512_rgb RESUMED from model_0029999.pth at 02:02 UTC Sep 15: 1.9-2.0 s/iter vs 2.73 on the A100; data `opd_sf3d_512` train/valid/test h5 copied to the JP volume (md5-verified), depth not needed for RGB | 01:1x Sep 15; ETA training end ~18:00 UTC, results copied back to the main volume afterwards |
 | bl-opd512-prgb | 9r6p29cxu5gwtt | A100 80GB PCIe | 1.59 | opd512_p_rgb (OPDFormer-P RGB 512x384) | ~00:36; CHAIN_DONE 13:39, deleted 13:40 UTC (~$21) |
 | bl-usdnet1cm | d2z37fxh1uwutg | A100 80GB PCIe | 1.59 | usdnet_v1cm (USDNet 1 cm; conversion on the dev pod) | ~00:39 |
 

@@ -37,4 +37,20 @@ synchronisation (SyncBN + gradient all-reduce). Even on a fast host the projecte
 not worth a second lottery. Pod deleted 22:20 UTC (~$3); the original single-GPU run was never
 interrupted. The DDP tooling is kept (it works) for future multi-GPU MOPD runs.
 
+**Moved to an H200 (2026-09-15 02:02 UTC).** User asked for a single-H200 test. Pod `bl-mopd-h200`
+(t0ht94598bv263, AP-JP-1 on the `bl-apjp` volume, $4.59/h; Xeon Platinum 8460Y+ host, 3.7 GHz boost):
+`runpod/baselines/mopd/time_smoke.sh` resumed `model_0029999.pth` for 100 iterations on a 320-image
+subset -> 1.90 s/iter (2.73 s/iter on the A100 at the same point; the CPU-bound step benefits from the
+faster host CPU as much as from the GPU). The dataset needed for RGB training (`train/valid/test.h5`
++ annotations, 23 GB; the RGB mapper never opens `depth.h5`) was copied to the JP volume with 10
+parallel ssh streams (~80 MB/s aggregate) and md5-verified against the main volume. The chain was
+then resumed on the H200 with `RESUME=1 NPROC=1` (same config, same batch 16, `--resume` from
+`last_checkpoint`; detectron2 does not restore the sampler state, so the shuffle order after 30k
+differs from what the A100 would have drawn -- the same situation as any resume; losses at
+30019-30199 in the same band as the A100 log). With the user's OK the A100 run was killed at iter
+~32.5k (2,500 iterations redone, ~1.3 h) once the H200 had passed iteration 30,180 with 2.0 s/iter,
+no errors and identical memory. Training end ~18:00 UTC 2026-09-15 (was ~23:00 UTC); ~$44 more.
+Results (`model_final.pth`, `test/`, `preds.jsonl`, logs) are copied back to the main volume's
+`runs/mopd512_rgb` / `results/mopd512_rgb` when the chain finishes.
+
 **Result.** pending.
