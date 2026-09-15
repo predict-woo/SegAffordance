@@ -101,6 +101,10 @@ def prediction(key, kin_id, line_xyxy, mask, depth, K, info, score=1.0):
     """One instance -> JSONL record. ``mask`` (H=768, W=1024) bool, ``depth`` metres (-1 holes),
     ``K`` = K_out, ``info`` = frames_test.json entry."""
     rec = {"key": key, "matched": False, "score": float(score), "mask_rle": None, "type": None, "axis_cam": None, "origin_cam": None}
+    # the raw predicted 2D line (normalised xyxy in the 1024x768 image; -1s when their head emitted
+    # none) and kinematic id, so figures can draw the undirected axis even without depth
+    rec["line_2d"] = [float(x) for x in line_xyxy] if line_xyxy is not None else None
+    rec["kin_id"] = int(kin_id)
     if mask.any():
         rec["mask_rle"] = C.rle_encode(unroll_mask(mask, info["wh"], info["rotated"]))
     if kin_id not in KIN_TYPE:
@@ -139,7 +143,11 @@ def run(repo, ckpt, data, out, split="test", limit=None, batch=2, workers=4, dev
 
     sys.path.insert(0, str(repo))
     from monoarti import axis_ops
+    import monoarti.dataset as _mds
     from monoarti.dataset import prepare_datasets
+    # their __getitem__ joins image paths onto the module-level DEFAULT_DATA_ROOT, not the data_root
+    # argument (and retries a random entry on failure -> RecursionError); point it at our stage
+    _mds.DEFAULT_DATA_ROOT = str(data)
     from monoarti.detr import box_ops
     from monoarti.model import build_model
 

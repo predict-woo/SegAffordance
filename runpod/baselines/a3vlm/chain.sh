@@ -158,6 +158,20 @@ EOF
     export_all "${EVAL_CKPT:-$(newest_epoch)}" ${NAME}_test $DATA
     touch $RUNS/CHAIN_DONE; echo "== $(date -u) CHAIN_DONE $NAME (eval)"
     ;;
+  eval_hv)
+    # Hand-video frames for the paper's Fig. 5 (2026-09-15): REC -> make-joint -> REG-Joint on the
+    # questions in $HV_Q (handvideo_stage.py a3vlm), no GT-box set, then the chained export.
+    ck="${EVAL_CKPT:-$(newest_epoch)}"; out=$RUNS/eval_hv; mkdir -p $out; q="${HV_Q:?}"
+    evaluate $q/rec_test.json $ck hv
+    python $SEG/tools/baselines_sf3d/run.py $SEG/tools/baselines_sf3d/a3vlm_preds_to_jsonl.py make-joint \
+      --rec-results $R/vqa_logs/hv/rec_test.json --rec-questions $q/rec_test.json --out $out/joint_pred_test.json
+    evaluate $out/joint_pred_test.json $ck hv
+    python $SEG/tools/baselines_sf3d/run.py $SEG/tools/baselines_sf3d/a3vlm_preds_to_jsonl.py export \
+      --joint-results $R/vqa_logs/hv/joint_pred_test.json --joint-questions $out/joint_pred_test.json \
+      --meta $q/meta_test.json --out $out/preds_chain.jsonl
+    cp $R/vqa_logs/hv/rec_test.json $out/rec_answers.json; cp $R/vqa_logs/hv/joint_pred_test.json $out/joint_answers.json
+    wc -l $out/preds_chain.jsonl; touch $RUNS/HV_DONE; echo "== $(date -u) HV_DONE $NAME"
+    ;;
   eval_joint_pred)
     # Re-generate ONLY the chained REG-Joint answers for a corrected question file ($JOINT_Q).
     # Needed 2026-09-13: the chain's make-joint ran with a pre-e68b5da exporter that parsed their
