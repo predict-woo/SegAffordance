@@ -2167,3 +2167,8 @@ depth) on them -> `results/<model>/handvideo_preds.jsonl` (schema as SF3D + data
 (no scan). User: fastest possible, multiple pods OK. Next: user picks samples; write a Fig. 3-style hand-video renderer
 over the dumps (viz_fig4_panels-like, 2D track as GT motion, no GT axis except ARCTIC) and compose Fig. 5.
 Sampler fix in hoi4d_predict_articulation.py: `--per-seq` rounds now take one pick per sequence while records remain.
+Peer plan for the Fig. 5 baseline columns (2026-09-14 22:20 UTC, user pre-authorised pods): (1) OPDFormer-P 512 all sources +
+OPDFormer-C 512 HOI4D on one A100 (mini MotionDataset_h5, letterboxed 512x384, masks mapped back to the 512x512 frame), ETA
+~2-3 h; (2) 3DOI (own env pod), ~2 h after; (3) A3VLM chain on a 2xH200 AP-JP-1 pod (~$10-15; EPIC/ARCTIC rows unprojected with
+a nominal depth and flagged), ~3-4 h after (1); (4) MOPD 512 after its training (~Sep 15 23:30 UTC). Outputs
+`/workspace/datasets/baselines/results/<model>/handvideo_preds.jsonl`.
