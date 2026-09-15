@@ -2359,3 +2359,14 @@ dense 36.7 (31.2) [43.5 / 28.5]; chance 57.3. Previous pass: 40.0 / 40.6 / 43.4.
 (the SF3D-only model is level with the final model on EPIC); the noproj model is worst, as on HOI4D/ARCTIC. Revolute records
 are the weak half for every model (43-48 deg); cupboard doors in P06_05 and P18/P20 remain the largest errors. Not in the
 paper. Remaining flagged records not re-saved: 0 (P01_03), 15 (P02_121_57), 21-24 (P06_05), 35 (P18_02), 36 (P20_03), 40 (P22_107).
+
+## Paper: EPIC axis column in Table III + rename to EgoArt (2026-09-16)
+
+User decision: the hand-annotated EPIC axis column DOES go into Table III for consistency (35.7 / 39.9 / 36.7), marked * with
+the caption and appendix stating it is indicative only (53 records, unsigned, our own annotations). Text: EPIC fixtures are
+SceneFun3D's objects, so all three models sit in one band; the column separates models from chance, not from each other.
+Model renamed AFUN -> **EgoArt** (`\method` = `EgoArt`, plain, no small caps); title is now "Learning 3D Articulation
+Affordances from Egocentric Human Interaction Videos" (set by the user on Overleaf). Reason: AFUN is an existing paper
+(Wang et al. 2026, arXiv:2606.02551), cited in related work. Figures re-composed with the new label (no re-render of strips):
+Fig. 4 = `viz/20260914_paper_figures/fig_sf3d_qual_v9.png`, Fig. 5 = `fig_handvideo_qual_v4.png` (same compose commands as
+v8/v3 with label EgoArt; MOPD still pending). Table III tabcolsep 1.6 -> 1.0pt to fit the ninth column.
