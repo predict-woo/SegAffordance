@@ -34,9 +34,10 @@ COMMON="--baseline OPDFormer-P $R/opd512_p_rgb/handvideo_preds_nearest.jsonl --b
 for spec in "arctic 270 1224" "epic 226" "hoi4d 2366 633"; do set -- $spec; src=$1; shift
   CUDA_VISIBLE_DEVICES= python tools/viz_fig4_panels.py --source $src --baseline OPDFormer-C $R/opd512_c_rgbd/handvideo_preds_nearest.jsonl \
     $COMMON --ours sf3d_only $D/$src/preds.jsonl --ours dense $D/$src/preds.jsonl --idx $@ --out $S; done
-python tools/compose_panels.py --out viz/20260914_paper_figures/fig_handvideo_qual_v2.png --panel-aspect 1.33333 --row-height 220 --gap 6 \
-  --labels "Ground truth,OPDFormer-C,OPDFormer-P,MOPD,USDNet,A3VLM,3DOI,SceneFun3D only,ARTHUR" \
+# USDNet column (index 4 in the strips) dropped from the paper figure (user, 2026-09-15): needs a scan, said in the caption
+python tools/compose_panels.py --out viz/20260914_paper_figures/fig_handvideo_qual_v2.png --panel-aspect 1.33333 --cols 0,1,2,3,5,6,7,8 --row-height 220 --gap 6 \
+  --labels "Ground truth,OPDFormer-C,OPDFormer-P,MOPD,A3VLM,3DOI,SceneFun3D only,ARTHUR" \
   --row-labels "out of distribution,in distribution,in distribution,out of distribution,in distribution" \
-  --col-groups "Baselines:1-6,Ours:7-8" --row-groups "ARCTIC:0-1,EPIC:2,HOI4D:3-4" \
+  --col-groups "Baselines:1-5,Ours:6-7" --row-groups "ARCTIC:0-1,EPIC:2,HOI4D:3-4" \
   $S/00_arctic_rot_270.png $S/01_arctic_rot_1224.png $S/00_epic_trans_226.png $S/00_hoi4d_trans_2366.png $S/01_hoi4d_trans_633.png
 ```
