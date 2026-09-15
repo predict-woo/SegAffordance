@@ -2275,3 +2275,6 @@ experiment (20260914_joint4_decoder_dense_sampledtraj) stays in INDEX/notes/CSV.
 Tables III/V axis columns switched to the IoU 0.25 definition (mlp1024 cell pending the rerun probe on pod-local disk —
 the first run's CSV on the network volume came back with 232 KB of NUL bytes and ~1,600 rows lost: write probe outputs
 to /root and cp).
+mlp1024 per-sample probe DONE (rerun on pod-local disk, 5,088 rows, no NULs) and merged into `sf3d_per_sample_metrics.csv`
+(ten checkpoints now). Axis@IoU0.25 19.9 (0.5: 18.1), MA 36.9, origin 0.301, mIoU 0.239, PDet25 43.0. Table V cell filled
+(Overleaf b6b05df): Tables II, III and V all use the unsigned axis error on IoU>=0.25 frames.
