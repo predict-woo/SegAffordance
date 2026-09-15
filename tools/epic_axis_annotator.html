@@ -42,6 +42,8 @@ const bar = document.getElementById("bar"), listEl = document.getElementById("li
 const renderer = new THREE.WebGLRenderer({antialias: true});
 renderer.setPixelRatio(devicePixelRatio); renderer.setSize(innerWidth, innerHeight); document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
+const world = new THREE.Group(); scene.add(world);   // clouds + markers; rotated so the record's gravity estimate is +y
+let home = {yaw: 0, pitch: 0};
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.01, 100);
 camera.rotation.order = "YXZ";
 addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
@@ -57,27 +59,34 @@ const toCam = v => [v.x, -v.y, -v.z];
 // axis visuals: two spheres + one long line; face visuals: three small spheres + a translucent triangle
 const sphGeo = new THREE.SphereGeometry(0.012, 16, 12);
 const sph = [new THREE.Mesh(sphGeo, new THREE.MeshBasicMaterial({color: 0x00ff66})), new THREE.Mesh(sphGeo, new THREE.MeshBasicMaterial({color: 0xff3366}))];
-sph.forEach(s => { s.visible = false; scene.add(s); });
+sph.forEach(s => { s.visible = false; world.add(s); });
 const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
-const line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({color: 0xffff00})); line.visible = false; line.frustumCulled = false; scene.add(line);
-const faceSph = [0, 1, 2].map(() => { const m = new THREE.Mesh(new THREE.SphereGeometry(0.008, 12, 8), new THREE.MeshBasicMaterial({color: 0x66ccff})); m.visible = false; scene.add(m); return m; });
+const line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({color: 0xffff00})); line.visible = false; line.frustumCulled = false; world.add(line);
+const faceSph = [0, 1, 2].map(() => { const m = new THREE.Mesh(new THREE.SphereGeometry(0.008, 12, 8), new THREE.MeshBasicMaterial({color: 0x66ccff})); m.visible = false; world.add(m); return m; });
 const triGeo = new THREE.BufferGeometry(); triGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(9), 3));
 const tri = new THREE.Mesh(triGeo, new THREE.MeshBasicMaterial({color: 0x66ccff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false}));
-tri.visible = false; tri.frustumCulled = false; scene.add(tri);
+tri.visible = false; tri.frustumCulled = false; world.add(tri);
 
-function resetView() { camera.position.set(0, 0, 0); yaw.v = 0; pitch.v = 0; camera.rotation.set(0, 0, 0); }
+function resetView() { camera.position.set(0, 0, 0); yaw.v = home.yaw; pitch.v = home.pitch; camera.rotation.set(pitch.v, yaw.v, 0); }
+function alignUp() {   // rotate the world so meta.up_cam (gravity, camera frame) becomes +y; the photo view becomes the home view
+  const u = meta && meta.up_cam ? toWorld(meta.up_cam).normalize() : new THREE.Vector3(0, 1, 0);
+  world.quaternion.setFromUnitVectors(u, new THREE.Vector3(0, 1, 0)); world.updateMatrixWorld(true);
+  const f = new THREE.Vector3(0, 0, -1).applyQuaternion(world.quaternion);   // the camera's optical axis in the aligned world
+  home = {yaw: Math.atan2(-f.x, -f.z), pitch: Math.asin(Math.max(-1, Math.min(1, f.y)))};
+}
 const locked = () => document.pointerLockElement === renderer.domElement;
 
 function status() {
   const r = records[cur] || {};
   const tl = r.type_label === 1 ? "rot" : "trans";
   const fields = meta && meta.n_fields ? `fields[G] ${showFields ? "on" : "off"}: ${meta.n_fields} pts, scale ${(+meta.fields_scale).toFixed(3)} (${meta.fields_frame}, off ${meta.fields_offset}, agree ${(+meta.fields_agree_frac).toFixed(2)})` : "fields: none";
+  const upS = meta && meta.up_cam ? `up: ${meta.up_source}` : "up: camera";
   const prog = mode === "axis" ? `picks ${picks.length}/2` : `face ${face.length}/3` + (face.length === 3 ? (picks.length === 2 ? ", axis set" : ", now click the face") : "");
   bar.innerHTML = `record <b>${cur + 1}/${records.length}</b>  key <b>${r.key}</b>  label ${tl}  |  mode <b class="mode">${mode.toUpperCase()}</b>  ` +
     `type <b class="${type}">${type}</b>  ${prog}  ` +
     (saved ? `<span class="ok">saved ${saved.saved_at} (${saved.type})</span>` : `<span class="no">not saved</span>`) +
     `  |  ${locked() ? "mouse locked (Esc frees)" : "click the view to lock the mouse"}  speed ${speed.toFixed(2)} m/s  size ${(ptSize * 1000).toFixed(1)} mm` +
-    `  depth[L] ${showDepth ? "on" : "off"}  ${fields}\n${r.desc || ""}`;
+    `  depth[L] ${showDepth ? "on" : "off"}  ${fields}  ${upS}\n${r.desc || ""}`;
   listEl.querySelectorAll("div").forEach((d, i) => d.className = i === cur ? "cur" : "");
 }
 
@@ -103,7 +112,7 @@ function faceNormalCam() {   // unit normal of the picked plane in the camera fr
   const n = b.clone().sub(a).cross(c.clone().sub(a));
   if (n.lengthSq() < 1e-12) return null;
   n.normalize();
-  const cp = toCam(camera.position), toEye = new THREE.Vector3(cp[0] - a.x, cp[1] - a.y, cp[2] - a.z);
+  const cp = toCam(camera.position.clone().applyQuaternion(world.quaternion.clone().invert())), toEye = new THREE.Vector3(cp[0] - a.x, cp[1] - a.y, cp[2] - a.z);
   if (n.dot(toEye) < 0) n.negate();
   return n;
 }
@@ -157,20 +166,20 @@ async function load(i) {
   xyz = new Float32Array(buf.slice(off, off + meta.n * 12)); off += meta.n * 12;
   rgb = new Uint8Array(buf, off, meta.n * 3); off += meta.n * 3;
   msk = new Uint8Array(buf, off, meta.n); off += meta.n;
-  for (const p of [points, fpoints]) if (p) { scene.remove(p); p.geometry.dispose(); }
-  points = makePoints(xyz, colors(), ptSize); points.visible = showDepth; scene.add(points);
+  for (const p of [points, fpoints]) if (p) { world.remove(p); p.geometry.dispose(); }
+  points = makePoints(xyz, colors(), ptSize); points.visible = showDepth; world.add(points);
   fpoints = null; fxyz = null;
   const nf = meta.n_fields || 0;   // second cloud: EPIC-Fields COLMAP points, already in this camera frame and scaled to metres
   if (nf > 0) {
     fxyz = new Float32Array(buf.slice(off, off + nf * 12)); off += nf * 12;
     const frgb = new Uint8Array(buf, off, nf * 3), fc = new Float32Array(nf * 3);
     for (let k = 0; k < nf * 3; k++) fc[k] = frgb[k] / 255;
-    fpoints = makePoints(fxyz, fc, ptSize * FIELDS_SIZE); fpoints.visible = showFields; scene.add(fpoints);
+    fpoints = makePoints(fxyz, fc, ptSize * FIELDS_SIZE); fpoints.visible = showFields; world.add(fpoints);
   }
   const a = records[i].annot;
   picks = a ? [a.p1, a.p2] : []; face = a && a.face ? a.face : []; if (a) mode = a.face ? "face" : "axis";
   type = a ? a.type : (meta.type_label === 1 ? "rot" : "trans"); saved = a || null;
-  thumbnail(); resetView(); drawAxis();
+  thumbnail(); alignUp(); resetView(); drawAxis();
 }
 
 async function save() {
@@ -185,11 +194,12 @@ async function save() {
 // ---- picking: screen-space nearest point over all VISIBLE points of both clouds (prefer the closest-to-camera
 //      point within a pixel radius); returns the unflipped camera-frame coordinates ------------------------------
 function pick(px, py) {
-  const m = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse), e = m.elements;
   const R = 8, w2 = innerWidth / 2, h2 = innerHeight / 2;
   const clouds = [[points, xyz], [fpoints, fxyz]].filter(([p]) => p && p.visible);
   let best = null, bestZ = 1e9, near = null, nearD = 1e9;
   for (const [p, src] of clouds) {
+    p.updateMatrixWorld(true);
+    const e = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, new THREE.Matrix4().multiplyMatrices(camera.matrixWorldInverse, p.matrixWorld)).elements;
     const pos = p.geometry.attributes.position.array, n = pos.length / 3;
     for (let i = 0; i < n; i++) {
       const x = pos[3 * i], y = pos[3 * i + 1], z = pos[3 * i + 2];

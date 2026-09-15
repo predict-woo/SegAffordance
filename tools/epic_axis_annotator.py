@@ -81,6 +81,8 @@ def encode_cloud(npz_path, rec):
     msk = np.ascontiguousarray(z["in_mask"], np.uint8)
     meta = dict(i=rec["i"], key=str(z["key"]), desc=str(z["desc"]), type_label=int(z["type_label"]), n=int(xyz.shape[0]),
                 point_uv=z["point_uv"].tolist(), K_render=z["K_render"].tolist(), size=z["size"].tolist(), n_fields=0)
+    if "up_cam" in z:   # gravity estimate from tools/epic_up_direction.py (unit vector, camera frame)
+        meta.update(up_cam=z["up_cam"].tolist(), up_source=str(z["up_source"]))
     tail = b""
     if "xyz_fields" in z.files and z["xyz_fields"].shape[0] > 0:  # EPIC-Fields overlay (tools/epic_fields_overlay.py)
         xf = np.ascontiguousarray(z["xyz_fields"], np.float32)
