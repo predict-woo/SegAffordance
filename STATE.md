@@ -2296,3 +2296,16 @@ epoch 139): under the paper protocol axis@0.25 41.9, origin 1.551 m, mIoU 0.135,
 its axis votes flip more often"), Fig. 4 USDNet column rendered from `results/usdnet_v1cm/preds.jsonl` (v6 composite, now
 with the Baselines/Ours header) — Overleaf 09d0332. Only MOPD 512 pending (peer ETA ~18:30 UTC). Deviations to state in
 the paper's baseline appendix if we add one: crops/point cap for USDNet 1 cm.
+
+## DONE (2026-09-15 07:10 UTC): supervisor ablation — human video WITHOUT the trajectory loss (pod jdec-noproj DELETED, verified)
+
+`20260915_joint4_decoder_dense_noproj` (final recipe, `loss_profiles.2d.trajectory_proj_weight 0`): ARCTIC axis **57.1**
+(chance 57.3; SF3D-only 56.6; final 45.8) -> the trajectory loss is the only channel through which hand video teaches 3D
+articulation. Side effects: SF3D MA 47.0 (vs 42.7), mIoU 0.291, PDet25 52.5, axis@0.25 14.2, origin 0.232; hand-video
+masks HOI4D 0.69 / EPIC 0.30 / ARCTIC 0.65 (vs 0.51 / 0.19 / 0.51): the projection loss competes with mask/type for the
+trunk, i.e. the final model pays ~4 MA and mask quality for articulation transfer. Paper: Table III row "+ video, masks
+and types only" + sentence in Sec. IV-C (Overleaf f2195ad). Files: notes.md, config.yaml, metrics.csv,
+arctic_axis_probe.csv, sf3d_per_sample_metrics.csv in the experiment dir. Probes were written to /root then copied
+(no NUL corruption). 2.07 it/s on the Server Edition (faster than the 1.48 first minutes suggested).
+Paper renamed 2026-09-15: \method = AFUN, title "AFUN: Towards an Affordance Foundation Model for Functionality
+Understanding" (Overleaf 6c68d6f); Figs 4-6 relabelled (v7 / v3 / v2 composites).
