@@ -2269,3 +2269,9 @@ with a prediction (ungated, unchanged). An all-frames variant (missing predictio
 was tried and REVERTED (Overleaf e9cf720 / 81f0eec). Bold: axis/origin/mIoU/PDet/+M/+MA/+MAO ours; MA/MAO A3VLM GT box.
 Tables III and V axis columns still at the trainer's IoU 0.5 definition; the mlp1024 probe needed to switch them was NOT
 launched (user stopped that tool call) — ask before running it.
+Paper (2026-09-15 ~05:00 UTC, user): the SAMPLED-TRAJECTORY-LOSS ablation is REMOVED from the paper entirely (Table V row
++ text; "imagine we never did that experiment"); the 3D-loss block is now direct losses vs closed form only. The
+experiment (20260914_joint4_decoder_dense_sampledtraj) stays in INDEX/notes/CSV. Also removed all "seed noise" wording;
+Tables III/V axis columns switched to the IoU 0.25 definition (mlp1024 cell pending the rerun probe on pod-local disk —
+the first run's CSV on the network volume came back with 232 KB of NUL bytes and ~1,600 rows lost: write probe outputs
+to /root and cp).
