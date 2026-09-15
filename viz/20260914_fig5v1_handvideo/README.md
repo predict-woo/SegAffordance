@@ -41,3 +41,7 @@ python tools/compose_panels.py --out viz/20260914_paper_figures/fig_handvideo_qu
   --col-groups "Baselines:1-5,Ours:6-7" --row-groups "ARCTIC:0-1,EPIC:2,HOI4D:3-4" \
   $S/00_arctic_rot_270.png $S/01_arctic_rot_1224.png $S/00_epic_trans_226.png $S/00_hoi4d_trans_2366.png $S/01_hoi4d_trans_633.png
 ```
+
+**Update (2026-09-16).** MOPD 512 landed -> `--baseline MOPD $R/mopd512_rgb/handvideo_preds_nearest.jsonl` (nearest-centroid
+fallback on the microwave door and both HOI4D rows, labelled "nearest instance"); composite `fig_handvideo_qual_v5.png`
+(label EgoArt, Overleaf d5b5ddf). No column is pending any more.

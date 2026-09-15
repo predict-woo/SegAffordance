@@ -58,3 +58,8 @@ python tools/compose_panels.py --out viz/20260914_paper_figures/fig_sf3d_qual_v8
   --row-height 240 --gap 6 --labels "Ground truth,AFUN,OPDFormer-C,OPDFormer-P,MOPD,USDNet,A3VLM,3DOI" --col-groups "Ours:1-1,Baselines:2-7" \
   $S/00_sf3d_rot_1684.png $S/01_sf3d_rot_113.png $S/02_sf3d_trans_3726.png $S/03_sf3d_trans_403.png
 ```
+
+**Update (2026-09-16).** MOPD 512 landed (`$R/mopd512_rgb/preds.jsonl`, oracle instance; all four frames matched, axis
+errors 5 / 44 / 13 / 16 deg) -> strips re-rendered with every column real; composite `fig_sf3d_qual_v10.png` (label EgoArt,
+Overleaf d5b5ddf). Same render command as above with `--baseline MOPD $R/mopd512_rgb/preds.jsonl`, `--baseline USDNet
+$R/usdnet_v1cm/preds.jsonl`, `--baseline 3DOI $R/3doi_runpod/preds.jsonl` and the `preds_nearest_opd512_*` files for the OPDFormers.

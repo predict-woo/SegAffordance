@@ -2409,3 +2409,12 @@ controls in the paper; the full-protocol numbers for noproj/sf3d_only remain in 
 - No baseline pods remain (only segaffordance-dev). Open: Euler 3DOI replicate read-out (VPN still
   down), volumes bl-apjp / bl-eufr pending the user's OK to delete (bl-apjp now also holds the 23 GB
   opd_sf3d_512 RGB copy and the MOPD checkpoints).
+
+## MOPD 512 in the paper (2026-09-16, Overleaf d5b5ddf)
+
+Peer session delivered `experiments/baselines_sf3d/20260914_mopd_rgb_512_full` (repo commit 519b024). Table II row under our
+protocol (recomputed from its per-sample CSV with the same function that reproduces the OPD-C/OPD-P 512 rows exactly):
+MOPD RGB 512 = axis 31.0 / origin 0.666 / mIoU 0.357† / PDet 61.4† / +M 56.5 / +MA 14.9 / +MAO 10.3 / MA 17.2 / MAO 11.6
+(conf>0.5 PDet@0.25 = 5.4, inside the "3.9 to 7.1" range already in the text). Fig. 4 = `fig_sf3d_qual_v10.png`, Fig. 5 =
+`fig_handvideo_qual_v5.png`, all columns real. Every Table II / Fig. 4 / Fig. 5 todo is gone; remaining red todos: the
+conclusion and a commented analysis note. No baseline pods remain (peer).
