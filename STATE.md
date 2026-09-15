@@ -2256,3 +2256,10 @@ after origin and after +MAO; "not comparable" note over the mask/detection colum
 pending rows (MOPD 512, USDNet 1 cm) land, compute them with IoU 0.25 / 10 cm from their CSVs. Any other PDet in the
 paper (Table V ablations, Table III) is mIoU-only or unaffected; `tools/sf3d_mao_probe.py --summarize` still defaults
 to 0.5 / 0.25 — pass `--iou 0.25` and read the 0.10 column for paper numbers.
+Table II axis column (2026-09-15 ~03:50 UTC): now the UNSIGNED axis error over DETECTED frames (IoU >= 0.25; was IoU > 0.5,
+the harness's `_test_axis_errors_matched` = peer's `err_adir_matched_deg`, verified identical from the CSVs). Values: OPD-C
+23.1, OPD-P RGB-D 35.4, OPD-P RGB 32.5, MOPD 32.9, USDNet 9.3 (only its 5 % detected frames; noted in text), OPD-C 512 19.2,
+OPD-P 512 31.8, A3VLM 16.5, A3VLM box 18.9, 3DOI 30.5 (§ dropped: column is unsigned for all), ours 13.9 (was 11.4).
+Bold MA/MAO now on the A3VLM GT-box row (those columns are not marked non-comparable). CAVEAT: Tables III and V still quote
+axis errors from the trainer at IoU 0.5 (e.g. 11.4 / 15.2, readout rows) — mlp1024 has no per-sample CSV yet; switch them
+to 0.25 when convenient (probe mlp1024 first).
