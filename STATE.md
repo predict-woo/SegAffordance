@@ -2200,3 +2200,17 @@ Overleaf `figures/fig_handvideo_qual.png` (e834e51), caption rewritten (\todo le
 Reading: detectors barely overlap hand-video parts (nearest instances shown); A3VLM boxes on the hand / wrong object;
 3DOI segments the part when given its centre but no joint; SF3D-only calls the laptop prismatic and misses toy car and
 drawer; ARTHUR gets mask + type + motion, hinge across the laptop lid (placement limit).
+
+## IN FLIGHT (2026-09-15 ~02:00 UTC): supervisor ablation — human video WITHOUT the trajectory loss
+
+Supervisor's request (Taein, via user): fill the middle row of | SF3D only 56.6 | + video mask/type only ? | + video
+mask/type/trajectory 45.8 | (ARCTIC axis error). Arm `dense_noproj` = the final dense recipe with
+`loss_profiles.2d.trajectory_proj_weight: 0.0` (hand-video batches keep mask, type and point-heatmap terms only):
+`config/joint4_decoder_dense_noproj.yaml`, `run_joint4dec_dense_noproj_chain.sh`, exp `20260915_joint4_decoder_dense_noproj`
+(made by tools/make_joint_arm.py --profile 2d:trajectory_proj_weight=0.0). Dev-pod smoke: 3-batch fast_dev_run trains and
+validates with finite losses. PRO 6000 stock was empty at 01:58 UTC: a poller (scratchpad launch_jdec_noproj.sh under the
+Monitor tool) retries `train_pod.sh create jdec-noproj` every 5 min (48 tries), then launches the chain detached and
+reports; VERIFY the pod list afterwards (creates can silently succeed). After CHAIN_DONE: delete the pod, run
+`tools/arctic_axis_probe.py` on the best ckpt (unsigned axis mean = the table's number; the chain's test_arctic log is
+not the same metric), fill notes/INDEX, add the row to the paper's Table III (or a new line in the transfer text).
+Paper: float placement fixed (main.tex float fractions/counters, [!t]) — Tables II-IV had drifted to the last page.
