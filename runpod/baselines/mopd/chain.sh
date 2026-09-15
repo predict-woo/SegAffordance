@@ -15,7 +15,7 @@ export TMPDIR=/workspace/tmp; mkdir -p $RUNS $LOGS /workspace/tmp
 # SyncBatchNorm so the batch statistics are unchanged. RESUME=1 continues from $RUNS/last_checkpoint.
 NPROC="${NPROC:-$(nvidia-smi -L | wc -l)}"
 python /workspace/SegAffordance/runpod/baselines/mopd/patch_ddp.py $R/train.py
-while [ ! -f $INIT_RUN/model_final.pth ]; do echo "$(date -u +%H:%M) waiting for opd_p_rgb model_final.pth"; sleep 300; done
+[ -f $RUNS/init.pth ] || while [ ! -f $INIT_RUN/model_final.pth ]; do echo "$(date -u +%H:%M) waiting for opd_p_rgb model_final.pth"; sleep 300; done  # composed init present -> no wait (resume on another volume)
 echo "== $(date -u) MOPD chain ($NAME, data $DATA, init $INIT_RUN, schedule ${SCHEDULE:-mopd}, gpus $NPROC, resume ${RESUME:-0}) on $(nvidia-smi --query-gpu=name --format=csv,noheader)"
 cd /workspace/SegAffordance
 [ -f $RUNS/init.pth ] || python tools/baselines_sf3d/run.py tools/baselines_sf3d/mopd_compose_ckpt.py --opd $INIT_RUN/model_final.pth --esam $B/ckpt/efficient_sam_vits.pt --mopd-repo $B/repos/MOPD --out $RUNS/init.pth
