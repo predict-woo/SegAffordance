@@ -1,0 +1,69 @@
+command: tools/hoi4d_predict_articulation.py --dataset hoi4d --model sf3d_only config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  experiments/20260913_sf3d_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval1.1144.ckpt
+  --model dense config/sf3d_test_decoder_rgb_scalefree_dense.yaml experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
+  --num 50 --per-seq 2 --seed 5 --scale 2 --out viz/20260914_fig5_handvideo_50/hoi4d
+  --dump viz/20260914_fig5_handvideo_50/hoi4d/preds.jsonl --export /workspace/datasets/handvideo_fig5_samples/hoi4d
+tool_commit: 354c75f
+generated: '2026-09-15T00:19:59+00:00'
+models:
+- name: sf3d_only
+  config: config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  ckpt: experiments/20260913_sf3d_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval1.1144.ckpt
+- name: dense
+  config: config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  ckpt: experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
+dataset: hoi4d
+seed: 5
+picks:
+- 1115
+- 2559
+- 1705
+- 1054
+- 260
+- 2521
+- 1336
+- 2405
+- 1149
+- 2807
+- 2073
+- 1637
+- 884
+- 377
+- 2225
+- 2177
+- 1779
+- 427
+- 1013
+- 465
+- 1366
+- 808
+- 1181
+- 1674
+- 830
+- 955
+- 317
+- 2366
+- 1120
+- 2188
+- 1463
+- 1460
+- 270
+- 51
+- 1173
+- 503
+- 633
+- 2531
+- 2221
+- 428
+- 1051
+- 1798
+- 97
+- 2250
+- 2564
+- 1235
+- 2684
+- 1927
+- 285
+- 849
+dump: viz/20260914_fig5_handvideo_50/hoi4d/preds.jsonl
+export: /workspace/datasets/handvideo_fig5_samples/hoi4d

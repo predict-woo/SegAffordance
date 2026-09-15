@@ -2155,3 +2155,15 @@ per-query Python loops (1 thread at 107 %, GPU 18 %). Built and verified a 2-GPU
 validation reproduces the 1-GPU run), but 2 x A100 PCIe gave 3.1 s/iter vs 2.67 on 1 GPU: the landed host was a
 CPU-quota VM 1.7x slower per thread, and DDP adds ~0.6 s/iter of sync; projected gain on a fast host ~1.3x only.
 Extra pod deleted (~$3); original run untouched, ETA ~23:30 UTC Sep 15. Details in the run's notes.
+
+## DONE (2026-09-14 ~22:10 UTC): Fig. 5 candidates — 50 frames per hand source, both our models, dumps + baseline request
+
+`viz/20260914_fig5_handvideo_50/{hoi4d,epic,arctic}`: 50 held-out records each (seed 5, spread over sequences), panels
+`[GT | sf3d_only | dense]` for picking, and tracked `preds.jsonl` dumps (`tools/hoi4d_predict_articulation.py --dump`).
+`--export` wrote the model inputs (frame_512.png, gt_mask_512.png, HOI4D depth npy, samples.jsonl with K/desc/point/track)
+to `/workspace/datasets/handvideo_fig5_samples/<src>/` (151 MB, volume only). Sent the peer (pod-copy-and-protocol-scoring)
+the request to run OPDFormer-C 512 (HOI4D only, depth), OPDFormer-P 512, MOPD 512, A3VLM chain, 3DOI (2D line where no
+depth) on them -> `results/<model>/handvideo_preds.jsonl` (schema as SF3D + dataset/sample, 3DOI + line_2d); USDNet n/a
+(no scan). User: fastest possible, multiple pods OK. Next: user picks samples; write a Fig. 3-style hand-video renderer
+over the dumps (viz_fig4_panels-like, 2D track as GT motion, no GT axis except ARCTIC) and compose Fig. 5.
+Sampler fix in hoi4d_predict_articulation.py: `--per-seq` rounds now take one pick per sequence while records remain.

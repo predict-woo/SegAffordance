@@ -31,3 +31,6 @@ viz/**
 !viz/*/*.csv
 !viz/*/preds.jsonl
 !viz/*/preds_*.jsonl
+!viz/*/*/
+!viz/*/*/preds.jsonl
+!viz/*/*/manifest.yaml

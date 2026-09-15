@@ -36,6 +36,7 @@ from datasets.scenefun3d import SF3DDataset, split_dataset_by_scene  # noqa: E40
 from model.losses.geometric import (  # noqa: E402
     apply_trajectory_scale, normalized_intrinsics, project_points, trajectory_scale_factor,
 )
+from sf3d_preds_io import out_to_record, write_record  # noqa: E402
 from sf3d_vis_predictions import (  # noqa: E402
     draw_axis_3d, draw_points_norm, draw_polyline_norm, load_model, overlay_mask, put_lines,
 )
@@ -71,6 +72,10 @@ def main():
     ap.add_argument("--ray-len", type=float, default=0.5,
                     help="metres of predicted axis drawn: trans = a ray of this length from the point, "
                          "rot = +/- this length about the hinge (drawn at the predicted depth z_p)")
+    ap.add_argument("--dump", default=None, help="JSONL: one tools/sf3d_preds_io.py record per model x sample (+ dataset), for GPU-free re-rendering")
+    ap.add_argument("--export", default=None, help="directory: per-sample model inputs for other sessions/baselines (frame_512.png as the model "
+                                                  "sees it, gt_mask_512.png, depth_512.npy when the source has depth) + samples.jsonl (key, desc, "
+                                                  "gt type, native size, K_norm, GT point uv, GT 2D track, ARCTIC GT axis/origin)")
     a = ap.parse_args()
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -105,7 +110,7 @@ def main():
             if len(picks) >= a.num:
                 break
             lst = by_seq[s]
-            if rnd < len(lst):
+            if lst:   # one pick per sequence per round while the sequence has records left (--per-seq rounds)
                 j = int(rng.integers(len(lst)))
                 picks.append(lst.pop(j))
     print(f"{len(cand)} {a.category or 'any'} records in {a.split} ({len(by_seq)} sequences); rendering {len(picks)}")
@@ -114,12 +119,33 @@ def main():
     field_names = {x for x in a.field_names.split(",") if x}
     models = [(n, *(load_field_model if (a.field or n in field_names) else load_model)(c, k, device)) for n, c, k in a.model]
     os.makedirs(a.out, exist_ok=True)
+    fdump = open(a.dump, "w") if a.dump else None
+    fexp = None
+    if a.export:
+        os.makedirs(a.export, exist_ok=True)
+        fexp = open(f"{a.export}/samples.jsonl", "w")
     for n_i, idx in enumerate(picks):
         it = ds[idx]
         (img_t, depth_t, desc, mask_t, _bbox, point_gt, mgt, tgt, img_size, fname,
          o3, K, _traj3d, traj2d_px, valid2d) = it
         gt_type = "rot" if int(tgt) == 1 else "trans"
         W, H = float(img_size[0]), float(img_size[1])
+        raw_key = ds.item_keys[idx].decode()
+        if fexp is not None:
+            import json
+            sid = f"{n_i:02d}_{a.dataset}"
+            cv2.imwrite(f"{a.export}/{sid}_frame_512.png", img_t.permute(1, 2, 0).numpy()[:, :, ::-1])
+            cv2.imwrite(f"{a.export}/{sid}_gt_mask_512.png", (mask_t[0].numpy() > 0.5).astype(np.uint8) * 255)
+            has_depth = bool(depth_t is not None and float(depth_t.abs().max()) > 0)
+            if has_depth:
+                np.save(f"{a.export}/{sid}_depth_512.npy", depth_t[0].numpy().astype(np.float32))
+            Kn = normalized_intrinsics(K[None].float(), img_size[None].float())[0]
+            rec = {"sample": sid, "dataset": a.dataset, "key": raw_key, "val_idx": int(idx), "desc": desc, "gt_type": int(tgt),
+                   "native_wh": [int(W), int(H)], "K_native": K.float().tolist(), "K_norm": Kn.tolist(), "has_depth": has_depth,
+                   "point_uv": point_gt.float().tolist(),
+                   "track_px_native": traj2d_px.float().tolist(), "track_valid": valid2d.bool().tolist(),
+                   "gt_axis_cam": mgt.float().tolist() if has_gt_axis else None, "gt_origin_cam": o3.float().tolist() if has_gt_axis else None}
+            fexp.write(json.dumps(rec) + "\n"); fexp.flush()
         frame = img_t.permute(1, 2, 0).numpy()[:, :, ::-1].copy()
         if a.scale != 1.0:
             frame = cv2.resize(frame, None, fx=a.scale, fy=a.scale, interpolation=cv2.INTER_CUBIC)
@@ -153,6 +179,9 @@ def main():
                             None, None, None, None, K_norm.to(device).float())
                 if getattr(mp, "trajectory_scale_free", False):
                     out = apply_trajectory_scale(out, trajectory_scale_factor("pred_z_p", out, None))
+            if fdump is not None:
+                rec = out_to_record(out, name, idx, raw_key, desc, int(tgt)); rec["dataset"] = a.dataset; rec["sample"] = f"{n_i:02d}_{a.dataset}"
+                write_record(fdump, rec)
             p = frame.copy()
             pm = torch.sigmoid(out.mask_logits)[0, 0].cpu()
             pm = torch.nn.functional.interpolate(pm[None, None], size=(S, S), mode="bilinear")[0, 0].numpy()
@@ -199,7 +228,12 @@ def main():
         key = ds.item_keys[idx].decode().replace("/", "_")[:80]
         cv2.imwrite(f"{a.out}/{n_i:02d}_{a.dataset}_{gt_type}_{key}.png", np.hstack(panels))  # lossless
         print("wrote", n_i, key, "|", desc)
-    write_manifest(a.out, models=[{"name": n, "config": c, "ckpt": k} for n, c, k in a.model])
+    if fdump is not None:
+        fdump.close()
+    if fexp is not None:
+        fexp.close()
+    write_manifest(a.out, models=[{"name": n, "config": c, "ckpt": k} for n, c, k in a.model], dataset=a.dataset, seed=a.seed,
+                   picks=[int(i) for i in picks], dump=a.dump, export=a.export)
     print("done ->", a.out)
 
 
