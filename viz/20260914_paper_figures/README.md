@@ -12,6 +12,11 @@ Fig. 3 style, rendered from prediction dumps by `tools/viz_fig4_panels.py` (batc
 OPDFormer-C at 512), now the Overleaf `figures/fig_sf3d_qual.png`. `fig_sf3d_qual.png` (old samples, old style) and
 `fig_sf3d_qual_v2.png` (new samples, old style) are kept for reference.
 
+**Fig. 5 replaced (2026-09-14 late):** `fig_handvideo_qual_v2.png` = the user's five hand-video picks as 9-column rows
+(GT, OPDFormer-C, OPDFormer-P, MOPD pending, USDNet n/a, A3VLM, 3DOI, SceneFun3D-only, ARTHUR) with in/out-of-distribution
+row labels, Fig. 3 style from dumps; batch `20260914_fig5v1_handvideo`. Now the Overleaf `figures/fig_handvideo_qual.png`
+(commit e834e51). `fig_handvideo_qual.png` (old 3 x 3) kept for reference.
+
 **Fig. 4 again (2026-09-14 late):** `fig_sf3d_qual_v4.png` = one frame per row, eight columns (GT, OPDFormer-C 512,
 OPDFormer-P 512, MOPD, USDNet, A3VLM chain, 3DOI, ARTHUR; MOPD / USDNet / 3DOI grey placeholders until their runs
 land), ARTHUR's motion over the GT extent; batch `20260914_fig4v4_all_baselines`. Now the Overleaf

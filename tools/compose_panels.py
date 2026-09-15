@@ -20,10 +20,12 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--cols", default=None, help="comma-separated panel column indices to keep, in order (default all)")
     ap.add_argument("--labels", default=None, help="comma-separated column labels for a header row")
-    ap.add_argument("--panel-width", type=int, default=None, help="width of one panel in the strips (default: height, i.e. square panels)")
+    ap.add_argument("--panel-width", type=int, default=None, help="width of one panel in the strips (default: height x --panel-aspect)")
+    ap.add_argument("--panel-aspect", type=float, default=1.0, help="panel width / height when --panel-width is not given (4:3 crops: 1.3333)")
     ap.add_argument("--gap", type=int, default=8)
     ap.add_argument("--row-height", type=int, default=360, help="resize every row to this height")
     ap.add_argument("--strip-header", type=int, default=0, help="crop this many pixels off the top of each panel (removes the burnt-in text)")
+    ap.add_argument("--row-labels", default=None, help="comma-separated per-row labels, drawn rotated in a left margin (e.g. in / out of distribution)")
     ap.add_argument("--jpg", action="store_true")
     a = ap.parse_args()
     rows = []
@@ -32,7 +34,7 @@ def main():
         if im is None:
             raise SystemExit(f"cannot read {f}")
         h, w = im.shape[:2]
-        pw = a.panel_width or h
+        pw = a.panel_width or int(round(h * a.panel_aspect))
         n = w // pw
         panels = [im[:, i * pw:(i + 1) * pw] for i in range(n)]
         if a.strip_header:
@@ -46,7 +48,8 @@ def main():
         rows.append(panels)
     ncol = len(rows[0])
     colw = [max(r[c].shape[1] for r in rows) for c in range(ncol)]
-    W = sum(colw) + a.gap * (ncol + 1)
+    margin = 40 if a.row_labels else 0
+    W = margin + sum(colw) + a.gap * (ncol + 1)
     header = 0
     if a.labels:
         header = 44
@@ -54,15 +57,22 @@ def main():
     canvas = np.full((H, W, 3), 255, np.uint8)
     if a.labels:
         labels = a.labels.split(",")
-        x = a.gap
+        x = margin + a.gap
         for c in range(ncol):
             txt = labels[c] if c < len(labels) else ""
             (tw, th), _ = cv2.getTextSize(txt, cv2.FONT_HERSHEY_SIMPLEX, 0.9, 2)
             cv2.putText(canvas, txt, (x + (colw[c] - tw) // 2, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (20, 20, 20), 2, cv2.LINE_AA)
             x += colw[c] + a.gap
+    row_labels = a.row_labels.split(",") if a.row_labels else []
     y = header + a.gap
-    for panels in rows:
-        x = a.gap
+    for r_i, panels in enumerate(rows):
+        if row_labels:
+            txt = row_labels[r_i] if r_i < len(row_labels) else ""
+            strip = np.full((margin, a.row_height, 3), 255, np.uint8)   # draw horizontally, then rotate to read bottom-up
+            (tw, th), _ = cv2.getTextSize(txt, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
+            cv2.putText(strip, txt, ((a.row_height - tw) // 2, (margin + th) // 2), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (20, 20, 20), 2, cv2.LINE_AA)
+            canvas[y:y + a.row_height, 0:margin] = cv2.rotate(strip, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        x = margin + a.gap
         for c, p in enumerate(panels):
             canvas[y:y + p.shape[0], x:x + p.shape[1]] = p
             x += colw[c] + a.gap

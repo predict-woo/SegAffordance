@@ -2185,3 +2185,18 @@ SF3D-trained detectors barely find hand-video elements (mean IoU 0.02-0.05); 3DO
 IoU 0.39; A3VLM text chain 0.14/0.07/0.08; point_uv is inside the GT mask for only 14/150 samples (it is the
 hand-contact point), hence the centroid protocol. Three inference pods, ~$5 total, all deleted. MOPD 512 exports
 follow when its training ends (~23:30 UTC).
+
+## DONE (2026-09-14 ~23:40 UTC): Fig. 5 rebuilt — five picked hand-video frames, all baseline columns, from dumps
+
+User picks (from `viz/20260914_fig5_handvideo_50`): ARCTIC laptop 270 (out of distribution), ARCTIC microwave door 1224
+(in), EPIC drawer 226 (in), HOI4D toy car 2366 (out), HOI4D drawer 633 (in); rows labelled in/out (`compose_panels
+--row-labels`, `--panel-aspect` for 4:3 strips). Columns GT | OPD-C 512 | OPD-P 512 | MOPD (pending, ~Sep 15 23:30 UTC) |
+USDNet n/a | A3VLM chain | 3DOI (GT-mask-centroid prompt = Table II protocol; the hand-point prompt gave tiny masks) |
+SF3D-only | ARTHUR. Peer delivered all hand-video exports within ~1.5 h (`results/<model>/handvideo_preds*.jsonl`,
+nearest-instance fallbacks for the five keys, 3DOI centroid variant); pods deleted. Renderer `viz_fig4_panels.py` now
+takes `--source hoi4d|epic|arctic`, `na` placeholders, `no_depth` rows, 3DOI `line_2d`, per-source saved records
+(`preds_<source>_<model>.jsonl`). Batch `viz/20260914_fig5v1_handvideo`; composite `fig_handvideo_qual_v2.png` ->
+Overleaf `figures/fig_handvideo_qual.png` (e834e51), caption rewritten (\todo left for the MOPD column).
+Reading: detectors barely overlap hand-video parts (nearest instances shown); A3VLM boxes on the hand / wrong object;
+3DOI segments the part when given its centre but no joint; SF3D-only calls the laptop prismatic and misses toy car and
+drawer; ARTHUR gets mask + type + motion, hinge across the laptop lid (placement limit).

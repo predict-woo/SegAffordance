@@ -238,6 +238,8 @@ def main():
             if preds == "na":
                 render(frame, None, None, None, None, None, None, f, a.k, crop=crop, placeholder=f"{name}\nnot applicable"); panels.append(f); continue
             r = preds.get(key); used[name].append(r if r else {"key": key, "matched": False})
+            if r and r.get("no_depth"):
+                render(frame, None, None, None, None, None, None, f, a.k, crop=crop, placeholder=f"{name}\nneeds depth"); panels.append(f); continue
             if not r or not r.get("matched"):
                 if r and r.get("mask_rle"):   # e.g. 3DOI "freeform": a mask but no joint
                     bm = cv2.resize(mask_utils.decode(r["mask_rle"]).astype(np.uint8), (PW, PH), interpolation=cv2.INTER_NEAREST)
@@ -274,11 +276,11 @@ def main():
         ext = (f"| GT extent {math.degrees(extent):.0f} deg" if gt_type == 1 else f"| GT travel {extent:.2f} m") if extent is not None else ""
         print("wrote", tag, "|", fr["desc"][:60], ext)
     if not a.no_save_preds:
-        with open(f"{a.out}/preds_ours.jsonl", "w") as fo:
+        with open(f"{a.out}/preds_{a.source}_ours.jsonl", "w") as fo:
             for r in used_ours: fo.write(json.dumps(r) + "\n")
         for name, rs in used.items():
             if rs:
-                with open(f"{a.out}/preds_{name}.jsonl", "w") as fo:
+                with open(f"{a.out}/preds_{a.source}_{name}.jsonl", "w") as fo:
                     for r in rs: fo.write(json.dumps(r) + "\n")
     write_manifest(a.out, source=a.source, ours=a.ours, baselines=a.baseline, picks=[int(x) for x in a.idx], extent=extent_mode)
     print("done ->", a.out)
