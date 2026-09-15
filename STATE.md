@@ -2263,3 +2263,9 @@ OPD-P 512 31.8, A3VLM 16.5, A3VLM box 18.9, 3DOI 30.5 (§ dropped: column is uns
 Bold MA/MAO now on the A3VLM GT-box row (those columns are not marked non-comparable). CAVEAT: Tables III and V still quote
 axis errors from the trainer at IoU 0.5 (e.g. 11.4 / 15.2, readout rows) — mlp1024 has no per-sample CSV yet; switch them
 to 0.25 when convenient (probe mlp1024 first).
+Final Table II axis/origin definition (user, 2026-09-15 ~04:10 UTC): axis = unsigned error on DETECTED frames (IoU >= 0.25;
+ours 13.9, A3VLM 16.5, OPD-C 512 19.2, USDNet 9.3 over its 5 % detections, noted in text); origin = over revolute frames
+with a prediction (ungated, unchanged). An all-frames variant (missing prediction = 90 deg; ours 19.5, A3VLM box 18.7 best)
+was tried and REVERTED (Overleaf e9cf720 / 81f0eec). Bold: axis/origin/mIoU/PDet/+M/+MA/+MAO ours; MA/MAO A3VLM GT box.
+Tables III and V axis columns still at the trainer's IoU 0.5 definition; the mlp1024 probe needed to switch them was NOT
+launched (user stopped that tool call) — ask before running it.
