@@ -2240,3 +2240,6 @@ table). 3DOI scored with its UNSIGNED axis as the main entry (user rule: metrics
 MA 43.8 vs 42.7; ours wins the rest). Ours: axis/origin/mIoU/PDet from the experiment metrics (22.5 PDet), the rates
 from the probe CSV (22.9 PDet there; 0.4 gap = probe vs trainer test path, noted). Pending rows: MOPD 512, USDNet 1 cm.
 Overleaf 10 pages, floats OK (Table II + Fig. 4 on p6).
+Pod jdec-noproj CREATED 02:31 UTC on try 7 (RTX PRO 6000 Server Edition, id 4j5y4u3qjw99jo, $2.09/h, alias segaff-jdec-noproj);
+chain `run_joint4dec_dense_noproj_chain.sh` launched by the poller (log experiments/20260915_joint4_decoder_dense_noproj/chain.log).
+ETA ~5 h train + ~25 min tests (~08:00 UTC). DELETE THE POD after CHAIN_DONE (`bash runpod/train_pod.sh delete jdec-noproj`) and verify.
