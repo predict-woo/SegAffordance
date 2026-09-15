@@ -2172,3 +2172,16 @@ OPDFormer-C 512 HOI4D on one A100 (mini MotionDataset_h5, letterboxed 512x384, m
 ~2-3 h; (2) 3DOI (own env pod), ~2 h after; (3) A3VLM chain on a 2xH200 AP-JP-1 pod (~$10-15; EPIC/ARCTIC rows unprojected with
 a nominal depth and flagged), ~3-4 h after (1); (4) MOPD 512 after its training (~Sep 15 23:30 UTC). Outputs
 `/workspace/datasets/baselines/results/<model>/handvideo_preds.jsonl`.
+
+## DONE (2026-09-15 01:05 UTC): Fig. 5 hand-video baseline exports (paper-session request)
+
+150 held-out hand-video frames (HOI4D/EPIC/ARCTIC x 50, `/workspace/datasets/handvideo_fig5_samples`) run through
+the trained baselines and exported in the figure schema (`results/<run>/handvideo_preds.jsonl`, masks in the 512
+stretched frame, oracle best-IoU instance; `_nearest.jsonl` = nearest-centroid fallback for the 5 figure samples;
+3DOI `_centroid.jsonl` = GT-mask-centroid prompt = the Table II protocol, chosen as the main column). Tooling:
+`tools/baselines_sf3d/handvideo_stage.py` (native-aspect letterboxing per model, K/mask/point mapping back),
+`handvideo_export.py`, `runpod/baselines/handvideo_{opd,3doi}.sh`, A3VLM `chain.sh MODE=eval_hv`. Findings: the
+SF3D-trained detectors barely find hand-video elements (mean IoU 0.02-0.05); 3DOI with the GT centroid gets hoi4d
+IoU 0.39; A3VLM text chain 0.14/0.07/0.08; point_uv is inside the GT mask for only 14/150 samples (it is the
+hand-contact point), hence the centroid protocol. Three inference pods, ~$5 total, all deleted. MOPD 512 exports
+follow when its training ends (~23:30 UTC).

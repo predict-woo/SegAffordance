@@ -43,3 +43,13 @@ DELETE the pod on CHAIN_DONE.
 | bl-mopd512 | az2ad8iqoruhd5 | A100 80GB PCIe | 1.59 | mopd512_rgb (MOPD, OPDFormer schedule, 512x384) | ~00:33 |
 | bl-opd512-prgb | 9r6p29cxu5gwtt | A100 80GB PCIe | 1.59 | opd512_p_rgb (OPDFormer-P RGB 512x384) | ~00:36; CHAIN_DONE 13:39, deleted 13:40 UTC (~$21) |
 | bl-usdnet1cm | d2z37fxh1uwutg | A100 80GB PCIe | 1.59 | usdnet_v1cm (USDNet 1 cm; conversion on the dev pod) | ~00:39 |
+
+## Fig. 5 hand-video inference pods (2026-09-15, paper-session request, user pre-authorised)
+
+| pod | id | GPU | $/hr | did | deleted (UTC) |
+|---|---|---|---|---|---|
+| bl-hv-opd | iemymhvt8aty3p | A100 80GB PCIe (EU-RO-1) | 1.59 | OPDFormer-P RGB 512 + OPDFormer-C 512 on the 150 hand-video frames (`runpod/baselines/handvideo_opd.sh`) | 00:46 (~$0.5) |
+| bl-hv-3doi | zdot2q7d8vnhw1 | A100 80GB PCIe | 1.59 | 3DOI on the frames, point_uv and GT-centroid prompts (`handvideo_3doi.sh`) | 00:58 (~$0.6) |
+| bl-hv-a3vlm | 3kkh0wx7ifanhk | 2 x H200 (AP-JP-1, bl-apjp) | 9.18 | A3VLM REC -> REG-Joint chain on the frames (`chain.sh MODE=eval_hv`) | 01:04 (~$3.5) |
+
+Outputs: `results/<run>/handvideo_preds*.jsonl`; stages under `/workspace/datasets/baselines/handvideo/`.
