@@ -74,7 +74,7 @@ def build_export(records, annots):
     return out
 
 
-def encode_cloud(npz_path, rec):
+def encode_cloud(npz_path, rec, preds=None):
     z = np.load(npz_path)
     xyz = np.ascontiguousarray(z["xyz"], np.float32)
     rgb = np.ascontiguousarray(z["rgb"], np.uint8)
@@ -83,6 +83,8 @@ def encode_cloud(npz_path, rec):
                 point_uv=z["point_uv"].tolist(), K_render=z["K_render"].tolist(), size=z["size"].tolist(), n_fields=0)
     if "up_cam" in z:   # gravity estimate from tools/epic_up_direction.py (unit vector, camera frame)
         meta.update(up_cam=z["up_cam"].tolist(), up_source=str(z["up_source"]))
+    if preds:   # model predictions to draw for debugging (tools/hoi4d_predict_articulation.py --dump)
+        meta["preds"] = preds
     if "track_px" in z:   # the record's 2D hand track (render px) lifted into the depth cloud (tools/epic_track_lift.py)
         meta.update(track_px=z["track_px"].tolist(), track_valid=[bool(v) for v in z["track_valid"]], track_xyz=z["track_xyz"].tolist())
     tail = b""
@@ -96,8 +98,23 @@ def encode_cloud(npz_path, rec):
     return struct.pack("<I", len(mb)) + mb + xyz.tobytes() + rgb.tobytes() + msk.tobytes() + tail
 
 
-def make_handler(clouds_dir, out_dir):
+def load_preds(path):
+    """tools/hoi4d_predict_articulation.py --dump records -> {key: {model: {p_rev, axis_rot, axis_trans, origin_uv, point_uv}}}"""
+    out = {}
+    if not path or not os.path.exists(path):
+        return out
+    for line in open(path):
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        tl = r.get("type_logits") or [0.0, 0.0]; m = max(tl); e = [np.exp(v - m) for v in tl]; p_rev = e[1] / sum(e) if len(e) > 1 else 0.0
+        out.setdefault(r["key"], {})[r["model"]] = dict(p_rev=float(p_rev), axis=r.get("motion"), origin_uv=r.get("origin_uv"), point_uv=r.get("point_uv"), origin_cam=r.get("origin"), point_cam=r.get("point_3d"))
+    return out
+
+
+def make_handler(clouds_dir, out_dir, preds=None):
     records = list_records(clouds_dir)
+    preds = preds or {}
     cache = {}
 
     class H(BaseHTTPRequestHandler):
@@ -121,7 +138,7 @@ def make_handler(clouds_dir, out_dir):
                 if not 0 <= i < len(records):
                     return self.send_error(404)
                 if i not in cache:
-                    cache[i] = encode_cloud(os.path.join(clouds_dir, records[i]["file"]), records[i])
+                    cache[i] = encode_cloud(os.path.join(clouds_dir, records[i]["file"]), records[i], preds.get(records[i]["key"]))
                 return self._send(cache[i], "application/octet-stream")
             self.send_error(404)
 
@@ -154,13 +171,14 @@ def main():
     s.add_argument("--clouds", required=True)
     s.add_argument("--out", required=True)
     s.add_argument("--port", type=int, default=8080)
+    s.add_argument("--preds", default=None, help="prediction dump (jsonl) to overlay, e.g. viz/20260916_epic_test_dump/preds.jsonl")
     e = sub.add_parser("export")
     e.add_argument("--clouds", default="/workspace/datasets/epic_gt_annot/clouds")
     e.add_argument("--out", required=True)
     e.add_argument("--json", default="experiments/epic_test_gt_articulation.json")
     a = ap.parse_args()
     if a.cmd == "serve":
-        handler, records = make_handler(a.clouds, a.out)
+        handler, records = make_handler(a.clouds, a.out, load_preds(a.preds))
         print(f"{len(records)} records from {a.clouds}; annotations -> {a.out}; http://localhost:{a.port}", flush=True)
         ThreadingHTTPServer(("0.0.0.0", a.port), handler).serve_forever()
     else:

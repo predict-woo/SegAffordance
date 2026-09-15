@@ -35,7 +35,8 @@
 <div id="help">click view = lock mouse (Esc frees)   WASD move   Space/Shift up/down   Ctrl fast   wheel speed
 AXIS mode: click p1, click p2        FACE mode: click 3 pts = plane, 4th click = axis through it
 X axis/face mode   T rot/trans   U undo   Enter save   N/P next/prev
-Home reset view   M mask tint   L depth cloud   G EPIC-Fields cloud   [ ] point size</div>
+Home reset view   M mask tint   L depth cloud   G EPIC-Fields cloud   V model predictions   [ ] point size
+magenta = AFUN (final)   orange = SceneFun3D-only   green = hand track</div>
 <div id="bar">loading…</div>
 <script type="module">
 import * as THREE from "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js";
@@ -73,6 +74,42 @@ const trackGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3()])
 const trackLine = new THREE.Line(trackGeo, new THREE.LineBasicMaterial({color: 0x33ff66})); trackLine.visible = false; trackLine.frustumCulled = false; world.add(trackLine);
 const trackPts = new THREE.Points(trackGeo, new THREE.PointsMaterial({color: 0x33ff66, size: 0.012, sizeAttenuation: true})); trackPts.visible = false; trackPts.frustumCulled = false; world.add(trackPts);
 const trackEnd = new THREE.Mesh(new THREE.SphereGeometry(0.014, 12, 8), new THREE.MeshBasicMaterial({color: 0x33ff66})); trackEnd.visible = false; world.add(trackEnd);
+const PRED_COLORS = {dense: 0xff40ff, sf3d_only: 0xffa030};
+const predObjs = {};   // model -> {line, sphere}
+let showPreds = true;
+function liftUV(uv) {   // nearest depth-cloud point (camera frame) to a normalised image position
+  if (!meta || !uv) return null;
+  const [W, H] = meta.size, K = meta.K_render, tu = uv[0] * W, tv = uv[1] * H; let best = -1, bd = 1e9;
+  for (let i = 0; i < meta.n; i++) {
+    const z = xyz[3 * i + 2]; if (z <= 0.05) continue;
+    const du = K[0][0] * xyz[3 * i] / z + K[0][2] - tu, dv = K[1][1] * xyz[3 * i + 1] / z + K[1][2] - tv, d = du * du + dv * dv;
+    if (d < bd) { bd = d; best = i; }
+  }
+  return best >= 0 && bd < 400 ? [xyz[3 * best], xyz[3 * best + 1], xyz[3 * best + 2]] : null;
+}
+function drawPreds() {   // predicted axis per model: line through the lifted predicted hinge (rot) or point (trans) along the predicted direction
+  for (const o of Object.values(predObjs)) { o.line.visible = false; o.sphere.visible = false; }
+  if (!meta || !meta.preds || !showPreds) return;
+  for (const [name, pr] of Object.entries(meta.preds)) {
+    if (!predObjs[name]) {
+      const col = PRED_COLORS[name] || 0xffffff;
+      const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+      const l = new THREE.Line(g, new THREE.LineBasicMaterial({color: col})); l.frustumCulled = false; world.add(l);
+      const sp = new THREE.Mesh(new THREE.SphereGeometry(0.014, 12, 8), new THREE.MeshBasicMaterial({color: col})); world.add(sp);
+      predObjs[name] = {line: l, sphere: sp};
+    }
+    const isRot = pr.p_rev > 0.5, anchor = liftUV(isRot && pr.origin_uv ? pr.origin_uv : pr.point_uv) || pr.point_cam;
+    if (!anchor || !pr.axis) continue;
+    const a = toWorld(anchor), d = toWorld(pr.axis).normalize().multiplyScalar(isRot ? 2 : 0.6);
+    const o = predObjs[name]; o.line.geometry.setFromPoints([isRot ? a.clone().sub(d) : a.clone(), a.clone().add(d)]); o.line.visible = true;
+    o.sphere.position.copy(a); o.sphere.visible = true;
+  }
+}
+function predAngle(pr) {   // unsigned angle between the prediction and the current annotation
+  if (!pr || !pr.axis || picks.length !== 2) return null;
+  const a = new THREE.Vector3(...pr.axis).normalize(), b = new THREE.Vector3(picks[1][0] - picks[0][0], picks[1][1] - picks[0][1], picks[1][2] - picks[0][2]).normalize();
+  return Math.acos(Math.min(1, Math.abs(a.dot(b)))) * 180 / Math.PI;
+}
 function drawTrack() {   // the hand track lifted into the depth cloud (green; sphere = end of the motion)
   const pts = meta && meta.track_xyz ? meta.track_xyz.filter((p, i) => meta.track_valid[i]).map(toWorld) : [];
   trackLine.visible = trackPts.visible = pts.length >= 2; trackEnd.visible = pts.length >= 1;
@@ -93,12 +130,13 @@ function status() {
   const tl = r.type_label === 1 ? "rot" : "trans";
   const fields = meta && meta.n_fields ? `fields[G] ${showFields ? "on" : "off"}: ${meta.n_fields} pts, scale ${(+meta.fields_scale).toFixed(3)} (${meta.fields_frame}, off ${meta.fields_offset}, agree ${(+meta.fields_agree_frac).toFixed(2)})` : "fields: none";
   const upS = meta && meta.up_cam ? `up: ${meta.up_source}` : "up: camera";
+  const predS = meta && meta.preds ? "\npreds[V] " + (showPreds ? "on" : "off") + ": " + Object.entries(meta.preds).map(([n, pr]) => { const ang = predAngle(pr); return `${n} (${n === "dense" ? "magenta" : "orange"}): ${pr.p_rev > 0.5 ? "rot" : "trans"} p_rev=${pr.p_rev.toFixed(2)}${ang === null ? "" : `, ${ang.toFixed(0)}° from your axis`}`; }).join("   ") : "";
   const prog = mode === "axis" ? `picks ${picks.length}/2` : `face ${face.length}/3` + (face.length === 3 ? (picks.length === 2 ? ", axis set" : ", now click the face") : "");
   bar.innerHTML = `record <b>${cur + 1}/${records.length}</b>  key <b>${r.key}</b>  label ${tl}  |  mode <b class="mode">${mode.toUpperCase()}</b>  ` +
     `type <b class="${type}">${type}</b>  ${prog}  ` +
     (saved ? `<span class="ok">saved ${saved.saved_at} (${saved.type})</span>` : `<span class="no">not saved</span>`) +
     `  |  ${locked() ? "mouse locked (Esc frees)" : "click the view to lock the mouse"}  speed ${speed.toFixed(2)} m/s  size ${(ptSize * 1000).toFixed(1)} mm` +
-    `  depth[L] ${showDepth ? "on" : "off"}  ${fields}  ${upS}\n${r.desc || ""}`;
+    `  depth[L] ${showDepth ? "on" : "off"}  ${fields}  ${upS}${predS}\n${r.desc || ""}`;
   listEl.querySelectorAll("div").forEach((d, i) => d.className = i === cur ? "cur" : "");
   const lab = r.type_label === 1 ? "rot" : "trans", name = t => t === "rot" ? "REVOLUTE (hinge)" : "PRISMATIC (slides)";
   document.getElementById("badge").innerHTML = `label: <span class="b-${lab}">${name(lab)}</span> &nbsp; annotating as: <span class="b-${type}${type !== lab ? " b-warn" : ""}">${name(type)}${type !== lab ? " (differs from label!)" : ""}</span>`;
@@ -204,7 +242,7 @@ async function load(i) {
   const a = records[i].annot;
   picks = a ? [a.p1, a.p2] : []; face = a && a.face ? a.face : []; if (a) mode = a.face ? "face" : "axis";
   type = a ? a.type : (meta.type_label === 1 ? "rot" : "trans"); saved = a || null;
-  thumbnail(); alignUp(); resetView(); drawTrack(); drawAxis();
+  thumbnail(); alignUp(); resetView(); drawTrack(); drawPreds(); drawAxis();
 }
 
 async function save() {
@@ -289,6 +327,7 @@ addEventListener("keydown", e => {
   else if (k === "m") { maskTint = !maskTint; if (points) points.geometry.setAttribute("color", new THREE.BufferAttribute(colors(), 3)); thumbnail(); }
   else if (k === "l") { showDepth = !showDepth; if (points) points.visible = showDepth; status(); }
   else if (k === "g") { showFields = !showFields; if (fpoints) fpoints.visible = showFields; status(); }
+  else if (k === "v") { showPreds = !showPreds; drawPreds(); status(); }
   else if (k === "[" || k === "]") { ptSize *= k === "]" ? 1.25 : 0.8; if (points) points.material.size = ptSize; if (fpoints) fpoints.material.size = ptSize * FIELDS_SIZE; status(); }
   if (["Space", "ArrowUp", "ArrowDown"].includes(e.code)) e.preventDefault();
 });
