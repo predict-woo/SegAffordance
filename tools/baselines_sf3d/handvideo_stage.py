@@ -194,14 +194,14 @@ def stage_opd(out, stats_src, samples):
 
 
 # ---------------------------------------------------------------- 3DOI
-def stage_threedoi(out, samples):
+def stage_threedoi(out, samples, prompt="point_uv"):
     """images/ + omnidata_filtered/{depth_zbuffer,mask_valid,point_info}/taskonomy/<visit>/ +
     3doi_sf3d/data_test.pt + frames_test.json (the layout sf3d_to_3doi.py writes, one instance per
     frame prompted with the GT interaction point). GT bbox/mask/axis fields are placeholders for
     their loader; kinematic = gt_type. No-depth sources get an all-zero depth (= all holes)."""
     import torch
-    from tools.baselines_sf3d.sf3d_to_3doi import (DEPTH_SCALE, KINEMATIC, bbox_norm, depth_name, hfov_rads, img_name,
-                                                   info_name, mask_polygon)
+    from tools.baselines_sf3d.sf3d_to_3doi import (DEPTH_SCALE, KINEMATIC, bbox_norm, depth_name, element_point, hfov_rads,
+                                                   img_name, info_name, mask_polygon)
 
     OUT_W, OUT_H = 1024, 768
     out = Path(out)
@@ -226,7 +226,10 @@ def stage_threedoi(out, samples):
         cv2.imwrite(str(m_dir / depth_name(f)), ((dcan > 0) * 255).astype(np.uint8))
         json.dump({"field_of_view_rads": hfov_rads(K_out.tolist())}, open(i_dir / info_name(f), "w"))
         gt_can = letterbox(stretched_to_native_mask(gt, cw, ch).astype(np.uint8), OUT_W, OUT_H, 0, nearest=True)[0].astype(bool)
-        kp = letterbox_point(r["point_uv"], lb)
+        if prompt == "centroid" and gt_can.any():
+            kp = element_point(gt_can)  # SF3D protocol: GT-mask centroid snapped into the mask (canvas-normalised)
+        else:
+            kp = letterbox_point(r["point_uv"], lb)  # the exported interaction point
         inst = {"keypoint": kp, "movable": "one_hand", "rigid": "yes",
                 "kinematic": KINEMATIC["rot" if int(r["gt_type"]) == 1 else "trans"], "pull_or_push": "n/a",
                 "affordance": kp, "bbox": bbox_norm(gt_can) if gt_can.any() else [0.0, 0.0, 1.0, 1.0],
@@ -236,7 +239,7 @@ def stage_threedoi(out, samples):
         infos[name] = {"key": r["sample"], "rotated": False, "wh": [OUT_W, OUT_H], "K_out": K_out.tolist(), "keys": [r["sample"]]}
         meta[r["sample"]] = {"sample": r["sample"], "dataset": r["dataset"], "key": r["key"], "img_name": name, "lb": lb,
                              "K_out": K_out.tolist(), "has_depth": depth is not None, "mask_png": r["mask_png"],
-                             "gt_type": int(r["gt_type"])}
+                             "gt_type": int(r["gt_type"]), "prompt": prompt, "keypoint": kp}
     torch.save(entries, out / "3doi_sf3d" / "data_test.pt")
     json.dump(infos, open(out / "frames_test.json", "w"))
     json.dump(meta, open(out / "hv_meta.json", "w"))
@@ -291,12 +294,13 @@ def main(argv=None):
     ap.add_argument("--sources", default=",".join(SOURCES))
     ap.add_argument("--stats", default="/workspace/datasets/baselines/data/opd_sf3d_512/stats.json", help="opd: training pixel stats")
     ap.add_argument("--image-root", default=None, help="a3vlm: absolute image dir as the A3VLM pod sees it")
+    ap.add_argument("--prompt", default="point_uv", choices=["point_uv", "centroid"], help="threedoi: query point")
     a = ap.parse_args(argv)
     samples = load_samples(a.samples, a.sources.split(","))
     if a.cmd == "opd":
         stage_opd(a.out, a.stats, samples)
     elif a.cmd == "threedoi":
-        stage_threedoi(a.out, samples)
+        stage_threedoi(a.out, samples, prompt=a.prompt)
     else:
         stage_a3vlm(a.out, a.image_root or str(Path(a.out) / "images"), samples)
 

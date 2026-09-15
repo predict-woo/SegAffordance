@@ -19,9 +19,8 @@ DP=$((NPROC / MP)); ACCUM="${ACCUM:-$((128 / (2 * DP)))}"
 # sdp shards the optimizer across DATA-parallel ranks only. With DP=1 each GPU holds the full
 # AdamW state for its half of the 13B model (~75 GB) and OOMs on an 80 GB card -- measured on
 # 2 x H100 2026-09-12. DP >= 2 (i.e. >= 4 GPUs) is the floor; the released recipe uses DP=8.
-if [ "$MODE" != "eval" ] && [ "$DP" -lt 2 ]; then
-  echo "ERROR: need at least $((MP * 2)) GPUs (DP=$DP shards nothing -> OOM); got $NPROC" >&2; exit 2
-fi
+case "$MODE" in eval|eval_hv|eval_joint_pred) ;; *) [ "$DP" -ge 2 ] || {
+  echo "ERROR: need at least $((MP * 2)) GPUs (DP=$DP shards nothing -> OOM); got $NPROC" >&2; exit 2; }; esac
 echo "== $(date -u) $MODE $NAME on $NPROC x $(nvidia-smi --query-gpu=name --format=csv,noheader | head -1); dp=$DP accum=$ACCUM"
 python $SEG/runpod/baselines/a3vlm/patch_eval.py $R/eval_affordance_v2.py
 # Pick a base port with a free range [PORT, PORT+NPROC/MP] -- the eval shards use PORT+1+i.

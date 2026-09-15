@@ -37,12 +37,23 @@ def base(m):
     return {"dataset": m["dataset"], "sample": m["sample"], "key": m["key"]}
 
 
-def export_opd(stage, pred, out, skip_no_depth=False):
+def _centroid(mask):
+    ys, xs = np.nonzero(mask)
+    return np.array([xs.mean(), ys.mean()]) if xs.size else None
+
+
+def export_opd(stage, pred, out, skip_no_depth=False, nearest_samples=None):
     """skip_no_depth: RGB-D models saw an all-zero depth for sources without depth (EPIC) -> those
-    rows are exported unmatched with "no_depth": true instead of a prediction on junk input."""
+    rows are exported unmatched with "no_depth": true instead of a prediction on junk input.
+    nearest_samples: restrict to these samples and, when no instance overlaps the GT mask, export the
+    detection whose mask centroid is nearest to the GT centroid (512-px stretched frame), flagged
+    "fallback": "nearest" with "centroid_dist_px" -- figure use only (paper session's convention,
+    cf. opd_nearest_instance.py on SF3D); never for scoring."""
     meta = json.load(open(Path(stage) / "hv_meta.json"))
+    if nearest_samples:
+        meta = {s: m for s, m in meta.items() if s in set(nearest_samples)}
     by_image = load_predictions(pred)  # {image_id: [instances]}
-    n_ok = 0
+    n_ok = n_near = 0
     with open(out, "w") as f:
         for s, m in meta.items():
             rec = {**base(m), **EMPTY}
@@ -52,18 +63,31 @@ def export_opd(stage, pred, out, skip_no_depth=False):
                 continue
             gt = gt_mask(m)
             best, best_iou, best_mask = None, 0.0, None
+            near, near_d, near_mask = None, np.inf, None
+            gc = _centroid(gt)
             for inst in by_image.get(m["image_id"], []):
                 mk = unletterbox_mask(_decode_rle(inst["segmentation"]), m["lb"])
                 iou = _iou(gt, mk)
                 if iou > best_iou:
                     best, best_iou, best_mask = inst, iou, mk
+                if nearest_samples and gc is not None:
+                    pc = _centroid(mk)
+                    if pc is not None:
+                        d = float(np.linalg.norm(pc - gc))
+                        if d < near_d:
+                            near, near_d, near_mask = inst, d, mk
+            if best is None and nearest_samples and near is not None:
+                best, best_mask = near, near_mask
+                rec["fallback"] = "nearest"
+                rec["centroid_dist_px"] = near_d
+                n_near += 1
             if best is not None:
                 rec.update(matched=True, score=float(best["score"]), mask_rle=C.rle_encode(best_mask),
                            type=_mtype_to_ours(best["mtype"]), axis_cam=C.opd_to_cam(best["maxis"]).tolist(),
-                           origin_cam=C.opd_to_cam(best["morigin"]).tolist(), iou=best_iou)
+                           origin_cam=C.opd_to_cam(best["morigin"]).tolist(), iou=_iou(gt, best_mask))
                 n_ok += 1
             f.write(json.dumps(rec) + "\n")
-    print(f"opd: {len(meta)} samples, {n_ok} matched -> {out}")
+    print(f"opd: {len(meta)} samples, {n_ok} exported ({n_near} nearest fallbacks) -> {out}")
 
 
 def export_threedoi(stage, pred, out):
@@ -123,9 +147,11 @@ def main(argv=None):
     ap.add_argument("--pred", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--skip-no-depth", action="store_true", help="opd: blank the rows of sources without depth (RGB-D models)")
+    ap.add_argument("--nearest", default=None, help="opd: comma-separated samples; nearest-centroid fallback when nothing overlaps")
     a = ap.parse_args(argv)
     if a.cmd == "opd":
-        export_opd(a.stage, a.pred, a.out, skip_no_depth=a.skip_no_depth)
+        export_opd(a.stage, a.pred, a.out, skip_no_depth=a.skip_no_depth,
+                   nearest_samples=a.nearest.split(",") if a.nearest else None)
     else:
         {"threedoi": export_threedoi, "a3vlm": export_a3vlm}[a.cmd](a.stage, a.pred, a.out)
 
