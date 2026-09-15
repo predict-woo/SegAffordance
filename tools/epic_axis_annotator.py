@@ -83,6 +83,8 @@ def encode_cloud(npz_path, rec):
                 point_uv=z["point_uv"].tolist(), K_render=z["K_render"].tolist(), size=z["size"].tolist(), n_fields=0)
     if "up_cam" in z:   # gravity estimate from tools/epic_up_direction.py (unit vector, camera frame)
         meta.update(up_cam=z["up_cam"].tolist(), up_source=str(z["up_source"]))
+    if "track_px" in z:   # the record's 2D hand track (render px) lifted into the depth cloud (tools/epic_track_lift.py)
+        meta.update(track_px=z["track_px"].tolist(), track_valid=[bool(v) for v in z["track_valid"]], track_xyz=z["track_xyz"].tolist())
     tail = b""
     if "xyz_fields" in z.files and z["xyz_fields"].shape[0] > 0:  # EPIC-Fields overlay (tools/epic_fields_overlay.py)
         xf = np.ascontiguousarray(z["xyz_fields"], np.float32)

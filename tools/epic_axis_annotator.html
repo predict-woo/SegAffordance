@@ -66,6 +66,15 @@ const faceSph = [0, 1, 2].map(() => { const m = new THREE.Mesh(new THREE.SphereG
 const triGeo = new THREE.BufferGeometry(); triGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(9), 3));
 const tri = new THREE.Mesh(triGeo, new THREE.MeshBasicMaterial({color: 0x66ccff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false}));
 tri.visible = false; tri.frustumCulled = false; world.add(tri);
+const trackGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3()]);
+const trackLine = new THREE.Line(trackGeo, new THREE.LineBasicMaterial({color: 0x33ff66})); trackLine.visible = false; trackLine.frustumCulled = false; world.add(trackLine);
+const trackPts = new THREE.Points(trackGeo, new THREE.PointsMaterial({color: 0x33ff66, size: 0.012, sizeAttenuation: true})); trackPts.visible = false; trackPts.frustumCulled = false; world.add(trackPts);
+const trackEnd = new THREE.Mesh(new THREE.SphereGeometry(0.014, 12, 8), new THREE.MeshBasicMaterial({color: 0x33ff66})); trackEnd.visible = false; world.add(trackEnd);
+function drawTrack() {   // the hand track lifted into the depth cloud (green; sphere = end of the motion)
+  const pts = meta && meta.track_xyz ? meta.track_xyz.filter((p, i) => meta.track_valid[i]).map(toWorld) : [];
+  trackLine.visible = trackPts.visible = pts.length >= 2; trackEnd.visible = pts.length >= 1;
+  if (pts.length) { trackGeo.setFromPoints(pts); trackGeo.computeBoundingSphere(); trackEnd.position.copy(pts[pts.length - 1]); }
+}
 
 function resetView() { camera.position.set(0, 0, 0); yaw.v = home.yaw; pitch.v = home.pitch; camera.rotation.set(pitch.v, yaw.v, 0); }
 function alignUp() {   // rotate the world so meta.up_cam (gravity, camera frame) becomes +y; the photo view becomes the home view
@@ -145,6 +154,17 @@ function thumbnail() {  // project the depth cloud back through K_render onto a 
     const o = 4 * (v * cw + u); d[o] = col[3 * i] * 255; d[o + 1] = col[3 * i + 1] * 255; d[o + 2] = col[3 * i + 2] * 255; d[o + 3] = 255;
   }
   ctx.putImageData(img, 0, 0);
+  if (meta.track_px) {
+    const tp = meta.track_px.filter((p, i) => meta.track_valid[i] || true).map(p => [p[0] * s, p[1] * s]);
+    if (tp.length >= 2) {
+      ctx.strokeStyle = "#33ff66"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(tp[0][0], tp[0][1]);
+      for (const q of tp.slice(1)) ctx.lineTo(q[0], q[1]);
+      ctx.stroke();
+      const [a1, a0] = [tp[tp.length - 1], tp[tp.length - 2]], ang = Math.atan2(a1[1] - a0[1], a1[0] - a0[0]);
+      ctx.fillStyle = "#33ff66"; ctx.beginPath(); ctx.moveTo(a1[0], a1[1]);
+      ctx.lineTo(a1[0] - 9 * Math.cos(ang - 0.5), a1[1] - 9 * Math.sin(ang - 0.5)); ctx.lineTo(a1[0] - 9 * Math.cos(ang + 0.5), a1[1] - 9 * Math.sin(ang + 0.5)); ctx.fill();
+    }
+  }
   ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(meta.point_uv[0] * s, meta.point_uv[1] * s, 7, 0, 6.283); ctx.stroke();
   document.getElementById("desc").textContent = meta.desc;
 }
@@ -179,7 +199,7 @@ async function load(i) {
   const a = records[i].annot;
   picks = a ? [a.p1, a.p2] : []; face = a && a.face ? a.face : []; if (a) mode = a.face ? "face" : "axis";
   type = a ? a.type : (meta.type_label === 1 ? "rot" : "trans"); saved = a || null;
-  thumbnail(); alignUp(); resetView(); drawAxis();
+  thumbnail(); alignUp(); resetView(); drawTrack(); drawAxis();
 }
 
 async function save() {
