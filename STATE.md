@@ -2389,3 +2389,10 @@ User decision after seeing the full-protocol Table III (noproj best on 7/9 SF3D 
 row is OUT of Tables III/IV and the text ("the channel is the trajectory loss" paragraph removed). Tables now have two rows,
 "SceneFun3D only" and "+ human video". The experiment, its CSVs and the probe numbers stay in the repo (STATE entries above)
 in case it comes back as an ablation.
+
+## Paper: Table III final layout (2026-09-16, Overleaf aaa8a5e; supersedes the two entries above)
+
+User reversed both earlier decisions: noproj row is BACK, and the split table is gone. Table III is one table, three rows
+(SceneFun3D only / + video: masks, types / + video: + trajectories) with SF3D axis + origin (Table II definitions:
+16.5/0.262, 14.2/0.232, 13.9/0.248) beside mIoU HOI4D/EPIC and axis HOI4D/EPIC*/ARCTIC. No MA/PDet/MAO columns for the
+controls in the paper; the full-protocol numbers for noproj/sf3d_only remain in the entry above for reference.
