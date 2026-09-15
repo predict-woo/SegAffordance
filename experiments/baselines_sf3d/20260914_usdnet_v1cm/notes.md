@@ -40,4 +40,26 @@ points per sample** (uniform random subsample above the cap, all per-point array
 inference is on whole scenes (`data.cropping=false`), unchanged. Run dir `runs/usdnet_v1cm`, results
 `results/usdnet_v1cm/`; the OOM logs are kept as `logs/train_usdnet_v1cm.oom{1,2,3,4}.log`.
 
-**Result.** pending.
+**Result (2026-09-15 07:03 UTC CHAIN_DONE; pod deleted, ~24.7 h, ~$39).** Trained 200 epochs; the
+exported checkpoint is the best-validation one, `epoch=139-val_mean_ap_50=0.019.ckpt` (the 2 cm run's
+best was 0.035 at its own epoch). Our scorer on the 5,088 test elements (`metrics.json`,
+`per_sample_metrics.csv`, `thresholded.json`):
+
+| | 2 cm (20260912_usdnet) | 1 cm, crop 3.0 m + 450 k cap |
+|---|---|---|
+| PDet (mask IoU >= 0.5) | 0.0 | 1.1 (58 elements) |
+| mean mask IoU | 0.071 | 0.135 |
+| type accuracy | 47.2 | 52.3 |
+| MA (unsigned / signed) | 23.1 / 21.8 | 11.2 / 7.8 |
+| axis err all / matched (deg) | 55.7 / n.a. | 55.7 / 47.7 |
+| axis flips all / rot | 5.6 / 9.4 | 17.8 / 32.0 |
+| origin err (m) | 0.988 | 1.551 |
+
+Confidence-thresholded (conf > 0.5): 2,247 elements keep a prediction, PDet 1.1, mean IoU 0.101.
+Reading: the finer voxels let the network produce a few correct element masks (the 2 cm run matched
+none) and double the mean IoU, but the articulation columns get WORSE -- the axis votes that carried
+the 2 cm run's MA (per-frame projection of whole-scene predictions) now flip three times as often
+and the origins drift further. The two runs are not a clean ablation (the 1 cm run needed the crop /
+point-cap deviations above, and USDNet has no seed control), so the table reports the 1 cm run as the
+resolution-matched row and keeps the 2 cm row for reference; neither is competitive on SF3D
+elements. Scored with `runpod/baselines/score_run.sh usdnet_v1cm 20260914_usdnet_v1cm usdnet_v1cm`.

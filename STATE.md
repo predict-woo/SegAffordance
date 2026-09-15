@@ -2278,3 +2278,12 @@ to /root and cp).
 mlp1024 per-sample probe DONE (rerun on pod-local disk, 5,088 rows, no NULs) and merged into `sf3d_per_sample_metrics.csv`
 (ten checkpoints now). Axis@IoU0.25 19.9 (0.5: 18.1), MA 36.9, origin 0.301, mIoU 0.239, PDet25 43.0. Table V cell filled
 (Overleaf b6b05df): Tables II, III and V all use the unsigned axis error on IoU>=0.25 frames.
+
+## 2026-09-15 07:25 UTC — USDNet 1 cm DONE
+
+- `bl-usdnet1cm` CHAIN_DONE 07:03 UTC, pod deleted by its watcher (~24.7 h, ~$39). Scored:
+  PDet 1.1 / mIoU 0.135 / MA 11.2 (signed 7.8) / axis 55.7 / origin 1.55 m (2 cm run: 0.0 / 0.071 /
+  23.1 / 55.7 / 0.99). Files in `experiments/baselines_sf3d/20260914_usdnet_v1cm/` (metrics.json,
+  per_sample_metrics.csv, thresholded.json); INDEX row added; deviations (crop 3.0 m, 450 k cap) in
+  its notes. Peer informed. Remaining baseline in flight: MOPD 512 on `bl-mopd-h200` (iter ~39.4k at
+  07:11 UTC, ETA ~17:10 UTC).
