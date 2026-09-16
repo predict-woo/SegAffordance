@@ -31,3 +31,20 @@ Pick-up prompts (1063-1071): the control ignores the noun and marks the mouse fo
 spoon, the key and the umbrella for the matching prompts, with an upward/along-desk translation, but misses the scissors and
 sometimes the cup rim. Same story as Fig. 6: hand video widens the object set and the prompt grounding, not the hinge
 accuracy.
+
+**Paper picks (user, 2026-09-16): Fig. 6 v3.** IMG_1068 "move the mouse forward", IMG_1075 "close the laptop", IMG_1079
+"open the right closet", IMG_1081 "close the window" (cases 56 / 77 / 82 / 85 = sheet 14 row 1, sheet 19 row 2, sheet 20
+row 3, sheet 21 row 2). Rendered in the Fig. 4 style by the new `tools/viz_photo_panels.py` from a prediction dump
+(`predict_image.py --dump`, new flag), square crops around EgoArt's point, prompts under each row
+(`compose_panels.py --row-captions`, new flag):
+```
+B=viz/20260916_itw_test; D=/workspace/datasets/itw/20260916_test
+python tools/predict_image.py --model sf3d_only ... --model dense ... --case $D/inputs/IMG_1068.jpg "move the mouse forward" \
+  --case $D/inputs/IMG_1075.jpg "close the laptop" --case $D/inputs/IMG_1079.jpg "open the right closet" \
+  --case $D/inputs/IMG_1081.jpg "close the window" --out $D/picks_raw --f35 26 --dump $B/picks/preds.jsonl
+CUDA_VISIBLE_DEVICES= python tools/viz_photo_panels.py --dump $B/picks/preds.jsonl --models sf3d_only,dense --idx 0 1 2 3 --out $B/picks/panels --aspect 1.0
+python tools/compose_panels.py --out viz/20260914_paper_figures/fig_wild_qual_v3.png --panel-aspect 1.0 --row-height 300 --gap 6 \
+  --labels "Photo,SceneFun3D only,EgoArt" --row-captions '"move the mouse forward"|"close the laptop"|"open the right closet"|"close the window"' \
+  $B/picks/panels/00_00_IMG_1068.png $B/picks/panels/01_01_IMG_1075.png $B/picks/panels/02_02_IMG_1079.png $B/picks/panels/03_03_IMG_1081.png
+```
+`picks/preds.jsonl` is tracked (the exact records behind the figure). Overleaf `figures/fig_wild_qual.jpg` = v3.

@@ -105,6 +105,7 @@ def main():
     ap.add_argument("--pad-to-landscape", action="store_true",
                     help="letterbox a portrait photo onto a 4:3 landscape canvas (grey sides) before the 512 stretch — the "
                          "training frames are all landscape; intrinsics shift accordingly (cx += pad)")
+    ap.add_argument("--dump", default=None, help="write every (case, model) prediction as a jsonl record (tools/sf3d_preds_io schema + image / prompt / K_norm / native size) for tools/viz_photo_panels.py")
     ap.add_argument("--K", nargs=4, type=float, default=None, metavar=("fx", "fy", "cx", "cy"),
                     help="explicit intrinsics in pixels of the input image (overrides --f35); e.g. an SF3D frame's K")
     a = ap.parse_args()
@@ -114,6 +115,7 @@ def main():
     models = [(n, *(load_field_model if n in field_names else load_model)(c, k, device)) for n, c, k in a.model]
     os.makedirs(a.out, exist_ok=True)
     S = a.input_size
+    fdump = open(a.dump, "w") if a.dump else None
     for i, (path, prompt) in enumerate(a.case):
         bgr = cv2.imread(path, cv2.IMREAD_COLOR)  # honours EXIF orientation
         if bgr is None:
@@ -144,9 +146,16 @@ def main():
                     out = apply_trajectory_scale(out, trajectory_scale_factor("pred_z_p", out, None))
             panel, _, _ = draw_prediction(bgr, out, K_norm, name, a.ray_len)
             panels.append(panel)
+            if fdump is not None:
+                from sf3d_preds_io import out_to_record, write_record
+                rec = out_to_record(out, name, i, f"{i:02d}_{os.path.splitext(os.path.basename(path))[0]}", prompt, -1)
+                rec.update(image=os.path.abspath(path), prompt=prompt, K_norm=K_norm[0].tolist(), native_wh=[int(W), int(H)])
+                write_record(fdump, rec)
         stem = os.path.splitext(os.path.basename(path))[0]
         cv2.imwrite(f"{a.out}/{i:02d}_{stem}.png", np.hstack(panels))
         print("wrote", i, stem, "|", prompt, "|", W, "x", H)
+    if fdump is not None:
+        fdump.close()
     write_manifest(a.out, models=[{"name": n, "config": c, "ckpt": k} for n, c, k in a.model],
                    cases=[{"image": im, "prompt": pr} for im, pr in a.case], f35=a.f35)
     print("done ->", a.out)

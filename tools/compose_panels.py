@@ -59,6 +59,7 @@ def main():
     ap.add_argument("--row-labels", default=None, help="comma-separated per-row labels, drawn rotated in a left margin (e.g. in / out of distribution)")
     ap.add_argument("--col-groups", default=None, help='column groups "Name:a-b,..." (kept-column indices): spanning label above the column labels + divider')
     ap.add_argument("--row-groups", default=None, help='row groups "Name:a-b,..." (input-row indices): label in the outer left margin + divider')
+    ap.add_argument("--row-captions", default=None, help="'|'-separated per-row captions drawn centred under each row (e.g. the prompt)")
     ap.add_argument("--jpg", action="store_true")
     a = ap.parse_args()
     rows = []
@@ -95,15 +96,22 @@ def main():
     header_labels = 44 if a.labels else 0
     header_groups = 46 if col_groups else 0
     y_top = header_groups + header_labels + a.gap
+    captions = a.row_captions.split("|") if a.row_captions else []
+    cap_h = 46 if captions else 0
     ys = []; y = y_top
     for r in range(nrow):
-        ys.append(y); y += a.row_height + (a.group_gap if r in row_bounds else a.gap)
+        ys.append(y); y += a.row_height + cap_h + (a.group_gap if r in row_bounds else a.gap)
     H = y - (a.group_gap if (nrow - 1) in row_bounds else a.gap) + a.gap
     canvas = np.full((H, W, 3), 255, np.uint8)
     # panels
     for r, panels in enumerate(rows):
         for c, p in enumerate(panels):
             canvas[ys[r]:ys[r] + p.shape[0], xs[c]:xs[c] + p.shape[1]] = p
+    # row captions (under each row, centred over the panel span)
+    for r in range(nrow):
+        if captions and r < len(captions) and captions[r]:
+            txt = captions[r]; tw, th = text_w(txt, 0.95, 2)
+            cv2.putText(canvas, txt, ((x_left + W - a.gap - tw) // 2, ys[r] + a.row_height + 34), FONT, 0.95, INK, 2, cv2.LINE_AA)
     # column labels
     if a.labels:
         labels = a.labels.split(",")
@@ -130,7 +138,7 @@ def main():
         y0, y1 = ys[s], ys[e] + a.row_height
         canvas[y0:y1, 0:group_margin] = vertical_label(name, y1 - y0, group_margin, 1.0, 2)
     for r in row_bounds:
-        ym = ys[r] + a.row_height + a.group_gap // 2
+        ym = ys[r] + a.row_height + cap_h + a.group_gap // 2
         cv2.line(canvas, (x_left - a.gap, ym), (W - a.gap, ym), INK, a.line, cv2.LINE_AA)
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     cv2.imwrite(a.out, canvas)
