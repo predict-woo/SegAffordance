@@ -112,8 +112,11 @@ def render(frame_rgb, mask, axis, track, point, mtype, err_deg, out_png, k=2.0, 
     ox, oy, W, H = x0, y0, x1 - x0, y1 - y0   # text positions below are relative to the window
     W_full, H_full = frame_rgb.shape[1], frame_rgb.shape[0]
     if placeholder is not None:
-        ax.imshow(np.full((H_full, W_full, 3), 235, np.uint8))
-        ax.text(ox + W / 2, oy + H / 2, placeholder, ha="center", va="center", fontsize=11 * k, color="#555555", style="italic")
+        # 2026-09-16 (user): keep the frame visible under a translucent veil, and say why there is no prediction
+        ax.imshow(frame_rgb)
+        ax.imshow(np.full((H_full, W_full, 3), 255, np.uint8), alpha=0.55)
+        ax.text(ox + W / 2, oy + H / 2, placeholder, ha="center", va="center", fontsize=11 * k, color="#222222", style="italic",
+                bbox=dict(boxstyle="round,pad=0.4,rounding_size=0.8", fc=(1, 1, 1, 0.85), ec="none"))
         fig.savefig(out_png, dpi=dpi, facecolor="white"); plt.close(fig); return
     ax.imshow(frame_rgb)
     if mask is not None:
