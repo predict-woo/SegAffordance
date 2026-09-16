@@ -2461,3 +2461,15 @@ OPD-P 512 41.4 (31.8); MOPD 512 42.1 (31.0); USDNet 2 cm 16.3 (9.3); A3VLM chain
 queries 21.8. Orderings unchanged everywhere; the margin to the best detector grows from 5 to 12 deg. Flip rates on detected
 frames: ours 4 %, detectors 9-14 %, 3DOI 32 %. Text numbers updated (USDNet 16 deg, A3VLM 5 deg less accurate, ablation
 4 deg worse axis, Table III 19.2 -> 16.5). Depth / no-mask arms must be scored the same way.
+
+## Depth-input ablation: result and decision (2026-09-16 ~04:40 UTC)
+
+`20260916_joint4_decoder_dense_depth` (final recipe + depth encoder + real depth; chain done 03:26 UTC, pod deleted).
+Paper protocol (probes with --load-depth; CSVs in the experiment dir): SF3D axis 15.8 / origin 0.299 / mIoU 0.241 /
+PDet 45.6 / +M 43.5 / +MA 26.5 / +MAO 21.9 / MA 45.9 / MAO 37.7 (final RGB: 16.5 / 0.248 / 0.277 / 51.9 / 49.9 / 29.1 /
+24.8 / 42.7 / 35.9). Hand video (mIoU / contact / endpoint / axis): HOI4D 0.52 / 0.019 / 0.053 / 48.8; EPIC 0.17 / 0.070 /
+0.195 / 41.0; ARCTIC 0.40 / 0.066 / 0.172 / 52.1 (final: 0.51 / 0.020 / 0.056 / 42.9; 0.19 / 0.055 / 0.219 / 36.7;
+0.51 / 0.060 / 0.164 / 45.8). Reading: +3 MA ungated, but worse grounding, hinge and every gated rate, and clearly worse
+transfer (ARCTIC axis +6 deg, ARCTIC masks -0.11). USER DECISION: depth is OUT of the paper entirely (no ablation row, the
+optional-depth paragraph and the depth input removed from the method text and from Fig. 3; Overleaf commit today).
+The depth encoder stays in the code (use_depth false everywhere).
