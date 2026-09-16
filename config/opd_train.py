@@ -88,6 +88,9 @@ class ModelParams:
     # did) instead of the GT mask. Detached so articulation losses cannot
     # steer the mask head through the pooling path.
     pool_with_predicted_mask: bool = False
+    # Readout support for the votes / pooled features: "mask" (default), "point" (predicted
+    # interaction-point heatmap; the no-mask ablation, 2026-09-16) or "uniform".
+    vote_weight_source: str = "mask"
     # gen-7 (docs/superpowers/specs/2026-08-14-heatmap-depth-lift-gen7-design.md).
     # Third projector channel: origin heatmap -> soft-argmax origin_uv ->
     # scalar depth z_q -> q_hat lifted with intrinsics. Supervised at the

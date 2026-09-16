@@ -2441,3 +2441,12 @@ overlay at the end). Launch via the scratchpad launcher (poll RTX PRO 6000 stock
 score with the Table II protocol; NOTE every probe tool builds SF3DDataset with load_depth=False -> for this checkpoint
 pass real depth (sf3d_mao_probe / handvideo_point_probe / hoi4d_axis_probe need a --load-depth switch) or the numbers are
 for a zero depth map. Dev pod overlay is 98 % full (/root caches) — clean before the next smoke there.
+
+## No-mask ablation launched (2026-09-16), in parallel with the depth arm
+
+`20260916_joint4_decoder_dense_nomask`: final recipe with the readout support switched from the part mask to the predicted
+interaction-point heatmap (`model_params.vote_weight_source: point`, new switch in segmenter/ModelParams; "uniform" also
+exists) and the mask loss off everywhere. Design choices and why in its notes.md. Smoke passed on the dev pod. Pod
+jdec-nomask via the gated scratchpad launcher. Both pods (jdec-depth, jdec-nomask) must be DELETED after CHAIN_DONE and
+the deletion verified with `runpodctl pod list --all`. Dev pod overlay: inductor/triton caches removed (was 98 % full;
+/root/hfcache 1.3 GB remains).

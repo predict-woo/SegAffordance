@@ -142,6 +142,10 @@ class CRIS(nn.Module):
         self.pool_with_predicted_mask = getattr(
             model_params, "pool_with_predicted_mask", False
         )
+        # What weights the per-pixel votes and the part-pooled features:
+        # "mask" (default: GT mask in train, predicted mask at test), "point"
+        # (the predicted interaction-point heatmap; no-mask ablation), "uniform".
+        self.vote_weight_source = getattr(model_params, "vote_weight_source", "mask")
 
         # gen-7 (docs/superpowers/specs/2026-08-14-heatmap-depth-lift-gen7-
         # design.md): third projector channel -> soft-argmax origin_uv ->
@@ -578,7 +582,19 @@ class CRIS(nn.Module):
         # --- Motion VAE part ---
         fq_h, fq_w = fq.shape[-2:]
 
-        if self.training and not self.pool_with_predicted_mask:
+        if self.vote_weight_source == "point":
+            # No-mask ablation (2026-09-16): the readout support is a soft window
+            # around the PREDICTED interaction point (the point heatmap as a
+            # distribution), train and test alike (detached in train mode), so
+            # the part mask enters neither the votes nor the pooled features.
+            w = torch.softmax(point_pred.flatten(1).float(), dim=-1).view_as(point_pred)
+            w = F.interpolate(w, size=(fq_h, fq_w), mode="bilinear", align_corners=False)
+            mask_for_pooling = (w / w.sum(dim=(-1, -2), keepdim=True).clamp(min=1e-8)).to(fq.dtype)
+            if self.training:
+                mask_for_pooling = mask_for_pooling.detach()
+        elif self.vote_weight_source == "uniform":
+            mask_for_pooling = torch.ones(fq.shape[0], 1, fq_h, fq_w, dtype=fq.dtype, device=fq.device)
+        elif self.training and not self.pool_with_predicted_mask:
             # Classical teacher forcing: pool under the GT mask.
             mask_for_pooling = F.interpolate(
                 mask.float(), size=(fq_h, fq_w), mode="bilinear", align_corners=False
