@@ -28,6 +28,7 @@ viz/**
 !viz/INDEX.md
 !viz/*/README.md
 !viz/*/manifest.yaml
+!viz/*/*.py
 !viz/*/*.csv
 !viz/*/preds.jsonl
 !viz/*/preds_*.jsonl

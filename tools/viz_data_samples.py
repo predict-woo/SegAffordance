@@ -61,7 +61,7 @@ def mask_polys(mask_u8):
     return [c[:, 0, :] for c in cs if len(c) >= 3 and cv2.contourArea(c) > 30]
 
 
-def render(frame_rgb, mask, track_px, valid, point_xy, mtype, text, out_png, dpi=200, k=1.0, caption=True):
+def render(frame_rgb, mask, track_px, valid, point_xy, mtype, text, out_png, dpi=200, k=1.0, caption=True, badge=True, draw_mask=True):
     """k scales fonts and line widths (k ~ 2.5 for a panel printed ~3 cm wide)."""
     import matplotlib
     matplotlib.use("Agg")
@@ -79,9 +79,10 @@ def render(frame_rgb, mask, track_px, valid, point_xy, mtype, text, out_png, dpi
 
     # mask: translucent fill + crisp outline
     overlay = np.zeros((H, W, 4), dtype=np.float32)
-    overlay[mask > 0] = (*RED, 0.38)
+    if draw_mask:
+        overlay[mask > 0] = (*RED, 0.38)
     ax.imshow(overlay)
-    for poly in mask_polys((mask > 0).astype(np.uint8)):
+    for poly in (mask_polys((mask > 0).astype(np.uint8)) if draw_mask else []):
         ax.plot(np.r_[poly[:, 0], poly[0, 0]], np.r_[poly[:, 1], poly[0, 1]],
                 color=RED, lw=1.6 * k, solid_joinstyle="round")
 
@@ -103,7 +104,8 @@ def render(frame_rgb, mask, track_px, valid, point_xy, mtype, text, out_png, dpi
 
     # type badge
     label = TYPE_NAME[int(mtype)]
-    ax.text(0.03 * W, 0.045 * H, label, ha="left", va="top", fontsize=13 * k, color="white",
+    if badge:
+      ax.text(0.03 * W, 0.045 * H, label, ha="left", va="top", fontsize=13 * k, color="white",
             fontweight="bold", zorder=6,
             bbox=dict(boxstyle="round,pad=0.35,rounding_size=0.8", fc=TYPE_COLOR[int(mtype)],
                       ec="none", alpha=0.95))
@@ -154,6 +156,8 @@ def main():
     ap.add_argument("--keys", default="", help="comma-separated record keys to render instead of random picks")
     ap.add_argument("--style-scale", type=float, default=1.0, help="font / line scale (2 for ~3 cm print width)")
     ap.add_argument("--no-caption", action="store_true", help="omit the instruction strip (put it in the LaTeX caption instead)")
+    ap.add_argument("--no-badge", action="store_true", help="omit the revolute / prismatic badge")
+    ap.add_argument("--no-mask", action="store_true", help="omit the part mask (hand track only)")
     a = ap.parse_args()
 
     root, key_cache = SOURCES[a.dataset]
@@ -199,7 +203,7 @@ def main():
         mtype = int(it[7])
         safe = key.replace("/", "__")
         out_png = os.path.join(a.out, f"{n:02d}_{safe}.png")
-        render(frame, mask, track, valid, point, mtype, it[2], out_png, k=a.style_scale, caption=not a.no_caption)
+        render(frame, mask, track, valid, point, mtype, it[2], out_png, k=a.style_scale, caption=not a.no_caption, badge=not a.no_badge, draw_mask=not a.no_mask)
         pngs.append(out_png)
         rows.append(f"| {n:02d} | `{key}` | {TYPE_NAME[mtype]} | {it[2].strip().splitlines()[0]} |")
         print(f"  {n:02d} {key} {TYPE_NAME[mtype]} :: {it[2].strip().splitlines()[0]}")

@@ -176,6 +176,9 @@ def main():
     ap.add_argument("--aspect", type=float, default=4 / 3, help="crop every panel to this aspect around the GT point (0 = native)")
     ap.add_argument("--extent", choices=["gt", "decoded"], default=None, help="motion on our panels (default: gt for sf3d, decoded for hand video)")
     ap.add_argument("--no-save-preds", action="store_true")
+    ap.add_argument("--clean", action="store_true", help="teaser style: no type badge, no axis-error label on any panel")
+    ap.add_argument("--no-error", action="store_true", help="keep the type badges, drop the axis-error labels and notes")
+    ap.add_argument("--save-frame", action="store_true", help="also write the raw cropped frame as <tag>_frame.png")
     a = ap.parse_args()
     extent_mode = a.extent or ("gt" if a.source == "sf3d" else "decoded")
     ours = {}
@@ -212,6 +215,9 @@ def main():
         extent = gt_extent(traj3d, gt_type, gt_origin, gt_dir) if a.source == "sf3d" else None
         tag = f"{n_i:02d}_{a.source}_{'rot' if gt_type == 1 else 'trans'}_{j}"
         panels = []
+        if a.save_frame:
+            cv2.imwrite(f"{a.out}/{tag}_frame.png", frame[crop[1]:crop[3], crop[0]:crop[2], ::-1])
+            with open(f"{a.out}/{tag}_desc.txt", "w") as fo: fo.write(fr["desc"])
 
         def axis_for(t, d, origin, anchor):
             if t == 1 and origin is not None:
@@ -229,7 +235,7 @@ def main():
         tr = (fr["traj2d_px"] / torch.tensor([fr["W"], fr["H"]])).numpy()[fr["valid2d"].numpy()]
         gt_axis = axis_for(gt_type, gt_dir, gt_origin, gt_origin if a.source == "arctic" else p0) if has_gt_axis else None
         f = f"{a.out}/{tag}_gt.png"
-        render(frame, m, gt_axis, tr, fr["point_gt"].numpy(), gt_type, None, f, a.k, crop=crop); panels.append(f)
+        render(frame, m, gt_axis, tr, fr["point_gt"].numpy(), None if a.clean else gt_type, None, f, a.k, crop=crop); panels.append(f)
         # baselines: oracle-matched instance, or placeholder
         for name, preds in bl:
             f = f"{a.out}/{tag}_{name}.png"
@@ -243,7 +249,7 @@ def main():
             if not r or not r.get("matched"):
                 if r and r.get("mask_rle"):   # e.g. 3DOI "freeform": a mask but no joint
                     bm = cv2.resize(mask_utils.decode(r["mask_rle"]).astype(np.uint8), (PW, PH), interpolation=cv2.INTER_NEAREST)
-                    render(frame, bm, None, None, None, None, None, f, a.k, crop=crop, note="no joint predicted")
+                    render(frame, bm, None, None, None, None, None, f, a.k, crop=crop, note="" if (a.clean or a.no_error) else "no joint predicted")
                 else:
                     render(frame, None, None, None, None, None, None, f, a.k, crop=crop, placeholder=f"{name}\nno instance")
                 panels.append(f); continue
@@ -252,11 +258,11 @@ def main():
             note = "nearest instance, " if r.get("fallback") == "nearest" else ""
             if r.get("axis_cam") is not None:
                 d = np.asarray(r["axis_cam"], np.float64)
-                render(frame, bm, axis_for(t, d, r.get("origin_cam"), p0), None, None, t, err(d), f, a.k, crop=crop, note=note)
+                render(frame, bm, axis_for(t, d, r.get("origin_cam"), p0), None, None, None if a.clean else t, None if (a.clean or a.no_error) else err(d), f, a.k, crop=crop, note="" if (a.clean or a.no_error) else note)
             elif r.get("line_2d"):   # 3DOI without depth: an undirected 2D line
-                render(frame, bm, (np.asarray(r["line_2d"], np.float64), None), None, None, t, None, f, a.k, crop=crop, note=note + "2D line")
+                render(frame, bm, (np.asarray(r["line_2d"], np.float64), None), None, None, None if a.clean else t, None, f, a.k, crop=crop, note="" if (a.clean or a.no_error) else note + "2D line")
             else:
-                render(frame, bm, None, None, None, t, None, f, a.k, crop=crop, note=note)
+                render(frame, bm, None, None, None, None if a.clean else t, None, f, a.k, crop=crop, note="" if (a.clean or a.no_error) else note)
             panels.append(f)
         # ours
         for name, _ in a.ours:
@@ -269,7 +275,7 @@ def main():
                 tr = traj_uv(K, mo) if mo is not None else None
             else:
                 tr = traj_uv(K, anchor[None] + np.asarray(r["trajectory"], np.float64)) if r["trajectory"] else None
-            render(frame, om, axis_for(t, d, r["origin"], anchor), tr, r["point_uv"], t, err(d), f, a.k, crop=crop); panels.append(f)
+            render(frame, om, axis_for(t, d, r["origin"], anchor), tr, r["point_uv"], None if a.clean else t, None if (a.clean or a.no_error) else err(d), f, a.k, crop=crop); panels.append(f)
         ims = [cv2.imread(p) for p in panels]
         ims = [cv2.resize(im, (cw, ch), interpolation=cv2.INTER_AREA) if im.shape[:2] != (ch, cw) else im for im in ims]
         cv2.imwrite(f"{a.out}/{tag}.png", np.hstack(ims))

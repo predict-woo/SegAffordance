@@ -1,0 +1,6 @@
+command: python3 viz/20260916_teaser_option_a/build.py
+generated: 2026-09-16T03:52:59Z
+inputs: [panels/hoi4d, panels/epic, panels/arctic (tools/viz_data_samples.py --no-mask), panels/laptop (tools/viz_fig4_panels.py --no-error --save-frame, ARCTIC idx 270), panels/sf3d_213 (dump_sample.py + render_pointcloud.py)]
+experiment: 20260913_joint4_decoder_l2anchor_dense
+checkpoint: best-epoch13-sf3dval0.9789.ckpt (via the Fig. 5 dump; no inference here)
+outputs: [fig.svg, fig.pdf, preview.png]

@@ -5,7 +5,7 @@ Architecture schematic of the FINAL model, `20260913_joint4_decoder_l2anchor_den
 `DenseArticulationHead`, `model/losses/geometric.py` `analytic_decode_curves`). Architecture figure,
 not checkpoint inference: no model runs. The example is SceneFun3D validation record 1773
 ("Open the left door of the closet near the window"), dumped on the dev pod by `dump_sample.py`
-(`sample/frame.png`, `sample/mask.png`, `sample/meta.json`); the output panel shows its GROUND-TRUTH
+(`sample/frame.png`, `sample/depth.png` inferno-coloured, `sample/mask.png`, `sample/meta.json`); the output panel shows its GROUND-TRUTH
 mask (magenta with a dark outline, so a handle-sized mask stays visible), hinge axis (red),
 interaction point (yellow ring) and sweep arc (yellow) projected with the record's intrinsics.
 `sample/mask_overlay.png` is derived from `sample/mask.png` by the ImageMagick line in `build.py`'s
@@ -19,11 +19,15 @@ and Times math with the paper's notation (bold vectors `I, T, s, w, F, F_q, u_p,
 italic scalars `M, c, z_p, z_q, L, γ(s)`).
 
 Three dashed groups match the method subsections: language-conditioned feature encoder (frozen
-DINOv3 ViT-L/16 + dino.txt, pyramid adapter to strides 8/16/32, sentence-state-gated FPN, 3-layer
-transformer decoder cross-attending to the word tokens, decoded map 512x32x32); dense hinge voting
-and readouts (dynamic-kernel projector to mask + point heatmaps with soft-argmax, dense voting head
+DINOv3 ViT-L/16 + dino.txt, pyramid adapter to strides 8/16/32, the text-gated FPN drawn EXPLODED as a
+sub-panel: conv 3x3 per level, the /32 level gated by the sentence state, /32 up x2 and /8 pool x2 into
+a concat bar at /16, conv 1x1 aggregation, CoordConv -> F, 3-layer
+transformer decoder cross-attending to the word tokens, decoded map 512x32x32; the OPTIONAL depth
+branch of the RGB-D variant is drawn dashed: depth map -> small conv depth encoder -> features
+concatenated to the /8 and /16 pyramid levels before fusion, `model/segmenter.py` `use_depth`); dense hinge voting
+and readouts (dynamic-kernel projector to two cell grids, one with a bar of dark cells at the handle (mask) and one shaded by distance from the point (heatmap), with soft-argmax, dense voting head
 with per-pixel axis / direction / type / hinge-offset fields averaged under the mask, part-pooled
-MLPs for z_p, z_q, L); analytic trajectory decoder (lift with K, render γ(s)) with the two
+MLPs for z_p, z_q, L); analytic trajectory generator (lift with K, render γ(s)) with the two
 supervision paths (2D projection loss on hand tracks, 3D closed-form loss on SceneFun3D sweeps).
 
 Fact drawn as implemented, not as the current paper text says: the pyramid adapter reads the
@@ -31,7 +35,7 @@ ViT's FINAL-layer patch tokens only (`SimpleFeaturePyramid`; `dinov3_multilayer_
 the final config). The four-tap DPT-style adapter exists in the code but was only used in the g14
 / g15 configs, so the "four intermediate taps" paragraph of `03_method.tex` needs correcting.
 
-Sizing: 2398 x 772 px canvas (3.1:1), laid out by a running x cursor with 36 px group padding and
+Sizing: 2550 x 804 px canvas (3.2:1), laid out by a running x cursor with 36 px group padding and
 named gaps (`build.py`). At IEEE two-column `\textwidth` (7.16 in) block labels print at ~6.1 pt,
 annotations at ~4.2 pt, group titles at ~6.1 pt.
 

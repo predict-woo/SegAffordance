@@ -1,0 +1,6 @@
+command: python3 viz/20260915_generalization_figure/build.py
+generated: 2026-09-15T18:05:19Z
+inputs: [viz/20260913_fig2_data_samples/picks_nocap (hoi4d, epic, arctic), viz/20260914_fig5v1_handvideo/00_arctic_rot_270_dense.png]
+experiment: 20260913_joint4_decoder_l2anchor_dense
+checkpoint: best-epoch13-sf3dval0.9789.ckpt (via the Fig. 5 render; no inference here)
+outputs: [fig.svg, fig.pdf, preview.png]
