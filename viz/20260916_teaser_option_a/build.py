@@ -141,9 +141,9 @@ for i, (img, dx, dy, rot, name, corner) in enumerate(pile):
     add(f'<rect x="{cx:.1f}" y="{cy:.1f}" width="{cw:.0f}" height="{chh}" rx="5" fill="white" fill-opacity="0.92" stroke="{LINE}" stroke-width="0.8"/>')
     text(cx + cw / 2, cy + chh / 2, name, fs, weight="600")
     add('</g>')
-text(RX0 + 186, SY + SH + 34, "prior methods", F_LAB, weight="600")
-mark(RX0 + 186 - 96 - 24, SY + SH + 34, False, r=15)
-text(RX0 + 186, SY + SH + 64, "prismatic, wrong part", F_SUB, fill=MUTED)
+text(RX0 + 172, SY + SH + 34, "prior methods", F_LAB, weight="600")
+text(RX0 + 172 + 16, SY + SH + 64, "prismatic, wrong part", F_SUB, fill=MUTED)
+mark(RX0 + 172 + 16 - 110 - 20, SY + SH + 64, False, r=12)
 
 text(688, TY + 24 + TH / 2, "vs.", F_LAB, fill=MUTED)
 
@@ -151,9 +151,9 @@ text(688, TY + 24 + TH / 2, "vs.", F_LAB, fill=MUTED)
 EX, EY, EW = 715, TY + 4, 255
 EH = EW * 3 / 4
 photo(EX, EY, EW, EH, "laptop_dense.jpg", "ego", rx=8)
-text(EX + EW / 2 + 12, EY + EH + 26, "EgoArt", F_LAB, weight="600")
-mark(EX + EW / 2 + 12 - 50 - 24, EY + EH + 26, True, r=15)
-text(EX + EW / 2, EY + EH + 56, "revolute, hinge on edge", F_SUB, fill=MUTED)
+text(EX + EW / 2, EY + EH + 26, "EgoArt", F_LAB, weight="600")
+mark(EX + EW / 2 + 16 - 124 - 20, EY + EH + 56, True, r=12)
+text(EX + EW / 2 + 16, EY + EH + 56, "revolute, hinge on edge", F_SUB, fill=MUTED)
 
 
 add("</svg>")
