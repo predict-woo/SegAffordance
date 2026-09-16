@@ -21,10 +21,10 @@ Message: 3D articulation on an object class that appears only in 2D human video.
   (`panels/sf3d*`); the kitchen is the only one wide enough to read as a scan.
 
 **Bottom row, a new object seen only in human video.** ARCTIC laptop record idx 270 (Fig. 5 row 1,
-"open the laptop screen"): the raw frame with the instruction; the prior methods as a scattered pile of
-five smaller cards, each with its own cross and a method-name chip (3DOI in front at the lower right, its blob mask and sideways
+"open the laptop screen"): the raw frame with the instruction in a speech bubble (language conditioning, per the supervisor); the prior methods as a scattered pile of
+five smaller cards, each with a method-name chip at its top-right (3DOI in front at the lower right, its blob mask and sideways
 line an obvious miss; A3VLM, OPDFormer-C, MOPD, OPDFormer-P tossed behind at their own offsets and
-angles, all "prismatic" with the wrong part); EgoArt (`20260913_joint4_decoder_l2anchor_dense`, best-epoch13) under a check: revolute, full
+angles, all "prismatic" with the wrong part); one cross beside the "prior methods" label; EgoArt (`20260913_joint4_decoder_l2anchor_dense`, best-epoch13) with a check beside its label: revolute, full
 lid, hinge on the lid edge. Rendered by `tools/viz_fig4_panels.py --no-error --save-frame` (both switches
 added for this figure: badges kept, axis-error labels dropped, raw crop written) from the Fig. 5 records in
 `viz/20260914_fig5v1_handvideo/preds_arctic_*.jsonl` and the dump in `viz/20260914_fig5_handvideo_50`.

@@ -107,8 +107,14 @@ text(30, RY, "NEW OBJECT, SEEN ONLY IN HUMAN VIDEO", F_HEAD, anchor="start", fil
 TY = RY + 26
 TW, TH = 200, 150
 photo(30, TY + 24, TW, TH, "laptop_frame.jpg", "test", rx=8)
-text(30 + TW / 2, TY + 24 + TH + 26, "“open the", F_SUB + 2, italic=True)
-text(30 + TW / 2, TY + 24 + TH + 54, "laptop screen”", F_SUB + 2, italic=True)
+cxb, by0, bw, bh, r = 30 + TW / 2, TY + 24 + TH + 18, 226, 76, 12
+bx0 = cxb - bw / 2
+add(f'<path d="M {bx0 + r} {by0} L {cxb - 11} {by0} L {cxb} {by0 - 13} L {cxb + 11} {by0} L {bx0 + bw - r} {by0} '
+    f'A {r} {r} 0 0 1 {bx0 + bw} {by0 + r} L {bx0 + bw} {by0 + bh - r} A {r} {r} 0 0 1 {bx0 + bw - r} {by0 + bh} '
+    f'L {bx0 + r} {by0 + bh} A {r} {r} 0 0 1 {bx0} {by0 + bh - r} L {bx0} {by0 + r} A {r} {r} 0 0 1 {bx0 + r} {by0} Z" '
+    f'fill="white" stroke="{LINE}" stroke-width="1.6" stroke-linejoin="round"/>')
+text(cxb, by0 + 26, "“open the", F_SUB + 2, italic=True)
+text(cxb, by0 + 54, "laptop screen”", F_SUB + 2, italic=True)
 arrow(30 + TW + 12, TY + 24 + TH / 2, 30 + TW + 60, TY + 24 + TH / 2)
 
 # scattered pile of prior methods: five smaller cards tossed across the slot so each one shows,
@@ -117,9 +123,9 @@ SW, SH = 148, 148 * 3 / 4
 RX0, RY0 = 300, TY + 22                            # pile region origin (between the arrow and "vs.")
 pile = [  # (image, dx, dy, rot, name, chip corner), drawn back to front; the corner is one each card keeps visible
     ("laptop_OPDFormer-P.jpg", 112, -20, 9, "OPDFormer-P", "tr"),
-    ("laptop_MOPD.jpg", 0, 26, -8, "MOPD", "tm"),
+    ("laptop_MOPD.jpg", 0, 26, -8, "MOPD", "tr"),
     ("laptop_OPDFormer-C.jpg", 172, 54, -5, "OPDFormer-C", "tr"),
-    ("laptop_A3VLM.jpg", 10, 86, 6, "A3VLM", "bl"),
+    ("laptop_A3VLM.jpg", 10, 86, 6, "A3VLM", "tr"),
     ("laptop_3DOI.jpg", 152, 126, -2, "3DOI", "tr"),
 ]
 SX, SY = RX0 + pile[-1][1], RY0 + pile[-1][2]     # the front card, for the label
@@ -128,16 +134,16 @@ for i, (img, dx, dy, rot, name, corner) in enumerate(pile):
     add(f'<g transform="rotate({rot} {gx + SW / 2:.1f} {gy + SH / 2:.1f})">')
     add(f'<rect x="{gx - 3}" y="{gy - 3}" width="{SW + 6}" height="{SH + 6:.1f}" rx="8" fill="white" stroke="{LINE}" stroke-width="1"/>')
     photo(gx, gy, SW, SH, img, f"s{i}", rx=6, border=False)
-    mark(gx + SW - 14, gy + 14, False, r=13)
     # method name chip, kept in the corner of the card that stays uncovered
     fs = 13; cw, chh = len(name) * fs * 0.6 + 12, fs + 8
     cx = gx + 6 if corner in ("tl", "bl") else (gx + 74 if corner == "tm" else gx + SW - 6 - cw)
-    cy = gy + SH - 6 - chh if corner == "bl" else (gy + 28 if corner == "tr" else (gy + 6 if corner == "tm" else gy + 30))
+    cy = gy + SH - 6 - chh if corner == "bl" else (gy + 6 if corner in ("tr", "tm") else gy + 30)
     add(f'<rect x="{cx:.1f}" y="{cy:.1f}" width="{cw:.0f}" height="{chh}" rx="5" fill="white" fill-opacity="0.92" stroke="{LINE}" stroke-width="0.8"/>')
     text(cx + cw / 2, cy + chh / 2, name, fs, weight="600")
     add('</g>')
-text(RX0 + 172, SY + SH + 34, "prior methods", F_LAB, weight="600")
-text(RX0 + 172, SY + SH + 64, "prismatic, wrong part", F_SUB, fill=MUTED)
+text(RX0 + 186, SY + SH + 34, "prior methods", F_LAB, weight="600")
+mark(RX0 + 186 - 96 - 24, SY + SH + 34, False, r=15)
+text(RX0 + 186, SY + SH + 64, "prismatic, wrong part", F_SUB, fill=MUTED)
 
 text(688, TY + 24 + TH / 2, "vs.", F_LAB, fill=MUTED)
 
@@ -145,8 +151,8 @@ text(688, TY + 24 + TH / 2, "vs.", F_LAB, fill=MUTED)
 EX, EY, EW = 715, TY + 4, 255
 EH = EW * 3 / 4
 photo(EX, EY, EW, EH, "laptop_dense.jpg", "ego", rx=8)
-mark(EX + EW - 18, EY + 18, True)
-text(EX + EW / 2, EY + EH + 26, "EgoArt", F_LAB, weight="600")
+text(EX + EW / 2 + 12, EY + EH + 26, "EgoArt", F_LAB, weight="600")
+mark(EX + EW / 2 + 12 - 50 - 24, EY + EH + 26, True, r=15)
 text(EX + EW / 2, EY + EH + 56, "revolute, hinge on edge", F_SUB, fill=MUTED)
 
 
