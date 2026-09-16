@@ -2473,3 +2473,12 @@ PDet 45.6 / +M 43.5 / +MA 26.5 / +MAO 21.9 / MA 45.9 / MAO 37.7 (final RGB: 16.5
 transfer (ARCTIC axis +6 deg, ARCTIC masks -0.11). USER DECISION: depth is OUT of the paper entirely (no ablation row, the
 optional-depth paragraph and the depth input removed from the method text and from Fig. 3; Overleaf commit today).
 The depth encoder stays in the code (use_depth false everywhere).
+
+## Paper: masks-and-types (noproj) model removed for good (2026-09-16 ~06:20 UTC)
+
+Table III is two rows (SceneFun3D only / + human video); the noproj row, the trade-off sentences, the "channel is the
+trajectory loss" claim and the conclusion's "carried by the trajectory loss alone" are gone. Evaluation paragraph now holds
+all metric definitions (Overleaf 1e73761). The noproj run and its probe CSVs stay in the repo. The no-mask arm finished on
+the EU-FR-1 H200 (CHAIN_DONE 06:00 UTC, best-epoch19; trainer: SF3D MA 51.4, ARCTIC axis 55.9 = chance) but is PAUSED by
+the user: results NOT yet pulled to the main volume, the H200 pod (jdec-nomask-h200fr, $4.59/h) is STILL RUNNING with the
+only copy of the checkpoint; pull script staged at /root/pull_fr_results.sh on the dev pod, probes at /root/probe_nomask.sh.
