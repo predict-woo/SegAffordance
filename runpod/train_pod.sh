@@ -43,6 +43,12 @@ GPUS=(
 if [ "${TRAIN_GPUS_48GB:-0}" = "1" ]; then
   GPUS+=("NVIDIA RTX 6000 Ada Generation" "NVIDIA L40S" "NVIDIA A40" "NVIDIA RTX A6000")
 fi
+# Server Edition only (no Workstation fallback): a 4th power-capped Workstation lemon
+# (532 MHz at 600 W, 0.49 it/s vs 2.05) cost 40 min on 2026-09-16. Opt in per launch:
+# TRAIN_GPUS_SERVER_ONLY=1 — the create loop then polls until Server stock lands.
+if [ "${TRAIN_GPUS_SERVER_ONLY:-0}" = "1" ]; then
+  GPUS=("NVIDIA RTX PRO 6000 Blackwell Server Edition")
+fi
 
 pod_id() {
   runpodctl pod list 2>/dev/null | python3 -c "
