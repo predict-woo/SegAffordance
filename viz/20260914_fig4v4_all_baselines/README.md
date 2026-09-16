@@ -63,3 +63,7 @@ python tools/compose_panels.py --out viz/20260914_paper_figures/fig_sf3d_qual_v8
 errors 5 / 44 / 13 / 16 deg) -> strips re-rendered with every column real; composite `fig_sf3d_qual_v10.png` (label EgoArt,
 Overleaf d5b5ddf). Same render command as above with `--baseline MOPD $R/mopd512_rgb/preds.jsonl`, `--baseline USDNet
 $R/usdnet_v1cm/preds.jsonl`, `--baseline 3DOI $R/3doi_runpod/preds.jsonl` and the `preds_nearest_opd512_*` files for the OPDFormers.
+
+**Update (2026-09-16, user): placeholders keep the frame.** `tools/viz_fig4_panels.py` draws placeholder panels (no instance /
+needs depth / not applicable) as the frame under a translucent white veil with the reason in a rounded box, instead of a flat
+grey panel. Strips re-rendered (same commands), composite `fig_sf3d_qual_v11.png` (USDNet oven door). Overleaf fig_sf3d_qual.jpg = v11.

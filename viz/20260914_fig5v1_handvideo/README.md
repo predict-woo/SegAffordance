@@ -49,3 +49,6 @@ fallback on the microwave door and both HOI4D rows, labelled "nearest instance")
 **Update (2026-09-16, user): Ours columns first.** `fig_handvideo_qual_v5.png` -> `fig_handvideo_qual_v6.png`: column order
 GT | SceneFun3D only | EgoArt | OPDFormer-C | OPDFormer-P | MOPD | A3VLM | 3DOI (`--cols 0,7,8,1,2,3,5,6`,
 `--col-groups "Ours:1-2,Baselines:3-7"`), everything else as v5.
+
+**Update (2026-09-16, user): placeholders keep the frame.** Same renderer change as Fig. 4 (frame under a translucent veil +
+reason); strips re-rendered, composite `fig_handvideo_qual_v7.png` (EPIC / OPDFormer-C "needs depth"). Overleaf fig_handvideo_qual.jpg = v7.
