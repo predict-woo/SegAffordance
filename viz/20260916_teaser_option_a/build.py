@@ -57,7 +57,7 @@ def mark(cx, cy, ok, r=17):
 
 
 # ---------------------------------------------------------------- layout (1000 x 720 design units)
-W, H = 1000, 750
+W, H = 1000, 798
 F_HEAD, F_LAB, F_SUB = 26, 28, 24      # ~6.5 / 7 / 6 pt at column width
 add(f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">')
 add('<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
@@ -111,26 +111,29 @@ text(30 + TW / 2, TY + 24 + TH + 26, "“open the", F_SUB + 2, italic=True)
 text(30 + TW / 2, TY + 24 + TH + 54, "laptop screen”", F_SUB + 2, italic=True)
 arrow(30 + TW + 12, TY + 24 + TH / 2, 30 + TW + 60, TY + 24 + TH / 2)
 
-# scattered pile of prior methods: back cards tossed at their own offsets and angles, 3DOI on top
-SX, SY, SW, SH = 334, TY + 62, 205, 205 * 3 / 4
-pile = [  # (image, dx, dy, rot), drawn back to front
-    ("laptop_OPDFormer-P.jpg", 34, -40, 11),
-    ("laptop_MOPD.jpg", -26, -30, -9),
-    ("laptop_OPDFormer-C.jpg", 46, -8, -5),
-    ("laptop_A3VLM.jpg", -10, -46, 4),
-    ("laptop_3DOI.jpg", 0, 0, -1.5),
+# scattered pile of prior methods: five smaller cards tossed across the slot so each one shows,
+# 3DOI on top and nearly square-on
+SW, SH = 148, 148 * 3 / 4
+RX0, RY0 = 300, TY + 10                            # pile region origin (between the arrow and "vs.")
+pile = [  # (image, dx, dy, rot), drawn back to front; dx stays within the slot (arrow .. "vs.")
+    ("laptop_OPDFormer-P.jpg", 112, -8, 9),
+    ("laptop_MOPD.jpg", 0, 26, -8),
+    ("laptop_OPDFormer-C.jpg", 200, 48, -5),
+    ("laptop_A3VLM.jpg", 10, 86, 6),
+    ("laptop_3DOI.jpg", 152, 126, -2),
 ]
+SX, SY = RX0 + pile[-1][1], RY0 + pile[-1][2]     # the front card, for the cross and the label
 for i, (img, dx, dy, rot) in enumerate(pile):
-    gx, gy = SX + dx, SY + dy
+    gx, gy = RX0 + dx, RY0 + dy
     add(f'<g transform="rotate({rot} {gx + SW / 2:.1f} {gy + SH / 2:.1f})">')
     add(f'<rect x="{gx - 3}" y="{gy - 3}" width="{SW + 6}" height="{SH + 6:.1f}" rx="8" fill="white" stroke="{LINE}" stroke-width="1"/>')
     photo(gx, gy, SW, SH, img, f"s{i}", rx=6, border=False)
+    mark(gx + SW - 14, gy + 14, False, r=13)
     add('</g>')
-mark(SX + SW - 16, SY + 16, False)
-text(SX + SW / 2 + 20, SY + SH + 26, "prior methods", F_LAB, weight="600")
-text(SX + SW / 2 + 20, SY + SH + 56, "prismatic, no part", F_SUB, fill=MUTED)
+text(RX0 + 172, SY + SH + 34, "prior methods", F_LAB, weight="600")
+text(RX0 + 172, SY + SH + 64, "prismatic, no part", F_SUB, fill=MUTED)
 
-text(660, TY + 24 + TH / 2, "vs.", F_LAB, fill=MUTED)
+text(688, TY + 24 + TH / 2, "vs.", F_LAB, fill=MUTED)
 
 # EgoArt
 EX, EY, EW = 715, TY + 4, 255
