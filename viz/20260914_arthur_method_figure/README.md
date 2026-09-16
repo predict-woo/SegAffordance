@@ -35,9 +35,8 @@ ViT's FINAL-layer patch tokens only (`SimpleFeaturePyramid`; `dinov3_multilayer_
 the final config). The four-tap DPT-style adapter exists in the code but was only used in the g14
 / g15 configs, so the "four intermediate taps" paragraph of `03_method.tex` needs correcting.
 
-Sizing: 2550 x 804 px canvas (3.2:1), laid out by a running x cursor with 36 px group padding and
-named gaps (`build.py`). At IEEE two-column `\textwidth` (7.16 in) block labels print at ~6.1 pt,
-annotations at ~4.2 pt, group titles at ~6.1 pt.
+Sizing: 3210 x 1145 px canvas (2.8:1), fonts scaled 1.45x on 2026-09-16 (FS in `build.py`). At IEEE
+`\textwidth` (7.16 in) block labels and group titles print at ~6.5 pt, annotations at ~5.4 pt.
 
 Files: `model.svg` (editable vector), `model.pdf` (paper include), `preview.png` (review copy),
 `sample/` (SF3D frame, mask, GT geometry), `dump_sample.py` (pod-side dump), `build.py` (generator),
