@@ -137,7 +137,7 @@ for i, (img, dx, dy, rot, name, corner) in enumerate(pile):
     text(cx + cw / 2, cy + chh / 2, name, fs, weight="600")
     add('</g>')
 text(RX0 + 172, SY + SH + 34, "prior methods", F_LAB, weight="600")
-text(RX0 + 172, SY + SH + 64, "prismatic, no part", F_SUB, fill=MUTED)
+text(RX0 + 172, SY + SH + 64, "prismatic, wrong part", F_SUB, fill=MUTED)
 
 text(688, TY + 24 + TH / 2, "vs.", F_LAB, fill=MUTED)
 
