@@ -1,9 +1,9 @@
 command: build.py
-tool_commit: 0cb4e7f
-generated: 2026-09-16T04:31:27+00:00
+tool_commit: ebd64c5
+generated: 2026-09-16T04:34:37+00:00
 experiment: 20260913_joint4_decoder_l2anchor_dense
 config: config/joint4_decoder_l2anchor_dense.yaml
 checkpoint: null  # architecture schematic, no inference
 example_image: sample/frame.png (SceneFun3D val 1773, dump_sample.py)
 outputs: [model.svg, model.pdf, preview.png]
-canvas_px: [3379.0, 1177.0]
+canvas_px: [3329.0, 1117.0]

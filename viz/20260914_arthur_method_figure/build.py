@@ -180,20 +180,19 @@ import json
 SAMPLE = OUT / "sample"                      # dumped by dump_sample.py on the dev pod (val 1773)
 IMG = base64.b64encode((SAMPLE / "frame.png").read_bytes()).decode()
 MASK = base64.b64encode((SAMPLE / "mask_overlay.png").read_bytes()).decode()
-DEPTH = base64.b64encode((SAMPLE / "depth.png").read_bytes()).decode()
 META = json.loads((SAMPLE / "meta.json").read_text())
 
 # ================================================================ canvas
 # --- layout constants: everything is placed with a running x cursor and named gaps
 PAD = 36               # inner padding of a group box
 GGAP = 22              # gap between neighbouring groups
-MID = 520              # vertical centre of the main data row
+MID = 470              # vertical centre of the main data row
 GY0 = 30               # top of the group boxes
-TROW = 880             # centre of the instruction / text row
+TROW = 830             # centre of the instruction / text row
 VH = 480               # height of the tall trunk blocks
 VY = MID - VH / 2
 BH = 150               # height of the readout head blocks
-R1, R2, R3 = MID - 285, MID, MID + 285
+R1, R2, R3 = MID - 265, MID, MID + 265
 
 # ---- pre-compute x positions (left to right) --------------------------------
 IX, IS = 26, 210                          # input photo
@@ -202,8 +201,7 @@ VX, VW = G1X + PAD, 200                   # DINOv3 tower / dino.txt tower
 PX, PW = VX + VW + 84, 80                # pyramid adapter
 LVX = PX + PW + 40                        # pyramid levels column (left edge of the widest map)
 LVW = 66
-FX = PX + PW + 146                        # text-gated FPN (exploded): per-level convs start here
-JX = PX + PW + 74                         # depth-concat junction column (middle of the gap, clear of the FPN border)
+FX = PX + PW + 96                        # text-gated FPN (exploded): per-level convs start here
 CW, CH = 54, 130                           # per-level "conv 3x3" boxes (rotated, tall)
 GX_ = FX + CW + 42                        # gate (x) on the /32 row
 CBX, CBW = GX_ + 18 + 96, 42              # concat bar
@@ -230,7 +228,7 @@ ADY = MID - ADH / 2
 OX, OS = ADX + ADW + 52, 236              # output panel
 OY = MID - OS / 2
 # supervision boxes
-SY, SH, SW = 1000, 150, 286
+SY, SH, SW = 940, 150, 286
 S1X = ADX + ADW / 2 - SW / 2 - 14
 S2X = OX + OS / 2 - SW / 2 + 14
 G3W = max(OX + OS, S2X + SW) + PAD - G3X
@@ -262,13 +260,6 @@ photo(IX, IY, IS, "clipin")
 frame(IX, IY, IS)
 text(IX + IS / 2, IY + IS + 36, f'RGB image {v("I")}', F_ANN + 1)
 
-# optional depth input (RGB-D variant): panel above the RGB image, dashed
-DS = 130
-DPX, DPY = IX + (IS - DS) / 2, 76
-photo(DPX, DPY, DS, "clipdepth", data=DEPTH)
-frame(DPX, DPY, DS, dashed=True)
-text(IX + IS / 2, DPY + DS + 30, f'depth {v("D")}', F_SMALL, fill=MUTED)
-text(IX + IS / 2, DPY + DS + 60, '(optional)', F_SMALL - 2, fill=MUTED)
 
 TX, TW, TH = IX, IS, 196
 TY = TROW - TH / 2
@@ -305,7 +296,7 @@ add(f'<rect x="{SGX0}" y="{SGY0}" width="{SGX1 - SGX0}" height="{SGY1 - SGY0}" r
 text((SGX0 + SGX1) / 2, SGY0 + 36, "Text-gated FPN", F_SUB + 3, weight="bold", fill="#444")
 for k, ((xx, yy, s_, lab), ry) in enumerate(zip(LV, ROWS)):
     arrow([(PX + PW, ry), (FX, ry)])
-    text((PX + PW + JX) / 2 - 6, ry - 22, lab, F_SMALL - 2, fill=MUTED)
+    text((PX + PW + FX) / 2, ry - 22, lab, F_SMALL - 2, fill=MUTED)
     box(FX, ry - CH / 2, CW, CH, "conv 3×3", TRUNK, fs=16, r=8, rot=True)
 # /32 row: gate by the sentence state, then up x2 into the concat bar
 otimes(GX_, ROWS[2])
@@ -327,18 +318,6 @@ arrow([(CBX + CBW, ROWS[1]), (AGX, ROWS[1])])
 box(AGX, ROWS[1] - CH2 / 2, AGW, CH2, "conv 1×1", TRUNK, fs=16, r=8, rot=True)
 arrow([(AGX + AGW, ROWS[1]), (CCX, ROWS[1])])
 box(CCX, ROWS[1] - CH2 / 2, CCW, CH2, "CoordConv", TRUNK, fs=16, r=8, rot=True)
-# optional depth encoder: small conv branch, features concatenated to the /8 and /16 levels before the convs
-DEW, DEH = 220, 74
-DEX, DEY = JX - DEW / 2, DPY + DS / 2 - DEH / 2
-box(DEX, DEY, DEW, DEH, "Depth encoder", TRUNK, fs=21, dashed=True, stroke=DIM)
-arrow([(DPX + DS, DPY + DS / 2), (DEX, DPY + DS / 2)], dashed=True, color=DIM)
-# dashed trunk down the gap, ending on the /16 row; a concat node on the /8 and /16 level arrows
-add(f'<path d="M {JX},{DEY + DEH} L {JX},{ROWS[1] - 9}" fill="none" stroke="{DIM}" stroke-width="1.8" stroke-dasharray="7 6"/>')
-for ry in ROWS[:2]:
-    add(f'<circle cx="{JX}" cy="{ry}" r="9" fill="white" stroke="{LINE}" stroke-width="1.4"/>')
-    add(f'<line x1="{JX - 5}" y1="{ry}" x2="{JX + 5}" y2="{ry}" stroke="{LINE}" stroke-width="1.4"/>')
-    add(f'<line x1="{JX}" y1="{ry - 5}" x2="{JX}" y2="{ry + 5}" stroke="{LINE}" stroke-width="1.4"/>')
-text(JX + 18, (DEY + DEH + SGY0) / 2, "concat at /8, /16", F_SMALL - 2, anchor="start", fill=MUTED)
 # sentence state s from dino.txt up into the gate
 arrow([(VX + VW, TROW - 48), (GX_, TROW - 48), (GX_, ROWS[2] + 12)])
 text(GX_ + 22, SGY1 + 34, v("s"), F_MATH, anchor="start", math=True)

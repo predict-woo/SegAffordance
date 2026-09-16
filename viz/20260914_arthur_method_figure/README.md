@@ -22,9 +22,8 @@ Three dashed groups match the method subsections: language-conditioned feature e
 DINOv3 ViT-L/16 + dino.txt, pyramid adapter to strides 8/16/32, the text-gated FPN drawn EXPLODED as a
 sub-panel: conv 3x3 per level, the /32 level gated by the sentence state, /32 up x2 and /8 pool x2 into
 a concat bar at /16, conv 1x1 aggregation, CoordConv -> F, 3-layer
-transformer decoder cross-attending to the word tokens, decoded map 512x32x32; the OPTIONAL depth
-branch of the RGB-D variant is drawn dashed: depth map -> small conv depth encoder -> features
-concatenated to the /8 and /16 pyramid levels before fusion, `model/segmenter.py` `use_depth`); dense hinge voting
+transformer decoder cross-attending to the word tokens, decoded map 512x32x32 (the optional depth branch of the RGB-D variant was drawn until 2026-09-16 and removed at the user's
+request; the sample dump still writes `sample/depth.png`); dense hinge voting
 and readouts (dynamic-kernel projector to two cell grids, one with a bar of dark cells at the handle (mask) and one shaded by distance from the point (heatmap), with soft-argmax, dense voting head
 with per-pixel axis / direction / type / hinge-offset fields averaged under the mask, part-pooled
 MLPs for z_p, z_q, L); analytic trajectory generator (lift with K, render γ(s)) with the two
