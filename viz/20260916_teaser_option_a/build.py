@@ -57,7 +57,7 @@ def mark(cx, cy, ok, r=17):
 
 
 # ---------------------------------------------------------------- layout (1000 x 720 design units)
-W, H = 1000, 742
+W, H = 1000, 750
 F_HEAD, F_LAB, F_SUB = 26, 28, 24      # ~6.5 / 7 / 6 pt at column width
 add(f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">')
 add('<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
@@ -111,12 +111,16 @@ text(30 + TW / 2, TY + 24 + TH + 26, "“open the", F_SUB + 2, italic=True)
 text(30 + TW / 2, TY + 24 + TH + 54, "laptop screen”", F_SUB + 2, italic=True)
 arrow(30 + TW + 12, TY + 24 + TH / 2, 30 + TW + 60, TY + 24 + TH / 2)
 
-# fanned stack of prior methods, front to back
-SX, SY, SW, SH = 310, TY + 54, 205, 205 * 3 / 4
-stack = ["laptop_MOPD.jpg", "laptop_OPDFormer-C.jpg", "laptop_A3VLM.jpg", "laptop_3DOI.jpg", "laptop_OPDFormer-P.jpg"]
-for i, img in enumerate(stack):
-    depth = len(stack) - 1 - i                    # 4 (back) .. 0 (front)
-    dx, dy, rot = depth * 14, -depth * 9, depth * 3
+# scattered pile of prior methods: back cards tossed at their own offsets and angles, 3DOI on top
+SX, SY, SW, SH = 334, TY + 62, 205, 205 * 3 / 4
+pile = [  # (image, dx, dy, rot), drawn back to front
+    ("laptop_OPDFormer-P.jpg", 34, -40, 11),
+    ("laptop_MOPD.jpg", -26, -30, -9),
+    ("laptop_OPDFormer-C.jpg", 46, -8, -5),
+    ("laptop_A3VLM.jpg", -10, -46, 4),
+    ("laptop_3DOI.jpg", 0, 0, -1.5),
+]
+for i, (img, dx, dy, rot) in enumerate(pile):
     gx, gy = SX + dx, SY + dy
     add(f'<g transform="rotate({rot} {gx + SW / 2:.1f} {gy + SH / 2:.1f})">')
     add(f'<rect x="{gx - 3}" y="{gy - 3}" width="{SW + 6}" height="{SH + 6:.1f}" rx="8" fill="white" stroke="{LINE}" stroke-width="1"/>')
