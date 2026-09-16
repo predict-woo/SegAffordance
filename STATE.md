@@ -2450,3 +2450,14 @@ exists) and the mask loss off everywhere. Design choices and why in its notes.md
 jdec-nomask via the gated scratchpad launcher. Both pods (jdec-depth, jdec-nomask) must be DELETED after CHAIN_DONE and
 the deletion verified with `runpodctl pod list --all`. Dev pod overlay: inductor/triton caches removed (was 98 % full;
 /root/hfcache 1.3 GB remains).
+
+## Protocol change: SceneFun3D axis columns are now SIGNED (2026-09-16, Overleaf pending push)
+
+User decision: Table II / III (SF3D block) / IV axis = mean SIGNED angle on detected frames (IoU >= 0.25); hand-video axis
+columns stay UNSIGNED because the video sources do not distinguish opening from closing (their GT axes are undirected).
+Signed values (unsigned in parentheses): ours 16.5 (13.9); sf3d_only 19.2 (16.5); noproj 17.0 (14.2); OPD-C 512 28.2 (19.2);
+OPD-P 512 41.4 (31.8); MOPD 512 42.1 (31.0); USDNet 2 cm 16.3 (9.3); A3VLM chain 21.5 (16.5); A3VLM GT box 26.6 (18.9);
+3DOI stays 30.5 unsigned (undirected axis, marked S); ablations: direct 20.1, pooled 27.6, 4x wider 24.7, attnpool 24.4,
+queries 21.8. Orderings unchanged everywhere; the margin to the best detector grows from 5 to 12 deg. Flip rates on detected
+frames: ours 4 %, detectors 9-14 %, 3DOI 32 %. Text numbers updated (USDNet 16 deg, A3VLM 5 deg less accurate, ablation
+4 deg worse axis, Table III 19.2 -> 16.5). Depth / no-mask arms must be scored the same way.
