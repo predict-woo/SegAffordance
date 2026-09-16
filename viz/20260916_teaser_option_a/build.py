@@ -57,7 +57,7 @@ def mark(cx, cy, ok, r=17):
 
 
 # ---------------------------------------------------------------- layout (1000 x 720 design units)
-W, H = 1000, 798
+W, H = 1000, 810
 F_HEAD, F_LAB, F_SUB = 26, 28, 24      # ~6.5 / 7 / 6 pt at column width
 add(f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">')
 add('<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
@@ -96,7 +96,7 @@ tx, ty = PX + PW - 44, CY0 + 40
 for c, dx, dy in (("#e05555", 26, 0), ("#5cc66a", 0, -26), ("#5b8def", -15, 14)):
     add(f'<line x1="{tx}" y1="{ty}" x2="{tx + dx}" y2="{ty + dy}" stroke="{c}" stroke-width="2.6" stroke-linecap="round"/>')
 text(PX + PW / 2, CY0 + CH + 26, "3D scans", F_LAB, weight="600")
-text(PX + PW / 2, CY0 + CH + 56, "articulation labels, no hands", F_SUB, fill=MUTED)
+text(PX + PW / 2, CY0 + CH + 56, "articulation labels, limited variety", F_SUB, fill=MUTED)
 
 # ---- divider
 add(f'<line x1="30" y1="{CY0 + CH + 82}" x2="{W - 30}" y2="{CY0 + CH + 82}" stroke="#d5d5d5"/>')
@@ -114,21 +114,27 @@ arrow(30 + TW + 12, TY + 24 + TH / 2, 30 + TW + 60, TY + 24 + TH / 2)
 # scattered pile of prior methods: five smaller cards tossed across the slot so each one shows,
 # 3DOI on top and nearly square-on
 SW, SH = 148, 148 * 3 / 4
-RX0, RY0 = 300, TY + 10                            # pile region origin (between the arrow and "vs.")
-pile = [  # (image, dx, dy, rot), drawn back to front; dx stays within the slot (arrow .. "vs.")
-    ("laptop_OPDFormer-P.jpg", 112, -8, 9),
-    ("laptop_MOPD.jpg", 0, 26, -8),
-    ("laptop_OPDFormer-C.jpg", 200, 48, -5),
-    ("laptop_A3VLM.jpg", 10, 86, 6),
-    ("laptop_3DOI.jpg", 152, 126, -2),
+RX0, RY0 = 300, TY + 22                            # pile region origin (between the arrow and "vs.")
+pile = [  # (image, dx, dy, rot, name, chip corner), drawn back to front; the corner is one each card keeps visible
+    ("laptop_OPDFormer-P.jpg", 112, -20, 9, "OPDFormer-P", "tr"),
+    ("laptop_MOPD.jpg", 0, 26, -8, "MOPD", "tm"),
+    ("laptop_OPDFormer-C.jpg", 172, 54, -5, "OPDFormer-C", "tr"),
+    ("laptop_A3VLM.jpg", 10, 86, 6, "A3VLM", "bl"),
+    ("laptop_3DOI.jpg", 152, 126, -2, "3DOI", "tr"),
 ]
-SX, SY = RX0 + pile[-1][1], RY0 + pile[-1][2]     # the front card, for the cross and the label
-for i, (img, dx, dy, rot) in enumerate(pile):
+SX, SY = RX0 + pile[-1][1], RY0 + pile[-1][2]     # the front card, for the label
+for i, (img, dx, dy, rot, name, corner) in enumerate(pile):
     gx, gy = RX0 + dx, RY0 + dy
     add(f'<g transform="rotate({rot} {gx + SW / 2:.1f} {gy + SH / 2:.1f})">')
     add(f'<rect x="{gx - 3}" y="{gy - 3}" width="{SW + 6}" height="{SH + 6:.1f}" rx="8" fill="white" stroke="{LINE}" stroke-width="1"/>')
     photo(gx, gy, SW, SH, img, f"s{i}", rx=6, border=False)
     mark(gx + SW - 14, gy + 14, False, r=13)
+    # method name chip, kept in the corner of the card that stays uncovered
+    fs = 13; cw, chh = len(name) * fs * 0.6 + 12, fs + 8
+    cx = gx + 6 if corner in ("tl", "bl") else (gx + 74 if corner == "tm" else gx + SW - 6 - cw)
+    cy = gy + SH - 6 - chh if corner == "bl" else (gy + 28 if corner == "tr" else (gy + 6 if corner == "tm" else gy + 30))
+    add(f'<rect x="{cx:.1f}" y="{cy:.1f}" width="{cw:.0f}" height="{chh}" rx="5" fill="white" fill-opacity="0.92" stroke="{LINE}" stroke-width="0.8"/>')
+    text(cx + cw / 2, cy + chh / 2, name, fs, weight="600")
     add('</g>')
 text(RX0 + 172, SY + SH + 34, "prior methods", F_LAB, weight="600")
 text(RX0 + 172, SY + SH + 64, "prismatic, no part", F_SUB, fill=MUTED)
