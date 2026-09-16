@@ -48,3 +48,6 @@ python tools/compose_panels.py --out viz/20260914_paper_figures/fig_wild_qual_v3
   $B/picks/panels/00_00_IMG_1068.png $B/picks/panels/01_01_IMG_1075.png $B/picks/panels/02_02_IMG_1079.png $B/picks/panels/03_03_IMG_1081.png
 ```
 `picks/preds.jsonl` is tracked (the exact records behind the figure). Overleaf `figures/fig_wild_qual.jpg` = v3.
+**v4 (2026-09-16, user): 2 x 2 layout.** The four picks as two side-by-side halves (mouse + laptop | closet + window), each
+half composed as above with two rows, then hstacked with a 40 px gap: `fig_wild_qual_v4.png` (754 x 1888). Overleaf
+`figures/fig_wild_qual.jpg` = v4, figure environment switched to `figure*` at `\textwidth`.

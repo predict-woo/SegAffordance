@@ -45,3 +45,7 @@ python tools/compose_panels.py --out viz/20260914_paper_figures/fig_handvideo_qu
 **Update (2026-09-16).** MOPD 512 landed -> `--baseline MOPD $R/mopd512_rgb/handvideo_preds_nearest.jsonl` (nearest-centroid
 fallback on the microwave door and both HOI4D rows, labelled "nearest instance"); composite `fig_handvideo_qual_v5.png`
 (label EgoArt, Overleaf d5b5ddf). No column is pending any more.
+
+**Update (2026-09-16, user): Ours columns first.** `fig_handvideo_qual_v5.png` -> `fig_handvideo_qual_v6.png`: column order
+GT | SceneFun3D only | EgoArt | OPDFormer-C | OPDFormer-P | MOPD | A3VLM | 3DOI (`--cols 0,7,8,1,2,3,5,6`,
+`--col-groups "Ours:1-2,Baselines:3-7"`), everything else as v5.
