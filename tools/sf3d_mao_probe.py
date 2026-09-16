@@ -65,6 +65,7 @@ def main():
     ap.add_argument("--key-cache", default="/workspace/cache/sf3d_v2_keys_cutoff05_minrad010_maskfrac0010_edge05.pkl")
     ap.add_argument("--out", default=None)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--load-depth", action="store_true", help="feed the frame caches' depth to the model (RGB-D checkpoints, e.g. the depth-input ablation); default zeros")
     ap.add_argument("--axis-deg", type=float, default=10.0)
     ap.add_argument("--iou", type=float, default=0.5, help="PDet threshold for the gated columns")
     ap.add_argument("--summarize", default=None, help="recompute the table from an existing CSV and exit")
@@ -80,7 +81,7 @@ def main():
         lmdb_data_root=a.data_root, lmdb_path=f"{a.data_root}/data.lmdb", rgb_transform=r, mask_transform=m,
         depth_transform=d, image_size_for_mask_reconstruction=(512, 512), point_source="element",
         key_cache_path=a.key_cache, return_trajectory_2d=True, frame_cache_path=a.frame_cache_path,
-        fast_pipeline=True, load_depth=False, min_revolute_radius=0.10, min_mask_area_frac=0.001, edge_margin_frac=0.05,
+        fast_pipeline=True, load_depth=a.load_depth, min_revolute_radius=0.10, min_mask_area_frac=0.001, edge_margin_frac=0.05,
     )
     _, va = split_dataset_by_scene(ds, 0.1, 42)
     idx = list(range(len(va)))

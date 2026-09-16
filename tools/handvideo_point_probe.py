@@ -59,6 +59,7 @@ def main():
     ap.add_argument("--sources", nargs="+", default=list(SOURCES))
     ap.add_argument("--out")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--load-depth", action="store_true", help="feed the frame caches' depth to the model (RGB-D checkpoints, e.g. the depth-input ablation); default zeros")
     ap.add_argument("--summarize", default=None)
     a = ap.parse_args()
     if a.summarize:
@@ -75,7 +76,7 @@ def main():
         ds = SF3DDataset(
             lmdb_data_root=root, lmdb_path=f"{root}/data.lmdb", frame_cache_path=f"{root}/frames.lmdb", key_cache_path=keys,
             image_size_for_mask_reconstruction=(512, 512), return_trajectory_2d=True, point_source="element", fast_pipeline=True,
-            load_depth=False, min_revolute_radius=0.0, min_mask_area_frac=0.0, edge_margin_frac=0.0, sensor_max_occluded_frac=0.5,
+            load_depth=a.load_depth, min_revolute_radius=0.0, min_mask_area_frac=0.0, edge_margin_frac=0.0, sensor_max_occluded_frac=0.5,
         )
         _, va = split_dataset_by_scene(ds, dcfg.get("val_split_ratio", 0.15), dcfg.get("manual_seed", 42))
         idxs = list(va.indices)[: a.limit or None]
