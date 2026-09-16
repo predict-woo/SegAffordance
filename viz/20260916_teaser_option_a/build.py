@@ -103,7 +103,7 @@ add(f'<line x1="30" y1="{CY0 + CH + 82}" x2="{W - 30}" y2="{CY0 + CH + 82}" stro
 
 # ---- bottom row: a new object
 RY = CY0 + CH + 110
-text(30, RY, "NEW OBJECT, SEEN ONLY IN HUMAN VIDEO", F_HEAD, anchor="start", fill=MUTED, weight="600")
+text(30, RY, "OBJECT CATEGORY SEEN ONLY IN HUMAN VIDEO", F_HEAD, anchor="start", fill=MUTED, weight="600")
 TY = RY + 26
 TW, TH = 200, 150
 photo(30, TY + 24, TW, TH, "laptop_frame.jpg", "test", rx=8)
