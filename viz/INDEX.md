@@ -8,6 +8,7 @@ Conventions: `../CLAUDE.md` § Visualization organization.
 
 | Batch | What | Source |
 |---|---|---|
+| [20260918_mlkitchen](20260918_mlkitchen/) | 2026-09-18 | ML-hall showroom kitchen (8 frames, 18 prompts): SceneFun3D-only vs EgoArt; types all correct, EgoArt wins the spatially-qualified prompts |
 | [20260916_teaser_option_a](20260916_teaser_option_a/README.md) | Paper Fig. 1 teaser, option A: six hand-video records as a track-only spread (2D) + SceneFun3D kitchen (val 213) as an oblique point cloud with its GT hinge and sweep (3D) on top; below, the ARCTIC laptop with every prior method fanned under one cross (all prismatic, no part) vs EgoArt under a check | Local SVG (`build.py`), `render_pointcloud.py`; pod renders in `panels/` |
 | [20260916_itw_test](20260916_itw_test/) | 2026-09-16 | 46 new phone photos (windows, doors, closets, laptops, mouse, table objects), 88 prompts, sf3d_only vs EgoArt panels + contact sheets; inputs/outputs on the volume (datasets/itw) |
 | [20260915_generalization_figure](20260915_generalization_figure/README.md) | Paper Fig. 1 teaser (generalisation): the three Fig. 2 hand-video records (HOI4D cabinet door, EPIC drawer, ARCTIC laptop) -> "train" -> EgoArt -> "test" -> the Fig. 5 EgoArt-model panel of the out-of-distribution ARCTIC laptop (mask, hinge axis, decoded trajectory); SVG + PDF, no inference | Local SVG (`build.py`) over existing renders |
