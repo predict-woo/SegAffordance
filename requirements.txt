@@ -18,3 +18,4 @@ tyro
 jsonargparse[signatures]>=4.27.7
 pytest
 termcolor          # imported by the dinov3 repo checkout (backbone "dinov3")
+matplotlib         # tools/viz_fig4_panels.py, viz_photo_panels.py (panel rendering on the dev pod)
