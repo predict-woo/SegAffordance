@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spot teleop</title>
+<style>
+  :root { --bg: #14161a; --fg: #e6e6e6; --panel: #1c1f25; --line: #2e323a; --accent: #f5c518; --ok: #3ddc84; --bad: #ff4d4d; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px/1.4 -apple-system, Helvetica, Arial, sans-serif; user-select: none; }
+  #app { display: grid; grid-template-columns: 1fr 360px; grid-template-rows: 100vh; }
+  #video { position: relative; background: #000; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  #video img { max-width: 100%; max-height: 100%; image-rendering: auto; }
+  #hud { position: absolute; left: 12px; top: 10px; display: flex; gap: 8px; align-items: center; }
+  #hud select, .chip { background: rgba(20,22,26,.85); color: var(--fg); border: 1px solid #444; border-radius: 6px; padding: 4px 8px; }
+  #velhud { position: absolute; left: 12px; bottom: 10px; background: rgba(20,22,26,.85); padding: 6px 10px; border-radius: 6px; font: 12px ui-monospace, Menlo, monospace; }
+  #velhud.moving { border: 1px solid var(--accent); }
+  #side { background: var(--panel); border-left: 1px solid var(--line); padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+  h1 { font-size: 15px; margin: 0; color: var(--accent); }
+  h2 { font-size: 12px; margin: 8px 0 4px; color: #aaa; text-transform: uppercase; letter-spacing: .04em; }
+  button { padding: 8px 10px; background: #2a2e36; color: var(--fg); border: 1px solid #444; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  button:active, button.down { background: #3a3f4a; border-color: var(--accent); color: var(--accent); }
+  button.stop { background: var(--bad); color: #fff; border-color: var(--bad); font-weight: 700; font-size: 16px; padding: 14px; }
+  button.warn { border-color: #a05a00; color: #ffb454; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .key { font: 12px ui-monospace, Menlo, monospace; }
+  .key b { display: block; font-size: 15px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row label { flex: 1; }
+  input[type=range] { width: 130px; }
+  #status { font: 11px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; background: #0f1115; border: 1px solid var(--line); border-radius: 6px; padding: 6px; min-height: 90px; }
+  #conn { font-size: 12px; }
+  #conn.bad { color: var(--bad); font-weight: 700; }
+  #msg { font-size: 12px; color: #bbb; min-height: 1.4em; }
+  .muted { color: #888; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="video">
+    <img id="cam" alt="camera stream">
+    <div id="hud">
+      <select id="camsel"></select>
+      <span class="chip" id="camstat">…</span>
+    </div>
+    <div id="velhud">vx +0.00  vy +0.00  wz +0.00</div>
+  </div>
+  <div id="side">
+    <h1>Spot teleop</h1>
+    <button class="stop" id="bStop">STOP  (space)</button>
+    <div id="conn">connecting…</div>
+
+    <h2>Drive (hold keys)</h2>
+    <div class="grid3">
+      <button class="key" data-k="q"><b>Q</b>turn left</button>
+      <button class="key" data-k="w"><b>W</b>forward</button>
+      <button class="key" data-k="e"><b>E</b>turn right</button>
+      <button class="key" data-k="a"><b>A</b>strafe left</button>
+      <button class="key" data-k="s"><b>S</b>back</button>
+      <button class="key" data-k="d"><b>D</b>strafe right</button>
+    </div>
+    <div class="muted">Arrow keys work too. Hold <b>Shift</b> for half speed. Release = immediate stop.</div>
+    <div class="row"><label>linear <span id="vlin">0.40</span> m/s</label><input type="range" id="slin" min="0.05" max="0.8" step="0.05" value="0.40"></div>
+    <div class="row"><label>turn <span id="vang">0.60</span> rad/s</label><input type="range" id="sang" min="0.1" max="1.2" step="0.05" value="0.60"></div>
+
+    <h2>Precise (trajectory, exact amounts)</h2>
+    <div class="grid4">
+      <button data-turn="15">⟲ 15°</button><button data-turn="5">⟲ 5°</button><button data-turn="-5">⟳ 5°</button><button data-turn="-15">⟳ 15°</button>
+      <button data-turn="2">⟲ 2°</button><button data-step="0.05,0">↑ 5 cm</button><button data-step="0.20,0">↑ 20 cm</button><button data-turn="-2">⟳ 2°</button>
+      <button data-step="0,0.05">← 5 cm</button><button data-step="-0.05,0">↓ 5 cm</button><button data-step="-0.20,0">↓ 20 cm</button><button data-step="0,-0.05">→ 5 cm</button>
+    </div>
+
+    <h2>Body</h2>
+    <div class="grid3"><button data-cmd="stand">stand</button><button data-cmd="sit">sit</button><button data-cmd="selfright">self-right</button></div>
+    <div class="grid3"><button data-cmd="claim">claim</button><button data-cmd="poweron">power on</button><button data-cmd="poweroff" class="warn">power off</button></div>
+
+    <h2>Arm</h2>
+    <div class="grid3"><button data-cmd="unstow">unstow</button><button data-cmd="home">home (half-down)</button><button data-cmd="stow">stow</button></div>
+    <div class="grid2"><button data-cmd="open">open gripper</button><button data-cmd="close">close gripper</button></div>
+
+    <h2>Emergency</h2>
+    <div class="grid2"><button data-cmd="estop" class="warn">gentle E-stop (settles)</button><button data-cmd="estop-release">E-stop release</button></div>
+
+    <div id="msg"></div>
+    <h2>Robot</h2>
+    <div id="status">…</div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const post = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }).then(r => r.json());
+
+// ---- camera ----------------------------------------------------------------------------------
+let cam = localStorage.getItem('spot_cam') || 'hand';
+function setCam(c) { cam = c; localStorage.setItem('spot_cam', c); $('cam').src = '/stream.mjpg?cam=' + c + '&t=' + Date.now(); }
+$('camsel').onchange = e => setCam(e.target.value);
+
+// ---- drive -----------------------------------------------------------------------------------
+const held = new Set();
+let shift = false, sendTimer = null, lastSent = null;
+const MAP = { w: [1, 0, 0], s: [-1, 0, 0], a: [0, 1, 0], d: [0, -1, 0], q: [0, 0, 1], e: [0, 0, -1],
+              arrowup: [1, 0, 0], arrowdown: [-1, 0, 0], arrowleft: [0, 0, 1], arrowright: [0, 0, -1] };
+function vector() {
+  let vx = 0, vy = 0, wz = 0;
+  for (const k of held) { const m = MAP[k]; if (m) { vx += m[0]; vy += m[1]; wz += m[2]; } }
+  const lin = +$('slin').value * (shift ? 0.5 : 1), ang = +$('sang').value * (shift ? 0.5 : 1);
+  return { vx: Math.sign(vx) * lin, vy: Math.sign(vy) * lin, wz: Math.sign(wz) * ang };
+}
+function sendVel(force) {
+  const v = vector(), key = JSON.stringify(v);
+  const moving = v.vx || v.vy || v.wz;
+  if (force || moving || key !== lastSent) { post('/api/vel', v).catch(() => {}); lastSent = key; }
+  $('velhud').textContent = `vx ${v.vx >= 0 ? '+' : ''}${v.vx.toFixed(2)}  vy ${v.vy >= 0 ? '+' : ''}${v.vy.toFixed(2)}  wz ${v.wz >= 0 ? '+' : ''}${v.wz.toFixed(2)}`;
+  $('velhud').classList.toggle('moving', !!moving);
+  document.querySelectorAll('.key').forEach(b => b.classList.toggle('down', held.has(b.dataset.k)));
+  if (moving && !sendTimer) sendTimer = setInterval(() => sendVel(true), 100);   // 10 Hz while moving (deadman refresh)
+  if (!moving && sendTimer) { clearInterval(sendTimer); sendTimer = null; }
+}
+function keyOf(e) { return e.key.length === 1 ? e.key.toLowerCase() : e.key.toLowerCase(); }
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  const k = keyOf(e);
+  if (k === ' ') { e.preventDefault(); stopAll(); return; }
+  if (k === 'shift') { shift = true; sendVel(false); return; }
+  if (MAP[k]) { e.preventDefault(); if (!held.has(k)) { held.add(k); sendVel(true); } }
+});
+window.addEventListener('keyup', e => {
+  const k = keyOf(e);
+  if (k === 'shift') { shift = false; sendVel(false); return; }
+  if (MAP[k]) { held.delete(k); sendVel(true); }
+});
+window.addEventListener('blur', () => { held.clear(); shift = false; sendVel(true); });
+// on-screen keys: press-and-hold with the mouse
+document.querySelectorAll('.key').forEach(b => {
+  const k = b.dataset.k;
+  const down = e => { e.preventDefault(); held.add(k); sendVel(true); };
+  const up = () => { if (held.has(k)) { held.delete(k); sendVel(true); } };
+  b.addEventListener('mousedown', down); b.addEventListener('touchstart', down, { passive: false });
+  b.addEventListener('mouseup', up); b.addEventListener('mouseleave', up); b.addEventListener('touchend', up);
+});
+$('slin').oninput = e => { $('vlin').textContent = (+e.target.value).toFixed(2); sendVel(false); };
+$('sang').oninput = e => { $('vang').textContent = (+e.target.value).toFixed(2); sendVel(false); };
+
+// ---- discrete commands -------------------------------------------------------------------------
+function say(t) { $('msg').textContent = t; }
+async function cmd(body) {
+  held.clear(); sendVel(true);
+  say(`${body.cmd}${body.deg != null ? ' ' + body.deg + '°' : ''}${body.dx != null ? ' ' + body.dx + ',' + body.dy + ' m' : ''} …`);
+  try { const j = await post('/api/cmd', body); say(`${body.cmd}: ${j.msg}`); } catch (e) { say('request failed: ' + e); }
+}
+function stopAll() { cmd({ cmd: 'stop' }); }
+$('bStop').onclick = stopAll;
+document.querySelectorAll('[data-cmd]').forEach(b => b.onclick = () => {
+  const c = b.dataset.cmd;
+  if ((c === 'estop' || c === 'poweroff') && !confirm(`Send ${c}? The robot will ${c === 'estop' ? 'settle to the ground and cut motor power' : 'cut motor power (make sure it is sitting)'}.`)) return;
+  cmd({ cmd: c });
+});
+document.querySelectorAll('[data-turn]').forEach(b => b.onclick = () => cmd({ cmd: 'turn', deg: +b.dataset.turn }));
+document.querySelectorAll('[data-step]').forEach(b => b.onclick = () => { const [dx, dy] = b.dataset.step.split(',').map(Number); cmd({ cmd: 'step', dx, dy }); });
+
+// ---- state poll --------------------------------------------------------------------------------
+let camsFilled = false;
+async function poll() {
+  try {
+    const s = await (await fetch('/api/state')).json();
+    if (!camsFilled) { s.cams.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; $('camsel').appendChild(o); }); $('camsel').value = cam; camsFilled = true; setCam(cam); }
+    $('camstat').textContent = s.frame_age == null ? `${s.cam}: waiting for frames` : `${s.cam} · ${s.encoding} · frame ${s.frames} · ${s.frame_age.toFixed(1)} s ago`;
+    $('camstat').style.color = s.frame_age != null && s.frame_age > 2 ? '#ff4d4d' : '';
+    $('status').textContent = s.status;
+    $('conn').textContent = 'connected to spot22' + (s.active ? ' · MOVING' : ''); $('conn').className = '';
+  } catch (e) { $('conn').textContent = 'NO CONNECTION to spot22 — robot stops on its own (deadman)'; $('conn').className = 'bad'; }
+  setTimeout(poll, 1000);
+}
+poll();
+</script>
+</body>
+</html>
