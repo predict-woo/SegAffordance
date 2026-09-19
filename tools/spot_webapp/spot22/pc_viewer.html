@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spot hand cloud</title>
+<style>
+  :root { --bg: #14161a; --fg: #e6e6e6; --panel: rgba(20,22,26,.88); --accent: #f5c518; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px/1.4 -apple-system, Helvetica, Arial, sans-serif; overflow: hidden; }
+  #c { display: block; width: 100vw; height: 100vh; }
+  #hud { position: fixed; left: 12px; top: 12px; background: var(--panel); padding: 10px 12px; border-radius: 8px; max-width: 340px; }
+  #hud h1 { font-size: 14px; margin: 0 0 6px; color: var(--accent); }
+  #hud label { display: block; margin: 6px 0 2px; }
+  #hud input[type=range] { width: 100%; }
+  #hud select { width: 100%; background: #2a2e36; color: var(--fg); border: 1px solid #444; border-radius: 4px; padding: 3px; }
+  #hud button { margin: 6px 6px 0 0; padding: 4px 8px; background: #2a2e36; color: var(--fg); border: 1px solid #444; border-radius: 4px; cursor: pointer; }
+  #hud button.on { border-color: var(--accent); color: var(--accent); }
+  #pred { margin-top: 8px; padding-top: 8px; border-top: 1px solid #333; }
+  #legend span { display: inline-block; margin-right: 10px; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+  #img { position: fixed; right: 12px; bottom: 12px; width: 240px; border: 1px solid #444; border-radius: 6px; opacity: .9; }
+  #help { position: fixed; right: 12px; top: 12px; background: var(--panel); padding: 8px 10px; border-radius: 8px; color: #aaa; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <h1 id="title">Spot hand camera point cloud</h1>
+  <div id="stats"></div>
+  <label>Point size <span id="psv">3</span> px</label>
+  <input id="ps" type="range" min="1" max="10" step="0.5" value="3">
+  <div>
+    <button id="bFrame" class="on">camera frame</button>
+    <button id="bAxes" class="on">axes</button>
+    <button id="bFrustum" class="on">frustum</button>
+    <button id="bReset">reset view</button>
+  </div>
+  <div id="pred" hidden>
+    <label>Prediction</label>
+    <select id="selPred"></select>
+    <div id="predInfo"></div>
+    <div id="legend">
+      <span><i class="sw" style="background:#f5c518"></i>axis + hinge</span>
+      <span><i class="sw" style="background:#3ddc84"></i>trajectory</span>
+      <span><i class="sw" style="background:#ffffff"></i>contact</span>
+      <span><i class="sw" style="background:#ff4d4d"></i>mask</span>
+    </div>
+    <div>
+      <button id="bMask" class="on">mask tint</button>
+      <button id="bPred" class="on">show prediction</button>
+    </div>
+  </div>
+</div>
+<div id="help">drag: orbit · right-drag: pan · wheel: zoom</div>
+<img id="img" alt="rgb frame">
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const D = /*__DATA__*/null;
+if (!D) { document.getElementById('stats').textContent = 'no data embedded'; throw new Error('no data'); }
+
+function b64f32(s) { const b = atob(s), a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return new Float32Array(a.buffer); }
+function b64u8(s) { const b = atob(s), a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+
+const xyzCam = b64f32(D.xyz_b64);
+const rgb = b64u8(D.rgb_b64);
+const baseColors = new Float32Array(rgb.length);
+for (let i = 0; i < rgb.length; i++) baseColors[i] = rgb[i] / 255;
+const colors = new Float32Array(baseColors);
+
+const T = D.T_body_cam;
+function toBody(p) {                       // camera-frame [x,y,z] -> body frame
+  return [T[0][0]*p[0] + T[0][1]*p[1] + T[0][2]*p[2] + T[0][3],
+          T[1][0]*p[0] + T[1][1]*p[1] + T[1][2]*p[2] + T[1][3],
+          T[2][0]*p[0] + T[2][1]*p[1] + T[2][2]*p[2] + T[2][3]];
+}
+let xyzBody = null;
+if (T) {
+  xyzBody = new Float32Array(xyzCam.length);
+  for (let i = 0; i < D.n; i++) { const q = toBody([xyzCam[3*i], xyzCam[3*i+1], xyzCam[3*i+2]]); xyzBody[3*i] = q[0]; xyzBody[3*i+1] = q[1]; xyzBody[3*i+2] = q[2]; }
+}
+
+document.getElementById('title').textContent = D.name;
+document.getElementById('stats').innerHTML =
+  `${D.n.toLocaleString()} points · ${D.w}×${D.h} · valid ${(100*D.valid_frac).toFixed(1)}%<br>` +
+  `depth ${D.z_min.toFixed(2)}–${D.z_max.toFixed(2)} m, median ${D.z_med.toFixed(2)} m<br>` +
+  (T ? 'body frame available' : 'camera frame only (no TF)');
+document.getElementById('img').src = 'data:image/jpeg;base64,' + D.img_b64;
+
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x14161a);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
+const controls = new OrbitControls(camera, canvas); controls.enableDamping = true;
+
+const geom = new THREE.BufferGeometry();
+geom.setAttribute('position', new THREE.BufferAttribute(xyzCam, 3));
+geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+const mat = new THREE.PointsMaterial({ size: 3, sizeAttenuation: false, vertexColors: true });
+scene.add(new THREE.Points(geom, mat));
+
+// everything expressed in the camera frame lives in camGroup; in body mode camGroup gets T applied
+const camGroup = new THREE.Group(); camGroup.matrixAutoUpdate = false; scene.add(camGroup);
+const axes = new THREE.AxesHelper(0.3); scene.add(axes);
+function frustum(K, w, h, z) {
+  const [fx, fy, cx, cy] = [K[0][0], K[1][1], K[0][2], K[1][2]];
+  const c = [[0,0],[w,0],[w,h],[0,h]].map(([u,v]) => new THREE.Vector3((u-cx)/fx*z, (v-cy)/fy*z, z));
+  const o = new THREE.Vector3(), segs = [];
+  for (let i = 0; i < 4; i++) segs.push(o, c[i], c[i], c[(i+1)%4]);
+  return new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(segs), new THREE.LineBasicMaterial({ color: 0xf5c518, transparent: true, opacity: 0.5 }));
+}
+const fr = frustum(D.K, D.w, D.h, D.z_med); camGroup.add(fr);
+
+// ---- prediction overlay (built in the camera frame inside camGroup) --------------------------
+const predGroup = new THREE.Group(); camGroup.add(predGroup);
+let curPred = null, maskOn = true;
+function V(a) { return new THREE.Vector3(a[0], a[1], a[2]); }
+function tube(points, radius, color) {
+  const curve = new THREE.CatmullRomCurve3(points.map(V));
+  return new THREE.Mesh(new THREE.TubeGeometry(curve, Math.max(8, points.length * 4), radius, 8, false), new THREE.MeshBasicMaterial({ color }));
+}
+function sphere(p, r, color) { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), new THREE.MeshBasicMaterial({ color })); m.position.copy(V(p)); return m; }
+function cone(tip, dir, len, color) {
+  const m = new THREE.Mesh(new THREE.ConeGeometry(len * 0.45, len, 12), new THREE.MeshBasicMaterial({ color }));
+  const d = V(dir).normalize(); m.position.copy(V(tip).sub(d.clone().multiplyScalar(len / 2)));
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d); return m;
+}
+function buildPred(p) {
+  predGroup.clear();
+  const a = p.anchor, d = p.axis;
+  const R = 0.006;                                              // tube radius, metres
+  if (p.type === 'revolute' && p.origin) {
+    const o = p.origin, L = 0.5;
+    predGroup.add(tube([[o[0]-d[0]*L, o[1]-d[1]*L, o[2]-d[2]*L], [o[0]+d[0]*L, o[1]+d[1]*L, o[2]+d[2]*L]], R, 0xf5c518));
+    predGroup.add(sphere(o, 0.02, 0xf5c518));
+    // lever from hinge foot to the contact point, thin
+    const t = (a[0]-o[0])*d[0] + (a[1]-o[1])*d[1] + (a[2]-o[2])*d[2];
+    const foot = [o[0]+d[0]*t, o[1]+d[1]*t, o[2]+d[2]*t];
+    predGroup.add(tube([foot, a], R * 0.5, 0xf5c518));
+  } else {                                                      // prismatic: slide direction from the contact
+    const L = 0.3;
+    predGroup.add(tube([a, [a[0]+d[0]*L, a[1]+d[1]*L, a[2]+d[2]*L]], R, 0xf5c518));
+  }
+  if (p.traj && p.traj.length > 1) {
+    predGroup.add(tube(p.traj, R * 1.2, 0x3ddc84));
+    const n = p.traj.length, e = p.traj[n-1], q = p.traj[n-2];
+    predGroup.add(cone(e, [e[0]-q[0], e[1]-q[1], e[2]-q[2]], 0.05, 0x3ddc84));
+  }
+  predGroup.add(sphere(a, 0.018, 0xffffff));
+  // mask tint
+  colors.set(baseColors);
+  if (maskOn) for (const i of p.mask_idx) { colors[3*i] = 1.0; colors[3*i+1] = 0.3; colors[3*i+2] = 0.3; }
+  geom.attributes.color.needsUpdate = true;
+  document.getElementById('predInfo').innerHTML =
+    `<b>${p.model}</b> · ${p.type} (p_rev ${p.p_rev.toFixed(2)})${p.recalibrated_from ? " · hinge+axis carried over from " + p.recalibrated_from + " (yaw " + p.recalib.yaw_deg.toFixed(1) + "°)" : ""}<br>“${p.prompt}”<br>` +
+    `trajectory: ${p.turn_deg != null ? p.turn_deg + "° about the axis" : p.slide_m + " m along the axis"}<br>contact = ${p.contact_from} at uv (${p.point_uv[0].toFixed(2)}, ${p.point_uv[1].toFixed(2)}); point head said (${p.model_uv[0].toFixed(2)}, ${p.model_uv[1].toFixed(2)}) · depth pred ${p.z_pred.toFixed(2)} m, measured ${p.z_meas ? p.z_meas.toFixed(2) + ' m' : 'n/a'} · scale ×${p.scale.toFixed(2)}<br>` +
+    `mask covers ${p.mask_idx.length} cloud points`;
+}
+if (D.preds && D.preds.length) {
+  const sel = document.getElementById('selPred');
+  D.preds.forEach((p, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `${p.model}: ${p.prompt}`; sel.appendChild(o); });
+  const pick = i => { curPred = D.preds[i]; buildPred(curPred); };
+  sel.onchange = e => pick(+e.target.value);
+  document.getElementById('pred').hidden = false;
+  // default to the EgoArt ("dense") record when present
+  const def = Math.max(0, D.preds.findIndex(p => p.model === 'dense')); sel.value = def; pick(def);
+  document.getElementById('bMask').onclick = e => { maskOn = !maskOn; e.target.classList.toggle('on'); buildPred(curPred); };
+  document.getElementById('bPred').onclick = e => { predGroup.visible = !predGroup.visible; e.target.classList.toggle('on'); };
+}
+
+// ---- frames / view ---------------------------------------------------------------------------
+let bodyMode = false;
+function applyFrame() {
+  if (bodyMode && xyzBody) {
+    geom.setAttribute('position', new THREE.BufferAttribute(xyzBody, 3));
+    camGroup.matrix.set(T[0][0],T[0][1],T[0][2],T[0][3], T[1][0],T[1][1],T[1][2],T[1][3], T[2][0],T[2][1],T[2][2],T[2][3], 0,0,0,1);
+    camera.up.set(0, 0, 1);
+    document.getElementById('bFrame').textContent = 'body frame';
+  } else {
+    geom.setAttribute('position', new THREE.BufferAttribute(xyzCam, 3));
+    camGroup.matrix.identity();
+    camera.up.set(0, -1, 0);
+    document.getElementById('bFrame').textContent = 'camera frame';
+  }
+  geom.attributes.position.needsUpdate = true; geom.computeBoundingSphere();
+  resetView();
+}
+function resetView() {
+  const bs = geom.boundingSphere; controls.target.copy(bs.center);
+  if (bodyMode && xyzBody) camera.position.set(bs.center.x - 2.2*bs.radius, bs.center.y - 0.8*bs.radius, bs.center.z + 0.9*bs.radius);
+  else camera.position.set(bs.center.x + 0.4*bs.radius, bs.center.y - 0.9*bs.radius, bs.center.z - 2.0*bs.radius);
+  camera.lookAt(bs.center); controls.update();
+}
+document.getElementById('ps').oninput = e => { mat.size = +e.target.value; document.getElementById('psv').textContent = e.target.value; };
+document.getElementById('bFrame').onclick = () => { if (!xyzBody) return; bodyMode = !bodyMode; applyFrame(); };
+document.getElementById('bAxes').onclick = e => { axes.visible = !axes.visible; e.target.classList.toggle('on'); };
+document.getElementById('bFrustum').onclick = e => { fr.visible = !fr.visible; e.target.classList.toggle('on'); };
+document.getElementById('bReset').onclick = resetView;
+if (!xyzBody) document.getElementById('bFrame').disabled = true;
+
+function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize(); applyFrame();
+(function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+</script>
+</body>
+</html>

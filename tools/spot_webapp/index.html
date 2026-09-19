@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EgoArt Spot pipeline</title>
+<style>
+  :root { --bg: #14161a; --fg: #e6e6e6; --panel: #1c1f25; --line: #2e323a; --accent: #f5c518; --ok: #3ddc84; --bad: #ff4d4d; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px/1.4 -apple-system, Helvetica, Arial, sans-serif; }
+  #app { display: grid; grid-template-columns: 340px 1fr 1fr; grid-template-rows: 100vh; }
+  #side { background: var(--panel); border-right: 1px solid var(--line); padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+  h1 { font-size: 15px; margin: 0; color: var(--accent); }
+  .view { position: relative; border-left: 1px solid var(--line); }
+  .view canvas { display: block; width: 100%; height: 100%; }
+  .view .tag { position: absolute; left: 10px; top: 8px; background: rgba(20,22,26,.85); padding: 4px 8px; border-radius: 6px; }
+  .view .info { position: absolute; left: 10px; bottom: 8px; right: 10px; background: rgba(20,22,26,.85); padding: 6px 8px; border-radius: 6px; font-size: 12px; color: #ccc; }
+  .view img { position: absolute; right: 10px; top: 8px; width: 180px; border: 1px solid #444; border-radius: 4px; }
+  .view .throb { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(20,22,26,.6); font-size: 15px; }
+  .view.busy .throb { display: flex; }
+  .spin { width: 28px; height: 28px; border: 3px solid #444; border-top-color: var(--accent); border-radius: 50%; animation: s 0.9s linear infinite; margin-right: 12px; }
+  @keyframes s { to { transform: rotate(360deg); } }
+  button { padding: 7px 10px; background: #2a2e36; color: var(--fg); border: 1px solid #444; border-radius: 5px; cursor: pointer; font-size: 13px; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.go { border-color: var(--ok); color: var(--ok); }
+  button.stop { background: var(--bad); color: #fff; border-color: var(--bad); font-weight: 700; font-size: 15px; padding: 12px; }
+  input[type=text], input[type=number] { width: 100%; box-sizing: border-box; padding: 6px; background: #12141a; color: var(--fg); border: 1px solid #444; border-radius: 4px; }
+  .step { border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+  .step.active { border-color: var(--accent); }
+  .step.done { border-color: var(--ok); }
+  .step h2 { font-size: 13px; margin: 0 0 6px; }
+  .row { display: flex; gap: 6px; align-items: center; }
+  .row label { flex: 1; }
+  .row input { width: 70px; }
+  #log { flex: 1; min-height: 120px; overflow-y: auto; background: #0f1115; border: 1px solid var(--line); border-radius: 6px; padding: 6px; font: 11px/1.4 ui-monospace, Menlo, monospace; white-space: pre-wrap; }
+  #moves { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 6px; background: #2a1d1d; border: 1px solid #5a2a2a; }
+  #moves.on { background: #3a1414; border-color: var(--bad); }
+  .err { color: var(--bad); }
+  .muted { color: #999; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="side">
+    <h1>EgoArt × Spot: open a door</h1>
+    <button class="stop" id="bStop">STOP ROBOT</button>
+    <button id="bReset" title="clear the run and start over at stage 1 (robot is not moved)">Reset to blank</button>
+    <div id="moves"><input type="checkbox" id="cbMoves"><label for="cbMoves"><b>Robot moves enabled</b><br><span class="muted">off = walk, aim and arc are dry runs</span></label></div>
+
+    <div class="step" id="s1"><h2>1 · Far snapshot</h2>
+      <div class="row"><button id="bHome">Head to home</button><button id="bSnap">Take RGB-D snapshot</button></div>
+      <span id="s1info" class="muted"></span></div>
+
+    <div class="step" id="s2"><h2>2 · Prompt → EgoArt</h2>
+      <input type="text" id="prompt" value="open the cabinet door with the vertical handle">
+      <div class="row" style="margin-top:6px"><button id="bPredict">Run EgoArt</button><span id="s2info" class="muted"></span></div></div>
+
+    <div class="step" id="s3"><h2>3 · Accept → walk + aim + close-up</h2>
+      <div class="row"><label>standoff (m)</label><input type="number" id="pStandoff" value="1.10" step="0.05"></div>
+      <div class="row"><label>camera distance (m)</label><input type="number" id="pAim" value="0.50" step="0.05"></div>
+      <button id="bAcceptFar" class="go">Accept far prediction</button> <span id="s3info" class="muted"></span></div>
+
+    <div class="step" id="s4"><h2>4 · Close-up: SAM 3 "handle" → recalibrated arc</h2>
+      <span id="s4info" class="muted">runs automatically after step 3</span></div>
+
+    <div class="step" id="s5"><h2>5 · Accept → home → execute</h2>
+      <div class="row"><label>turn (deg)</label><input type="number" id="pTurn" value="30" step="5"></div>
+      <div class="row"><label>arc speed (cm/s)</label><input type="number" id="pSpeed" value="1.0" step="0.5"></div>
+      <button id="bAcceptClose" class="go">Accept and execute</button> <span id="s5info" class="muted"></span></div>
+
+    <div id="err" class="err"></div>
+    <div id="log"></div>
+  </div>
+  <div class="view" id="vFar"><div class="tag">far view</div><img id="imgFar" hidden><div class="info" id="infoFar">no cloud yet</div><div class="throb"><div class="spin"></div><span id="throbFar">working…</span></div></div>
+  <div class="view" id="vClose"><div class="tag">close view</div><img id="imgClose" hidden><div class="info" id="infoClose">no cloud yet</div><div class="throb"><div class="spin"></div><span id="throbClose">working…</span></div></div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const $ = id => document.getElementById(id);
+const api = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+  .then(r => r.json()).then(j => { if (j.error) $('err').textContent = j.error; return j; });
+
+// ---- cloud view ------------------------------------------------------------------------------
+function b64f32(s) { const b = atob(s), a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return new Float32Array(a.buffer); }
+function b64u8(s) { const b = atob(s), a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+const V = a => new THREE.Vector3(a[0], a[1], a[2]);
+
+class CloudView {
+  constructor(el, imgEl, infoEl) {
+    this.el = el; this.img = imgEl; this.info = infoEl; this.url = null;
+    const canvas = document.createElement('canvas'); el.insertBefore(canvas, el.firstChild);
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); this.renderer.setPixelRatio(devicePixelRatio);
+    this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0x14161a);
+    this.camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100); this.camera.up.set(0, -1, 0);
+    this.controls = new OrbitControls(this.camera, canvas); this.controls.enableDamping = true;
+    this.cloud = null; this.overlay = new THREE.Group(); this.scene.add(this.overlay);
+    this.scene.add(new THREE.AxesHelper(0.2));
+    new ResizeObserver(() => this.resize()).observe(el); this.resize();
+    const loop = () => { this.controls.update(); this.renderer.render(this.scene, this.camera); requestAnimationFrame(loop); }; loop();
+  }
+  clear() {
+    if (this.cloud) { this.scene.remove(this.cloud); this.cloud.geometry.dispose(); this.cloud = null; }
+    this.overlay.clear(); this.url = null; this.img.hidden = true; this.img.removeAttribute('src'); this.info.textContent = 'no cloud yet';
+  }
+  resize() { const w = this.el.clientWidth, h = this.el.clientHeight; if (!w || !h) return; this.renderer.setSize(w, h, false); this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }
+  tube(points, r, color) { return new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(V)), Math.max(8, points.length * 4), r, 8, false), new THREE.MeshBasicMaterial({ color })); }
+  sphere(p, r, color) { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), new THREE.MeshBasicMaterial({ color })); m.position.copy(V(p)); return m; }
+  cone(tip, dir, len, color) { const m = new THREE.Mesh(new THREE.ConeGeometry(len * .45, len, 12), new THREE.MeshBasicMaterial({ color })); const d = V(dir).normalize(); m.position.copy(V(tip).sub(d.clone().multiplyScalar(len / 2))); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d); return m; }
+  async load(url) {
+    if (url === this.url) return; this.url = url;
+    let D;
+    try { const r = await fetch(url); if (!r.ok) throw new Error('HTTP ' + r.status); D = await r.json(); }
+    catch (e) { this.info.textContent = 'could not load cloud: ' + e.message + ' (retrying)'; this.url = null; return; }
+    if (this.cloud) { this.scene.remove(this.cloud); this.cloud.geometry.dispose(); }
+    this.overlay.clear();
+    const xyz = b64f32(D.xyz_b64), rgb = b64u8(D.rgb_b64), col = new Float32Array(rgb.length);
+    for (let i = 0; i < rgb.length; i++) col[i] = rgb[i] / 255;
+    const p = D.preds && D.preds[0];
+    if (p) for (const i of p.mask_idx) { col[3*i] = 1; col[3*i+1] = .3; col[3*i+2] = .3; }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(xyz, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    this.cloud = new THREE.Points(g, new THREE.PointsMaterial({ size: 3, sizeAttenuation: false, vertexColors: true })); this.scene.add(this.cloud);
+    let info = `${D.n.toLocaleString()} pts · depth median ${D.z_med.toFixed(2)} m`;
+    if (p) {
+      const a = p.anchor, d = p.axis, R = 0.006;
+      if (p.type === 'revolute' && p.origin) {
+        const o = p.origin, L = 0.5;
+        this.overlay.add(this.tube([[o[0]-d[0]*L, o[1]-d[1]*L, o[2]-d[2]*L], [o[0]+d[0]*L, o[1]+d[1]*L, o[2]+d[2]*L]], R, 0xf5c518));
+        this.overlay.add(this.sphere(o, 0.02, 0xf5c518));
+      } else { const L = .3; this.overlay.add(this.tube([a, [a[0]+d[0]*L, a[1]+d[1]*L, a[2]+d[2]*L]], R, 0xf5c518)); }
+      if (p.traj && p.traj.length > 1) { this.overlay.add(this.tube(p.traj, R * 1.2, 0x3ddc84)); const n = p.traj.length, e = p.traj[n-1], q = p.traj[n-2]; this.overlay.add(this.cone(e, [e[0]-q[0], e[1]-q[1], e[2]-q[2]], .05, 0x3ddc84)); }
+      this.overlay.add(this.sphere(a, 0.018, 0xffffff));
+      info += ` · <b>${p.type}</b>${Number.isFinite(p.p_rev) ? ' p_rev ' + p.p_rev.toFixed(2) : ''} · ${p.model === 'sam3' ? 'SAM 3: ' : ''}${p.contact_from} · depth ${p.z_meas ? p.z_meas.toFixed(2) + ' m' : 'n/a'}`;
+      if (p.recalibrated_from) info += ` · hinge/axis from far frame (yaw ${p.recalib.yaw_deg.toFixed(1)}°), turn ${p.turn_deg}°`;
+      if (p.recalib) info += `<br>body frame: handle (${p.recalib.handle_body.map(v => v.toFixed(2)).join(', ')}) hinge (${p.recalib.hinge_body.map(v => v.toFixed(2)).join(', ')})`;
+    }
+    this.info.innerHTML = info;
+    this.img.src = 'data:image/jpeg;base64,' + D.img_b64; this.img.hidden = false;
+    g.computeBoundingSphere(); const bs = g.boundingSphere; this.controls.target.copy(bs.center);
+    this.camera.position.set(bs.center.x + .4*bs.radius, bs.center.y - .9*bs.radius, bs.center.z - 2.0*bs.radius); this.camera.lookAt(bs.center);
+  }
+}
+const far = new CloudView($('vFar'), $('imgFar'), $('infoFar'));
+const close = new CloudView($('vClose'), $('imgClose'), $('infoClose'));
+
+// ---- controls ---------------------------------------------------------------------------------
+$('bStop').onclick = () => api('/api/stop');
+$('cbMoves').onchange = e => {
+  if (e.target.checked && !confirm('Enable REAL robot motion (walk, aim, arm arc)? Keep a hand on STOP.')) { e.target.checked = false; return; }
+  api('/api/moves', { enabled: e.target.checked });
+};
+const params = () => api('/api/params', { standoff: +$('pStandoff').value, aim_dist: +$('pAim').value, turn_deg: +$('pTurn').value, speed: +$('pSpeed').value / 100 });
+$('bHome').onclick = () => api('/api/home');
+$('bReset').onclick = () => api('/api/reset').then(j => { if (j.ok) { far.clear(); close.clear(); } });
+$('bSnap').onclick = () => api('/api/snap_far');
+$('bPredict').onclick = () => params().then(() => api('/api/predict_far', { prompt: $('prompt').value }));
+$('bAcceptFar').onclick = () => params().then(() => api('/api/accept_far'));
+$('bAcceptClose').onclick = () => params().then(() => api('/api/accept_close'));
+
+async function poll() {
+  try {
+    const s = await (await fetch('/state')).json();
+    $('cbMoves').checked = s.moves_enabled; $('moves').classList.toggle('on', s.moves_enabled);
+    $('log').textContent = s.log.join('\n'); $('log').scrollTop = 1e9;
+    $('err').textContent = s.error || '';
+    const busy = s.busy;
+    $('vFar').classList.toggle('busy', busy === 'snap_far' || busy === 'predict_far');
+    $('vClose').classList.toggle('busy', busy === 'accept_far' || busy === 'predict_close');
+    $('throbFar').textContent = busy === 'predict_far' ? 'EgoArt is thinking…' : 'taking snapshot…';
+    $('throbClose').textContent = busy === 'accept_far' ? 'walking / aiming / snapping…' : 'SAM 3 on the close-up…';
+    const st = s.stage, order = ['idle', 'far_ready', 'far_predicted', 'close_snapped', 'close_predicted', 'done'];
+    const idx = order.indexOf(st);
+    [['s1', 1], ['s2', 2], ['s3', 3], ['s4', 4], ['s5', 5]].forEach(([id, k]) => { const el = $(id); el.classList.toggle('done', idx >= k); el.classList.toggle('active', idx === k - 1 && !busy); });
+    $('bSnap').disabled = !!busy; $('bHome').disabled = !!busy || !s.moves_enabled; $('bHome').title = s.moves_enabled ? 'arm to the half-down pose (camera far view)' : 'enable robot moves first';
+    $('bPredict').disabled = !!busy || idx < 1; $('bAcceptFar').disabled = !!busy || idx < 2; $('bAcceptClose').disabled = !!busy || idx < 4;
+    $('s1info').textContent = s.far.stem || ''; $('s2info').textContent = s.far.prompt ? `“${s.far.prompt}”` : '';
+    $('s3info').textContent = s.plans.standoff ? `walk ${s.plans.standoff.goal_body_xy_yaw_deg.map(v => v.toFixed(2)).join(', ')}` : '';
+    $('s4info').textContent = s.close.stem ? `close-up ${s.close.stem}` : 'runs automatically after step 3';
+    $('s5info').textContent = st === 'done' ? (s.moves_enabled ? 'executed' : 'dry run complete') : '';
+    if (s.far.cloud) far.load(s.far.cloud); else if (far.url) far.clear();
+    if (s.close.cloud) close.load(s.close.cloud); else if (close.url) close.clear();
+  } catch (e) { $('err').textContent = 'server unreachable'; }
+  setTimeout(poll, 1000);
+}
+poll();
+</script>
+</body>
+</html>
