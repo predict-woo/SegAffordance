@@ -33,6 +33,9 @@ from rclpy.node import Node
 from scipy.spatial.transform import Rotation
 
 import tf2_ros
+import yaml
+import bosdyn.client
+from bosdyn.client.robot_state import RobotStateClient
 from geometry_msgs.msg import PoseStamped, Twist
 from sensor_msgs.msg import CameraInfo, Image as ImageMsg
 from spot_msgs.msg import BatteryStateArray, EStopStateArray, LeaseArray, PowerState
@@ -53,6 +56,7 @@ LOG = os.path.join(HERE, "spotd.log")
 POSES = os.path.join(HERE, "poses.json")
 
 NS = "/spot"
+SPOT_CFG = "/home/spot/dev/ros2_ws/install/locopt_ros/share/locopt_ros/config/spot_config.yaml"   # username/password/hostname
 BASE_FRAME, HAND_FRAME, CMD_FRAME = "spot/body", "spot/hand", "body"
 
 # body-frame box the hand may be commanded into (m). Unstow is x=1.0 z=0.18; half-stow x=0.7 z=0.3.
@@ -144,6 +148,10 @@ class SpotD(Node):
         self.vel_target, self.vel_until = None, 0.0
         self.create_timer(0.1, self._vel_tick)
         self.abort = threading.Event()   # set by `stop`; traj execution checks it between waypoints
+        # Direct SDK robot-state client (read-only, no lease). The driver's C++ state_publisher publishes garbage in
+        # /spot/status/power_states after a startup race (2026-09-19), so power / shore / faults come from here.
+        self.sdk_robot, self.sdk_state, self.sdk_err = None, None, None
+        self.sdk_lock = threading.Lock()
         self.traj_busy = False
 
     def _cb(self, name):
@@ -537,17 +545,48 @@ class SpotD(Node):
         json.dump(meta, open(os.path.splitext(path)[0] + ".json", "w"), indent=1)
         return True, "\n".join(out)
 
+    # ---- robot state via the SDK -----------------------------------------------------------------
+    def robot_state(self, max_age=1.0):
+        """Fresh RobotState proto from the robot (cached for max_age seconds), or None with self.sdk_err set."""
+        with self.sdk_lock:
+            if self.sdk_state is not None and time.time() - self.sdk_state[0] < max_age:
+                return self.sdk_state[1]
+            try:
+                if self.sdk_robot is None:
+                    cfg = yaml.safe_load(open(SPOT_CFG))["/**"]["ros__parameters"]
+                    robot = bosdyn.client.create_standard_sdk("spotd").create_robot(cfg["hostname"])
+                    robot.authenticate(cfg["username"], cfg["password"])
+                    self.sdk_robot = (robot, robot.ensure_client(RobotStateClient.default_service_name))
+                st = self.sdk_robot[1].get_robot_state(timeout=2.0)
+                self.sdk_state, self.sdk_err = (time.time(), st), None
+                return st
+            except Exception as ex:
+                self.sdk_err = f"{type(ex).__name__}: {str(ex)[:120]}"
+                self.sdk_robot = None          # re-authenticate next time
+                return None
+
+    def power_info(self):
+        """(motor_state_name, shore_state_name, charge_pct, faults[list], source) from the SDK, else the topic."""
+        st = self.robot_state()
+        if st is not None:
+            ps = st.power_state
+            faults = [f.error_message for f in st.system_fault_state.faults]
+            return MOTOR.get(ps.motor_power_state, str(ps.motor_power_state)), SHORE.get(ps.shore_power_state, str(ps.shore_power_state)), \
+                float(ps.locomotion_charge_percentage.value), faults, "sdk"
+        p = self.power
+        if p is not None and p.motor_power_state in MOTOR and p.shore_power_state in SHORE:
+            return MOTOR[p.motor_power_state], SHORE[p.shore_power_state], float(p.locomotion_charge_percentage), [], "topic"
+        return "unknown", "unknown", float("nan"), [], f"none ({self.sdk_err})"
+
     # ---- status ----------------------------------------------------------------------------
     def status(self) -> str:
         p, e, l, b = self.power, self.estop, self.leases, self.batt
         driver = any(n == "spot_ros2" for n, _ in self.get_node_names_and_namespaces())
         out = [f"driver: {'up' if driver else 'DOWN'}"]
-        if p:
-            # the C++ state_publisher sometimes emits out-of-range enum values (driver message mismatch); flag rather than print garbage
-            if p.motor_power_state in MOTOR and p.shore_power_state in SHORE:
-                out.append(f"motors: {MOTOR[p.motor_power_state]}  shore: {SHORE[p.shore_power_state]}  charge: {p.locomotion_charge_percentage:.0f}%")
-            else:
-                out.append(f"motors/shore: power_states topic unreadable (raw {p.motor_power_state}/{p.shore_power_state}); trust service replies + battery")
+        motor, shore, charge, faults, src = self.power_info()
+        out.append(f"motors: {motor}  shore: {shore}  charge: {charge:.0f}%  (via {src})")
+        if faults:
+            out.append("robot faults: " + "; ".join(faults))
         if e:
             out.append("estop: " + "  ".join(f"{s.name.replace('_estop', '')}={ESTOP.get(s.state, s.state)}" for s in e.estop_states))
         if l:
@@ -699,8 +738,7 @@ class SpotD(Node):
                 ok, msg = self.trigger(key, timeout=45.0)
                 out.append(f"{label}: {'ok' if ok else 'FAILED'} - {msg}")
                 if not ok and key != "poweroff":
-                    p = self.power
-                    if p and p.shore_power_state == 1:
+                    if self.power_info()[1] == SHORE[1]:
                         out.append("robot is on shore power: unplug it, then run recover again")
                     return False, "\n".join(out)
                 time.sleep(1.5)
