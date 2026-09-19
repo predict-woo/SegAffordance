@@ -1,7 +1,7 @@
 # spot_world: real-time world-frame visualizer + recorder (Rerun)
 
 On spot22: `~/andrew_ws/world/` = `spot_world.py`, `world.sh`, `spot.urdf` (generated), `venv/` (numpy 2 + rerun-sdk),
-`recordings/*.rrd`.  Start: `tmux new -d -s world "bash ~/andrew_ws/world/world.sh"`.  View: http://192.168.1.213:9090
+`recordings/*.rrd`.  Start: `tmux new -d -s world "bash ~/andrew_ws/world/world.sh"` (streaming only; `RR_RECORD=1 bash ...` also writes an .rrd).  View: http://192.168.1.213:9090
 (web viewer served by spot22; gRPC on 9876 for the native viewer: `rerun rerun+http://192.168.1.213:9876/proxy`).
 
 Setup once (spot22):
@@ -13,4 +13,4 @@ Setup once (spot22):
 Logged, all in `spot/vision` (visual-odometry world frame): Boston Dynamics URDF meshes animated from /spot/joint_states +
 TF body pose; live voxelised clouds from the 5 body depth cams + hand depth (2 Hz, stride 4); persistent voxel map in 2 m
 tiles (5 cm voxels, a voxel needs 3 hits; only dirty tiles re-sent every 2 s); depth-camera frustums; hand RGB (2 Hz); body trail.
-Recording grows ~0.5-1 MB/s while running. Known cosmetic warning: ViewCoordinatesBatch numpy ABI (rerun 0.38 + py3.10).
+Recording (opt-in) grows ~0.5-1 MB/s while on; streaming keeps a 1 GiB in-memory buffer on spot22 and writes nothing. Known cosmetic warning: ViewCoordinatesBatch numpy ABI (rerun 0.38 + py3.10).

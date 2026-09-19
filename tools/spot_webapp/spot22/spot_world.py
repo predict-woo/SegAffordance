@@ -266,18 +266,18 @@ class SpotWorld(Node):
         self.get_logger().info(f"map {total} voxels in {len(self.map)} tiles ({len(todo)} re-sent), {self.n_depth} depth frames", throttle_duration_sec=30.0)
 
 def main():
-    rec_dir = os.path.join(HERE, "recordings"); os.makedirs(rec_dir, exist_ok=True)
-    rec = os.path.join(rec_dir, f"spot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.rrd")
     rr.init("spot_world")
     grpc_port, web_port = int(os.environ.get("RR_GRPC_PORT", 9876)), int(os.environ.get("RR_WEB_PORT", 9090))
-    try:
-        rr.set_sinks(rr.GrpcServerSink(port=grpc_port, server_memory_limit="2GiB"), rr.FileSink(rec))
-        url = f"rerun+http://0.0.0.0:{grpc_port}/proxy"
-    except Exception as ex:
-        print(f"set_sinks failed ({ex}); falling back to serve_grpc without file recording", flush=True)
-        url = rr.serve_grpc(grpc_port=grpc_port, server_memory_limit="2GiB")
+    record = os.environ.get("RR_RECORD", "0") == "1"           # streaming only by default; RR_RECORD=1 also writes an .rrd
+    if record:
+        rec_dir = os.path.join(HERE, "recordings"); os.makedirs(rec_dir, exist_ok=True)
+        rec = os.path.join(rec_dir, f"spot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.rrd")
+        rr.set_sinks(rr.GrpcServerSink(port=grpc_port, server_memory_limit="1GiB"), rr.FileSink(rec))
+    else:
+        rec = "off (RR_RECORD=1 to record)"
+        rr.serve_grpc(grpc_port=grpc_port, server_memory_limit="1GiB")   # in-memory ring buffer for late-joining viewers only
     rr.serve_web_viewer(web_port=web_port, open_browser=False, connect_to=f"rerun+http://192.168.1.213:{grpc_port}/proxy")
-    print(f"rerun grpc {url}  | web viewer http://192.168.1.213:{web_port}  | recording {rec}", flush=True)
+    print(f"rerun grpc port {grpc_port}  | web viewer http://192.168.1.213:{web_port}  | recording {rec}", flush=True)
     # world frame + view coordinates (z up)
     rr.log("world", rr.components.ViewCoordinates([3, 5, 1]), static=True)   # Right, Forward, Up = RIGHT_HAND_Z_UP; the archetype constant trips a numpy ABI warning in 0.38
     rr.log("world", rr.CoordinateFrame(WORLD), static=True)
