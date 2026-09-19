@@ -99,7 +99,10 @@ def snap(tag):
     ssh(POD, f"mkdir -p {pod_run()}")
     sh(f"scp -q {d}/{stem}.jpg {d}/{stem}_depth.png {d}/{stem}.json {POD}:{pod_run()}/")
     meta = json.load(open(f"{d}/{stem}.json"))
-    log(f"[{tag}] snapshot {stem}: {meta['width']}x{meta['height']}, hand at {['%.2f' % v for v in meta['hand_in_body']['xyz']]}")
+    hand = meta.get("hand_in_body")
+    log(f"[{tag}] snapshot {stem}: {meta['width']}x{meta['height']}, hand at {['%.2f' % v for v in hand['xyz']] if hand else 'UNKNOWN (no TF: driver state publisher down?)'}")
+    if "T_body_cam" not in meta:
+        raise RuntimeError("snapshot has no body->camera transform (TF missing); fix the driver before continuing")
     return stem
 
 

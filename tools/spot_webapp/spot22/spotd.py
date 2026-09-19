@@ -543,7 +543,11 @@ class SpotD(Node):
         driver = any(n == "spot_ros2" for n, _ in self.get_node_names_and_namespaces())
         out = [f"driver: {'up' if driver else 'DOWN'}"]
         if p:
-            out.append(f"motors: {MOTOR.get(p.motor_power_state, p.motor_power_state)}  shore: {SHORE.get(p.shore_power_state)}  charge: {p.locomotion_charge_percentage:.0f}%")
+            # the C++ state_publisher sometimes emits out-of-range enum values (driver message mismatch); flag rather than print garbage
+            if p.motor_power_state in MOTOR and p.shore_power_state in SHORE:
+                out.append(f"motors: {MOTOR[p.motor_power_state]}  shore: {SHORE[p.shore_power_state]}  charge: {p.locomotion_charge_percentage:.0f}%")
+            else:
+                out.append(f"motors/shore: power_states topic unreadable (raw {p.motor_power_state}/{p.shore_power_state}); trust service replies + battery")
         if e:
             out.append("estop: " + "  ".join(f"{s.name.replace('_estop', '')}={ESTOP.get(s.state, s.state)}" for s in e.estop_states))
         if l:
