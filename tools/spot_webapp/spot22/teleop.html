@@ -78,6 +78,7 @@
 
     <h2>Body</h2>
     <div class="grid3"><button data-cmd="stand">stand</button><button data-cmd="sit">sit</button><button data-cmd="selfright">self-right</button></div>
+    <div class="grid2"><button data-cmd="sit">sit down</button><button data-cmd="rollover" class="warn">flip over (battery change)</button></div>
     <div class="grid3"><button data-cmd="claim">claim</button><button data-cmd="poweron">power on</button><button data-cmd="poweroff" class="warn">power off</button></div>
 
     <h2>Arm</h2>
@@ -159,6 +160,7 @@ function stopAll() { cmd({ cmd: 'stop' }); }
 $('bStop').onclick = stopAll;
 document.querySelectorAll('[data-cmd]').forEach(b => b.onclick = () => {
   const c = b.dataset.cmd;
+  if (c === 'rollover' && !confirm('Flip Spot onto its back (sit, then rollover)? Make sure there is clear space around it.')) return;
   if ((c === 'estop' || c === 'poweroff') && !confirm(`Send ${c}? The robot will ${c === 'estop' ? 'settle to the ground and cut motor power' : 'cut motor power (make sure it is sitting)'}.`)) return;
   cmd({ cmd: c });
 });

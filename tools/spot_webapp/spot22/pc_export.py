@@ -102,7 +102,21 @@ def recalibrate(pred_new, old_json, T_new, pts_cam):
     return pred_new
 
 
-def preds_from_masks(npz_path, depth_m, xs, ys, K, T_body_cam, expect_body=None, model="sam3"):
+def mask_orientation(m):
+    """Principal axis of a binary mask: (angle_deg from the image x axis in [0, 180), aspect = major/minor extent)."""
+    my, mx = np.nonzero(m)
+    if mx.size < 5:
+        return None, None
+    pts = np.stack([mx, my], 1).astype(np.float64); pts -= pts.mean(0)
+    cov = pts.T @ pts / len(pts)
+    w, v = np.linalg.eigh(cov)
+    major = v[:, 1]
+    ang = float(np.degrees(np.arctan2(major[1], major[0])) % 180.0)
+    aspect = float(np.sqrt(max(w[1], 1e-9) / max(w[0], 1e-9)))
+    return ang, aspect
+
+
+def preds_from_masks(npz_path, depth_m, xs, ys, K, T_body_cam, expect_body=None, model="sam3", grasp_bias_m=0.0):
     z = np.load(npz_path, allow_pickle=True)
     masks, scores = z["masks"].astype(bool), z["scores"].astype(float)
     if len(scores) == 0:
@@ -126,14 +140,22 @@ def preds_from_masks(npz_path, depth_m, xs, ys, K, T_body_cam, expect_body=None,
     z_meas = measured_depth(depth_m, u, v) or measured_depth(depth_m, u, v, r=30)
     if not z_meas:
         return [], "no depth at the mask centroid"
-    anchor = np.array([(u * W - K[0, 2]) / K[0, 0] * z_meas, (v * H - K[1, 2]) / K[1, 1] * z_meas, z_meas])
+    # grasp bias: place the contact grasp_bias_m closer to the camera along the pixel ray (the mask centroid sits ON
+    # the bar surface; the gripper closes better with a little stand-off)
+    z_use = max(z_meas - grasp_bias_m, 0.05)
+    anchor = np.array([(u * W - K[0, 2]) / K[0, 0] * z_use, (v * H - K[1, 2]) / K[1, 1] * z_use, z_use])
+    ang, aspect = mask_orientation(m)
+    # bar orientation from the mask's principal axis (image x is horizontal at the aim pose): <45 deg from x = horizontal bar
+    orient = None if ang is None else ("horizontal" if min(ang, 180 - ang) < 45 else "vertical")
     pred = {"own_origin": None, "model": model, "prompt": str(z["prompt"]) if "prompt" in z else "", "type": "revolute", "p_rev": None,   # None, not NaN: NaN is not valid JSON for browsers
             "point_uv": [float(u), float(v)], "model_uv": [float(u), float(v)],
             "contact_from": f"sam3 instance #{idx}/{len(scores)} score {scores[idx]:.2f} ({how})",
-            "z_pred": float(z_meas), "z_meas": z_meas, "scale": 1.0, "anchor": anchor.tolist(), "axis": [0.0, -1.0, 0.0], "origin": None,
+            "z_pred": float(z_meas), "z_meas": z_meas, "scale": 1.0, "grasp_bias_m": float(grasp_bias_m),
+            "anchor": anchor.tolist(), "axis": [0.0, -1.0, 0.0], "origin": None,
+            "handle_orient": orient, "handle_angle_deg": ang, "handle_aspect": aspect,
             "traj": [], "turn_deg": None, "slide_m": None, "mask_idx": np.flatnonzero(m[ys, xs]).tolist(),
             "sam3": {"scores": scores.tolist(), "centroids": cents.tolist(), "picked": idx}}
-    return [pred], how
+    return [pred], how + (f"; bar {orient} ({ang:.0f} deg, aspect {aspect:.1f})" if orient else "") + (f"; grasp bias {grasp_bias_m * 100:.0f} cm toward the camera" if grasp_bias_m else "")
 
 
 def load_preds(path, image_stem, depth_m, xs, ys, K_px, models, turn_deg, slide_m, n_steps=24):
@@ -212,6 +234,7 @@ def main():
     ap.add_argument("--slide-m", type=float, default=0.3, help="prismatic trajectory length")
     ap.add_argument("--masks-npz", help="external segmentation (sam3_client.py output) instead of --preds: instance masks + scores")
     ap.add_argument("--expect-body", type=float, nargs=3, help="expected handle position in the body frame; picks the instance nearest its projection")
+    ap.add_argument("--grasp-bias-m", type=float, default=0.0, help="move the external-mask contact this much closer to the camera (m)")
     ap.add_argument("--recalib", help="FAR frame's *.pred.json: carry its hinge/axis over to this frame via the handle centroid + door-plane yaw")
     a = ap.parse_args()
     stem = os.path.splitext(a.rgb)[0]
@@ -229,7 +252,7 @@ def main():
     T = np.array(meta["T_body_cam"], np.float64) if "T_body_cam" in meta else None
     preds = load_preds(a.preds, os.path.basename(stem), depth, xs, ys, K, set(a.models.split(',')), a.turn_deg, a.slide_m) if a.preds else []
     if a.masks_npz:
-        preds, how = preds_from_masks(a.masks_npz, depth, xs, ys, K, T, a.expect_body)
+        preds, how = preds_from_masks(a.masks_npz, depth, xs, ys, K, T, a.expect_body, grasp_bias_m=a.grasp_bias_m)
         print(f"external masks: {how}" if preds else f"external masks: FAILED ({how})")
     if a.recalib and preds:
         oldj = json.load(open(a.recalib))

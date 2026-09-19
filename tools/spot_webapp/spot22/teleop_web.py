@@ -45,6 +45,7 @@ VMAX, WMAX = 1.0, 1.5            # hard caps (m/s, rad/s) regardless of what the
 DEADMAN_S = 0.35
 ALLOWED_CMDS = {"stop", "sit", "stand", "stow", "unstow", "open", "close", "estop", "claim", "take", "poweron", "poweroff",
                 "selfright", "estop-release"}
+# flip over = sit, then the driver's rollover (battery-change pose); self-right brings it back
 
 
 def spotctl(*args, timeout=30.0):
@@ -227,6 +228,11 @@ class H(BaseHTTPRequestHandler):
                 ok, txt = spotctl(cmd, "--yes") if cmd == "estop-hard" else spotctl(cmd)
             elif cmd == "home":
                 ok, txt = spotctl("go", "half-down")
+            elif cmd == "rollover":
+                ok, txt = spotctl("sit")
+                if ok:
+                    time.sleep(3.0)
+                    ok, txt2 = spotctl("rollover"); txt = f"sit ok; rollover: {txt2}"
             elif cmd == "turn":
                 deg = float(np.clip(float(body.get("deg", 0.0)), -45, 45)); ok, txt = spotctl("walkto", "0", "0", f"{deg:.1f}", "--t", "10")
             elif cmd == "step":

@@ -73,6 +73,7 @@ TRIGGERS = {  # command -> service (relative to NS); MOVES marks commands that m
     "open": "open_gripper", "close": "close_gripper",
     "estop": "estop/gentle", "estop-hard": "estop/hard", "estop-release": "estop/release",
     "clear-fault": "clear_behavior_fault",
+    "rollover": "rollover",          # battery-change pose; the driver requires a sit first
 }
 MOTOR = {0: "unknown", 1: "off", 2: "on", 3: "powering-on", 4: "powering-off", 5: "ERROR"}
 SHORE = {0: "unknown", 1: "ON-SHORE-POWER", 2: "off"}
@@ -96,6 +97,7 @@ HELP = """spotctl commands (one line each; MOVES = the robot moves)
   estop | estop-release | estop-hard --yes    gentle E-stop (settles + motors off) / clear it / cut power
   recover [--no-stand]                    estop-release -> poweroff -> poweron -> stand
   clear-fault                             clear behaviour fault
+  rollover                                MOVES: flip onto the back for a battery change (sit first)
   walkto X Y YAW_DEG [--t S] [--loose] [--dry]   MOVES BASE to a pose in the current body frame (m, deg); `stop` cancels
   traj FILE.json --smooth [--speed 0.01] [--approach-speed 0.015] [--reverse] [--no-grasp] [--dry]
                                           MOVES arm as ONE timed trajectory (continuous + slow): open -> glide to pre-grasp -> glide into

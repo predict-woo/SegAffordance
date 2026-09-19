@@ -49,8 +49,8 @@ SAM3_PORT = 12190                # sam3_serve.py on the pod (tmux session sam3)
 
 STATE = {
     "stage": "idle", "busy": None, "moves_enabled": False, "log": [], "run_id": None,
-    "params": {"turn_deg": 30, "slide_m": 0.15, "speed": 0.01, "standoff": 1.10, "aim_dist": 0.50, "approach": 0.12},
-    "handle": "vertical",       # bar orientation chosen in the UI: sets the gripper roll for the grasp
+    "params": {"turn_deg": 30, "slide_m": 0.15, "speed": 0.01, "standoff": 1.10, "aim_dist": 0.50, "approach": 0.12, "grasp_bias": 0.02},
+    "handle": "auto",           # auto = from the SAM 3 mask shape; or vertical / horizontal override. Sets the gripper roll.
     "far": {}, "close": {}, "plans": {}, "error": None,
 }
 LOCK = threading.Lock()
@@ -113,7 +113,7 @@ def export_cloud(stem, tag, preds=None, recalib=None, models="dense", masks_npz=
     p = STATE["params"]
     out = f"{pod_run()}/{stem}_{tag}"
     extra = f" --preds {preds}" if preds else ""
-    extra += f" --masks-npz {masks_npz}" if masks_npz else ""
+    extra += f" --masks-npz {masks_npz} --grasp-bias-m {p['grasp_bias']}" if masks_npz else ""
     extra += f" --expect-body {expect_body[0]:.4f} {expect_body[1]:.4f} {expect_body[2]:.4f}" if expect_body else ""
     extra += f" --recalib {recalib}" if recalib else ""
     txt = ssh(POD, f"cd {POD_REPO} && python {POD_TOOLS}/pc_export.py {pod_run()}/{stem}.jpg{extra} --models {models} --turn-deg {p['turn_deg']} --slide-m {p['slide_m']} -o {out}.html 2>&1 | grep -v Warning")
@@ -214,14 +214,26 @@ def job_predict_close():
     so = STATE["plans"].get("standoff") or {}
     expect = so.get("handle_in_goal_frame") if STATE["moves_enabled"] else so.get("handle_body")
     files = export_cloud(close["stem"], "closerecal", masks_npz=npz, expect_body=expect, recalib=far["pred_pod"])
-    close.update({"prompt": CLOSE_PROMPT, "cloud": files["data"], "pred": files["pred_local"]})
+    try:
+        pr = json.load(open(files["pred_local"]))["preds"][0]
+        detected = pr.get("handle_orient"); ang = pr.get("handle_angle_deg")
+    except Exception:
+        detected, ang = None, None
+    close.update({"prompt": CLOSE_PROMPT, "cloud": files["data"], "pred": files["pred_local"], "handle_detected": detected})
+    log(f"[close] handle bar from the mask: {detected or 'undetermined'}" + (f" ({ang:.0f} deg in the image)" if ang is not None else ""))
     STATE["stage"] = "close_predicted"
 
 
 def job_accept_close():
     p = STATE["params"]; close = STATE["close"]; moves = STATE["moves_enabled"]
     sh(f"scp -q {close['pred']} {SPOT}:{SPOT_WS}/snaps/close_recal.pred.json")
-    txt = ssh(SPOT, f"cd {SPOT_WS} && python3 plan_traj.py snaps/close_recal.pred.json --real --turn {p['turn_deg']} --slide {p['slide_m']} --steps 30 --approach {p['approach']} --handle {STATE['handle']} -o traj_web.json")
+    handle = STATE["handle"]
+    if handle == "auto":
+        handle = close.get("handle_detected") or "vertical"
+        log(f"[plan] handle bar: {handle} ({'from the SAM 3 mask' if close.get('handle_detected') else 'mask undetermined, defaulting to vertical'})")
+    else:
+        log(f"[plan] handle bar: {handle} (manual override)")
+    txt = ssh(SPOT, f"cd {SPOT_WS} && python3 plan_traj.py snaps/close_recal.pred.json --real --turn {p['turn_deg']} --slide {p['slide_m']} --steps 30 --approach {p['approach']} --handle {handle} -o traj_web.json")
     for line in txt.strip().splitlines():
         log(f"[plan] {line}")
     if "OUT OF REACH" in txt or "WARNING" in txt:
@@ -306,7 +318,7 @@ class H(BaseHTTPRequestHandler):
                 STATE["moves_enabled"] = bool(body.get("enabled")); log(f"moves {'ENABLED' if STATE['moves_enabled'] else 'disabled'}")
                 return self._send(200, {"ok": True})
             if u.path == "/api/params":
-                if body.get("handle") in ("vertical", "horizontal"):
+                if body.get("handle") in ("auto", "vertical", "horizontal"):
                     STATE["handle"] = body["handle"]
                 STATE["params"].update({k: float(v) for k, v in body.items() if k in STATE["params"]})
                 return self._send(200, {"ok": True, "params": STATE["params"]})
