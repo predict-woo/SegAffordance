@@ -269,13 +269,14 @@ def main():
     rr.init("spot_world")
     grpc_port, web_port = int(os.environ.get("RR_GRPC_PORT", 9876)), int(os.environ.get("RR_WEB_PORT", 9090))
     record = os.environ.get("RR_RECORD", "0") == "1"           # streaming only by default; RR_RECORD=1 also writes an .rrd
+    CORS = [f"http://192.168.1.213:{web_port}", f"http://localhost:{web_port}", f"http://127.0.0.1:{web_port}", "*"]
     if record:
         rec_dir = os.path.join(HERE, "recordings"); os.makedirs(rec_dir, exist_ok=True)
         rec = os.path.join(rec_dir, f"spot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.rrd")
-        rr.set_sinks(rr.GrpcServerSink(port=grpc_port, server_memory_limit="1GiB"), rr.FileSink(rec))
+        rr.set_sinks(rr.GrpcServerSink(port=grpc_port, server_memory_limit="1GiB", cors_allow_origin=CORS), rr.FileSink(rec))
     else:
         rec = "off (RR_RECORD=1 to record)"
-        rr.serve_grpc(grpc_port=grpc_port, server_memory_limit="1GiB")   # in-memory ring buffer for late-joining viewers only
+        rr.serve_grpc(grpc_port=grpc_port, server_memory_limit="1GiB", cors_allow_origin=CORS)   # browser viewer is cross-origin (port 9090 -> 9876)
     rr.serve_web_viewer(web_port=web_port, open_browser=False, connect_to=f"rerun+http://192.168.1.213:{grpc_port}/proxy")
     viewer_url = f"http://192.168.1.213:{web_port}/?url=rerun%2Bhttp%3A%2F%2F192.168.1.213%3A{grpc_port}%2Fproxy"
     print(f"OPEN THIS: {viewer_url}\n(the bare :{web_port} page is an empty viewer; the ?url= part tells it where the data is)  | recording {rec}", flush=True)
