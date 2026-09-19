@@ -11,6 +11,6 @@ Setup once (spot22):
   xacro $(ros2 pkg prefix spot_description)/share/spot_description/urdf/spot.urdf.xacro arm:=true tf_prefix:=spot/ > ~/andrew_ws/world/spot.urdf
 
 Logged, all in `spot/vision` (visual-odometry world frame): Boston Dynamics URDF meshes animated from /spot/joint_states +
-TF body pose; live voxelised clouds from the 5 body depth cams + hand depth (2 Hz, stride 4); persistent voxel map in 2 m
-tiles (5 cm voxels, a voxel needs 3 hits; only dirty tiles re-sent every 2 s); depth-camera frustums; hand RGB (2 Hz); body trail.
+TF body pose; live per-frame clouds from the 5 body depth cams + hand depth (4 Hz, stride 4, real colours); optional cumulative voxel map (OFF by default; `WORLD_MAP=1` enables: 2 m
+tiles of 5 cm voxels, 3-hit filter, dirty tiles re-sent every 2 s); depth-camera frustums; hand RGB (2 Hz); body trail.
 Recording (opt-in) grows ~0.5-1 MB/s while on; streaming keeps a 1 GiB in-memory buffer on spot22 and writes nothing. Known cosmetic warning: ViewCoordinatesBatch numpy ABI (rerun 0.38 + py3.10).

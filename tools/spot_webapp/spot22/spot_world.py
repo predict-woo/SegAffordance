@@ -35,12 +35,12 @@ URDF = os.path.join(HERE, "spot.urdf")
 WORLD = "spot/vision"
 BODY = "spot/body"
 DEPTH_CAMS = {  # name -> (registered depth image, its camera_info, the matching intensity/RGB image, stride, hz cap)
-    "frontleft": ("/spot/depth_registered/frontleft/image", "/spot/depth_registered/frontleft/camera_info", "/spot/camera/frontleft/image", 4, 2.0),
-    "frontright": ("/spot/depth_registered/frontright/image", "/spot/depth_registered/frontright/camera_info", "/spot/camera/frontright/image", 4, 2.0),
-    "left": ("/spot/depth_registered/left/image", "/spot/depth_registered/left/camera_info", "/spot/camera/left/image", 4, 2.0),
-    "right": ("/spot/depth_registered/right/image", "/spot/depth_registered/right/camera_info", "/spot/camera/right/image", 4, 2.0),
-    "back": ("/spot/depth_registered/back/image", "/spot/depth_registered/back/camera_info", "/spot/camera/back/image", 4, 2.0),
-    "hand": ("/spot/depth_registered/hand/image", "/spot/depth_registered/hand/camera_info", "/spot/camera/hand/image", 4, 2.0),
+    "frontleft": ("/spot/depth_registered/frontleft/image", "/spot/depth_registered/frontleft/camera_info", "/spot/camera/frontleft/image", 4, 4.0),
+    "frontright": ("/spot/depth_registered/frontright/image", "/spot/depth_registered/frontright/camera_info", "/spot/camera/frontright/image", 4, 4.0),
+    "left": ("/spot/depth_registered/left/image", "/spot/depth_registered/left/camera_info", "/spot/camera/left/image", 4, 4.0),
+    "right": ("/spot/depth_registered/right/image", "/spot/depth_registered/right/camera_info", "/spot/camera/right/image", 4, 4.0),
+    "back": ("/spot/depth_registered/back/image", "/spot/depth_registered/back/camera_info", "/spot/camera/back/image", 4, 4.0),
+    "hand": ("/spot/depth_registered/hand/image", "/spot/depth_registered/hand/camera_info", "/spot/camera/hand/image", 4, 4.0),
 }
 CAM_COLORS = {"frontleft": (255, 140, 0), "frontright": (255, 200, 0), "left": (0, 200, 255), "right": (120, 120, 255),
               "back": (200, 80, 255), "hand": (60, 255, 120)}
@@ -50,6 +50,7 @@ MAP_MAX_VOXELS = 800_000
 MAP_LOG_PERIOD, POSE_HZ = 2.0, 15.0
 TILE = 2.0                     # map is logged as 2 m tiles; only tiles that gained voxels are re-sent
 MAP_MIN_HITS = 3               # a voxel enters the map after being seen in this many frames (kills depth-noise inflation)
+MAP_ON = os.environ.get("WORLD_MAP", "0") == "1"   # cumulative map is OFF by default: live per-frame clouds only
 
 
 def turbo(t):
@@ -86,10 +87,11 @@ class SpotWorld(Node):
         self.create_subscription(ImageMsg, "/spot/camera/hand/image", self._hand_rgb, 1)
         self.create_subscription(JointState, "/spot/joint_states", self._joints, 10)
         self.create_subscription(Odometry, "/spot/odometry", self._odom, 10)
-        self.create_timer(MAP_LOG_PERIOD, self._log_map)
+        if MAP_ON:
+            self.create_timer(MAP_LOG_PERIOD, self._log_map)
         self.last_joint_t = self.last_rgb_t = 0.0
         self.n_depth = 0
-        self.get_logger().info(f"spot_world up: URDF {len(self.joints)} joints, {len(DEPTH_CAMS)} depth cams")
+        self.get_logger().info(f"spot_world up: URDF {len(self.joints)} joints, {len(DEPTH_CAMS)} depth cams, cumulative map {'ON' if MAP_ON else 'off'}")
 
     # ---- helpers -------------------------------------------------------------------------------
     @staticmethod
@@ -179,6 +181,9 @@ class SpotWorld(Node):
         if cam not in self.live_frame_set:
             rr.log(f"world/live/{cam}", rr.CoordinateFrame(WORLD), static=True); self.live_frame_set.add(cam)
         rr.log(f"world/live/{cam}", rr.Points3D(live.astype(np.float32), colors=live_rgb, radii=0.012))
+        self.n_depth += 1
+        if not MAP_ON:
+            return
         # map: add voxels (world frame, coarser)
         mk = self._voxel_keys(pw, VOXEL_MAP)
         _, first = np.unique(mk, return_index=True)          # one candidate per voxel
@@ -197,7 +202,6 @@ class SpotWorld(Node):
                     pend[k] = n
             if len(pend) > 3_000_000:
                 pend.clear()
-        self.n_depth += 1
 
     def _hand_rgb(self, m):
         if time.time() - self.last_rgb_t < 0.5:
@@ -286,10 +290,10 @@ def main():
     if record:
         rec_dir = os.path.join(HERE, "recordings"); os.makedirs(rec_dir, exist_ok=True)
         rec = os.path.join(rec_dir, f"spot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.rrd")
-        rr.set_sinks(rr.GrpcServerSink(port=grpc_port, server_memory_limit="1GiB", cors_allow_origin=CORS), rr.FileSink(rec))
+        rr.set_sinks(rr.GrpcServerSink(port=grpc_port, server_memory_limit="256MiB", cors_allow_origin=CORS), rr.FileSink(rec))
     else:
         rec = "off (RR_RECORD=1 to record)"
-        rr.serve_grpc(grpc_port=grpc_port, server_memory_limit="1GiB", cors_allow_origin=CORS)   # browser viewer is cross-origin (port 9090 -> 9876)
+        rr.serve_grpc(grpc_port=grpc_port, server_memory_limit="256MiB", cors_allow_origin=CORS)   # small history buffer: a (re)connecting viewer replays seconds, not minutes
     rr.serve_web_viewer(web_port=web_port, open_browser=False, connect_to=f"rerun+http://192.168.1.213:{grpc_port}/proxy")
     viewer_url = f"http://192.168.1.213:{web_port}/?url=rerun%2Bhttp%3A%2F%2F192.168.1.213%3A{grpc_port}%2Fproxy"
     print(f"OPEN THIS: {viewer_url}\n(the bare :{web_port} page is an empty viewer; the ?url= part tells it where the data is)  | recording {rec}", flush=True)
