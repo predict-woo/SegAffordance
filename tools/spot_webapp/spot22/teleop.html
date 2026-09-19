@@ -34,6 +34,10 @@
   #conn.bad { color: var(--bad); font-weight: 700; }
   #msg { font-size: 12px; color: #bbb; min-height: 1.4em; }
   .muted { color: #888; }
+  #batt { font-weight: 700; }
+  #batt.low { color: #ffb454; border-color: #a05a00; }
+  #batt.crit { color: #fff; background: var(--bad); border-color: var(--bad); }
+  #batt.chg { color: var(--ok); }
 </style>
 </head>
 <body>
@@ -43,6 +47,7 @@
     <div id="hud">
       <select id="camsel"></select>
       <span class="chip" id="camstat">…</span>
+      <span class="chip" id="batt" title="battery from the robot (SDK)">🔋 …</span>
     </div>
     <div id="velhud">vx +0.00  vy +0.00  wz +0.00</div>
   </div>
@@ -169,6 +174,11 @@ async function poll() {
     $('camstat').textContent = s.frame_age == null ? `${s.cam}: waiting for frames` : `${s.cam} · ${s.encoding} · frame ${s.frames} · ${s.frame_age.toFixed(1)} s ago`;
     $('camstat').style.color = s.frame_age != null && s.frame_age > 2 ? '#ff4d4d' : '';
     $('status').textContent = s.status;
+    if (s.battery) {
+      const b = s.battery, pct = Math.round(b.charge);
+      $('batt').textContent = `🔋 ${pct}%  ${b.charging ? 'charging' : b.voltage.toFixed(1) + ' V'}${b.runtime_min != null && !b.charging ? ' · ~' + b.runtime_min + ' min' : ''}${b.motors ? ' · motors ' + b.motors : ''}`;
+      $('batt').className = 'chip ' + (b.charging ? 'chg' : pct <= 15 ? 'crit' : pct <= 30 ? 'low' : '');
+    }
     $('conn').textContent = 'connected to spot22' + (s.active ? ' · MOVING' : ''); $('conn').className = '';
   } catch (e) { $('conn').textContent = 'NO CONNECTION to spot22 — robot stops on its own (deadman)'; $('conn').className = 'bad'; }
   setTimeout(poll, 1000);

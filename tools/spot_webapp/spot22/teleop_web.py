@@ -30,6 +30,11 @@ from geometry_msgs.msg import Twist
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import Image as ImageMsg
+import yaml
+import bosdyn.client
+from bosdyn.client.robot_state import RobotStateClient
+
+SPOT_CFG = "/home/spot/dev/ros2_ws/install/locopt_ros/share/locopt_ros/config/spot_config.yaml"
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SPOTD_SOCK = "/tmp/spotd.sock"
@@ -134,6 +139,30 @@ class TeleopNode(Node):
         except Exception as ex:
             self.get_logger().warning(f"image convert failed: {ex}")
 
+    def battery(self):
+        """{charge, voltage, charging, runtime_min, motors} straight from the robot (cached 2 s), or None."""
+        if time.time() - getattr(self, "batt_t", 0.0) < 2.0:
+            return getattr(self, "batt", None)
+        try:
+            if getattr(self, "sdk", None) is None:
+                cfg = yaml.safe_load(open(SPOT_CFG))["/**"]["ros__parameters"]
+                robot = bosdyn.client.create_standard_sdk("teleop_web").create_robot(cfg["hostname"])
+                robot.authenticate(cfg["username"], cfg["password"])
+                self.sdk = robot.ensure_client(RobotStateClient.default_service_name)
+            st = self.sdk.get_robot_state(timeout=2.0)
+            ps, bs = st.power_state, (st.battery_states[0] if st.battery_states else None)
+            motors = {1: "off", 2: "on", 3: "powering on", 4: "powering off", 5: "ERROR"}.get(ps.motor_power_state, "?")
+            self.batt = {"charge": float(ps.locomotion_charge_percentage.value), "charging": ps.shore_power_state == 1 or (bs is not None and bs.status == 2),
+                         "voltage": float(bs.voltage.value) if bs is not None else 0.0,
+                         "runtime_min": int(ps.locomotion_estimated_runtime.seconds // 60) if ps.HasField("locomotion_estimated_runtime") else None,
+                         "motors": motors}
+        except Exception as ex:
+            self.sdk = None
+            self.batt = None
+            self.get_logger().warning(f"battery read failed: {ex}")
+        self.batt_t = time.time()
+        return self.batt
+
     def get_status(self):
         if time.time() - self.status_t > 2.0:
             ok, txt = spotctl("status", timeout=5.0)
@@ -159,7 +188,7 @@ class H(BaseHTTPRequestHandler):
                 vx, vy, wz = NODE.cmd; active = time.time() < NODE.cmd_until
                 cam, n, age = NODE.cam_name, NODE.frame_n, (time.time() - NODE.jpeg_t) if NODE.jpeg else None
             return self._send(200, {"vel": [vx, vy, wz], "active": active, "cam": cam, "frames": n, "frame_age": age,
-                                    "encoding": NODE.enc, "status": NODE.get_status(), "cams": list(CAMS)})
+                                    "encoding": NODE.enc, "status": NODE.get_status(), "cams": list(CAMS), "battery": NODE.battery()})
         if u.path == "/stream.mjpg":
             cam = (parse_qs(u.query).get("cam") or ["hand"])[0]
             NODE.select_cam(cam)
