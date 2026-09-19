@@ -648,10 +648,17 @@ class SpotD(Node):
             return self.trigger("estop-hard")
         if cmd == "clear-fault":
             return self.clear_faults()
-        if cmd == "selfright":                      # a fall fault always precedes a self-right: clear it first
-            ok, msg = self.clear_faults()
-            ok2, msg2 = self.trigger("selfright", timeout=45.0)
-            return ok2, f"{msg2} (faults: {msg})"
+        if cmd == "selfright":
+            # the FALL fault can be raised only after the robot has been on its back for a moment, so a single
+            # clear-then-command can race it: clear, try, and on a BehaviorFaultError clear again and retry
+            notes = []
+            for attempt in range(3):
+                ok, msg = self.clear_faults(); notes.append(msg)
+                ok2, msg2 = self.trigger("selfright", timeout=45.0)
+                if ok2 or "BehaviorFault" not in msg2:
+                    return ok2, f"{msg2} (faults: {' | '.join(notes)})"
+                time.sleep(1.0)
+            return False, f"{msg2} after 3 attempts (faults: {' | '.join(notes)})"
         if cmd in TRIGGERS:
             return self.trigger(cmd, timeout=45.0 if cmd in ("poweron", "stand", "selfright") else 20.0)
         if cmd == "walkto":
