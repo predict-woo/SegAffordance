@@ -44,7 +44,7 @@ CAMS = {"hand": "/spot/camera/hand/image", "front": "/spot/camera/frontmiddle_vi
 VMAX, WMAX = 1.0, 1.5            # hard caps (m/s, rad/s) regardless of what the page sends
 DEADMAN_S = 0.35
 ALLOWED_CMDS = {"stop", "sit", "stand", "stow", "unstow", "open", "close", "estop", "claim", "take", "poweron", "poweroff",
-                "selfright", "estop-release"}
+                "selfright", "estop-release", "clear-fault"}
 # flip over = sit, then the driver's rollover (battery-change pose); self-right brings it back
 
 
@@ -229,10 +229,12 @@ class H(BaseHTTPRequestHandler):
             elif cmd == "home":
                 ok, txt = spotctl("go", "half-down")
             elif cmd == "rollover":
-                ok, txt = spotctl("sit")
+                # the driver only allows a rollover after it has WATCHED a sit complete, so: stand -> sit -> rollover
+                ok, txt = spotctl("stand", timeout=45.0)
                 if ok:
-                    time.sleep(3.0)
-                    ok, txt2 = spotctl("rollover"); txt = f"sit ok; rollover: {txt2}"
+                    time.sleep(3.0); ok, txt = spotctl("sit")
+                if ok:
+                    time.sleep(4.0); ok, txt2 = spotctl("rollover"); txt = f"stand+sit ok; rollover: {txt2}"
             elif cmd == "turn":
                 deg = float(np.clip(float(body.get("deg", 0.0)), -45, 45)); ok, txt = spotctl("walkto", "0", "0", f"{deg:.1f}", "--t", "10")
             elif cmd == "step":

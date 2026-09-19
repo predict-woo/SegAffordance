@@ -39,7 +39,7 @@ from bosdyn.client.robot_state import RobotStateClient
 from geometry_msgs.msg import PoseStamped, Twist
 from sensor_msgs.msg import CameraInfo, Image as ImageMsg
 from spot_msgs.msg import BatteryStateArray, EStopStateArray, LeaseArray, PowerState
-from spot_msgs.srv import SetGripperAngle
+from spot_msgs.srv import SetGripperAngle, ClearBehaviorFault
 from spot_msgs.action import Trajectory as TrajectoryAction
 from rclpy.action import ActionClient
 from builtin_interfaces.msg import Duration as DurationMsg
@@ -72,7 +72,6 @@ TRIGGERS = {  # command -> service (relative to NS); MOVES marks commands that m
     "stow": "arm_stow", "unstow": "arm_unstow", "carry": "arm_carry",
     "open": "open_gripper", "close": "close_gripper",
     "estop": "estop/gentle", "estop-hard": "estop/hard", "estop-release": "estop/release",
-    "clear-fault": "clear_behavior_fault",
     "rollover": "rollover",          # battery-change pose; the driver requires a sit first
 }
 MOTOR = {0: "unknown", 1: "off", 2: "on", 3: "powering-on", 4: "powering-off", 5: "ERROR"}
@@ -96,7 +95,7 @@ HELP = """spotctl commands (one line each; MOVES = the robot moves)
   vel VX VY YAW [-t SECS]                 MOVES base for SECS (default 1.0, max 3.0), then auto-stops
   estop | estop-release | estop-hard --yes    gentle E-stop (settles + motors off) / clear it / cut power
   recover [--no-stand]                    estop-release -> poweroff -> poweron -> stand
-  clear-fault                             clear behaviour fault
+  clear-fault                             clear all clearable behaviour faults (fall etc.); selfright does this itself
   rollover                                MOVES: flip onto the back for a battery change (sit first)
   walkto X Y YAW_DEG [--t S] [--loose] [--dry]   MOVES BASE to a pose in the current body frame (m, deg); `stop` cancels
   traj FILE.json --smooth [--speed 0.01] [--approach-speed 0.015] [--reverse] [--no-grasp] [--dry]
@@ -133,6 +132,7 @@ class SpotD(Node):
         self.lock = threading.Lock()
         self.cli = {k: self.create_client(Trigger, f"{NS}/{v}") for k, v in TRIGGERS.items()}
         self.grip_cli = self.create_client(SetGripperAngle, f"{NS}/set_gripper_angle")
+        self.fault_cli = self.create_client(ClearBehaviorFault, f"{NS}/clear_behavior_fault")
         self.traj_action = ActionClient(self, TrajectoryAction, f"{NS}/trajectory")
         self.walk_goal = None
         self.rc_cli = self.create_client(RobotCommandSrv, f"{NS}/robot_command")   # service, not action: the rclpy action client crashed the daemon from a worker thread
@@ -580,6 +580,27 @@ class SpotD(Node):
             return MOTOR[p.motor_power_state], SHORE[p.shore_power_state], float(p.locomotion_charge_percentage), [], "topic"
         return "unknown", "unknown", float("nan"), [], f"none ({self.sdk_err})"
 
+    def clear_faults(self) -> tuple[bool, str]:
+        """Clear every clearable behaviour fault (e.g. CAUSE_FALL after a rollover) through the driver's typed service."""
+        st = self.robot_state(max_age=0.0)
+        if st is None:
+            return False, f"cannot read robot state ({self.sdk_err})"
+        faults = list(st.behavior_fault_state.faults)
+        if not faults:
+            return True, "no behaviour faults"
+        if not self.fault_cli.wait_for_service(timeout_sec=2.0):
+            return False, "clear_behavior_fault service not available"
+        out = []
+        for f in faults:
+            fut = self.fault_cli.call_async(ClearBehaviorFault.Request(id=int(f.behavior_fault_id)))
+            t0 = time.time()
+            while not fut.done() and time.time() - t0 < 10:
+                time.sleep(0.02)
+            r = fut.result() if fut.done() else None
+            out.append(f"fault {f.behavior_fault_id} (cause {f.cause}): {'cleared' if r and r.success else 'FAILED ' + (r.message if r else 'timeout')}")
+        self.sdk_state = None
+        return all("cleared" in o for o in out), "; ".join(out)
+
     # ---- status ----------------------------------------------------------------------------
     def status(self) -> str:
         p, e, l, b = self.power, self.estop, self.leases, self.batt
@@ -625,6 +646,12 @@ class SpotD(Node):
             if "--yes" not in rest:
                 return False, "estop-hard cuts motor power and the robot COLLAPSES. Re-run with --yes."
             return self.trigger("estop-hard")
+        if cmd == "clear-fault":
+            return self.clear_faults()
+        if cmd == "selfright":                      # a fall fault always precedes a self-right: clear it first
+            ok, msg = self.clear_faults()
+            ok2, msg2 = self.trigger("selfright", timeout=45.0)
+            return ok2, f"{msg2} (faults: {msg})"
         if cmd in TRIGGERS:
             return self.trigger(cmd, timeout=45.0 if cmd in ("poweron", "stand", "selfright") else 20.0)
         if cmd == "walkto":
