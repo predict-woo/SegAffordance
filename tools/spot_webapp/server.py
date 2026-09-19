@@ -50,6 +50,7 @@ SAM3_PORT = 12190                # sam3_serve.py on the pod (tmux session sam3)
 STATE = {
     "stage": "idle", "busy": None, "moves_enabled": False, "log": [], "run_id": None,
     "params": {"turn_deg": 30, "speed": 0.01, "standoff": 1.10, "aim_dist": 0.50, "approach": 0.12},
+    "handle": "vertical",       # bar orientation chosen in the UI: sets the gripper roll for the grasp
     "far": {}, "close": {}, "plans": {}, "error": None,
 }
 LOCK = threading.Lock()
@@ -215,7 +216,7 @@ def job_predict_close():
 def job_accept_close():
     p = STATE["params"]; close = STATE["close"]; moves = STATE["moves_enabled"]
     sh(f"scp -q {close['pred']} {SPOT}:{SPOT_WS}/snaps/close_recal.pred.json")
-    txt = ssh(SPOT, f"cd {SPOT_WS} && python3 plan_traj.py snaps/close_recal.pred.json --real --turn {p['turn_deg']} --steps 30 --approach {p['approach']} -o traj_web.json")
+    txt = ssh(SPOT, f"cd {SPOT_WS} && python3 plan_traj.py snaps/close_recal.pred.json --real --turn {p['turn_deg']} --steps 30 --approach {p['approach']} --handle {STATE['handle']} -o traj_web.json")
     for line in txt.strip().splitlines():
         log(f"[plan] {line}")
     if "OUT OF REACH" in txt or "WARNING" in txt:
@@ -300,6 +301,8 @@ class H(BaseHTTPRequestHandler):
                 STATE["moves_enabled"] = bool(body.get("enabled")); log(f"moves {'ENABLED' if STATE['moves_enabled'] else 'disabled'}")
                 return self._send(200, {"ok": True})
             if u.path == "/api/params":
+                if body.get("handle") in ("vertical", "horizontal"):
+                    STATE["handle"] = body["handle"]
                 STATE["params"].update({k: float(v) for k, v in body.items() if k in STATE["params"]})
                 return self._send(200, {"ok": True, "params": STATE["params"]})
             if u.path == "/api/snap_far":

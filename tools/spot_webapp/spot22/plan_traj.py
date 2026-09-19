@@ -8,8 +8,9 @@ Frames: prediction is in the hand colour camera's optical frame at capture time 
 T_body_cam from the snapshot maps it into spot/body (x forward, y left, z up). The robot has not walked
 since the capture, so the cabinet is fixed in the body frame.
 
-Gripper: hand x points at the door (horizontal direction camera -> contact), rolled 90 deg so the jaws
-close horizontally around a vertical handle. Along the arc the hand rotates with the door (R_k = Rot(axis,
+Gripper: hand x points into the door (fitted door normal, else camera -> contact). --handle vertical (default)
+rolls the hand 90 deg so the jaws close horizontally around a vertical bar; --handle horizontal keeps roll 0 so
+they close vertically around a horizontal bar. Along the arc the hand rotates with the door (R_k = Rot(axis,
 theta_k) R_0), as a hand holding the handle would.
 
 Default is an IN-THE-AIR rehearsal: the whole arc is translated so its first point sits at --start-x in
@@ -40,6 +41,8 @@ def main():
     ap.add_argument("--z-clamp", type=float, nargs=2, default=(-0.10, 0.45))
     ap.add_argument("--approach", type=float, default=0.10, help="pre-grasp stand-off along -hand_x (m)")
     ap.add_argument("--real", action="store_true", help="no translation: execute at the predicted location")
+    ap.add_argument("--handle", choices=["vertical", "horizontal"], default="vertical",
+                    help="bar orientation: vertical -> roll 90 (jaws close horizontally); horizontal -> roll 0 (jaws close vertically)")
     a = ap.parse_args()
 
     J = json.load(open(a.pred_json))
@@ -60,7 +63,8 @@ def main():
         look = anchor - tbc; look[2] = 0.0; look /= np.linalg.norm(look)
         yaw_src = "camera->contact"
     yaw = np.arctan2(look[1], look[0])
-    R0 = R.from_euler("z", yaw) * R.from_euler("x", np.pi / 2)
+    roll = np.pi / 2 if a.handle == "vertical" else 0.0
+    R0 = R.from_euler("z", yaw) * R.from_euler("x", roll)
 
     th = np.radians(np.linspace(0.0, a.turn, a.steps))
     if origin is not None:
@@ -83,7 +87,7 @@ def main():
     reach = np.linalg.norm(pos - SHOULDER, axis=1)
     wps = [{"xyz": pos[k].tolist(), "quat_xyzw": rots[k].as_quat().tolist()} for k in range(a.steps)]
     out = {
-        "source": a.pred_json, "approach_m": a.approach, "prompt": p["prompt"], "type": p["type"], "turn_deg": a.turn, "rehearsal": not a.real,
+        "source": a.pred_json, "approach_m": a.approach, "handle": a.handle, "prompt": p["prompt"], "type": p["type"], "turn_deg": a.turn, "rehearsal": not a.real,
         "offset_body": offset.tolist(), "axis_body": axis.tolist(), "origin_body": (origin + offset).tolist() if origin is not None else None,
         "pre_grasp": {"xyz": pre.tolist(), "quat_xyzw": R0.as_quat().tolist()},
         "waypoints": wps,
@@ -98,7 +102,7 @@ def main():
     if origin is not None:
         print(f"hinge (body, {'shifted' if not a.real else 'real'}): {f(origin + offset)}   lever {np.linalg.norm(anchor - origin):.2f} m")
     print(f"mode: {'REHEARSAL, arc shifted by ' + f(offset) if not a.real else 'REAL position'}")
-    print(f"hand at grasp: yaw {np.degrees(yaw):+.1f} deg ({yaw_src}), roll +90 deg (jaws horizontal); RPY = {np.round(R0.as_euler('xyz', degrees=True), 1).tolist()}")
+    print(f"hand at grasp: yaw {np.degrees(yaw):+.1f} deg ({yaw_src}), roll {np.degrees(roll):+.0f} deg ({a.handle} handle, jaws close {'horizontally' if a.handle == 'vertical' else 'vertically'}); RPY = {np.round(R0.as_euler('xyz', degrees=True), 1).tolist()}")
     print(f"pre-grasp:     {f(pre)}")
     print(f"start:         {f(pos[0])}")
     print(f"end:           {f(pos[-1])}   end hand RPY = {np.round(rots[-1].as_euler('xyz', degrees=True), 1).tolist()}")
