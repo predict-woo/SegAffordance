@@ -9,7 +9,8 @@ Stages (each button on the page = one stage; the page polls /state):
   3 accept_far     plan standoff -> WALK -> aim the camera at the predicted handle from AIM_DIST -> snap close
   4 predict_close  SAM 3 text prompt "handle" (pod, sam3_serve.py) -> instance nearest the expected handle -> centroid
                    + door plane -> far hinge carried over -> close cloud with the recalibrated arc
-  5 accept_close   plan the real arc -> arm HOME -> smooth timed trajectory (open -> ease in -> grasp -> arc -> release)
+  5 accept_close   plan the real arc -> arm HOME -> smooth timed trajectory (open -> ease in -> grasp -> arc -> release
+                   -> retreat) -> arm back HOME
   stop             spotctl stop at any time;  home = arm to half-down;  reset = clear the run
 
 Robot MOTION (walk, aim, home, arc) only happens when moves are enabled (page toggle or --moves); otherwise those
@@ -223,8 +224,12 @@ def job_accept_close():
         log("[home] MOVING: go half-down -> " + spotctl("go half-down"))
         time.sleep(0.5)
         log("[arc] MOVING: " + spotctl(f"traj traj_web.json --smooth --speed {p['speed']}", timeout=600))
+        time.sleep(0.5)
+        # back to the home pose after the release + retreat, so the camera is in the far-view position for the next run
+        log("[home] MOVING: return to half-down -> " + spotctl("go half-down", timeout=60))
     else:
         log("[arc] dry run: " + spotctl(f"traj traj_web.json --smooth --speed {p['speed']} --dry"))
+        log("[home] dry run: would return the arm to half-down afterwards")
     STATE["stage"] = "done"
 
 
