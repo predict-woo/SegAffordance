@@ -1,8 +1,8 @@
 # spot_world: real-time world-frame visualizer + recorder (Rerun)
 
 On spot22: `~/andrew_ws/world/` = `spot_world.py`, `world.sh`, `spot.urdf` (generated), `venv/` (numpy 2 + rerun-sdk),
-`recordings/*.rrd`.  Start: `tmux new -d -s world "bash ~/andrew_ws/world/world.sh"` (streaming only; `RR_RECORD=1 bash ...` also writes an .rrd).  View: http://192.168.1.213:9090
-(web viewer served by spot22; gRPC on 9876 for the native viewer: `rerun rerun+http://192.168.1.213:9876/proxy`).
+`recordings/*.rrd`.  Start: `tmux new -d -s world "bash ~/andrew_ws/world/world.sh"` (streaming only; `RR_RECORD=1 bash ...` also writes an .rrd).  View: http://192.168.1.213:9090/?url=rerun%2Bhttp%3A%2F%2F192.168.1.213%3A9876%2Fproxy
+(the bare :9090 page is an empty viewer, the ?url= tells it where the data is; native viewer: `rerun rerun+http://192.168.1.213:9876/proxy`).
 
 Setup once (spot22):
   python3 -m venv --system-site-packages ~/andrew_ws/world/venv

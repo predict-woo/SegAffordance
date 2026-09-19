@@ -277,7 +277,8 @@ def main():
         rec = "off (RR_RECORD=1 to record)"
         rr.serve_grpc(grpc_port=grpc_port, server_memory_limit="1GiB")   # in-memory ring buffer for late-joining viewers only
     rr.serve_web_viewer(web_port=web_port, open_browser=False, connect_to=f"rerun+http://192.168.1.213:{grpc_port}/proxy")
-    print(f"rerun grpc port {grpc_port}  | web viewer http://192.168.1.213:{web_port}  | recording {rec}", flush=True)
+    viewer_url = f"http://192.168.1.213:{web_port}/?url=rerun%2Bhttp%3A%2F%2F192.168.1.213%3A{grpc_port}%2Fproxy"
+    print(f"OPEN THIS: {viewer_url}\n(the bare :{web_port} page is an empty viewer; the ?url= part tells it where the data is)  | recording {rec}", flush=True)
     # world frame + view coordinates (z up)
     rr.log("world", rr.components.ViewCoordinates([3, 5, 1]), static=True)   # Right, Forward, Up = RIGHT_HAND_Z_UP; the archetype constant trips a numpy ABI warning in 0.38
     rr.log("world", rr.CoordinateFrame(WORLD), static=True)
