@@ -35,7 +35,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("pred_json")
     ap.add_argument("-o", "--out", default="traj.json")
-    ap.add_argument("--turn", type=float, default=60.0)
+    ap.add_argument("--turn", type=float, default=60.0, help="revolute: sweep in degrees")
+    ap.add_argument("--slide", type=float, default=0.20, help="prismatic: pull length in metres (along the axis, toward the robot)")
     ap.add_argument("--steps", type=int, default=40)
     ap.add_argument("--start-x", type=float, default=0.75, help="rehearsal: body-frame x of the first waypoint")
     ap.add_argument("--z-clamp", type=float, nargs=2, default=(-0.10, 0.45))
@@ -72,7 +73,10 @@ def main():
         pos = np.stack([origin + rodrigues(axis, t).apply(lever) for t in th])
         rots = [rodrigues(axis, t) * R0 for t in th]
     else:
-        pos = np.stack([anchor + axis * (0.3 * k / (a.steps - 1)) for k in range(a.steps)])
+        pull = axis.copy()
+        if np.dot(pull, -anchor) < 0:      # pull toward the robot, whatever sign the axis carries
+            pull = -pull
+        pos = np.stack([anchor + pull * (a.slide * k / (a.steps - 1)) for k in range(a.steps)])
         rots = [R0] * a.steps
 
     real_start = pos[0].copy()
@@ -87,7 +91,7 @@ def main():
     reach = np.linalg.norm(pos - SHOULDER, axis=1)
     wps = [{"xyz": pos[k].tolist(), "quat_xyzw": rots[k].as_quat().tolist()} for k in range(a.steps)]
     out = {
-        "source": a.pred_json, "approach_m": a.approach, "handle": a.handle, "prompt": p["prompt"], "type": p["type"], "turn_deg": a.turn, "rehearsal": not a.real,
+        "source": a.pred_json, "approach_m": a.approach, "handle": a.handle, "prompt": p["prompt"], "type": p["type"], "turn_deg": a.turn, "slide_m": a.slide, "rehearsal": not a.real,
         "offset_body": offset.tolist(), "axis_body": axis.tolist(), "origin_body": (origin + offset).tolist() if origin is not None else None,
         "pre_grasp": {"xyz": pre.tolist(), "quat_xyzw": R0.as_quat().tolist()},
         "waypoints": wps,
@@ -95,7 +99,8 @@ def main():
     json.dump(out, open(a.out, "w"), indent=1)
 
     f = lambda v: "(" + ", ".join(f"{x:+.3f}" for x in v) + ")"
-    print(f"prompt: {p['prompt']}   type: {p['type']}   turn: {a.turn:.0f} deg over {a.steps} waypoints")
+    motion = f"turn: {a.turn:.0f} deg" if origin is not None else f"pull: {a.slide * 100:.0f} cm"
+    print(f"prompt: {p['prompt']}   type: {p['type']}   {motion} over {a.steps} waypoints")
     print(f"REAL contact in body frame:  {f(real_start)}   reach from shoulder {np.linalg.norm(real_start - SHOULDER):.2f} m"
           f"  -> {'in reach' if np.linalg.norm(real_start - SHOULDER) < REACH_MAX else 'OUT OF REACH (needs walking)'}")
     print(f"axis (body):    {f(axis)}   (z up = {axis[2]:+.2f}; sign gives opening direction, right-hand rule)")

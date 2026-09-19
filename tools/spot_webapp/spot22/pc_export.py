@@ -65,10 +65,15 @@ def recalibrate(pred_new, old_json, T_new, pts_cam):
     To = np.array(old_json["T_body_cam"]); Ro, to = To[:3, :3], To[:3, 3]
     Rn, tn = T_new[:3, :3], T_new[:3, 3]
     h_old = Ro @ np.asarray(old["anchor"]) + to
-    o_old = Ro @ np.asarray(old["origin"]) + to
     a_old = Ro @ np.asarray(old["axis"]); a_old /= np.linalg.norm(a_old)
-    lever_old = h_old - o_old
-    n_old = np.cross(a_old, lever_old); n_old[2] = 0; n_old /= np.linalg.norm(n_old)
+    revolute = old["type"] == "revolute" and old.get("origin") is not None
+    if revolute:
+        o_old = Ro @ np.asarray(old["origin"]) + to
+        lever_old = h_old - o_old
+        n_old = np.cross(a_old, lever_old); n_old[2] = 0; n_old /= np.linalg.norm(n_old)   # door normal from the hinge geometry
+    else:
+        o_old, lever_old = None, None
+        n_old = a_old.copy(); n_old[2] = 0; n_old /= np.linalg.norm(n_old)                   # drawer: the slide axis IS the front normal
     if n_old[0] > 0:
         n_old = -n_old
     n_new, n_pts = door_normal_body(pts_cam, Rn)
@@ -76,17 +81,24 @@ def recalibrate(pred_new, old_json, T_new, pts_cam):
     c, s = np.cos(dpsi), np.sin(dpsi)
     Rz = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
     h_new = Rn @ np.asarray(pred_new["anchor"]) + tn
-    o_new = h_new - Rz @ lever_old
     a_new = Rz @ a_old
     body2cam = lambda x: Rn.T @ (np.asarray(x) - tn)
-    pred_new["origin"] = body2cam(o_new).tolist()
     pred_new["axis"] = (Rn.T @ a_new).tolist()
-    pred_new["type"] = "revolute"
+    pred_new["type"] = "revolute" if revolute else "prismatic"
     pred_new["recalibrated_from"] = old_json["snapshot"]
-    pred_new["recalib"] = {"yaw_deg": float(np.degrees(dpsi)), "door_normal_new_body": n_new.tolist(), "door_normal_old_body": n_old.tolist(),
-                           "plane_points": n_pts, "handle_body": h_new.tolist(), "hinge_body": o_new.tolist(), "axis_body": a_new.tolist(),
-                           "lever_m": float(np.linalg.norm(lever_old)),
-                           "own_hinge_body": (Rn @ np.asarray(pred_new["own_origin"]) + tn).tolist() if pred_new.get("own_origin") else None}
+    rc = {"yaw_deg": float(np.degrees(dpsi)), "door_normal_new_body": n_new.tolist(), "door_normal_old_body": n_old.tolist(),
+          "plane_points": n_pts, "handle_body": h_new.tolist(), "axis_body": a_new.tolist(),
+          "own_hinge_body": (Rn @ np.asarray(pred_new["own_origin"]) + tn).tolist() if pred_new.get("own_origin") else None}
+    if revolute:
+        o_new = h_new - Rz @ lever_old
+        pred_new["origin"] = body2cam(o_new).tolist()
+        rc.update({"hinge_body": o_new.tolist(), "lever_m": float(np.linalg.norm(lever_old))})
+    else:
+        pred_new["origin"] = None
+        # a drawer pulls along the front normal: snap the carried axis to the fitted normal (toward the robot)
+        pred_new["axis"] = (Rn.T @ n_new).tolist()
+        rc.update({"hinge_body": None, "lever_m": None, "axis_body": n_new.tolist()})
+    pred_new["recalib"] = rc
     return pred_new
 
 
@@ -223,10 +235,15 @@ def main():
         oldj = json.load(open(a.recalib))
         for pr in preds:
             recalibrate(pr, oldj, T, pts.astype(np.float64))
-            th = np.linspace(0.0, np.radians(a.turn_deg), 24)
-            anc, org, ax = np.asarray(pr["anchor"]), np.asarray(pr["origin"]), np.asarray(pr["axis"])
-            pr["traj"] = np.stack([org + rotate(anc - org, ax, t_) for t_ in th]).tolist()
-            pr["turn_deg"] = a.turn_deg
+            anc, ax = np.asarray(pr["anchor"]), np.asarray(pr["axis"])
+            if pr["type"] == "revolute":
+                th = np.linspace(0.0, np.radians(a.turn_deg), 24)
+                org = np.asarray(pr["origin"])
+                pr["traj"] = np.stack([org + rotate(anc - org, ax, t_) for t_ in th]).tolist()
+                pr["turn_deg"], pr["slide_m"] = a.turn_deg, None
+            else:
+                pr["traj"] = np.stack([anc + ax * (a.slide_m * k / 23) for k in range(24)]).tolist()
+                pr["turn_deg"], pr["slide_m"] = None, a.slide_m
     data = {
         "n": int(len(pts)), "w": W, "h": H, "valid_frac": float(v.mean()),
         "z_med": float(np.median(z)), "z_min": float(z.min()), "z_max": float(z.max()),
@@ -251,7 +268,8 @@ def main():
         if p.get("recalib"):
             rc = p["recalib"]
             print(f"    recalibrated from {p['recalibrated_from']}: yaw between frames {rc['yaw_deg']:+.1f} deg (door plane from {rc['plane_points']} pts)")
-            print(f"    body frame now: handle {np.round(rc['handle_body'], 3).tolist()}  hinge {np.round(rc['hinge_body'], 3).tolist()}  axis {np.round(rc['axis_body'], 3).tolist()}  lever {rc['lever_m']:.2f} m")
+            hinge = f"hinge {np.round(rc['hinge_body'], 3).tolist()}  lever {rc['lever_m']:.2f} m" if rc.get("hinge_body") else "prismatic: no hinge, axis = fitted front normal"
+            print(f"    body frame now: handle {np.round(rc['handle_body'], 3).tolist()}  {hinge}  axis {np.round(rc['axis_body'], 3).tolist()}  type {p['type']}")
             print(f"    this frame's own hinge (for comparison): {rc['own_hinge_body'] and np.round(rc['own_hinge_body'], 3).tolist()}")
 
 

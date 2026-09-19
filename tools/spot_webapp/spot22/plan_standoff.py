@@ -39,15 +39,20 @@ def main():
     T = np.array(J["T_body_cam"]); Rbc, tbc = T[:3, :3], T[:3, 3]
     h = Rbc @ np.asarray(p["anchor"]) + tbc
     ax = Rbc @ np.asarray(p["axis"]); ax /= np.linalg.norm(ax)
-    if p["type"] != "revolute" or not p["origin"]:
-        raise SystemExit("standoff planning is written for a revolute (door) prediction")
-    o = Rbc @ np.asarray(p["origin"]) + tbc
-    lever = h - o
-    lhat = lever.copy(); lhat[2] = 0; lhat /= np.linalg.norm(lhat)
-    n = np.cross(ax, lever); n[2] = 0; n /= np.linalg.norm(n)
+    revolute = p["type"] == "revolute" and p.get("origin") is not None
+    if revolute:
+        o = Rbc @ np.asarray(p["origin"]) + tbc
+        lever = h - o
+        lhat = lever.copy(); lhat[2] = 0; lhat /= np.linalg.norm(lhat)
+        n = np.cross(ax, lever); n[2] = 0; n /= np.linalg.norm(n)
+        lateral = a.lateral
+    else:                          # drawer: pull direction = slide axis = front normal; nothing swings, so no lateral offset
+        o, lever = h.copy(), np.zeros(3)
+        n = ax.copy(); n[2] = 0; n /= np.linalg.norm(n)
+        lhat, lateral = np.zeros(3), 0.0
     if np.dot(n, -h) < 0:          # point toward the robot (body origin)
         n = -n
-    goal = h + n * a.standoff + lhat * a.lateral
+    goal = h + n * a.standoff + lhat * lateral
     goal[2] = 0.0
     yaw = float(np.arctan2(-n[1], -n[0]))
 
@@ -59,25 +64,34 @@ def main():
     th = np.radians(np.linspace(0, a.turn, 25))
     def rot(v, d, t):
         return v * np.cos(t) + np.cross(d, v) * np.sin(t) + d * np.dot(d, v) * (1 - np.cos(t))
-    path_body_at_goal = np.stack([to_goal_frame(o + rot(lever, ax, t)) for t in th])
+    if revolute:
+        path_body_at_goal = np.stack([to_goal_frame(o + rot(lever, ax, t)) for t in th])
+    else:                          # pull toward the robot by up to 0.3 m
+        path_body_at_goal = np.stack([to_goal_frame(h + n * k) for k in np.linspace(0, 0.3, 25)])
     reach = np.linalg.norm(path_body_at_goal - np.array([SHOULDER_X, 0, 0]), axis=1)
 
     out = {"goal_body_xy_yaw_deg": [float(goal[0]), float(goal[1]), float(np.degrees(yaw))],
            "handle_body": h.tolist(), "hinge_body": o.tolist(), "axis_body": ax.tolist(), "door_normal_body": n.tolist(),
-           "standoff_m": a.standoff, "lateral_m": a.lateral,
+           "standoff_m": a.standoff, "lateral_m": lateral, "type": "revolute" if revolute else "prismatic",
            "handle_in_goal_frame": to_goal_frame(h).tolist(), "hinge_in_goal_frame": to_goal_frame(o).tolist(),
            "arc_reach_from_shoulder_m": [float(reach.min()), float(reach.max())]}
     json.dump(out, open(a.out, "w"), indent=1)
 
     f = lambda v: "(" + ", ".join(f"{x:+.3f}" for x in v) + ")"
-    print(f"handle (body):      {f(h)}    hinge: {f(o)}    lever {np.linalg.norm(lever):.2f} m")
-    print(f"axis (body):        {f(ax)}    door normal toward robot: {f(n)}")
+    if revolute:
+        print(f"handle (body):      {f(h)}    hinge: {f(o)}    lever {np.linalg.norm(lever):.2f} m")
+    else:
+        print(f"handle (body):      {f(h)}    PRISMATIC (drawer): pull along the axis, no hinge")
+    print(f"axis (body):        {f(ax)}    front normal toward robot: {f(n)}")
     print(f"base goal (body):   x={goal[0]:+.3f}  y={goal[1]:+.3f}  yaw={np.degrees(yaw):+.1f} deg"
           f"   -> walk {np.linalg.norm(goal[:2]):.2f} m forward-ish, turn {np.degrees(yaw):+.1f} deg")
     print(f"after walking, handle would be at {f(to_goal_frame(h))} in the new body frame; hinge at {f(to_goal_frame(o))}")
     print(f"arc reach from shoulder at goal: {reach.min():.2f}..{reach.max():.2f} m (limit {REACH_MAX})"
           + ("   OK" if reach.max() <= REACH_MAX else "   TOO FAR: reduce --standoff"))
-    print(f"door sweep: handle moves toward the robot and toward the hinge side ({'right' if o[1] < h[1] else 'left'}); body is offset {a.lateral:.2f} m the other way")
+    if revolute:
+        print(f"door sweep: handle moves toward the robot and toward the hinge side ({'right' if o[1] < h[1] else 'left'}); body is offset {lateral:.2f} m the other way")
+    else:
+        print("drawer: handle comes straight toward the robot; body centred on the handle")
     print(f"spotctl walkto {goal[0]:.3f} {goal[1]:.3f} {np.degrees(yaw):.1f}")
     print(f"wrote {a.out}")
 

@@ -49,7 +49,7 @@ SAM3_PORT = 12190                # sam3_serve.py on the pod (tmux session sam3)
 
 STATE = {
     "stage": "idle", "busy": None, "moves_enabled": False, "log": [], "run_id": None,
-    "params": {"turn_deg": 30, "speed": 0.01, "standoff": 1.10, "aim_dist": 0.50, "approach": 0.12},
+    "params": {"turn_deg": 30, "slide_m": 0.15, "speed": 0.01, "standoff": 1.10, "aim_dist": 0.50, "approach": 0.12},
     "handle": "vertical",       # bar orientation chosen in the UI: sets the gripper roll for the grasp
     "far": {}, "close": {}, "plans": {}, "error": None,
 }
@@ -116,7 +116,7 @@ def export_cloud(stem, tag, preds=None, recalib=None, models="dense", masks_npz=
     extra += f" --masks-npz {masks_npz}" if masks_npz else ""
     extra += f" --expect-body {expect_body[0]:.4f} {expect_body[1]:.4f} {expect_body[2]:.4f}" if expect_body else ""
     extra += f" --recalib {recalib}" if recalib else ""
-    txt = ssh(POD, f"cd {POD_REPO} && python {POD_TOOLS}/pc_export.py {pod_run()}/{stem}.jpg{extra} --models {models} --turn-deg {p['turn_deg']} -o {out}.html 2>&1 | grep -v Warning")
+    txt = ssh(POD, f"cd {POD_REPO} && python {POD_TOOLS}/pc_export.py {pod_run()}/{stem}.jpg{extra} --models {models} --turn-deg {p['turn_deg']} --slide-m {p['slide_m']} -o {out}.html 2>&1 | grep -v Warning")
     for line in txt.strip().splitlines():
         log(f"[{tag}] {line.strip()}")
     d = run_dir()
@@ -165,7 +165,12 @@ def job_predict_far(prompt):
     far = STATE["far"]
     dump = predict(far["stem"], prompt, "far")
     files = export_cloud(far["stem"], "farpred", preds=dump)
-    far.update({"prompt": prompt, "cloud": files["data"], "pred": files["pred_local"], "pred_pod": files["pred_pod"]})
+    try:
+        far_type = json.load(open(files["pred_local"]))["preds"][0]["type"]
+    except Exception:
+        far_type = "unknown"
+    far.update({"prompt": prompt, "cloud": files["data"], "pred": files["pred_local"], "pred_pod": files["pred_pod"], "type": far_type})
+    log(f"[far] EgoArt type: {far_type}")
     STATE["stage"] = "far_predicted"
 
 
@@ -216,7 +221,7 @@ def job_predict_close():
 def job_accept_close():
     p = STATE["params"]; close = STATE["close"]; moves = STATE["moves_enabled"]
     sh(f"scp -q {close['pred']} {SPOT}:{SPOT_WS}/snaps/close_recal.pred.json")
-    txt = ssh(SPOT, f"cd {SPOT_WS} && python3 plan_traj.py snaps/close_recal.pred.json --real --turn {p['turn_deg']} --steps 30 --approach {p['approach']} --handle {STATE['handle']} -o traj_web.json")
+    txt = ssh(SPOT, f"cd {SPOT_WS} && python3 plan_traj.py snaps/close_recal.pred.json --real --turn {p['turn_deg']} --slide {p['slide_m']} --steps 30 --approach {p['approach']} --handle {STATE['handle']} -o traj_web.json")
     for line in txt.strip().splitlines():
         log(f"[plan] {line}")
     if "OUT OF REACH" in txt or "WARNING" in txt:

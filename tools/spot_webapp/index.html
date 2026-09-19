@@ -63,7 +63,8 @@
       <span id="s4info" class="muted">runs automatically after step 3</span></div>
 
     <div class="step" id="s5"><h2>5 · Accept → home → execute → home</h2>
-      <div class="row"><label>turn (deg)</label><input type="number" id="pTurn" value="30" step="5"></div>
+      <div class="row" id="rowTurn"><label>turn (deg) · revolute</label><input type="number" id="pTurn" value="30" step="5"></div>
+      <div class="row" id="rowSlide"><label>pull (cm) · prismatic</label><input type="number" id="pSlide" value="15" step="5"></div>
       <div class="row"><label>arc speed (cm/s)</label><input type="number" id="pSpeed" value="1.0" step="0.5"></div>
       <div class="row"><label>handle bar</label><select id="pHandle" style="width:120px;background:#12141a;color:var(--fg);border:1px solid #444;border-radius:4px;padding:4px"><option value="vertical">vertical (jaws horizontal)</option><option value="horizontal">horizontal (jaws vertical)</option></select></div>
       <button id="bAcceptClose" class="go">Accept and execute</button> <span id="s5info" class="muted"></span></div>
@@ -137,8 +138,8 @@ class CloudView {
       if (p.traj && p.traj.length > 1) { this.overlay.add(this.tube(p.traj, R * 1.2, 0x3ddc84)); const n = p.traj.length, e = p.traj[n-1], q = p.traj[n-2]; this.overlay.add(this.cone(e, [e[0]-q[0], e[1]-q[1], e[2]-q[2]], .05, 0x3ddc84)); }
       this.overlay.add(this.sphere(a, 0.018, 0xffffff));
       info += ` · <b>${p.type}</b>${Number.isFinite(p.p_rev) ? ' p_rev ' + p.p_rev.toFixed(2) : ''} · ${p.model === 'sam3' ? 'SAM 3: ' : ''}${p.contact_from} · depth ${p.z_meas ? p.z_meas.toFixed(2) + ' m' : 'n/a'}`;
-      if (p.recalibrated_from) info += ` · hinge/axis from far frame (yaw ${p.recalib.yaw_deg.toFixed(1)}°), turn ${p.turn_deg}°`;
-      if (p.recalib) info += `<br>body frame: handle (${p.recalib.handle_body.map(v => v.toFixed(2)).join(', ')}) hinge (${p.recalib.hinge_body.map(v => v.toFixed(2)).join(', ')})`;
+      if (p.recalibrated_from) info += ` · ${p.type === 'revolute' ? 'hinge/axis' : 'pull axis'} from far frame (yaw ${p.recalib.yaw_deg.toFixed(1)}°), ${p.type === 'revolute' ? 'turn ' + p.turn_deg + '°' : 'pull ' + Math.round(p.slide_m * 100) + ' cm'}`;
+      if (p.recalib) info += `<br>body frame: handle (${p.recalib.handle_body.map(v => v.toFixed(2)).join(', ')})` + (p.recalib.hinge_body ? ` hinge (${p.recalib.hinge_body.map(v => v.toFixed(2)).join(', ')})` : ' · drawer, no hinge');
     }
     this.info.innerHTML = info;
     this.img.src = 'data:image/jpeg;base64,' + D.img_b64; this.img.hidden = false;
@@ -155,7 +156,7 @@ $('cbMoves').onchange = e => {
   if (e.target.checked && !confirm('Enable REAL robot motion (walk, aim, arm arc)? Keep a hand on STOP.')) { e.target.checked = false; return; }
   api('/api/moves', { enabled: e.target.checked });
 };
-const params = () => api('/api/params', { standoff: +$('pStandoff').value, aim_dist: +$('pAim').value, turn_deg: +$('pTurn').value, speed: +$('pSpeed').value / 100, handle: $('pHandle').value });
+const params = () => api('/api/params', { standoff: +$('pStandoff').value, aim_dist: +$('pAim').value, turn_deg: +$('pTurn').value, slide_m: +$('pSlide').value / 100, speed: +$('pSpeed').value / 100, handle: $('pHandle').value });
 $('bHome').onclick = () => api('/api/home');
 $('bReset').onclick = () => api('/api/reset').then(j => { if (j.ok) { far.clear(); close.clear(); } });
 $('bSnap').onclick = () => api('/api/snap_far');
@@ -179,7 +180,8 @@ async function poll() {
     [['s1', 1], ['s2', 2], ['s3', 3], ['s4', 4], ['s5', 5]].forEach(([id, k]) => { const el = $(id); el.classList.toggle('done', idx >= k); el.classList.toggle('active', idx === k - 1 && !busy); });
     $('bSnap').disabled = !!busy; $('bHome').disabled = !!busy || !s.moves_enabled; $('bHome').title = s.moves_enabled ? 'arm to the half-down pose (camera far view)' : 'enable robot moves first';
     $('bPredict').disabled = !!busy || idx < 1; $('bAcceptFar').disabled = !!busy || idx < 2; $('bAcceptClose').disabled = !!busy || idx < 4;
-    $('s1info').textContent = s.far.stem || ''; $('s2info').textContent = s.far.prompt ? `“${s.far.prompt}”` : '';
+    $('s1info').textContent = s.far.stem || ''; $('s2info').textContent = s.far.prompt ? `“${s.far.prompt}” → ${s.far.type || '…'}` : '';
+    const ty = s.far.type; $('rowTurn').style.opacity = ty === 'prismatic' ? .4 : 1; $('rowSlide').style.opacity = ty === 'revolute' ? .4 : 1;
     $('s3info').textContent = s.plans.standoff ? `walk ${s.plans.standoff.goal_body_xy_yaw_deg.map(v => v.toFixed(2)).join(', ')}` : '';
     $('s4info').textContent = s.close.stem ? `close-up ${s.close.stem}` : 'runs automatically after step 3';
     $('s5info').textContent = st === 'done' ? (s.moves_enabled ? 'executed' : 'dry run complete') : '';
