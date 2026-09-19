@@ -34,13 +34,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 URDF = os.path.join(HERE, "spot.urdf")
 WORLD = "spot/vision"
 BODY = "spot/body"
-DEPTH_CAMS = {  # name -> (depth image topic, camera_info topic, stride, hz cap)
-    "frontleft": ("/spot/depth/frontleft/image", "/spot/depth/frontleft/camera_info", 4, 2.0),
-    "frontright": ("/spot/depth/frontright/image", "/spot/depth/frontright/camera_info", 4, 2.0),
-    "left": ("/spot/depth/left/image", "/spot/depth/left/camera_info", 4, 2.0),
-    "right": ("/spot/depth/right/image", "/spot/depth/right/camera_info", 4, 2.0),
-    "back": ("/spot/depth/back/image", "/spot/depth/back/camera_info", 4, 2.0),
-    "hand": ("/spot/depth/hand/image", "/spot/depth/hand/camera_info", 2, 2.0),
+DEPTH_CAMS = {  # name -> (registered depth image, its camera_info, the matching intensity/RGB image, stride, hz cap)
+    "frontleft": ("/spot/depth_registered/frontleft/image", "/spot/depth_registered/frontleft/camera_info", "/spot/camera/frontleft/image", 4, 2.0),
+    "frontright": ("/spot/depth_registered/frontright/image", "/spot/depth_registered/frontright/camera_info", "/spot/camera/frontright/image", 4, 2.0),
+    "left": ("/spot/depth_registered/left/image", "/spot/depth_registered/left/camera_info", "/spot/camera/left/image", 4, 2.0),
+    "right": ("/spot/depth_registered/right/image", "/spot/depth_registered/right/camera_info", "/spot/camera/right/image", 4, 2.0),
+    "back": ("/spot/depth_registered/back/image", "/spot/depth_registered/back/camera_info", "/spot/camera/back/image", 4, 2.0),
+    "hand": ("/spot/depth_registered/hand/image", "/spot/depth_registered/hand/camera_info", "/spot/camera/hand/image", 4, 2.0),
 }
 CAM_COLORS = {"frontleft": (255, 140, 0), "frontright": (255, 200, 0), "left": (0, 200, 255), "right": (120, 120, 255),
               "back": (200, 80, 255), "hand": (60, 255, 120)}
@@ -73,14 +73,16 @@ class SpotWorld(Node):
         self.n_voxels = 0
         self.pending = {}                # voxel key -> hit count, for voxels not yet committed
         self.trail = deque(maxlen=20000)
-        self.tree = rr_urdf.UrdfTree.from_file_path(URDF, entity_path_prefix="spot")
+        self.tree = rr_urdf.UrdfTree.from_file_path(URDF, entity_path_prefix="world/spot")
         self.tree.log_urdf_to_recording()
         self.joints = {j.name: j for j in self.tree.joints()}
         self.cam_frames_logged = set()
         self.live_frame_set = set()
-        for cam, (dt, ct, _, _) in DEPTH_CAMS.items():
+        self.color = {}                  # cam -> latest intensity/RGB image as (H,W,3) uint8
+        for cam, (dt, ct, it, _, _) in DEPTH_CAMS.items():
             self.create_subscription(CameraInfo, ct, lambda m, c=cam: self._caminfo(c, m), 5)
             self.create_subscription(ImageMsg, dt, lambda m, c=cam: self._depth(c, m), 2)
+            self.create_subscription(ImageMsg, it, lambda m, c=cam: self._color(c, m), 1)
         self.create_subscription(ImageMsg, "/spot/camera/hand/image", self._hand_rgb, 1)
         self.create_subscription(JointState, "/spot/joint_states", self._joints, 10)
         self.create_subscription(Odometry, "/spot/odometry", self._odom, 10)
@@ -121,7 +123,7 @@ class SpotWorld(Node):
         if cam in self.K:
             return
         K = np.array(m.k).reshape(3, 3)
-        stride = DEPTH_CAMS[cam][2]
+        stride = DEPTH_CAMS[cam][3]
         us, vs = np.meshgrid(np.arange(0, m.width, stride), np.arange(0, m.height, stride))
         self.grids[cam] = ((us + 0.5 - K[0, 2]) / K[0, 0], (vs + 0.5 - K[1, 2]) / K[1, 1], stride)
         self.K[cam] = (K, m.width, m.height, m.header.frame_id)
@@ -130,9 +132,18 @@ class SpotWorld(Node):
         rr.log(f"cams/{cam}", rr.CoordinateFrame(m.header.frame_id), static=True)
         self.get_logger().info(f"{cam}: {m.width}x{m.height} f={K[0, 0]:.0f} frame {m.header.frame_id}")
 
+    def _color(self, cam, m):
+        enc = m.encoding.lower()
+        if enc in ("rgb8", "bgr8"):
+            a = np.frombuffer(m.data, np.uint8).reshape(m.height, m.width, 3)
+            self.color[cam] = a if enc == "rgb8" else a[:, :, ::-1]
+        elif enc in ("mono8", "8uc1"):
+            g = np.frombuffer(m.data, np.uint8).reshape(m.height, m.width)
+            self.color[cam] = np.repeat(g[:, :, None], 3, axis=2)
+
     def _depth(self, cam, m):
         now = time.time()
-        if cam not in self.K or now - self.last_cam_t[cam] < 1.0 / DEPTH_CAMS[cam][3]:
+        if cam not in self.K or cam not in self.color or now - self.last_cam_t[cam] < 1.0 / DEPTH_CAMS[cam][4]:
             return
         self.last_cam_t[cam] = now
         K, W, H, frame = self.K[cam]
@@ -145,6 +156,10 @@ class SpotWorld(Node):
         if ok.sum() < 20:
             return
         pc = np.stack([xn[ok] * z[ok], yn[ok] * z[ok], z[ok]], 1)
+        img = self.color[cam]
+        if img.shape[0] != m.height or img.shape[1] != m.width:
+            return
+        rgb = img[::stride, ::stride][ok]                       # (N,3) uint8, same grid as the depth samples
         # camera frame -> world at the image stamp (the depth frame id is the optical frame the driver publishes)
         Mwc = self._T(WORLD, m.header.frame_id, m.header.stamp)
         if Mwc is None:
@@ -153,7 +168,7 @@ class SpotWorld(Node):
         # live cloud: voxel downsample
         keys = self._voxel_keys(pw, VOXEL_LIVE)
         _, first = np.unique(keys, return_index=True)
-        live = pw[first]
+        live, live_rgb = pw[first], rgb[first]
         # camera->body->world TF for the frustum (log the camera frame pose relative to the body once; the body moves)
         if frame not in self.cam_frames_logged:
             Mbc = self._T(BODY, frame, m.header.stamp)
@@ -161,24 +176,23 @@ class SpotWorld(Node):
                 self._log_tf(f"tf/{cam}", BODY, frame, Mbc, static=True)
                 self.cam_frames_logged.add(frame)
         rr.set_time("ros", timestamp=self._stamp(m))
-        col = np.array(CAM_COLORS[cam], np.uint8)
         if cam not in self.live_frame_set:
             rr.log(f"world/live/{cam}", rr.CoordinateFrame(WORLD), static=True); self.live_frame_set.add(cam)
-        rr.log(f"world/live/{cam}", rr.Points3D(live.astype(np.float32), colors=col, radii=0.012))   # one colour for the batch: no per-point colour array
+        rr.log(f"world/live/{cam}", rr.Points3D(live.astype(np.float32), colors=live_rgb, radii=0.012))
         # map: add voxels (world frame, coarser)
         mk = self._voxel_keys(pw, VOXEL_MAP)
         _, first = np.unique(mk, return_index=True)          # one candidate per voxel
         tiles = np.floor(pw[first] / TILE).astype(np.int64)
         with self.lock:
             pend = self.pending
-            for k, p, tk in zip(mk[first].tolist(), pw[first], map(tuple, tiles.tolist())):
+            for k, p, c, tk in zip(mk[first].tolist(), pw[first], rgb[first], map(tuple, tiles.tolist())):
                 tile = self.map.get(tk)
                 if tile is not None and k in tile:
                     continue
                 n = pend.get(k, 0) + 1
                 if n >= MAP_MIN_HITS:
                     pend.pop(k, None)
-                    self.map.setdefault(tk, {})[k] = p; self.n_voxels += 1; self.dirty_tiles.add(tk)
+                    self.map.setdefault(tk, {})[k] = np.concatenate([p, c.astype(np.float32)]); self.n_voxels += 1; self.dirty_tiles.add(tk)
                 else:
                     pend[k] = n
             if len(pend) > 3_000_000:
@@ -256,9 +270,8 @@ class SpotWorld(Node):
             self.dirty_tiles.clear()
             total = self.n_voxels
         rr.set_time("ros", timestamp=time.time())
-        for tk, pts in todo:
-            col = turbo((pts[:, 2] + 0.6) / 2.6)               # height colouring: -0.6 m .. +2.0 m relative to the odometry origin
-            rr.log(f"world/map/{tk[0]}_{tk[1]}_{tk[2]}", rr.Points3D(pts, colors=col, radii=0.02))
+        for tk, arr in todo:
+            rr.log(f"world/map/{tk[0]}_{tk[1]}_{tk[2]}", rr.Points3D(arr[:, :3], colors=arr[:, 3:6].astype(np.uint8), radii=0.02))
         if not getattr(self, "_map_frame_set", False):
             rr.log("world/map", rr.CoordinateFrame(WORLD), static=True)
             rr.log("world/trail", rr.CoordinateFrame(WORLD), static=True)
@@ -283,6 +296,8 @@ def main():
     # world frame + view coordinates (z up)
     rr.log("world", rr.components.ViewCoordinates([3, 5, 1]), static=True)   # Right, Forward, Up = RIGHT_HAND_Z_UP; the archetype constant trips a numpy ABI warning in 0.38
     rr.log("world", rr.CoordinateFrame(WORLD), static=True)
+    # link the odometry world frame to the viewer root frame (identity), so views rooted at "/" can place everything
+    rr.log("tf/world", rr.Transform3D(translation=[0.0, 0.0, 0.0], quaternion=[0.0, 0.0, 0.0, 1.0], parent_frame="tf#/", child_frame=WORLD), static=True)
     rclpy.init()
     node = SpotWorld()
     ex = MultiThreadedExecutor(num_threads=4); ex.add_node(node)
