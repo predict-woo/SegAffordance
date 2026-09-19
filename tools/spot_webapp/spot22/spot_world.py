@@ -1,0 +1,296 @@
+#!/usr/bin/env python3
+"""spot_world: real-time world-frame visualizer + recorder for Spot, logged to Rerun.
+
+  bash ~/andrew_ws/world.sh            (tmux session `world`)  ->  web viewer at http://192.168.1.213:9090
+                                        recordings: ~/andrew_ws/world/recordings/spot_<timestamp>.rrd
+
+What is logged (all in the fixed frame `spot/vision`, Spot's visual-odometry world frame):
+  * the official Spot URDF (Boston Dynamics meshes from spot_description) animated from /spot/joint_states and TF
+  * live point clouds from the 5 body depth cameras + the hand depth camera, backprojected on spot22, voxel-
+    downsampled, transformed with TF at the image timestamp
+  * a persistent voxel map that accumulates as Spot walks (occupied voxels are kept until the cap is hit)
+  * depth camera frustums (pinholes) and the hand RGB image
+  * the trail of the body through the room
+Everything is time-stamped with ROS time, so the .rrd recording scrubs like a video.
+"""
+import os
+import threading
+import time
+from collections import deque
+from datetime import datetime
+
+import numpy as np
+import rclpy
+import rerun as rr
+import rerun.urdf as rr_urdf
+import tf2_ros
+from nav_msgs.msg import Odometry
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.node import Node
+from rclpy.time import Time
+from sensor_msgs.msg import CameraInfo, Image as ImageMsg, JointState
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+URDF = os.path.join(HERE, "spot.urdf")
+WORLD = "spot/vision"
+BODY = "spot/body"
+DEPTH_CAMS = {  # name -> (depth image topic, camera_info topic, stride, hz cap)
+    "frontleft": ("/spot/depth/frontleft/image", "/spot/depth/frontleft/camera_info", 4, 2.0),
+    "frontright": ("/spot/depth/frontright/image", "/spot/depth/frontright/camera_info", 4, 2.0),
+    "left": ("/spot/depth/left/image", "/spot/depth/left/camera_info", 4, 2.0),
+    "right": ("/spot/depth/right/image", "/spot/depth/right/camera_info", 4, 2.0),
+    "back": ("/spot/depth/back/image", "/spot/depth/back/camera_info", 4, 2.0),
+    "hand": ("/spot/depth/hand/image", "/spot/depth/hand/camera_info", 2, 2.0),
+}
+CAM_COLORS = {"frontleft": (255, 140, 0), "frontright": (255, 200, 0), "left": (0, 200, 255), "right": (120, 120, 255),
+              "back": (200, 80, 255), "hand": (60, 255, 120)}
+Z_MIN, Z_MAX = 0.25, 4.0
+VOXEL_LIVE, VOXEL_MAP = 0.04, 0.05
+MAP_MAX_VOXELS = 800_000
+MAP_LOG_PERIOD, POSE_HZ = 2.0, 15.0
+TILE = 2.0                     # map is logged as 2 m tiles; only tiles that gained voxels are re-sent
+MAP_MIN_HITS = 3               # a voxel enters the map after being seen in this many frames (kills depth-noise inflation)
+
+
+def turbo(t):
+    """t in [0,1] -> RGB uint8 (a compact Turbo-like ramp)."""
+    t = np.clip(t, 0, 1)
+    r = np.clip(1.6 * t - 0.2, 0, 1); g = np.clip(1 - np.abs(2 * t - 1) * 1.2, 0, 1); b = np.clip(1.4 - 1.8 * t, 0, 1)
+    return (np.stack([r, g, b], 1) * 255).astype(np.uint8)
+
+
+class SpotWorld(Node):
+    def __init__(self):
+        super().__init__("spot_world")
+        self.tf_buf = tf2_ros.Buffer(cache_time=rclpy.duration.Duration(seconds=15.0))
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buf, self, spin_thread=False)
+        self.lock = threading.Lock()
+        self.K = {}
+        self.grids = {}
+        self.last_cam_t = {c: 0.0 for c in DEPTH_CAMS}
+        self.map = {}                    # tile key (ix,iy,iz) -> {voxel key -> [x, y, z]} (world)
+        self.dirty_tiles = set()
+        self.n_voxels = 0
+        self.pending = {}                # voxel key -> hit count, for voxels not yet committed
+        self.trail = deque(maxlen=20000)
+        self.tree = rr_urdf.UrdfTree.from_file_path(URDF, entity_path_prefix="spot")
+        self.tree.log_urdf_to_recording()
+        self.joints = {j.name: j for j in self.tree.joints()}
+        self.cam_frames_logged = set()
+        self.live_frame_set = set()
+        for cam, (dt, ct, _, _) in DEPTH_CAMS.items():
+            self.create_subscription(CameraInfo, ct, lambda m, c=cam: self._caminfo(c, m), 5)
+            self.create_subscription(ImageMsg, dt, lambda m, c=cam: self._depth(c, m), 2)
+        self.create_subscription(ImageMsg, "/spot/camera/hand/image", self._hand_rgb, 1)
+        self.create_subscription(JointState, "/spot/joint_states", self._joints, 10)
+        self.create_subscription(Odometry, "/spot/odometry", self._odom, 10)
+        self.create_timer(MAP_LOG_PERIOD, self._log_map)
+        self.last_joint_t = self.last_rgb_t = 0.0
+        self.n_depth = 0
+        self.get_logger().info(f"spot_world up: URDF {len(self.joints)} joints, {len(DEPTH_CAMS)} depth cams")
+
+    # ---- helpers -------------------------------------------------------------------------------
+    @staticmethod
+    def _stamp(msg):
+        return msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+
+    def _T(self, target, source, stamp):
+        """4x4 target_T_source at stamp (falls back to latest)."""
+        try:
+            tf = self.tf_buf.lookup_transform(target, source, Time(seconds=stamp.sec, nanoseconds=stamp.nanosec), timeout=rclpy.duration.Duration(seconds=0.05))
+        except Exception:
+            try:
+                tf = self.tf_buf.lookup_transform(target, source, Time())
+            except Exception:
+                return None
+        q, t = tf.transform.rotation, tf.transform.translation
+        x, y, z, w = q.x, q.y, q.z, q.w
+        R = np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                      [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                      [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
+        M = np.eye(4); M[:3, :3] = R; M[:3, 3] = [t.x, t.y, t.z]
+        return M
+
+    @staticmethod
+    def _voxel_keys(pts, size):
+        ijk = np.floor(pts / size).astype(np.int64) + (1 << 20)
+        return (ijk[:, 0] << 42) | (ijk[:, 1] << 21) | ijk[:, 2]
+
+    # ---- cameras -------------------------------------------------------------------------------
+    def _caminfo(self, cam, m):
+        if cam in self.K:
+            return
+        K = np.array(m.k).reshape(3, 3)
+        stride = DEPTH_CAMS[cam][2]
+        us, vs = np.meshgrid(np.arange(0, m.width, stride), np.arange(0, m.height, stride))
+        self.grids[cam] = ((us + 0.5 - K[0, 2]) / K[0, 0], (vs + 0.5 - K[1, 2]) / K[1, 1], stride)
+        self.K[cam] = (K, m.width, m.height, m.header.frame_id)
+        # frustum: pinhole under the camera's own TF frame
+        rr.log(f"cams/{cam}", rr.Pinhole(image_from_camera=K, resolution=[m.width, m.height], camera_xyz=rr.components.ViewCoordinates([3, 2, 5]), image_plane_distance=0.3), static=True)
+        rr.log(f"cams/{cam}", rr.CoordinateFrame(m.header.frame_id), static=True)
+        self.get_logger().info(f"{cam}: {m.width}x{m.height} f={K[0, 0]:.0f} frame {m.header.frame_id}")
+
+    def _depth(self, cam, m):
+        now = time.time()
+        if cam not in self.K or now - self.last_cam_t[cam] < 1.0 / DEPTH_CAMS[cam][3]:
+            return
+        self.last_cam_t[cam] = now
+        K, W, H, frame = self.K[cam]
+        if m.encoding.lower() not in ("16uc1", "mono16"):
+            return
+        d = np.frombuffer(m.data, np.uint16).reshape(m.height, m.width)
+        xn, yn, stride = self.grids[cam]
+        z = d[::stride, ::stride].astype(np.float32) / 1000.0
+        ok = (z > Z_MIN) & (z < Z_MAX)
+        if ok.sum() < 20:
+            return
+        pc = np.stack([xn[ok] * z[ok], yn[ok] * z[ok], z[ok]], 1)
+        # camera frame -> world at the image stamp (the depth frame id is the optical frame the driver publishes)
+        Mwc = self._T(WORLD, m.header.frame_id, m.header.stamp)
+        if Mwc is None:
+            return
+        pw = pc @ Mwc[:3, :3].T + Mwc[:3, 3]
+        # live cloud: voxel downsample
+        keys = self._voxel_keys(pw, VOXEL_LIVE)
+        _, first = np.unique(keys, return_index=True)
+        live = pw[first]
+        # camera->body->world TF for the frustum (log the camera frame pose relative to the body once; the body moves)
+        if frame not in self.cam_frames_logged:
+            Mbc = self._T(BODY, frame, m.header.stamp)
+            if Mbc is not None:
+                self._log_tf(f"tf/{cam}", BODY, frame, Mbc, static=True)
+                self.cam_frames_logged.add(frame)
+        rr.set_time("ros", timestamp=self._stamp(m))
+        col = np.array(CAM_COLORS[cam], np.uint8)
+        if cam not in self.live_frame_set:
+            rr.log(f"world/live/{cam}", rr.CoordinateFrame(WORLD), static=True); self.live_frame_set.add(cam)
+        rr.log(f"world/live/{cam}", rr.Points3D(live.astype(np.float32), colors=col, radii=0.012))   # one colour for the batch: no per-point colour array
+        # map: add voxels (world frame, coarser)
+        mk = self._voxel_keys(pw, VOXEL_MAP)
+        _, first = np.unique(mk, return_index=True)          # one candidate per voxel
+        tiles = np.floor(pw[first] / TILE).astype(np.int64)
+        with self.lock:
+            pend = self.pending
+            for k, p, tk in zip(mk[first].tolist(), pw[first], map(tuple, tiles.tolist())):
+                tile = self.map.get(tk)
+                if tile is not None and k in tile:
+                    continue
+                n = pend.get(k, 0) + 1
+                if n >= MAP_MIN_HITS:
+                    pend.pop(k, None)
+                    self.map.setdefault(tk, {})[k] = p; self.n_voxels += 1; self.dirty_tiles.add(tk)
+                else:
+                    pend[k] = n
+            if len(pend) > 3_000_000:
+                pend.clear()
+        self.n_depth += 1
+
+    def _hand_rgb(self, m):
+        if time.time() - self.last_rgb_t < 0.5:
+            return
+        self.last_rgb_t = time.time()
+        enc = m.encoding.lower()
+        if enc not in ("rgb8", "bgr8"):
+            return
+        a = np.frombuffer(m.data, np.uint8).reshape(m.height, m.width, 3)
+        rgb = a[:, :, ::-1] if enc == "bgr8" else a
+        rr.set_time("ros", timestamp=self._stamp(m))
+        rr.log("cams/hand_rgb", rr.Image(np.ascontiguousarray(rgb)).compress(jpeg_quality=70))
+
+    # ---- robot ---------------------------------------------------------------------------------
+    def _log_tf(self, path, parent, child, M, static=False):
+        R = M[:3, :3]
+        # rotation matrix -> quaternion (x, y, z, w)
+        t = np.trace(R)
+        if t > 0:
+            s = np.sqrt(t + 1.0) * 2; w = 0.25 * s; x = (R[2, 1] - R[1, 2]) / s; y = (R[0, 2] - R[2, 0]) / s; z = (R[1, 0] - R[0, 1]) / s
+        else:
+            i = int(np.argmax(np.diag(R)))
+            if i == 0:
+                s = np.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2]) * 2; w = (R[2, 1] - R[1, 2]) / s; x = 0.25 * s; y = (R[0, 1] + R[1, 0]) / s; z = (R[0, 2] + R[2, 0]) / s
+            elif i == 1:
+                s = np.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2]) * 2; w = (R[0, 2] - R[2, 0]) / s; x = (R[0, 1] + R[1, 0]) / s; y = 0.25 * s; z = (R[1, 2] + R[2, 1]) / s
+            else:
+                s = np.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1]) * 2; w = (R[1, 0] - R[0, 1]) / s; x = (R[0, 2] + R[2, 0]) / s; y = (R[1, 2] + R[2, 1]) / s; z = 0.25 * s
+        rr.log(path, rr.Transform3D(translation=M[:3, 3], quaternion=[x, y, z, w], parent_frame=parent, child_frame=child), static=static)
+
+    def _odom(self, m):
+        now = time.time()
+        if now - getattr(self, "_last_odom_t", 0.0) < 1.0 / POSE_HZ:
+            return
+        self._last_odom_t = now
+        M = self._T(WORLD, BODY, m.header.stamp)
+        if M is None:
+            return
+        rr.set_time("ros", timestamp=self._stamp(m))
+        self._log_tf("tf/body", WORLD, BODY, M)
+        p = M[:3, 3]
+        if not self.trail or np.linalg.norm(p - self.trail[-1]) > 0.02:
+            self.trail.append(p.copy())
+            if len(self.trail) % 5 == 0:
+                rr.log("world/trail", rr.LineStrips3D([np.array(self.trail, np.float32)], colors=[[255, 255, 255]], radii=0.01))
+
+    def _joints(self, m):
+        now = time.time()
+        if now - self.last_joint_t < 1.0 / POSE_HZ:
+            return
+        self.last_joint_t = now
+        rr.set_time("ros", timestamp=self._stamp(m))
+        for name, pos in zip(m.name, m.position):
+            j = self.joints.get(name)
+            if j is not None:
+                rr.log(f"tf/joints/{name}", j.compute_transform(float(pos), clamp=False))
+
+    # ---- map -----------------------------------------------------------------------------------
+    def _log_map(self):
+        with self.lock:
+            if not self.dirty_tiles:
+                return
+            if self.n_voxels > MAP_MAX_VOXELS:               # drop whole tiles farthest from the robot's last position
+                here = self.trail[-1] if self.trail else np.zeros(3)
+                far = sorted(self.map, key=lambda tk: -np.linalg.norm(np.array(tk) * TILE + TILE / 2 - here))
+                while self.n_voxels > MAP_MAX_VOXELS * 0.8 and far:
+                    tk = far.pop(0); self.n_voxels -= len(self.map.pop(tk)); self.dirty_tiles.discard(tk)
+                    rr.log(f"world/map/{tk[0]}_{tk[1]}_{tk[2]}", rr.Clear(recursive=False))
+            todo = [(tk, np.array(list(self.map[tk].values()), np.float32)) for tk in self.dirty_tiles if tk in self.map]
+            self.dirty_tiles.clear()
+            total = self.n_voxels
+        rr.set_time("ros", timestamp=time.time())
+        for tk, pts in todo:
+            col = turbo((pts[:, 2] + 0.6) / 2.6)               # height colouring: -0.6 m .. +2.0 m relative to the odometry origin
+            rr.log(f"world/map/{tk[0]}_{tk[1]}_{tk[2]}", rr.Points3D(pts, colors=col, radii=0.02))
+        if not getattr(self, "_map_frame_set", False):
+            rr.log("world/map", rr.CoordinateFrame(WORLD), static=True)
+            rr.log("world/trail", rr.CoordinateFrame(WORLD), static=True)
+            self._map_frame_set = True
+        self.get_logger().info(f"map {total} voxels in {len(self.map)} tiles ({len(todo)} re-sent), {self.n_depth} depth frames", throttle_duration_sec=30.0)
+
+def main():
+    rec_dir = os.path.join(HERE, "recordings"); os.makedirs(rec_dir, exist_ok=True)
+    rec = os.path.join(rec_dir, f"spot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.rrd")
+    rr.init("spot_world")
+    grpc_port, web_port = int(os.environ.get("RR_GRPC_PORT", 9876)), int(os.environ.get("RR_WEB_PORT", 9090))
+    try:
+        rr.set_sinks(rr.GrpcServerSink(port=grpc_port, server_memory_limit="2GiB"), rr.FileSink(rec))
+        url = f"rerun+http://0.0.0.0:{grpc_port}/proxy"
+    except Exception as ex:
+        print(f"set_sinks failed ({ex}); falling back to serve_grpc without file recording", flush=True)
+        url = rr.serve_grpc(grpc_port=grpc_port, server_memory_limit="2GiB")
+    rr.serve_web_viewer(web_port=web_port, open_browser=False, connect_to=f"rerun+http://192.168.1.213:{grpc_port}/proxy")
+    print(f"rerun grpc {url}  | web viewer http://192.168.1.213:{web_port}  | recording {rec}", flush=True)
+    # world frame + view coordinates (z up)
+    rr.log("world", rr.components.ViewCoordinates([3, 5, 1]), static=True)   # Right, Forward, Up = RIGHT_HAND_Z_UP; the archetype constant trips a numpy ABI warning in 0.38
+    rr.log("world", rr.CoordinateFrame(WORLD), static=True)
+    rclpy.init()
+    node = SpotWorld()
+    ex = MultiThreadedExecutor(num_threads=4); ex.add_node(node)
+    try:
+        ex.spin()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node(); rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()
