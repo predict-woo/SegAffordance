@@ -9,7 +9,9 @@ What is logged (all in the fixed frame `spot/vision`, Spot's visual-odometry wor
   * live point clouds from the 5 body depth cameras + the hand depth camera, backprojected on spot22, voxel-
     downsampled, transformed with TF at the image timestamp
   * a persistent voxel map that accumulates as Spot walks (occupied voxels are kept until the cap is hit)
-  * depth camera frustums (pinholes) and the hand RGB image
+  * depth camera frustums (pinholes) and the hand RGB video at the camera's full rate (~30 Hz), logged by the
+    separate hand_video.py (own process: the driver republishes the hand image at only ~4 Hz, and in-process polling
+    lost frames to the GIL); HAND_SDK=0 falls back to the ROS topic
   * the trail of the body through the room
 Everything is time-stamped with ROS time, so the .rrd recording scrubs like a video.
 """
@@ -51,6 +53,8 @@ MAP_LOG_PERIOD, POSE_HZ = 2.0, 15.0
 TILE = 2.0                     # map is logged as 2 m tiles; only tiles that gained voxels are re-sent
 MAP_MIN_HITS = 3               # a voxel enters the map after being seen in this many frames (kills depth-noise inflation)
 MAP_ON = os.environ.get("WORLD_MAP", "0") == "1"   # cumulative map is OFF by default: live per-frame clouds only
+HAND_SDK = os.environ.get("HAND_SDK", "1") == "1"  # hand RGB comes from hand_video.py (own process, full rate) instead of the ~4 Hz driver topic
+RECORDING_ID = "spot-world-live"                   # shared with hand_video.py so both land in the same recording
 
 
 def turbo(t):
@@ -84,14 +88,15 @@ class SpotWorld(Node):
             self.create_subscription(CameraInfo, ct, lambda m, c=cam: self._caminfo(c, m), 5)
             self.create_subscription(ImageMsg, dt, lambda m, c=cam: self._depth(c, m), 2)
             self.create_subscription(ImageMsg, it, lambda m, c=cam: self._color(c, m), 1)
-        self.create_subscription(ImageMsg, "/spot/camera/hand/image", self._hand_rgb, 1)
+        if not HAND_SDK:                 # otherwise hand_video.py (started by world.sh) logs cams/hand_rgb at full rate
+            self.create_subscription(ImageMsg, "/spot/camera/hand/image", self._hand_rgb, 1)
         self.create_subscription(JointState, "/spot/joint_states", self._joints, 10)
         self.create_subscription(Odometry, "/spot/odometry", self._odom, 10)
         if MAP_ON:
             self.create_timer(MAP_LOG_PERIOD, self._log_map)
         self.last_joint_t = self.last_rgb_t = 0.0
         self.n_depth = 0
-        self.get_logger().info(f"spot_world up: URDF {len(self.joints)} joints, {len(DEPTH_CAMS)} depth cams, cumulative map {'ON' if MAP_ON else 'off'}")
+        self.get_logger().info(f"spot_world up: URDF {len(self.joints)} joints, {len(DEPTH_CAMS)} depth cams, cumulative map {'ON' if MAP_ON else 'off'}, hand video via {'hand_video.py' if HAND_SDK else 'ROS'}")
 
     # ---- helpers -------------------------------------------------------------------------------
     @staticmethod
@@ -204,6 +209,7 @@ class SpotWorld(Node):
                 pend.clear()
 
     def _hand_rgb(self, m):
+        """ROS fallback (HAND_SDK=0): the driver's hand image, ~4 Hz at best, throttled to 2 Hz."""
         if time.time() - self.last_rgb_t < 0.5:
             return
         self.last_rgb_t = time.time()
@@ -283,7 +289,7 @@ class SpotWorld(Node):
         self.get_logger().info(f"map {total} voxels in {len(self.map)} tiles ({len(todo)} re-sent), {self.n_depth} depth frames", throttle_duration_sec=30.0)
 
 def main():
-    rr.init("spot_world")
+    rr.init("spot_world", recording_id=RECORDING_ID)
     grpc_port, web_port = int(os.environ.get("RR_GRPC_PORT", 9876)), int(os.environ.get("RR_WEB_PORT", 9090))
     record = os.environ.get("RR_RECORD", "0") == "1"           # streaming only by default; RR_RECORD=1 also writes an .rrd
     CORS = [f"http://192.168.1.213:{web_port}", f"http://localhost:{web_port}", f"http://127.0.0.1:{web_port}", "*"]
@@ -301,7 +307,7 @@ def main():
     viewer_url = f"http://192.168.1.213:{web_port}/?url=rerun%2Bhttp%3A%2F%2F192.168.1.213%3A{grpc_port}%2Fproxy"
     print(f"OPEN THIS: {viewer_url}\n(the bare :{web_port} page is an empty viewer; the ?url= part tells it where the data is)  | recording {rec}", flush=True)
     # world frame + view coordinates (z up)
-    rr.log("world", rr.components.ViewCoordinates([3, 5, 1]), static=True)   # Right, Forward, Up = RIGHT_HAND_Z_UP; the archetype constant trips a numpy ABI warning in 0.38
+    rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
     rr.log("world", rr.CoordinateFrame(WORLD), static=True)
     # link the odometry world frame to the viewer root frame (identity), so views rooted at "/" can place everything
     rr.log("tf/world", rr.Transform3D(translation=[0.0, 0.0, 0.0], quaternion=[0.0, 0.0, 0.0, 1.0], parent_frame="tf#/", child_frame=WORLD), static=True)
