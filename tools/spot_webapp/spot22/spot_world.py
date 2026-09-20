@@ -127,6 +127,17 @@ class SpotWorld(Node):
                 tf = self.tf_buf.lookup_transform(target, source, Time())
             except Exception:
                 return None
+        return self._tf_to_matrix(tf)
+
+    def _T_latest(self, target, source):
+        """4x4 target_T_source from the latest TF, no waiting."""
+        try:
+            return self._tf_to_matrix(self.tf_buf.lookup_transform(target, source, Time()))
+        except Exception:
+            return None
+
+    @staticmethod
+    def _tf_to_matrix(tf):
         q, t = tf.transform.rotation, tf.transform.translation
         x, y, z, w = q.x, q.y, q.z, q.w
         R = np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
@@ -293,8 +304,11 @@ class SpotWorld(Node):
             j = self.joints.get(name)
             if j is not None:
                 rr.log(f"tf/joints/{name}", j.compute_transform(float(pos), clamp=False))
-        for cam, (K, W, H, frame) in list(self.K.items()):   # camera frustum poses in the world frame (entity transforms)
-            M = self._T(WORLD, frame, m.header.stamp)
+        # camera frustum poses in the world frame (entity transforms). Latest TF, not the joint stamp: a stamped lookup
+        # with a timeout polls can_transform for up to 50 ms while the TF for that stamp is still in flight, which cost
+        # most of a core at 6 cameras x 15 Hz.
+        for cam, (K, W, H, frame) in list(self.K.items()):
+            M = self._T_latest(WORLD, frame)
             if M is not None:
                 self._log_tf(f"world/cams/{cam}", None, None, M)
 
