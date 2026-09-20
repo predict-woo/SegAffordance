@@ -13,4 +13,9 @@ if [ "${HAND_SDK:-1}" = "1" ]; then                     # full-rate camera video
   "$PY" -u video_streams.py &
   trap 'kill $! 2>/dev/null' EXIT INT TERM
 fi
-"$PY" -u spot_world.py
+# restart while the node reports failed DDS discovery (exit 3: it received nothing from the driver in 15 s)
+while true; do
+  "$PY" -u spot_world.py; rc=$?
+  [ "$rc" -eq 3 ] || break
+  echo "world.sh: spot_world exited with 3 (no DDS discovery), restarting in 2 s"; sleep 2
+done

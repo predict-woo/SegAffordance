@@ -99,9 +99,19 @@ class SpotWorld(Node):
             self.create_timer(MAP_LOG_PERIOD, self._log_map)
         self.last_joint_t = self.last_rgb_t = 0.0
         self.n_depth = 0
+        self.n_msgs = 0                    # any ROS message received; FastDDS discovery on spot22 sometimes fails silently
+        self._discovery_timer = self.create_timer(15.0, self._discovery_check)
         self.get_logger().info(f"spot_world up: URDF {len(self.joints)} joints, {len(DEPTH_CAMS)} depth cams, cumulative map {'ON' if MAP_ON else 'off'}, camera video via {'video_streams.py' if HAND_SDK else 'ROS'}")
 
     # ---- helpers -------------------------------------------------------------------------------
+    def _discovery_check(self):
+        """Exit with code 3 if no topic delivered anything in the first 15 s: this node instance never discovered the
+        driver (FastDDS discovery on spot22 fails at random with this many participants). world.sh restarts us."""
+        if self.n_msgs == 0:
+            self.get_logger().error("no ROS messages received in 15 s (DDS discovery failed) -> exiting for a restart")
+            os._exit(3)
+        self.destroy_timer(self._discovery_timer) if hasattr(self, "_discovery_timer") else None
+
     @staticmethod
     def _stamp(msg):
         return msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
@@ -130,6 +140,7 @@ class SpotWorld(Node):
 
     # ---- cameras -------------------------------------------------------------------------------
     def _caminfo(self, cam, m):
+        self.n_msgs += 1
         if cam in self.K:
             return
         K = np.array(m.k).reshape(3, 3)
@@ -243,6 +254,7 @@ class SpotWorld(Node):
         rr.log(path, rr.Transform3D(translation=M[:3, 3], quaternion=[x, y, z, w], parent_frame=parent, child_frame=child), static=static)
 
     def _odom(self, m):
+        self.n_msgs += 1
         now = time.time()
         if now - getattr(self, "_last_odom_t", 0.0) < 1.0 / POSE_HZ:
             return
@@ -259,6 +271,7 @@ class SpotWorld(Node):
                 rr.log("world/trail", rr.LineStrips3D([np.array(self.trail, np.float32)], colors=[[255, 255, 255]], radii=0.01))
 
     def _joints(self, m):
+        self.n_msgs += 1
         now = time.time()
         if now - self.last_joint_t < 1.0 / POSE_HZ:
             return
