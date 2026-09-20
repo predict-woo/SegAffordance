@@ -14,7 +14,7 @@ H.264 stream is capped (2 Mbit/s hand, 1 Mbit/s per grey body camera) and costs 
 Gotcha: frames decoded from MJPEG carry pict_type=I, which makes x264 emit only keyframes (10 Mbit/s); reset it.
 Note: the front body cameras are mounted sideways, so their video is rotated ~90 deg in a 2D view (it is correct in 3D).
 
-env: RR_GRPC_PORT (9876), VIDEO_CAMS (comma list of robot image sources; default hand + both front cameras),
+env: RR_GRPC_PORT (9876), VIDEO_CAMS (comma list of robot image sources; default: the hand camera only),
      VIDEO_KBPS_HAND (2000), VIDEO_KBPS_BODY (1000), VIDEO_CODEC (h264 | jpeg), VIDEO_JPEG_QUALITY (75)
 """
 import os
@@ -42,7 +42,7 @@ SOURCES = {
     "right_fisheye_image": ("cams/right", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
     "back_fisheye_image": ("cams/back", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
 }
-CAMS = [c.strip() for c in os.environ.get("VIDEO_CAMS", "hand_color_image,frontleft_fisheye_image,frontright_fisheye_image").split(",") if c.strip()]
+CAMS = [c.strip() for c in os.environ.get("VIDEO_CAMS", "hand_color_image").split(",") if c.strip()]   # hand only by default; body cams are known too
 CODEC = os.environ.get("VIDEO_CODEC", "h264")
 QUALITY = int(os.environ.get("VIDEO_JPEG_QUALITY", "75"))
 RECORDING_ID = "spot-world-live"                   # must match spot_world.py

@@ -24,6 +24,7 @@ from datetime import datetime
 import numpy as np
 import rclpy
 import rerun as rr
+import rerun.blueprint as rrb
 import rerun.urdf as rr_urdf
 import tf2_ros
 from nav_msgs.msg import Odometry
@@ -303,8 +304,10 @@ def main():
     record = os.environ.get("RR_RECORD", "0") == "1"           # streaming only by default; RR_RECORD=1 also writes an .rrd
     CORS = [f"http://192.168.1.213:{web_port}", f"http://localhost:{web_port}", f"http://127.0.0.1:{web_port}", "*"]
     # History replayed to a (re)connecting viewer. Static data (URDF meshes, frames) is always kept; this bounds only the
-    # dynamic part, so a fresh browser tab gets the model plus the last few frames instead of minutes of clouds.
-    HISTORY = os.environ.get("RR_HISTORY", "16MiB")
+    # dynamic part, so a fresh browser tab gets the model plus the last seconds instead of minutes of clouds. Do not go
+    # much lower: at 16 MiB with the H.264 video also in the buffer the server evicted ALL of this node's transforms and
+    # clouds and viewers showed an empty world (only the video survived); 64 MiB is a few seconds of clouds + video.
+    HISTORY = os.environ.get("RR_HISTORY", "64MiB")
     if record:
         rec_dir = os.path.join(HERE, "recordings"); os.makedirs(rec_dir, exist_ok=True)
         rec = os.path.join(rec_dir, f"spot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.rrd")
@@ -320,6 +323,11 @@ def main():
     rr.log("world", rr.CoordinateFrame(WORLD), static=True)
     # link the odometry world frame to the viewer root frame (identity), so views rooted at "/" can place everything
     rr.log("tf/world", rr.Transform3D(translation=[0.0, 0.0, 0.0], quaternion=[0.0, 0.0, 0.0, 1.0], parent_frame="tf#/", child_frame=WORLD), static=True)
+    # explicit layout: the 3D world and the hand video. Sent as active+default so a viewer's stale saved layout (e.g. a
+    # panel for an entity that no longer exists) is replaced instead of persisting across restarts.
+    rr.send_blueprint(rrb.Blueprint(
+        rrb.Horizontal(rrb.Spatial3DView(origin="/", name="world"), rrb.Spatial2DView(origin="cams/hand", name="hand camera"), column_shares=[3, 1]),
+        collapse_panels=False), make_active=True, make_default=True)
     rclpy.init()
     node = SpotWorld()
     ex = MultiThreadedExecutor(num_threads=4); ex.add_node(node)
