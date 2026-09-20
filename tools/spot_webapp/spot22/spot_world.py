@@ -198,10 +198,14 @@ class SpotWorld(Node):
             self.rgb_cloud = (cKDTree(live), live_rgb, now)
         elif self.rgb_cloud is not None and now - self.rgb_cloud[2] < RGB_CLOUD_MAX_AGE and COLOR_MATCH_M > 0:
             tree, rgb_colors, _ = self.rgb_cloud
-            dist, idx = tree.query(live, k=1, distance_upper_bound=COLOR_MATCH_M)
-            near = dist < COLOR_MATCH_M
-            if near.any():
-                live_rgb = live_rgb.copy(); live_rgb[near] = rgb_colors[idx[near]]
+            # cheap prefilter: only points inside the hand cloud's bounding box can be within COLOR_MATCH_M of it
+            inbox = np.all((live >= tree.mins - COLOR_MATCH_M) & (live <= tree.maxes + COLOR_MATCH_M), axis=1)
+            if inbox.any():
+                dist, idx = tree.query(live[inbox], k=1, distance_upper_bound=COLOR_MATCH_M)
+                near = dist < COLOR_MATCH_M
+                if near.any():
+                    sel = np.flatnonzero(inbox)[near]
+                    live_rgb = live_rgb.copy(); live_rgb[sel] = rgb_colors[idx[near]]
         rr.set_time("ros", timestamp=self._stamp(m))
         if cam not in self.live_frame_set:
             rr.log(f"world/live/{cam}", rr.CoordinateFrame(WORLD), static=True); self.live_frame_set.add(cam)
