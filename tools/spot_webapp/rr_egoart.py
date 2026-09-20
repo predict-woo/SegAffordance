@@ -73,14 +73,14 @@ def log_prediction(stage, data, T_vb):
     pts = np.frombuffer(base64.b64decode(data["xyz_b64"]), np.float32).reshape(-1, 3).astype(np.float64)
     if p.get("mask_idx"):
         m = tf(T_wc, pts[np.asarray(p["mask_idx"], int)])
-        rr.log(f"{base}/mask", rr.Points3D(m.astype(np.float32), colors=COL["mask"], radii=0.006, labels=[f"{stage}: segmented handle ({len(m)} pts)"], show_labels=False))
+        rr.log(f"{base}/mask", rr.Points3D(m.astype(np.float32), colors=COL["mask"], radii=0.01, labels=[f"{stage}: segmented handle ({len(m)} pts)"], show_labels=False))
     contact = tf(T_wc, p["anchor"])[0]
-    rr.log(f"{base}/contact", rr.Points3D([contact], colors=col, radii=0.02, labels=[f"{stage}: contact point"], show_labels=False))
+    rr.log(f"{base}/contact", rr.Points3D([contact], colors=col, radii=0.03, labels=[f"{stage}: contact point"], show_labels=False))
     traj = tf(T_wc, p["traj"]) if p.get("traj") else None
     if traj is not None and len(traj) > 1:
-        rr.log(f"{base}/trajectory", rr.LineStrips3D([traj.astype(np.float32)], colors=col, radii=0.006,
+        rr.log(f"{base}/trajectory", rr.LineStrips3D([traj.astype(np.float32)], colors=col, radii=0.012,
                                                      labels=[f"{stage}: {p['type']} trajectory" + (f", {p['turn_deg']:.0f} deg" if p.get("turn_deg") else f", {p.get('slide_m', 0):.2f} m")], show_labels=False))
-        rr.log(f"{base}/trajectory/waypoints", rr.Points3D(traj.astype(np.float32), colors=col, radii=0.009))
+        rr.log(f"{base}/trajectory/waypoints", rr.Points3D(traj.astype(np.float32), colors=col, radii=0.02))
     axis = T_wc[:3, :3] @ np.asarray(p["axis"], np.float64); axis /= np.linalg.norm(axis)
     if p["type"] == "revolute" and p.get("origin") is not None:
         hinge = tf(T_wc, p["origin"])[0]
@@ -118,9 +118,9 @@ def log_plan(tj, T_vb):
     wps = np.asarray([w["xyz"] for w in tj["waypoints"]], np.float64)
     W = tf(T_vb, wps)
     pre = tf(T_vb, tj["pre_grasp"]["xyz"])[0]
-    rr.log(f"{base}/waypoints", rr.LineStrips3D([W.astype(np.float32)], colors=col, radii=0.006,
+    rr.log(f"{base}/waypoints", rr.LineStrips3D([W.astype(np.float32)], colors=col, radii=0.012,
                                                  labels=[f"hand path to execute: {tj['type']}, {tj['handle']} handle" + (f", {tj['turn_deg']:.0f} deg" if tj.get("turn_deg") else "")], show_labels=False))
-    rr.log(f"{base}/waypoints/points", rr.Points3D(W.astype(np.float32), colors=col, radii=0.008))
+    rr.log(f"{base}/waypoints/points", rr.Points3D(W.astype(np.float32), colors=col, radii=0.018))
     rr.log(f"{base}/pre_grasp", rr.LineStrips3D([np.stack([pre, W[0]]).astype(np.float32)], colors=col, radii=0.003, labels=["approach"], show_labels=False))
     rr.log(f"{base}/pre_grasp/point", rr.Points3D([pre], colors=col, radii=0.012))
     # hand x axis (approach direction) at a few waypoints, from the quaternions

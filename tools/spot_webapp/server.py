@@ -49,7 +49,7 @@ SAM3_PORT = 12190                # sam3_serve.py on the pod (tmux session sam3)
 
 STATE = {
     "stage": "idle", "busy": None, "moves_enabled": False, "log": [], "run_id": None,
-    "params": {"turn_deg": 30, "slide_m": 0.15, "speed": 0.01, "standoff": 1.10, "aim_dist": 0.50, "approach": 0.12, "grasp_bias": 0.02},
+    "params": {"turn_deg": 80, "slide_m": 0.15, "speed": 0.01, "standoff": 1.10, "aim_dist": 0.50, "approach": 0.12, "grasp_bias": 0.02},
     "handle": "auto",           # auto = from the SAM 3 mask shape; or vertical / horizontal override. Sets the gripper roll.
     "far": {}, "close": {}, "plans": {}, "error": None,
 }

@@ -230,7 +230,7 @@ def main():
     ap.add_argument("--preds", help="predict_image.py --dump jsonl; records whose image matches this frame are overlaid")
     ap.add_argument("--max-depth-m", type=float, default=4.0)
     ap.add_argument("--models", default="dense", help="comma-separated model names to overlay (default: dense = EgoArt)")
-    ap.add_argument("--turn-deg", type=float, default=60.0, help="revolute trajectory sweep (default pi/3)")
+    ap.add_argument("--turn-deg", type=float, default=80.0, help="revolute trajectory sweep (default 80 deg)")
     ap.add_argument("--slide-m", type=float, default=0.3, help="prismatic trajectory length")
     ap.add_argument("--masks-npz", help="external segmentation (sam3_client.py output) instead of --preds: instance masks + scores")
     ap.add_argument("--expect-body", type=float, nargs=3, help="expected handle position in the body frame; picks the instance nearest its projection")
