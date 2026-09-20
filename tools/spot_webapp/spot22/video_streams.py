@@ -4,7 +4,7 @@
 Started by world.sh next to spot_world.py. One thread per camera polls the robot's image service for the JPEG image
 (hand colour camera 30 Hz, body cameras 15 Hz; one fetch is 5-8 ms on the wired link), decodes it, re-encodes it with
 x264 and logs the Annex-B NAL units to Rerun's VideoStream archetype on the server that spot_world.py hosts, in the
-same recording. Each stream is logged onto a child of the entity that carries that camera's Pinhole (world/cams/<cam>/video), so the 3D view
+same recording. Each stream is logged onto a child of the entity that carries that camera's Pinhole (world/cams/<cam>/pinhole/video), so the 3D view
 shows the live video in the camera frustum and a 2D view of the entity shows the plain video. The browser decodes it.
 
 Why not the driver's topics: its image publisher fetches all cameras in one loop and gets ~4 Hz for the hand camera.
@@ -37,12 +37,12 @@ GRPC_PORT = int(os.environ.get("RR_GRPC_PORT", 9876))
 # robot image source -> (Rerun entity under the camera's Pinhole entity that spot_world.py logs, camera fps, kbit/s cap)
 SOURCES = {
     # the video goes on a CHILD of the Pinhole entity: Rerun shows 2D content in a 3D view only under a pinhole ancestor
-    "hand_color_image": ("world/cams/hand/video", int(os.environ.get("VIDEO_FPS_HAND", "30")), int(os.environ.get("VIDEO_KBPS_HAND", "2000"))),
-    "frontleft_fisheye_image": ("world/cams/frontleft/video", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
-    "frontright_fisheye_image": ("world/cams/frontright/video", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
-    "left_fisheye_image": ("world/cams/left/video", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
-    "right_fisheye_image": ("world/cams/right/video", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
-    "back_fisheye_image": ("world/cams/back/video", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
+    "hand_color_image": ("world/cams/hand/pinhole/video", int(os.environ.get("VIDEO_FPS_HAND", "30")), int(os.environ.get("VIDEO_KBPS_HAND", "2000"))),
+    "frontleft_fisheye_image": ("world/cams/frontleft/pinhole/video", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
+    "frontright_fisheye_image": ("world/cams/frontright/pinhole/video", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
+    "left_fisheye_image": ("world/cams/left/pinhole/video", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
+    "right_fisheye_image": ("world/cams/right/pinhole/video", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
+    "back_fisheye_image": ("world/cams/back/pinhole/video", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
 }
 CAMS = [c.strip() for c in os.environ.get("VIDEO_CAMS", "hand_color_image").split(",") if c.strip()]   # hand only by default; body cams are known too
 CODEC = os.environ.get("VIDEO_CODEC", "h264")

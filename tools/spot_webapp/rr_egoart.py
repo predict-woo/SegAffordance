@@ -62,10 +62,12 @@ def log_prediction(stage, data, T_vb):
     rr.log(base, rr.Clear(recursive=True))
     # the snapshot camera: frustum with the photo in it
     K = np.asarray(data["K"], np.float64)
+    # pose on one entity, pinhole on a CHILD: in rerun 0.38 both would otherwise claim the same child frame
+    # ("does not form the root of a 2D subspace") and the frustum ends up misplaced
     rr.log(f"{base}/camera", rr.Transform3D(translation=T_wc[:3, 3], quaternion=rot_to_quat(T_wc[:3, :3])))
-    rr.log(f"{base}/camera", rr.Pinhole(image_from_camera=K, resolution=[data["w"], data["h"]], camera_xyz=rr.ViewCoordinates.RDF, image_plane_distance=0.12))
+    rr.log(f"{base}/camera/pinhole", rr.Pinhole(image_from_camera=K, resolution=[data["w"], data["h"]], camera_xyz=rr.ViewCoordinates.RDF, image_plane_distance=0.12))
     if data.get("img_b64"):
-        rr.log(f"{base}/camera/image", rr.EncodedImage(contents=np.frombuffer(base64.b64decode(data["img_b64"]), np.uint8), media_type="image/jpeg"))
+        rr.log(f"{base}/camera/pinhole/image", rr.EncodedImage(contents=np.frombuffer(base64.b64decode(data["img_b64"]), np.uint8), media_type="image/jpeg"))
     preds = data.get("preds") or []
     if not preds:
         return f"{stage}: camera only (no prediction)"

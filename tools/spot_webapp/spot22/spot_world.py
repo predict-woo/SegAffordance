@@ -169,7 +169,9 @@ class SpotWorld(Node):
         # frustum: a plain entity under world/ (frame spot/vision); its pose is re-logged in _joints as an ordinary
         # entity transform computed from TF on spot22, like the clouds. Hanging the pinhole on the camera's TF frame via
         # parent/child frame edges drew the hand frustum under the belly although the logged transform was correct.
-        rr.log(f"world/cams/{cam}", rr.Pinhole(image_from_camera=K, resolution=[m.width, m.height], camera_xyz=rr.ViewCoordinates.RDF, image_plane_distance=FRUSTUM_M), static=True)
+        # the Pinhole goes on a CHILD of the pose entity: in rerun 0.38 a Transform3D and a Pinhole on the same entity claim
+        # the same child frame ("does not form the root of a 2D subspace") and the frustum is drawn in the wrong place
+        rr.log(f"world/cams/{cam}/pinhole", rr.Pinhole(image_from_camera=K, resolution=[m.width, m.height], camera_xyz=rr.ViewCoordinates.RDF, image_plane_distance=FRUSTUM_M), static=True)
         self.get_logger().info(f"{cam}: {m.width}x{m.height} f={K[0, 0]:.0f} frame {m.header.frame_id}")
 
     def _color(self, cam, m):
@@ -259,7 +261,7 @@ class SpotWorld(Node):
         a = np.frombuffer(m.data, np.uint8).reshape(m.height, m.width, 3)
         rgb = a[:, :, ::-1] if enc == "bgr8" else a
         rr.set_time("ros", timestamp=self._stamp(m))
-        rr.log("world/cams/hand/video", rr.Image(np.ascontiguousarray(rgb)).compress(jpeg_quality=70))
+        rr.log("world/cams/hand/pinhole/video", rr.Image(np.ascontiguousarray(rgb)).compress(jpeg_quality=70))
 
     # ---- robot ---------------------------------------------------------------------------------
     def _log_tf(self, path, parent, child, M, static=False):
@@ -369,7 +371,7 @@ def main():
     # panel for an entity that no longer exists) is replaced instead of persisting across restarts. The 2D view is rooted
     # at the video entity, not at the Pinhole entity: that one's frame is the 3D camera frame, which has no pinhole root.
     rr.send_blueprint(rrb.Blueprint(
-        rrb.Horizontal(rrb.Spatial3DView(origin="/", name="world"), rrb.Spatial2DView(origin="world/cams/hand/video", name="hand camera"), column_shares=[3, 1]),
+        rrb.Horizontal(rrb.Spatial3DView(origin="/", name="world"), rrb.Spatial2DView(origin="world/cams/hand/pinhole/video", name="hand camera"), column_shares=[3, 1]),
         collapse_panels=False), make_active=True, make_default=True)
     rclpy.init()
     node = SpotWorld()
