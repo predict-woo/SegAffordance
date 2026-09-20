@@ -44,7 +44,7 @@ ROS on spot22 is FastDDS on `ROS_DOMAIN_ID=22`. Every shell that talks to the dr
 | `state_pub_loop.sh` | Relaunches the driver's C++ state publisher until it survives (§6). |
 | `teleop_web.py`, `teleop.html`, `teleop_web.sh` | Browser teleop server, tmux session `teleop`, http://192.168.1.213:8780. |
 | `world/spot_world.py`, `world/world.sh`, `world/spot.urdf`, `world/venv/` | Rerun world view, tmux session `world`, viewer URL in `WORLD.md`. |
-| `poses.json` | Named arm poses (`half`, `half-down` = the camera "home" pose, ...). |
+| `poses.json` | Named arm poses. `home` (hand at x 0.85, z 0.30, pitched 15° down) is the camera pose the pipeline starts and ends at; `half`/`half-down` (x 0.70) are the supervisor's original poses, no longer used as home because the arm jitters there: the hand sits at the front face of a registered payload keep-out box (a 1.4 × 1.0 × 0.4 m "Custom" payload volume over the deck) and the arm's payload-collision avoidance fights the pose controller. |
 | `snaps/` | Every camera snapshot taken by `spotctl snap` (jpg + 16-bit depth png + json with K, hand pose, body→camera transform). |
 | `spotd.log` | Every command spotd executed, with timing and result. |
 
@@ -107,7 +107,7 @@ time, so anything computed in the camera frame can be moved into the body frame 
 `spotctl snap --depth` grabs one hand-camera RGB frame (640×480), the registered 16-bit depth, the intrinsics
 (fx = fy = 552 px, principal point at the centre, no distortion) and TF. The app copies the three files to the pod and
 runs `pc_export.py` without predictions to get a point cloud (base64 float32 xyz + uint8 rgb) for the far view.
-The camera should be at the "home" pose (`spotctl go half-down`: hand at x 0.70, z 0.30, pitched 15° down) for a
+The camera should be at the "home" pose (`spotctl go home`: hand at x 0.85, z 0.30, pitched 15° down) for a
 view that contains the whole door; the **Head to home** button does that.
 
 Depth from the hand camera is sparse (≈10 % of pixels: a low-resolution ToF sensor registered into the colour image) and

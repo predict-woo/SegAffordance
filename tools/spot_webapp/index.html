@@ -179,7 +179,7 @@ async function poll() {
     const st = s.stage, order = ['idle', 'far_ready', 'far_predicted', 'close_snapped', 'close_predicted', 'done'];
     const idx = order.indexOf(st);
     [['s1', 1], ['s2', 2], ['s3', 3], ['s4', 4], ['s5', 5]].forEach(([id, k]) => { const el = $(id); el.classList.toggle('done', idx >= k); el.classList.toggle('active', idx === k - 1 && !busy); });
-    $('bSnap').disabled = !!busy; $('bHome').disabled = !!busy || !s.moves_enabled; $('bHome').title = s.moves_enabled ? 'arm to the half-down pose (camera far view)' : 'enable robot moves first';
+    $('bSnap').disabled = !!busy; $('bHome').disabled = !!busy || !s.moves_enabled; $('bHome').title = s.moves_enabled ? 'arm to the home pose (camera far view)' : 'enable robot moves first';
     $('bPredict').disabled = !!busy || idx < 1; $('bAcceptFar').disabled = !!busy || idx < 2; $('bAcceptClose').disabled = !!busy || idx < 4;
     $('s1info').textContent = s.far.stem || ''; $('s2info').textContent = s.far.prompt ? `“${s.far.prompt}” → ${s.far.type || '…'}` : '';
     const ty = s.far.type; $('rowTurn').style.opacity = ty === 'prismatic' ? .4 : 1; $('rowSlide').style.opacity = ty === 'revolute' ? .4 : 1;

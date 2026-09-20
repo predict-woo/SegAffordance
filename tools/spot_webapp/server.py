@@ -11,7 +11,7 @@ Stages (each button on the page = one stage; the page polls /state):
                    + door plane -> far hinge carried over -> close cloud with the recalibrated arc
   5 accept_close   plan the real arc -> arm HOME -> smooth timed trajectory (open -> ease in -> grasp -> arc -> release
                    -> retreat) -> arm back HOME
-  stop             spotctl stop at any time;  home = arm to half-down;  reset = clear the run
+  stop             spotctl stop at any time;  home = arm to the home pose;  reset = clear the run
 
 Robot MOTION (walk, aim, home, arc) only happens when moves are enabled (page toggle or --moves); otherwise those
 steps run as dry runs and the close-up frame is taken from wherever the camera is. Snapshots are always live.
@@ -239,15 +239,15 @@ def job_accept_close():
     if "OUT OF REACH" in txt or "WARNING" in txt:
         log("[plan] reach warning present: check the numbers above before enabling moves")
     if moves:
-        log("[home] MOVING: go half-down -> " + spotctl("go half-down"))
+        log("[home] MOVING: go home -> " + spotctl("go home"))
         time.sleep(0.5)
         log("[arc] MOVING: " + spotctl(f"traj traj_web.json --smooth --speed {p['speed']}", timeout=600))
         time.sleep(0.5)
         # back to the home pose after the release + retreat, so the camera is in the far-view position for the next run
-        log("[home] MOVING: return to half-down -> " + spotctl("go half-down", timeout=60))
+        log("[home] MOVING: return home -> " + spotctl("go home", timeout=60))
     else:
         log("[arc] dry run: " + spotctl(f"traj traj_web.json --smooth --speed {p['speed']} --dry"))
-        log("[home] dry run: would return the arm to half-down afterwards")
+        log("[home] dry run: would return the arm home afterwards")
     STATE["stage"] = "done"
 
 
@@ -312,7 +312,7 @@ class H(BaseHTTPRequestHandler):
             if u.path == "/api/home":
                 if not STATE["moves_enabled"]:
                     raise RuntimeError("enable robot moves first")
-                out = spotctl("go half-down", timeout=60); log(f"[home] arm to half-down -> {out}")
+                out = spotctl("go home", timeout=60); log(f"[home] arm home -> {out}")
                 return self._send(200, {"ok": True, "msg": out})
             if u.path == "/api/moves":
                 STATE["moves_enabled"] = bool(body.get("enabled")); log(f"moves {'ENABLED' if STATE['moves_enabled'] else 'disabled'}")

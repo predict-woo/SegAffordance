@@ -227,7 +227,7 @@ class H(BaseHTTPRequestHandler):
             elif cmd in ALLOWED_CMDS:
                 ok, txt = spotctl(cmd, "--yes") if cmd == "estop-hard" else spotctl(cmd)
             elif cmd == "home":
-                ok, txt = spotctl("go", "half-down")
+                ok, txt = spotctl("go", "home")
             elif cmd == "rollover":
                 # the driver only allows a rollover after it has WATCHED a sit complete, so: stand -> sit -> rollover
                 ok, txt = spotctl("stand", timeout=45.0)
