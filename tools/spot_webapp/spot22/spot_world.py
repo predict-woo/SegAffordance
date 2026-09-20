@@ -23,6 +23,7 @@ from datetime import datetime
 
 import numpy as np
 import rclpy
+from scipy.spatial import cKDTree
 import rerun as rr
 import rerun.blueprint as rrb
 import rerun.urdf as rr_urdf
@@ -57,6 +58,8 @@ MAP_ON = os.environ.get("WORLD_MAP", "0") == "1"   # cumulative map is OFF by de
 HAND_SDK = os.environ.get("HAND_SDK", "1") == "1"  # camera video comes from video_streams.py (own process, full rate) instead of the ~4 Hz driver topic
 RECORDING_ID = "spot-world-live"                   # shared with video_streams.py so both land in the same recording
 FRUSTUM_M = 0.15                                   # image-plane distance of the drawn frustums (fisheye f=257 px makes them wide)
+COLOR_MATCH_M = float(os.environ.get("COLOR_MATCH_M", "0.02"))   # grey body-cam points within this distance of a hand (RGB) point take its colour
+RGB_CLOUD_MAX_AGE = 1.5                            # s; older hand clouds are not used for colouring
 
 
 def turbo(t):
@@ -85,6 +88,7 @@ class SpotWorld(Node):
         self.joints = {j.name: j for j in self.tree.joints()}
         self.live_frame_set = set()
         self.color = {}                  # cam -> latest intensity/RGB image as (H,W,3) uint8
+        self.rgb_cloud = None            # (KD-tree of the latest hand cloud in the world frame, its colours, wall time)
         for cam, (dt, ct, it, _, _) in DEPTH_CAMS.items():
             self.create_subscription(CameraInfo, ct, lambda m, c=cam: self._caminfo(c, m), 5)
             self.create_subscription(ImageMsg, dt, lambda m, c=cam: self._depth(c, m), 2)
@@ -189,6 +193,15 @@ class SpotWorld(Node):
         keys = self._voxel_keys(pw, VOXEL_LIVE)
         _, first = np.unique(keys, return_index=True)
         live, live_rgb = pw[first], rgb[first]
+        # colour transfer: the body cameras are greyscale; points close to the (RGB) hand cloud borrow its colours
+        if cam == "hand":
+            self.rgb_cloud = (cKDTree(live), live_rgb, now)
+        elif self.rgb_cloud is not None and now - self.rgb_cloud[2] < RGB_CLOUD_MAX_AGE and COLOR_MATCH_M > 0:
+            tree, rgb_colors, _ = self.rgb_cloud
+            dist, idx = tree.query(live, k=1, distance_upper_bound=COLOR_MATCH_M)
+            near = dist < COLOR_MATCH_M
+            if near.any():
+                live_rgb = live_rgb.copy(); live_rgb[near] = rgb_colors[idx[near]]
         rr.set_time("ros", timestamp=self._stamp(m))
         if cam not in self.live_frame_set:
             rr.log(f"world/live/{cam}", rr.CoordinateFrame(WORLD), static=True); self.live_frame_set.add(cam)
