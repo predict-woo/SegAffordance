@@ -223,7 +223,7 @@ class SpotWorld(Node):
         a = np.frombuffer(m.data, np.uint8).reshape(m.height, m.width, 3)
         rgb = a[:, :, ::-1] if enc == "bgr8" else a
         rr.set_time("ros", timestamp=self._stamp(m))
-        rr.log("cams/hand", rr.Image(np.ascontiguousarray(rgb)).compress(jpeg_quality=70))
+        rr.log("cams/hand/video", rr.Image(np.ascontiguousarray(rgb)).compress(jpeg_quality=70))
 
     # ---- robot ---------------------------------------------------------------------------------
     def _log_tf(self, path, parent, child, M, static=False):

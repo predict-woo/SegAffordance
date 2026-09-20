@@ -4,7 +4,7 @@
 Started by world.sh next to spot_world.py. One thread per camera polls the robot's image service for the JPEG image
 (hand colour camera 30 Hz, body cameras 15 Hz; one fetch is 5-8 ms on the wired link), decodes it, re-encodes it with
 x264 and logs the Annex-B NAL units to Rerun's VideoStream archetype on the server that spot_world.py hosts, in the
-same recording. Each stream is logged onto the entity that carries that camera's Pinhole (cams/<cam>), so the 3D view
+same recording. Each stream is logged onto a child of the entity that carries that camera's Pinhole (cams/<cam>/video), so the 3D view
 shows the live video in the camera frustum and a 2D view of the entity shows the plain video. The browser decodes it.
 
 Why not the driver's topics: its image publisher fetches all cameras in one loop and gets ~4 Hz for the hand camera.
@@ -15,7 +15,8 @@ Gotcha: frames decoded from MJPEG carry pict_type=I, which makes x264 emit only 
 Note: the front body cameras are mounted sideways, so their video is rotated ~90 deg in a 2D view (it is correct in 3D).
 
 env: RR_GRPC_PORT (9876), VIDEO_CAMS (comma list of robot image sources; default: the hand camera only),
-     VIDEO_KBPS_HAND (2000), VIDEO_KBPS_BODY (1000), VIDEO_CODEC (h264 | jpeg), VIDEO_JPEG_QUALITY (75)
+     VIDEO_FPS_HAND (30; the poll rate, lower it if the driver's registered depth starves), VIDEO_KBPS_HAND (2000),
+     VIDEO_KBPS_BODY (1000), VIDEO_CODEC (h264 | jpeg), VIDEO_JPEG_QUALITY (75)
 """
 import os
 import socket
@@ -33,14 +34,15 @@ from bosdyn.client.image import ImageClient, build_image_request
 
 SPOT_CFG = "/home/spot/dev/ros2_ws/install/locopt_ros/share/locopt_ros/config/spot_config.yaml"   # hostname/username/password
 GRPC_PORT = int(os.environ.get("RR_GRPC_PORT", 9876))
-# robot image source -> (Rerun entity = the entity spot_world.py logs that camera's Pinhole on, camera fps, kbit/s cap)
+# robot image source -> (Rerun entity under the camera's Pinhole entity that spot_world.py logs, camera fps, kbit/s cap)
 SOURCES = {
-    "hand_color_image": ("cams/hand", 30, int(os.environ.get("VIDEO_KBPS_HAND", "2000"))),
-    "frontleft_fisheye_image": ("cams/frontleft", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
-    "frontright_fisheye_image": ("cams/frontright", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
-    "left_fisheye_image": ("cams/left", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
-    "right_fisheye_image": ("cams/right", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
-    "back_fisheye_image": ("cams/back", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
+    # the video goes on a CHILD of the Pinhole entity: Rerun shows 2D content in a 3D view only under a pinhole ancestor
+    "hand_color_image": ("cams/hand/video", int(os.environ.get("VIDEO_FPS_HAND", "30")), int(os.environ.get("VIDEO_KBPS_HAND", "2000"))),
+    "frontleft_fisheye_image": ("cams/frontleft/video", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
+    "frontright_fisheye_image": ("cams/frontright/video", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
+    "left_fisheye_image": ("cams/left/video", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
+    "right_fisheye_image": ("cams/right/video", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
+    "back_fisheye_image": ("cams/back/video", 15, int(os.environ.get("VIDEO_KBPS_BODY", "1000"))),
 }
 CAMS = [c.strip() for c in os.environ.get("VIDEO_CAMS", "hand_color_image").split(",") if c.strip()]   # hand only by default; body cams are known too
 CODEC = os.environ.get("VIDEO_CODEC", "h264")
@@ -87,13 +89,17 @@ def stream(robot, source):
             last, n, nbytes, t0, pts = None, 0, 0, time.time(), 0
             log(f"{source} -> {entity} as {CODEC}" + (f" ({kbps} kbit/s cap, {fps} fps)" if CODEC == "h264" else f" (JPEG q{QUALITY})"))
             while True:
+                t_req = time.time()
                 r = ic.get_image(req)[0]
                 ts = r.shot.acquisition_time
                 key = (ts.seconds, ts.nanos)
-                if key == last:                      # camera has not produced a new frame yet
-                    time.sleep(0.003)
+                if key == last:                      # camera has not produced a new frame yet: short back-off
+                    time.sleep(0.004)
                     continue
                 last = key
+                # Pace to ~1 request per camera frame. A tight poll (~90 req/s) starved the driver's all-cameras GetImage
+                # on the robot's image service: its image and depth topics stopped, and with them the point clouds.
+                pace = (1.0 / fps) - 0.008 - (time.time() - t_req)
                 data = bytes(r.shot.image.data)
                 rr.set_time("ros", timestamp=time.time())
                 if CODEC == "h264":
@@ -114,6 +120,8 @@ def stream(robot, source):
                     dt = time.time() - t0
                     log(f"{source}: {n / dt:.1f} fps, {8 * nbytes / dt / 1e6:.2f} Mbit/s")
                     n, nbytes, t0 = 0, 0, time.time()
+                if pace > 0:
+                    time.sleep(pace)
         except Exception as e:                       # robot rebooting, auth hiccup, network: retry
             log(f"{source}: {type(e).__name__}: {e}; retrying in 3 s")
             time.sleep(3.0)
