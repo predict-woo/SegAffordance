@@ -9,9 +9,9 @@ What is logged (all in the fixed frame `spot/vision`, Spot's visual-odometry wor
   * live point clouds from the 5 body depth cameras + the hand depth camera, backprojected on spot22, voxel-
     downsampled, transformed with TF at the image timestamp
   * a persistent voxel map that accumulates as Spot walks (occupied voxels are kept until the cap is hit)
-  * depth camera frustums (pinholes) and the hand RGB video at the camera's full rate (~30 Hz), logged by the
-    separate hand_video.py (own process: the driver republishes the hand image at only ~4 Hz, and in-process polling
-    lost frames to the GIL); HAND_SDK=0 falls back to the ROS topic
+  * depth camera frustums (pinholes) with live H.264 video in them for the hand and both front cameras, at the cameras'
+    full rate (30 / 15 fps), logged by the separate video_streams.py (own process: the driver republishes the hand image at
+    only ~4 Hz, and in-process polling lost frames to the GIL); HAND_SDK=0 falls back to the driver's hand topic (2 Hz)
   * the trail of the body through the room
 Everything is time-stamped with ROS time, so the .rrd recording scrubs like a video.
 """
@@ -53,8 +53,10 @@ MAP_LOG_PERIOD, POSE_HZ = 2.0, 15.0
 TILE = 2.0                     # map is logged as 2 m tiles; only tiles that gained voxels are re-sent
 MAP_MIN_HITS = 3               # a voxel enters the map after being seen in this many frames (kills depth-noise inflation)
 MAP_ON = os.environ.get("WORLD_MAP", "0") == "1"   # cumulative map is OFF by default: live per-frame clouds only
-HAND_SDK = os.environ.get("HAND_SDK", "1") == "1"  # hand RGB comes from hand_video.py (own process, full rate) instead of the ~4 Hz driver topic
-RECORDING_ID = "spot-world-live"                   # shared with hand_video.py so both land in the same recording
+HAND_SDK = os.environ.get("HAND_SDK", "1") == "1"  # camera video comes from video_streams.py (own process, full rate) instead of the ~4 Hz driver topic
+RECORDING_ID = "spot-world-live"                   # shared with video_streams.py so both land in the same recording
+MOVING_CAMS = {"hand"}                             # cameras on the arm: their pose relative to the body is re-logged with the joints, not once
+FRUSTUM_M = 0.15                                   # image-plane distance of the drawn frustums (fisheye f=257 px makes them wide)
 
 
 def turbo(t):
@@ -88,7 +90,7 @@ class SpotWorld(Node):
             self.create_subscription(CameraInfo, ct, lambda m, c=cam: self._caminfo(c, m), 5)
             self.create_subscription(ImageMsg, dt, lambda m, c=cam: self._depth(c, m), 2)
             self.create_subscription(ImageMsg, it, lambda m, c=cam: self._color(c, m), 1)
-        if not HAND_SDK:                 # otherwise hand_video.py (started by world.sh) logs cams/hand_rgb at full rate
+        if not HAND_SDK:                 # otherwise video_streams.py (started by world.sh) logs the video onto cams/<cam> at full rate
             self.create_subscription(ImageMsg, "/spot/camera/hand/image", self._hand_rgb, 1)
         self.create_subscription(JointState, "/spot/joint_states", self._joints, 10)
         self.create_subscription(Odometry, "/spot/odometry", self._odom, 10)
@@ -96,7 +98,7 @@ class SpotWorld(Node):
             self.create_timer(MAP_LOG_PERIOD, self._log_map)
         self.last_joint_t = self.last_rgb_t = 0.0
         self.n_depth = 0
-        self.get_logger().info(f"spot_world up: URDF {len(self.joints)} joints, {len(DEPTH_CAMS)} depth cams, cumulative map {'ON' if MAP_ON else 'off'}, hand video via {'hand_video.py' if HAND_SDK else 'ROS'}")
+        self.get_logger().info(f"spot_world up: URDF {len(self.joints)} joints, {len(DEPTH_CAMS)} depth cams, cumulative map {'ON' if MAP_ON else 'off'}, camera video via {'video_streams.py' if HAND_SDK else 'ROS'}")
 
     # ---- helpers -------------------------------------------------------------------------------
     @staticmethod
@@ -135,7 +137,7 @@ class SpotWorld(Node):
         self.grids[cam] = ((us + 0.5 - K[0, 2]) / K[0, 0], (vs + 0.5 - K[1, 2]) / K[1, 1], stride)
         self.K[cam] = (K, m.width, m.height, m.header.frame_id)
         # frustum: pinhole under the camera's own TF frame
-        rr.log(f"cams/{cam}", rr.Pinhole(image_from_camera=K, resolution=[m.width, m.height], camera_xyz=rr.components.ViewCoordinates([3, 2, 5]), image_plane_distance=0.3), static=True)
+        rr.log(f"cams/{cam}", rr.Pinhole(image_from_camera=K, resolution=[m.width, m.height], camera_xyz=rr.ViewCoordinates.RDF, image_plane_distance=FRUSTUM_M), static=True)
         rr.log(f"cams/{cam}", rr.CoordinateFrame(m.header.frame_id), static=True)
         self.get_logger().info(f"{cam}: {m.width}x{m.height} f={K[0, 0]:.0f} frame {m.header.frame_id}")
 
@@ -176,8 +178,9 @@ class SpotWorld(Node):
         keys = self._voxel_keys(pw, VOXEL_LIVE)
         _, first = np.unique(keys, return_index=True)
         live, live_rgb = pw[first], rgb[first]
-        # camera->body->world TF for the frustum (log the camera frame pose relative to the body once; the body moves)
-        if frame not in self.cam_frames_logged:
+        # camera->body TF for the frustum: body cameras are rigid to the body, so log their pose once (static); the hand
+        # camera moves with the arm and is re-logged in _joints (a static pose left its frustum wherever the arm was at start)
+        if frame not in self.cam_frames_logged and cam not in MOVING_CAMS:
             Mbc = self._T(BODY, frame, m.header.stamp)
             if Mbc is not None:
                 self._log_tf(f"tf/{cam}", BODY, frame, Mbc, static=True)
@@ -219,7 +222,7 @@ class SpotWorld(Node):
         a = np.frombuffer(m.data, np.uint8).reshape(m.height, m.width, 3)
         rgb = a[:, :, ::-1] if enc == "bgr8" else a
         rr.set_time("ros", timestamp=self._stamp(m))
-        rr.log("cams/hand_rgb", rr.Image(np.ascontiguousarray(rgb)).compress(jpeg_quality=70))
+        rr.log("cams/hand", rr.Image(np.ascontiguousarray(rgb)).compress(jpeg_quality=70))
 
     # ---- robot ---------------------------------------------------------------------------------
     def _log_tf(self, path, parent, child, M, static=False):
@@ -264,6 +267,12 @@ class SpotWorld(Node):
             j = self.joints.get(name)
             if j is not None:
                 rr.log(f"tf/joints/{name}", j.compute_transform(float(pos), clamp=False))
+        for cam in MOVING_CAMS:                      # arm cameras: pose relative to the body at this stamp
+            if cam in self.K:
+                frame = self.K[cam][3]
+                M = self._T(BODY, frame, m.header.stamp)
+                if M is not None:
+                    self._log_tf(f"tf/{cam}", BODY, frame, M)
 
     # ---- map -----------------------------------------------------------------------------------
     def _log_map(self):

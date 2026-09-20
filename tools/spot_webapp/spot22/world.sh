@@ -9,8 +9,8 @@ source "$HOME/dev/ros2_ws/install/setup.bash"     # AMENT_PREFIX_PATH lets Rerun
 cd "$(dirname "$0")"
 PY="$(dirname "$0")/venv/bin/python"                    # venv: numpy 2 + rerun-sdk + pandas>=2.2 (system numpy 1.25 mismatches the wheel; without a numpy-2 pandas in the
                                                        #  venv, pyarrow imports the system pandas and every rerun batch fails with "numpy.dtype size changed")
-if [ "${HAND_SDK:-1}" = "1" ]; then                     # full-rate hand video in its own process (see hand_video.py)
-  "$PY" -u hand_video.py &
+if [ "${HAND_SDK:-1}" = "1" ]; then                     # full-rate camera video (hand + front cams) in its own process (see video_streams.py)
+  "$PY" -u video_streams.py &
   trap 'kill $! 2>/dev/null' EXIT INT TERM
 fi
 "$PY" -u spot_world.py

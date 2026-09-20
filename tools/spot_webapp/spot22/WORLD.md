@@ -12,5 +12,5 @@ Setup once (spot22):
 
 Logged, all in `spot/vision` (visual-odometry world frame): Boston Dynamics URDF meshes animated from /spot/joint_states +
 TF body pose; live per-frame clouds from the 5 body depth cams + hand depth (4 Hz, stride 4, real colours); optional cumulative voxel map (OFF by default; `WORLD_MAP=1` enables: 2 m
-tiles of 5 cm voxels, 3-hit filter, dirty tiles re-sent every 2 s); depth-camera frustums; hand camera video at the camera's full 30 fps as an H.264 stream (~2 Mbit/s, `hand_video.py`: JPEG from the robot's image service, x264 on spot22, Rerun `VideoStream`; `HAND_SDK=0` falls back to the driver topic, ~4 Hz); body trail.
+tiles of 5 cm voxels, 3-hit filter, dirty tiles re-sent every 2 s); depth-camera frustums; live H.264 video in the frustums of the hand (30 fps, 2 Mbit/s) and both front cameras (15 fps, 1 Mbit/s each) via `video_streams.py` (JPEG from the robot's image service, x264 on spot22, Rerun `VideoStream`; `VIDEO_CAMS` picks the cameras, `HAND_SDK=0` falls back to the driver's hand topic, ~4 Hz); body trail.
 Recording (opt-in) grows ~0.5-1 MB/s while on; streaming keeps a 1 GiB in-memory buffer on spot22 and writes nothing. Known cosmetic warning: ViewCoordinatesBatch numpy ABI (rerun 0.38 + py3.10).
