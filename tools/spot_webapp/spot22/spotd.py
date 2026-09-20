@@ -187,6 +187,8 @@ class SpotD(Node):
         return np.array([tr.x, tr.y, tr.z]), rpy, quat
 
     def send_pose(self, xyz, rpy_deg, wait=True, force=False) -> tuple[bool, str]:
+        if not self.traj_busy:               # a stop must not latch: the next pose command after `stop` is a fresh request
+            self.abort.clear()               # (while a trajectory is still winding down after a stop, keep its abort)
         for k, v in zip("xyz", xyz):
             lo, hi = WORKSPACE[k]
             if not force and not (lo <= v <= hi):
