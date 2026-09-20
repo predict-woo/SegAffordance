@@ -36,7 +36,7 @@ def main():
     ap.add_argument("pred_json")
     ap.add_argument("-o", "--out", default="traj.json")
     ap.add_argument("--turn", type=float, default=80.0, help="revolute: sweep in degrees")
-    ap.add_argument("--slide", type=float, default=0.20, help="prismatic: pull length in metres (along the axis, toward the robot)")
+    ap.add_argument("--slide", type=float, default=0.30, help="prismatic: pull length in metres (along the axis, toward the robot)")
     ap.add_argument("--steps", type=int, default=40)
     ap.add_argument("--start-x", type=float, default=0.75, help="rehearsal: body-frame x of the first waypoint")
     ap.add_argument("--z-clamp", type=float, nargs=2, default=(-0.10, 0.45))
