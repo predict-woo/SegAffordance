@@ -35,6 +35,7 @@ from urllib.parse import urlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RUN_ROOT = os.path.join(HERE, "runs")
+SAVE_ROOT = os.path.join(HERE, "saves")        # "Save session" button: one folder per press with every raw file of the current run
 SPOT, POD = "spot", "segaff-dev"
 SPOT_WS = "~/andrew_ws"
 POD_REPO = "/workspace/SegAffordance"
@@ -48,7 +49,7 @@ CLOSE_PROMPT = "handle"          # SAM 3 text prompt for the close-up (EgoArt is
 SAM3_PORT = 12190                # sam3_serve.py on the pod (tmux session sam3)
 
 STATE = {
-    "stage": "idle", "busy": None, "moves_enabled": False, "log": [], "run_id": None,
+    "stage": "idle", "busy": None, "moves_enabled": False, "log": [], "run_id": None, "last_save": None,
     "params": {"turn_deg": 80, "slide_m": 0.15, "speed": 0.01, "standoff": 1.10, "aim_dist": 0.50, "approach": 0.12, "grasp_bias": 0.02},
     "handle": "auto",           # auto = from the SAM 3 mask shape; or vertical / horizontal override. Sets the gripper roll.
     "far": {}, "close": {}, "plans": {}, "error": None,
@@ -299,8 +300,56 @@ def job_accept_close():
     STATE["stage"] = "done"
 
 
+def job_save():
+    """Everything raw about the current session into saves/<run or blank>_<time>/: the run folder (snapshots: jpg, depth png,
+    json with K / body<-camera / vision<-body; every .data.json cloud and .pred.json; standoff / traj plans), the pod's EgoArt
+    dump and SAM 3 masks, the plans held in memory (aim), each cloud decoded to an .npz, and session.json (stage, params,
+    prompt, handle, plans, the log). A blank session saves just session.json, so pressing it always works."""
+    import base64
+    import glob
+    import shutil
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    rid = STATE.get("run_id")
+    dest = os.path.join(SAVE_ROOT, f"{rid or 'blank'}_saved_{ts}")
+    os.makedirs(dest, exist_ok=True)
+    n_files = 0
+    if rid:
+        d = run_dir()
+        shutil.copytree(d, os.path.join(dest, "run"), dirs_exist_ok=True)
+        n_files += len(os.listdir(d))
+        try:                                                   # model outputs that only live on the pod
+            os.makedirs(os.path.join(dest, "pod"), exist_ok=True)
+            names = ssh(POD, f"ls {pod_run()} | grep -E 'preds.jsonl$|sam3.*npz$|_out|out_' || true").split()
+            for name in names:
+                sh(f"scp -q -r {POD}:{pod_run()}/{name} {dest}/pod/"); n_files += 1
+        except Exception as ex:
+            log(f"[save] pod files skipped: {ex}")
+        os.makedirs(os.path.join(dest, "clouds"), exist_ok=True)
+        for f in sorted(glob.glob(os.path.join(d, "*.data.json"))):   # decoded copies of the clouds, for numpy users
+            try:
+                z = json.load(open(f))
+                import numpy as np
+                xyz = np.frombuffer(base64.b64decode(z["xyz_b64"]), np.float32).reshape(-1, 3)
+                rgb = np.frombuffer(base64.b64decode(z["rgb_b64"]), np.uint8).reshape(-1, 3)
+                preds = [{k: v for k, v in p.items() if k != "mask_idx"} for p in z.get("preds", [])]
+                mask = np.asarray(z["preds"][0].get("mask_idx", []), np.int64) if z.get("preds") else np.zeros(0, np.int64)
+                stem = os.path.basename(f)[:-len(".data.json")]
+                tvb = TVB.get(stem.split("_", 3)[0] + "_" + stem.split("_")[1] + "_" + stem.split("_")[2]) if stem.count("_") >= 2 else None
+                np.savez_compressed(os.path.join(dest, "clouds", stem + ".npz"), xyz_cam=xyz, rgb=rgb, mask_idx=mask,
+                                    K=np.asarray(z["K"]), T_body_cam=np.asarray(z["T_body_cam"] if z.get("T_body_cam") else np.full((4, 4), np.nan)),
+                                    T_vision_body=np.asarray(tvb if tvb else np.full((4, 4), np.nan)), preds_json=json.dumps(preds), name=z.get("name", stem))
+                n_files += 1
+            except Exception as ex:
+                log(f"[save] cloud {os.path.basename(f)} skipped: {ex}")
+    session = {k: v for k, v in STATE.items() if k not in ("busy",)}
+    session.update({"saved_at": ts, "T_vision_body_by_snapshot": TVB, "note": "camera-frame clouds: xyz_cam @ T_body_cam -> body; @ T_vision_body -> Spot odometry frame"})
+    json.dump(session, open(os.path.join(dest, "session.json"), "w"), indent=1, default=str)
+    STATE["last_save"] = dest
+    log(f"[save] {'run ' + rid if rid else 'blank session'} -> {dest} ({n_files} files + session.json)")
+
+
 JOBS = {"snap_far": job_snap_far, "predict_far": job_predict_far, "accept_far": job_accept_far,
-        "predict_close": job_predict_close, "accept_close": job_accept_close}
+        "predict_close": job_predict_close, "accept_close": job_accept_close, "save": job_save}
 
 
 def start_job(name, **kw):
@@ -371,7 +420,9 @@ class H(BaseHTTPRequestHandler):
                     STATE["handle"] = body["handle"]
                 STATE["params"].update({k: float(v) for k, v in body.items() if k in STATE["params"]})
                 return self._send(200, {"ok": True, "params": STATE["params"]})
-            if u.path == "/api/snap_far":
+            if u.path == "/api/save":
+                start_job("save")
+            elif u.path == "/api/snap_far":
                 start_job("snap_far")
             elif u.path == "/api/predict_far":
                 if not STATE["far"].get("stem"):

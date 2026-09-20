@@ -44,6 +44,7 @@
     <h1>EgoArt × Spot: open a door</h1>
     <button class="stop" id="bStop">STOP ROBOT</button>
     <button id="bReset" title="clear the run and start over at stage 1 (robot is not moved)">Reset to blank</button>
+    <button id="bSave" title="write every raw file of the current session (snapshots, clouds, predictions, plans, log) to tools/spot_webapp/saves/">Save session</button>
     <div id="moves"><input type="checkbox" id="cbMoves"><label for="cbMoves"><b>Robot moves enabled</b><br><span class="muted">off = walk, aim and arc are dry runs</span></label></div>
 
     <div class="step" id="s1"><h2>1 · Far snapshot</h2>
@@ -160,6 +161,7 @@ $('cbMoves').onchange = e => {
 const params = () => api('/api/params', { standoff: +$('pStandoff').value, aim_dist: +$('pAim').value, turn_deg: +$('pTurn').value, slide_m: +$('pSlide').value / 100, speed: +$('pSpeed').value / 100, handle: $('pHandle').value, grasp_bias: +$('pBias').value / 100 });
 $('bHome').onclick = () => api('/api/home');
 $('bReset').onclick = () => api('/api/reset').then(j => { if (j.ok) { far.clear(); close.clear(); } });
+$('bSave').onclick = () => api('/api/save');
 $('bSnap').onclick = () => api('/api/snap_far');
 $('bPredict').onclick = () => params().then(() => api('/api/predict_far', { prompt: $('prompt').value }));
 $('bAcceptFar').onclick = () => params().then(() => api('/api/accept_far'));
@@ -179,6 +181,7 @@ async function poll() {
     const st = s.stage, order = ['idle', 'far_ready', 'far_predicted', 'close_snapped', 'close_predicted', 'done'];
     const idx = order.indexOf(st);
     [['s1', 1], ['s2', 2], ['s3', 3], ['s4', 4], ['s5', 5]].forEach(([id, k]) => { const el = $(id); el.classList.toggle('done', idx >= k); el.classList.toggle('active', idx === k - 1 && !busy); });
+    $('bSave').disabled = !!busy; $('bSave').textContent = s.last_save ? 'Save session (last: ' + s.last_save.split('/').pop() + ')' : 'Save session';
     $('bSnap').disabled = !!busy; $('bHome').disabled = !!busy || !s.moves_enabled; $('bHome').title = s.moves_enabled ? 'arm to the home pose (camera far view)' : 'enable robot moves first';
     $('bPredict').disabled = !!busy || idx < 1; $('bAcceptFar').disabled = !!busy || idx < 2; $('bAcceptClose').disabled = !!busy || idx < 4;
     $('s1info').textContent = s.far.stem || ''; $('s2info').textContent = s.far.prompt ? `“${s.far.prompt}” → ${s.far.type || '…'}` : '';
