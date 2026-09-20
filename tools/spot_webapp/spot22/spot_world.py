@@ -337,9 +337,10 @@ def main():
     # link the odometry world frame to the viewer root frame (identity), so views rooted at "/" can place everything
     rr.log("tf/world", rr.Transform3D(translation=[0.0, 0.0, 0.0], quaternion=[0.0, 0.0, 0.0, 1.0], parent_frame="tf#/", child_frame=WORLD), static=True)
     # explicit layout: the 3D world and the hand video. Sent as active+default so a viewer's stale saved layout (e.g. a
-    # panel for an entity that no longer exists) is replaced instead of persisting across restarts.
+    # panel for an entity that no longer exists) is replaced instead of persisting across restarts. The 2D view is rooted
+    # at the video entity, not at the Pinhole entity: that one's frame is the 3D camera frame, which has no pinhole root.
     rr.send_blueprint(rrb.Blueprint(
-        rrb.Horizontal(rrb.Spatial3DView(origin="/", name="world"), rrb.Spatial2DView(origin="cams/hand", name="hand camera"), column_shares=[3, 1]),
+        rrb.Horizontal(rrb.Spatial3DView(origin="/", name="world"), rrb.Spatial2DView(origin="cams/hand/video", name="hand camera"), column_shares=[3, 1]),
         collapse_panels=False), make_active=True, make_default=True)
     rclpy.init()
     node = SpotWorld()
