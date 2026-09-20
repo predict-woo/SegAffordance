@@ -237,7 +237,8 @@ def job_accept_far():
     T_hand_cam = spotctl("tf spot/hand spot/hand_color_image_sensor")
     h = so["handle_in_goal_frame"] if moves else so["handle_body"]
     n = [-1.0, 0.0, 0.0] if moves else so["door_normal_body"]
-    txt = ssh(SPOT, f"cd {SPOT_WS} && python3 plan_aim.py --target {h[0]} {h[1]} {h[2]} --normal {n[0]} {n[1]} {n[2]} --dist {p['aim_dist']} --T-hand-cam '{T_hand_cam}' -o aim.json")
+    # fixed-point formatting: a value like -5.6e-17 is not recognised by argparse as a negative number and is taken for an option
+    txt = ssh(SPOT, f"cd {SPOT_WS} && python3 plan_aim.py --target {h[0]:.6f} {h[1]:.6f} {h[2]:.6f} --normal {n[0]:.6f} {n[1]:.6f} {n[2]:.6f} --dist {p['aim_dist']:.4f} --T-hand-cam '{T_hand_cam}' -o aim.json")
     for line in txt.strip().splitlines():
         log(f"[aim] {line}")
     aim = json.loads(ssh(SPOT, f"cat {SPOT_WS}/aim.json")); STATE["plans"]["aim"] = aim
