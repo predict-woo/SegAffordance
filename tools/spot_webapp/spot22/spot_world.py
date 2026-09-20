@@ -56,7 +56,6 @@ MAP_MIN_HITS = 3               # a voxel enters the map after being seen in this
 MAP_ON = os.environ.get("WORLD_MAP", "0") == "1"   # cumulative map is OFF by default: live per-frame clouds only
 HAND_SDK = os.environ.get("HAND_SDK", "1") == "1"  # camera video comes from video_streams.py (own process, full rate) instead of the ~4 Hz driver topic
 RECORDING_ID = "spot-world-live"                   # shared with video_streams.py so both land in the same recording
-MOVING_CAMS = {"hand"}                             # cameras on the arm: their pose relative to the body is re-logged with the joints, not once
 FRUSTUM_M = 0.15                                   # image-plane distance of the drawn frustums (fisheye f=257 px makes them wide)
 
 
@@ -84,14 +83,13 @@ class SpotWorld(Node):
         self.tree = rr_urdf.UrdfTree.from_file_path(URDF, entity_path_prefix="world/spot")
         self.tree.log_urdf_to_recording()
         self.joints = {j.name: j for j in self.tree.joints()}
-        self.cam_frames_logged = set()
         self.live_frame_set = set()
         self.color = {}                  # cam -> latest intensity/RGB image as (H,W,3) uint8
         for cam, (dt, ct, it, _, _) in DEPTH_CAMS.items():
             self.create_subscription(CameraInfo, ct, lambda m, c=cam: self._caminfo(c, m), 5)
             self.create_subscription(ImageMsg, dt, lambda m, c=cam: self._depth(c, m), 2)
             self.create_subscription(ImageMsg, it, lambda m, c=cam: self._color(c, m), 1)
-        if not HAND_SDK:                 # otherwise video_streams.py (started by world.sh) logs the video onto cams/<cam> at full rate
+        if not HAND_SDK:                 # otherwise video_streams.py (started by world.sh) logs the video onto world/cams/<cam>/video at full rate
             self.create_subscription(ImageMsg, "/spot/camera/hand/image", self._hand_rgb, 1)
         self.create_subscription(JointState, "/spot/joint_states", self._joints, 10)
         self.create_subscription(Odometry, "/spot/odometry", self._odom, 10)
@@ -148,9 +146,10 @@ class SpotWorld(Node):
         us, vs = np.meshgrid(np.arange(0, m.width, stride), np.arange(0, m.height, stride))
         self.grids[cam] = ((us + 0.5 - K[0, 2]) / K[0, 0], (vs + 0.5 - K[1, 2]) / K[1, 1], stride)
         self.K[cam] = (K, m.width, m.height, m.header.frame_id)
-        # frustum: pinhole under the camera's own TF frame
-        rr.log(f"cams/{cam}", rr.Pinhole(image_from_camera=K, resolution=[m.width, m.height], camera_xyz=rr.ViewCoordinates.RDF, image_plane_distance=FRUSTUM_M), static=True)
-        rr.log(f"cams/{cam}", rr.CoordinateFrame(m.header.frame_id), static=True)
+        # frustum: a plain entity under world/ (frame spot/vision); its pose is re-logged in _joints as an ordinary
+        # entity transform computed from TF on spot22, like the clouds. Hanging the pinhole on the camera's TF frame via
+        # parent/child frame edges drew the hand frustum under the belly although the logged transform was correct.
+        rr.log(f"world/cams/{cam}", rr.Pinhole(image_from_camera=K, resolution=[m.width, m.height], camera_xyz=rr.ViewCoordinates.RDF, image_plane_distance=FRUSTUM_M), static=True)
         self.get_logger().info(f"{cam}: {m.width}x{m.height} f={K[0, 0]:.0f} frame {m.header.frame_id}")
 
     def _color(self, cam, m):
@@ -190,13 +189,6 @@ class SpotWorld(Node):
         keys = self._voxel_keys(pw, VOXEL_LIVE)
         _, first = np.unique(keys, return_index=True)
         live, live_rgb = pw[first], rgb[first]
-        # camera->body TF for the frustum: body cameras are rigid to the body, so log their pose once (static); the hand
-        # camera moves with the arm and is re-logged in _joints (a static pose left its frustum wherever the arm was at start)
-        if frame not in self.cam_frames_logged and cam not in MOVING_CAMS:
-            Mbc = self._T(BODY, frame, m.header.stamp)
-            if Mbc is not None:
-                self._log_tf(f"tf/{cam}", BODY, frame, Mbc, static=True)
-                self.cam_frames_logged.add(frame)
         rr.set_time("ros", timestamp=self._stamp(m))
         if cam not in self.live_frame_set:
             rr.log(f"world/live/{cam}", rr.CoordinateFrame(WORLD), static=True); self.live_frame_set.add(cam)
@@ -234,7 +226,7 @@ class SpotWorld(Node):
         a = np.frombuffer(m.data, np.uint8).reshape(m.height, m.width, 3)
         rgb = a[:, :, ::-1] if enc == "bgr8" else a
         rr.set_time("ros", timestamp=self._stamp(m))
-        rr.log("cams/hand/video", rr.Image(np.ascontiguousarray(rgb)).compress(jpeg_quality=70))
+        rr.log("world/cams/hand/video", rr.Image(np.ascontiguousarray(rgb)).compress(jpeg_quality=70))
 
     # ---- robot ---------------------------------------------------------------------------------
     def _log_tf(self, path, parent, child, M, static=False):
@@ -251,7 +243,10 @@ class SpotWorld(Node):
                 s = np.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2]) * 2; w = (R[0, 2] - R[2, 0]) / s; x = (R[0, 1] + R[1, 0]) / s; y = 0.25 * s; z = (R[1, 2] + R[2, 1]) / s
             else:
                 s = np.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1]) * 2; w = (R[1, 0] - R[0, 1]) / s; x = (R[0, 2] + R[2, 0]) / s; y = (R[1, 2] + R[2, 1]) / s; z = 0.25 * s
-        rr.log(path, rr.Transform3D(translation=M[:3, 3], quaternion=[x, y, z, w], parent_frame=parent, child_frame=child), static=static)
+        if parent is None:
+            rr.log(path, rr.Transform3D(translation=M[:3, 3], quaternion=[x, y, z, w]), static=static)
+        else:
+            rr.log(path, rr.Transform3D(translation=M[:3, 3], quaternion=[x, y, z, w], parent_frame=parent, child_frame=child), static=static)
 
     def _odom(self, m):
         self.n_msgs += 1
@@ -281,12 +276,10 @@ class SpotWorld(Node):
             j = self.joints.get(name)
             if j is not None:
                 rr.log(f"tf/joints/{name}", j.compute_transform(float(pos), clamp=False))
-        for cam in MOVING_CAMS:                      # arm cameras: pose relative to the body at this stamp
-            if cam in self.K:
-                frame = self.K[cam][3]
-                M = self._T(BODY, frame, m.header.stamp)
-                if M is not None:
-                    self._log_tf(f"tf/{cam}", BODY, frame, M)
+        for cam, (K, W, H, frame) in list(self.K.items()):   # camera frustum poses in the world frame (entity transforms)
+            M = self._T(WORLD, frame, m.header.stamp)
+            if M is not None:
+                self._log_tf(f"world/cams/{cam}", None, None, M)
 
     # ---- map -----------------------------------------------------------------------------------
     def _log_map(self):
@@ -340,7 +333,7 @@ def main():
     # panel for an entity that no longer exists) is replaced instead of persisting across restarts. The 2D view is rooted
     # at the video entity, not at the Pinhole entity: that one's frame is the 3D camera frame, which has no pinhole root.
     rr.send_blueprint(rrb.Blueprint(
-        rrb.Horizontal(rrb.Spatial3DView(origin="/", name="world"), rrb.Spatial2DView(origin="cams/hand/video", name="hand camera"), column_shares=[3, 1]),
+        rrb.Horizontal(rrb.Spatial3DView(origin="/", name="world"), rrb.Spatial2DView(origin="world/cams/hand/video", name="hand camera"), column_shares=[3, 1]),
         collapse_panels=False), make_active=True, make_default=True)
     rclpy.init()
     node = SpotWorld()
