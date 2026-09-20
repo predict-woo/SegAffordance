@@ -48,6 +48,17 @@ ROS on spot22 is FastDDS on `ROS_DOMAIN_ID=22`. Every shell that talks to the dr
 | `snaps/` | Every camera snapshot taken by `spotctl snap` (jpg + 16-bit depth png + json with K, hand pose, body→camera transform). |
 | `spotd.log` | Every command spotd executed, with timing and result. |
 
+### Live Rerun overlay of the pipeline
+
+`rr_egoart.py` (Mac, runs with the pipx `rerun-sdk` python) draws every stage of a run into the live Rerun world view served
+by `spot_world.py` on spot22, under `world/egoart/<stage>`: the far snapshot camera with its photo, the segmented handle
+points, EgoArt's contact point, hinge, axis and trajectory (magenta), the planned base goal as a footprint and walk arrow
+(green), the recalibrated close-up prediction (cyan) and the hand waypoints about to be executed (orange). Everything is
+expressed in Spot's odometry frame using the body pose captured at snapshot time (`spotctl tf spot/vision spot/body`, stored
+as `T_vision_body` in the snapshot json), so a far prediction stays on the door while the robot walks. "Reset to blank" and a
+new far snapshot clear the overlay. `RR_EGOART=0` disables it, `RR_URL` points it at another Rerun server.
+
+
 Copies of all these scripts are in `spot22/` in this folder (source of truth is the repo; deploy with `scp`).
 
 Changes on spot22 **outside** `~/andrew_ws`: one PATH line added at the top of `~/.bashrc` (backup `~/.bashrc.bak-20260919`),

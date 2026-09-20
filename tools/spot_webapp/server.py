@@ -80,6 +80,36 @@ def spotctl(args, timeout=300):
     return ssh(SPOT, f"{SPOT_WS}/spotctl {args}", timeout).strip()
 
 
+# ---- Rerun world view -----------------------------------------------------------------------------
+RR_PY = os.environ.get("RR_PY", os.path.expanduser("~/.local/pipx/venvs/rerun-sdk/bin/python"))   # a python with rerun-sdk 0.38
+RR_LOGGER = os.path.join(HERE, "rr_egoart.py")
+RR_ENABLED = os.environ.get("RR_EGOART", "1") == "1" and os.path.exists(RR_PY)
+
+
+def rr_log(stage, tvb=None, **files):
+    """Draw a stage's outputs into the live Rerun world view on spot22 (rr_egoart.py). Never fatal for the pipeline."""
+    if not RR_ENABLED:
+        return
+    cmd = [RR_PY, RR_LOGGER, stage] + sum(([f"--{k}", v] for k, v in files.items()), []) + (["--tvb", json.dumps(tvb)] if tvb is not None else [])
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=40)
+        if r.returncode == 0:
+            log(f"[rerun] {r.stdout.strip() or stage}")
+        else:
+            log(f"[rerun] {stage} failed: {(r.stderr.strip().splitlines() or ['?'])[-1]}")
+    except Exception as ex:
+        log(f"[rerun] {stage} failed: {ex}")
+
+
+def body_in_world():
+    """4x4 vision_T_body now (Spot's visual-odometry frame), or None without TF. Taken at snapshot time so far-frame results
+    stay on the door in Rerun while the robot walks."""
+    try:
+        return json.loads(spotctl("tf spot/vision spot/body", timeout=20))
+    except Exception as ex:
+        log(f"[rerun] no vision->body TF ({ex}); drawing in the body frame instead"); return None
+
+
 def run_dir():
     d = os.path.join(RUN_ROOT, STATE["run_id"]); os.makedirs(d, exist_ok=True); return d
 
@@ -101,6 +131,9 @@ def snap(tag):
     ssh(POD, f"mkdir -p {pod_run()}")
     sh(f"scp -q {d}/{stem}.jpg {d}/{stem}_depth.png {d}/{stem}.json {POD}:{pod_run()}/")
     meta = json.load(open(f"{d}/{stem}.json"))
+    meta["T_vision_body"] = body_in_world()
+    json.dump(meta, open(f"{d}/{stem}.json", "w"), indent=1)
+    TVB[stem] = meta["T_vision_body"]
     hand = meta.get("hand_in_body")
     log(f"[{tag}] snapshot {stem}: {meta['width']}x{meta['height']}, hand at {['%.2f' % v for v in hand['xyz']] if hand else 'UNKNOWN (no TF: driver state publisher down?)'}")
     if "T_body_cam" not in meta:
@@ -152,12 +185,21 @@ def sam3(stem, prompt, tag, thr=0.3):
     return r["npz"]
 
 
+TVB = {}          # snapshot stem -> vision_T_body at snapshot time (for the Rerun overlay)
+
+
+def local_data(stem, tag):
+    return f"{run_dir()}/{stem}_{tag}.data.json"
+
+
 def job_snap_far():
     STATE["run_id"] = datetime.now().strftime("%Y%m%d_%H%M%S")
     STATE["far"], STATE["close"], STATE["plans"] = {}, {}, {}
+    rr_log("clear")
     stem = snap("far")
     files = export_cloud(stem, "far")
     STATE["far"] = {"stem": stem, "cloud": files["data"], "pred": None}
+    rr_log("far", tvb=TVB.get(stem), data=local_data(stem, "far"))
     STATE["stage"] = "far_ready"
 
 
@@ -171,6 +213,7 @@ def job_predict_far(prompt):
         far_type = "unknown"
     far.update({"prompt": prompt, "cloud": files["data"], "pred": files["pred_local"], "pred_pod": files["pred_pod"], "type": far_type})
     log(f"[far] EgoArt type: {far_type}")
+    rr_log("far", tvb=TVB.get(far["stem"]), data=local_data(far["stem"], "farpred"))
     STATE["stage"] = "far_predicted"
 
 
@@ -183,6 +226,8 @@ def job_accept_far():
         log(f"[standoff] {line}")
     so = json.loads(ssh(SPOT, f"cat {SPOT_WS}/standoff.json"))
     STATE["plans"]["standoff"] = so
+    json.dump(so, open(f"{run_dir()}/standoff.json", "w"), indent=1)
+    rr_log("standoff", tvb=TVB.get(far["stem"]), standoff=f"{run_dir()}/standoff.json")
     gx, gy, gyaw = so["goal_body_xy_yaw_deg"]
     # 2. walk
     log(f"[walk] {'MOVING' if moves else 'dry run'}: walkto {gx:.3f} {gy:.3f} {gyaw:.1f}")
@@ -220,6 +265,7 @@ def job_predict_close():
     except Exception:
         detected, ang = None, None
     close.update({"prompt": CLOSE_PROMPT, "cloud": files["data"], "pred": files["pred_local"], "handle_detected": detected})
+    rr_log("close", tvb=TVB.get(close["stem"]), data=local_data(close["stem"], "closerecal"))
     log(f"[close] handle bar from the mask: {detected or 'undetermined'}" + (f" ({ang:.0f} deg in the image)" if ang is not None else ""))
     STATE["stage"] = "close_predicted"
 
@@ -238,6 +284,8 @@ def job_accept_close():
         log(f"[plan] {line}")
     if "OUT OF REACH" in txt or "WARNING" in txt:
         log("[plan] reach warning present: check the numbers above before enabling moves")
+    open(f"{run_dir()}/traj_web.json", "w").write(ssh(SPOT, f"cat {SPOT_WS}/traj_web.json"))
+    rr_log("plan", tvb=TVB.get(close["stem"]), traj=f"{run_dir()}/traj_web.json")
     if moves:
         log("[home] MOVING: go home -> " + spotctl("go home"))
         time.sleep(0.5)
@@ -308,6 +356,7 @@ class H(BaseHTTPRequestHandler):
                     raise RuntimeError(f"busy with {STATE['busy']}; press STOP first or wait")
                 STATE.update({"stage": "idle", "run_id": None, "far": {}, "close": {}, "plans": {}, "error": None})
                 log("reset: state cleared (robot untouched, moves switch unchanged)")
+                rr_log("clear")
                 return self._send(200, {"ok": True})
             if u.path == "/api/home":
                 if not STATE["moves_enabled"]:
