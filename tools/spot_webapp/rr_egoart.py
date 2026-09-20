@@ -103,7 +103,8 @@ def log_standoff(so, T_vb):
     T_bg = np.eye(4); T_bg[:3, :3] = [[c, -s, 0], [s, c, 0], [0, 0, 1]]; T_bg[:3, 3] = [x, y, 0.0]
     T_wg = T_vb @ T_bg
     col = COL["goal"]
-    rr.log(f"{base}/goal", rr.Transform3D(translation=T_wg[:3, 3], quaternion=rot_to_quat(T_wg[:3, :3]), axis_length=0.3))
+    rr.log(f"{base}/goal", rr.Transform3D(translation=T_wg[:3, 3], quaternion=rot_to_quat(T_wg[:3, :3])))
+    rr.log(f"{base}/goal/heading", rr.Arrows3D(origins=[[0.0, 0.0, 0.02]], vectors=[[0.6, 0.0, 0.0]], colors=col, radii=0.012, labels=["facing the door"], show_labels=False))
     rr.log(f"{base}/goal/footprint", rr.Boxes3D(centers=[[0.0, 0.0, 0.25]], half_sizes=[[0.55, 0.25, 0.25]], colors=col,
                                                 labels=[f"stand here: {np.hypot(x, y):.2f} m away, standoff {so['standoff_m']:.2f} m"], show_labels=False))
     here = T_vb[:3, 3].copy(); here[2] = T_wg[2, 3] + 0.02
