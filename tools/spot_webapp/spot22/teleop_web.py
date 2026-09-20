@@ -21,6 +21,9 @@ import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import faulthandler
+import signal
+faulthandler.register(signal.SIGUSR1, all_threads=True)   # `kill -USR1 <pid>` dumps every thread's Python stack to stderr (the tmux pane): the server deadlocked once (2026-09-20), all threads in futex wait
 from urllib.parse import parse_qs, urlparse
 
 import cv2
