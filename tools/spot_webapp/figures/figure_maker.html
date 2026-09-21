@@ -1,0 +1,191 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>EgoArt figure maker</title>
+<style>
+  :root { --bg: #0f1115; --panel: #181b21; --fg: #e6e6e6; --muted: #9aa3ad; --accent: #4f8cff; }
+  body { margin: 0; font: 13px/1.4 -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--fg); display: grid; grid-template-columns: 300px 1fr; height: 100vh; }
+  #side { background: var(--panel); padding: 14px; overflow-y: auto; border-right: 1px solid #262a33; }
+  h1 { font-size: 15px; margin: 0 0 10px; } h2 { font-size: 12px; color: var(--muted); margin: 16px 0 6px; text-transform: uppercase; letter-spacing: .04em; }
+  label { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 4px 0; }
+  input[type=number], select { width: 110px; background: #0f1115; color: var(--fg); border: 1px solid #333; border-radius: 4px; padding: 3px 6px; }
+  input[type=color] { width: 40px; height: 22px; border: none; background: none; padding: 0; }
+  button { background: #262a33; color: var(--fg); border: 1px solid #3a3f4a; border-radius: 5px; padding: 6px 10px; cursor: pointer; margin: 3px 3px 3px 0; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  #view { position: relative; overflow: hidden; } canvas { display: block; width: 100%; height: 100%; }
+  #status { position: absolute; left: 12px; bottom: 10px; color: #cfd6de; background: rgba(0,0,0,.45); padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+  #photo { position: absolute; right: 12px; top: 12px; width: 220px; border: 1px solid #444; border-radius: 4px; opacity: .9; }
+  .hint { color: var(--muted); font-size: 11px; margin-top: 6px; }
+</style>
+<div id="side">
+  <h1>EgoArt figure maker</h1>
+  <label>session <select id="sess"></select></label>
+  <div class="hint" id="prompt"></div>
+  <h2>Show</h2>
+  <label>point cloud <input type="checkbox" id="shCloud" checked></label>
+  <label>handle mask <input type="checkbox" id="shMask" checked></label>
+  <label>trajectory <input type="checkbox" id="shTraj" checked></label>
+  <label>hinge / slide axis <input type="checkbox" id="shAxis" checked></label>
+  <label>hinge point <input type="checkbox" id="shHinge" checked></label>
+  <label>contact point <input type="checkbox" id="shContact" checked></label>
+  <label>camera frustum <input type="checkbox" id="shFrustum" checked></label>
+  <label>photo in frustum <input type="checkbox" id="shPhoto"></label>
+  <label>axes helper <input type="checkbox" id="shAxes"></label>
+  <h2>Style</h2>
+  <label>background <select id="bgMode"><option value="white">white</option><option value="dark">dark</option><option value="transparent">transparent</option></select></label>
+  <label>point size (mm) <input type="number" id="ptSize" value="9" step="1" min="1"></label>
+  <label>max depth (m) <input type="number" id="maxDepth" value="4" step="0.25" min="0.5"></label>
+  <label>tube radius (mm) <input type="number" id="tubeR" value="8" step="1" min="1"></label>
+  <label>contact radius (mm) <input type="number" id="contactR" value="22" step="2" min="2"></label>
+  <label>axis length (m) <input type="number" id="axisLen" value="0.7" step="0.1" min="0.1"></label>
+  <label>frustum depth (m) <input type="number" id="frustumD" value="0.25" step="0.05" min="0.05"></label>
+  <label>trajectory <input type="color" id="cTraj" value="#3ddc84"></label>
+  <label>axis <input type="color" id="cAxis" value="#f5c518"></label>
+  <label>contact <input type="color" id="cContact" value="#ff4d6d"></label>
+  <label>mask points <input type="color" id="cMask" value="#ff7b00"></label>
+  <label>frustum <input type="color" id="cFrustum" value="#7f8c9a"></label>
+  <label>field of view (deg) <input type="number" id="fov" value="45" step="1" min="10" max="120"></label>
+  <h2>Camera</h2>
+  <button id="bReset">reset view</button><button id="bLoadCam">reload saved</button><button id="bCopyCam">copy to all sessions</button>
+  <div class="hint">orbit: drag · pan: right-drag / shift-drag · zoom: wheel</div>
+  <h2>Export</h2>
+  <label>width (px) <input type="number" id="outW" value="3840" step="10"></label>
+  <label>height (px) <input type="number" id="outH" value="2160" step="10"></label>
+  <button class="primary" id="bSave">Save PNG + camera</button>
+  <button id="bSaveCam">Save camera only</button>
+  <div class="hint" id="saved"></div>
+</div>
+<div id="view"><img id="photo" hidden><div id="status">loading…</div></div>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+const $ = id => document.getElementById(id);
+const V = a => new THREE.Vector3(a[0], a[1], a[2]);
+function b64f32(s) { const b = atob(s), a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return new Float32Array(a.buffer); }
+function b64u8(s) { const b = atob(s), a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+
+const view = $('view'), canvas = document.createElement('canvas'); view.insertBefore(canvas, view.firstChild);
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(devicePixelRatio);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100); camera.up.set(0, -1, 0);
+const controls = new OrbitControls(camera, canvas); controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x666666, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(-1, -2, -1.5); scene.add(sun);
+const axes = new THREE.AxesHelper(0.25); scene.add(axes);
+const overlay = new THREE.Group(); scene.add(overlay);
+let cloud = null, D = null, sessions = [], cur = null;
+
+function resize() { const w = view.clientWidth, h = view.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(view); resize();
+(function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+
+const mat = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.05 });
+function tube(points, r, color) { return new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(V)), Math.max(16, points.length * 6), r, 16, false), mat(color)); }
+function sphere(p, r, color) { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 32, 24), mat(color)); m.position.copy(V(p)); return m; }
+function cone(tip, dir, len, r, color) { const m = new THREE.Mesh(new THREE.ConeGeometry(r, len, 24), mat(color)); const d = V(dir).normalize(); m.position.copy(V(tip).sub(d.clone().multiplyScalar(len / 2))); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d); return m; }
+function lines(segs, color, width) { const g = new THREE.BufferGeometry().setFromPoints(segs.map(V)); return new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color, linewidth: width })); }
+
+function style() {
+  return { bg: $('bgMode').value, ptSize: +$('ptSize').value, maxDepth: +$('maxDepth').value, tubeR: +$('tubeR').value, contactR: +$('contactR').value, axisLen: +$('axisLen').value, frustumD: +$('frustumD').value,
+           cTraj: $('cTraj').value, cAxis: $('cAxis').value, cContact: $('cContact').value, cMask: $('cMask').value, cFrustum: $('cFrustum').value, fov: +$('fov').value,
+           show: Object.fromEntries(['Cloud', 'Mask', 'Traj', 'Axis', 'Hinge', 'Contact', 'Frustum', 'Photo', 'Axes'].map(k => [k, $('sh' + k).checked])) };
+}
+function applyStyle(s) {
+  if (!s) return;
+  for (const k of ['bgMode', 'ptSize', 'maxDepth', 'tubeR', 'contactR', 'axisLen', 'frustumD', 'cTraj', 'cAxis', 'cContact', 'cMask', 'cFrustum', 'fov']) { const key = k === 'bgMode' ? 'bg' : k; if (s[key] !== undefined) $(k).value = s[key]; }
+  if (s.show) for (const k in s.show) if ($('sh' + k)) $('sh' + k).checked = s.show[k];
+}
+function cameraState() { return { position: camera.position.toArray(), target: controls.target.toArray(), up: camera.up.toArray(), fov: camera.fov }; }
+function applyCamera(c) { if (!c) return; camera.position.fromArray(c.position); controls.target.fromArray(c.target); if (c.up) camera.up.fromArray(c.up); if (c.fov) { camera.fov = c.fov; $('fov').value = c.fov; } camera.updateProjectionMatrix(); controls.update(); }
+
+function rebuild() {
+  if (!D) return;
+  const s = style();
+  scene.background = s.bg === 'dark' ? new THREE.Color(0x0f1115) : s.bg === 'white' ? new THREE.Color(0xffffff) : null;
+  axes.visible = s.show.Axes;
+  camera.fov = s.fov; camera.updateProjectionMatrix();
+  if (cloud) { scene.remove(cloud); cloud.geometry.dispose(); cloud = null; }
+  overlay.clear();
+  const xyz = b64f32(D.xyz_b64), rgb = b64u8(D.rgb_b64), p = D.preds && D.preds[0];
+  const maskSet = new Set(p && s.show.Mask ? p.mask_idx : []);
+  const mc = new THREE.Color(s.cMask);
+  const pos = [], col = [];
+  for (let i = 0; i < xyz.length / 3; i++) {
+    if (xyz[3 * i + 2] > s.maxDepth) continue;
+    if (!s.show.Cloud && !maskSet.has(i)) continue;
+    pos.push(xyz[3 * i], xyz[3 * i + 1], xyz[3 * i + 2]);
+    if (maskSet.has(i)) col.push(mc.r, mc.g, mc.b); else col.push(rgb[3 * i] / 255, rgb[3 * i + 1] / 255, rgb[3 * i + 2] / 255);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  cloud = new THREE.Points(g, new THREE.PointsMaterial({ size: s.ptSize / 1000, sizeAttenuation: true, vertexColors: true })); scene.add(cloud);
+  if (p) {
+    const a = p.anchor, d = p.axis, R = s.tubeR / 1000;
+    if (s.show.Axis) {
+      if (p.type === 'revolute' && p.origin) { const o = p.origin, L = s.axisLen / 2; overlay.add(tube([[o[0] - d[0] * L, o[1] - d[1] * L, o[2] - d[2] * L], [o[0] + d[0] * L, o[1] + d[1] * L, o[2] + d[2] * L]], R * 0.8, s.cAxis)); }
+      else { const L = s.axisLen; overlay.add(tube([a, [a[0] + d[0] * L, a[1] + d[1] * L, a[2] + d[2] * L]], R * 0.8, s.cAxis)); overlay.add(cone([a[0] + d[0] * L, a[1] + d[1] * L, a[2] + d[2] * L], d, R * 6, R * 2.5, s.cAxis)); }
+    }
+    if (s.show.Hinge && p.type === 'revolute' && p.origin) overlay.add(sphere(p.origin, s.contactR / 1000 * 0.8, s.cAxis));
+    if (s.show.Traj && p.traj && p.traj.length > 1) { overlay.add(tube(p.traj, R, s.cTraj)); const n = p.traj.length, e = p.traj[n - 1], q = p.traj[n - 2]; overlay.add(cone(e, [e[0] - q[0], e[1] - q[1], e[2] - q[2]], R * 7, R * 3, s.cTraj)); }
+    if (s.show.Contact) overlay.add(sphere(a, s.contactR / 1000, s.cContact));
+  }
+  if (s.show.Frustum) {
+    const K = D.K, fx = K[0][0], fy = K[1][1], cx = K[0][2], cy = K[1][2], z = s.frustumD;
+    const c = [[(0 - cx) / fx * z, (0 - cy) / fy * z, z], [(D.w - cx) / fx * z, (0 - cy) / fy * z, z], [(D.w - cx) / fx * z, (D.h - cy) / fy * z, z], [(0 - cx) / fx * z, (D.h - cy) / fy * z, z]];
+    const o = [0, 0, 0];
+    overlay.add(lines([o, c[0], o, c[1], o, c[2], o, c[3], c[0], c[1], c[1], c[2], c[2], c[3], c[3], c[0]], s.cFrustum, 1));
+    for (const [p0, p1] of [[o, c[0]], [o, c[1]], [o, c[2]], [o, c[3]], [c[0], c[1]], [c[1], c[2]], [c[2], c[3]], [c[3], c[0]]]) overlay.add(tube([p0, p1], R * 0.35, s.cFrustum));
+    if (s.show.Photo) {
+      const tex = new THREE.TextureLoader().load('data:image/jpeg;base64,' + D.img_b64); tex.colorSpace = THREE.SRGBColorSpace;
+      const w = (c[1][0] - c[0][0]), h = (c[3][1] - c[0][1]);
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, transparent: true, opacity: 0.95 }));
+      plane.position.set((c[0][0] + c[1][0]) / 2, (c[0][1] + c[3][1]) / 2, z); plane.scale.y = -1; overlay.add(plane);
+    }
+  }
+  $('status').textContent = `${(pos.length / 3).toLocaleString()} pts` + (p ? ` · ${p.type}` + (p.turn_deg ? ` ${p.turn_deg}°` : p.slide_m ? ` ${Math.round(p.slide_m * 100)} cm` : '') + ` · contact from ${p.contact_from}` : '');
+}
+function resetView() {
+  if (!cloud) return; cloud.geometry.computeBoundingSphere(); const bs = cloud.geometry.boundingSphere;
+  controls.target.copy(bs.center); camera.position.set(bs.center.x + .4 * bs.radius, bs.center.y - .9 * bs.radius, bs.center.z - 2.0 * bs.radius); camera.lookAt(bs.center); controls.update();
+}
+
+async function loadSession(name) {
+  cur = sessions.find(x => x.name === name); if (!cur) return;
+  $('prompt').textContent = cur.prompt + (cur.png ? ' · saved: ' + cur.png : '');
+  $('status').textContent = 'loading ' + name + '…';
+  D = await (await fetch(cur.data)).json();
+  $('photo').src = 'data:image/jpeg;base64,' + D.img_b64; $('photo').hidden = false;
+  if (cur.camera) { applyStyle(cur.camera.style); rebuild(); applyCamera(cur.camera.camera); } else { rebuild(); resetView(); }
+}
+async function save(withPng) {
+  const body = { name: cur.name, camera: { camera: cameraState(), style: style() } };
+  if (withPng) {
+    const W = +$('outW').value, H = +$('outH').value, w0 = view.clientWidth, h0 = view.clientHeight, pr = renderer.getPixelRatio();
+    const scale = W / (w0 * pr);
+    renderer.setPixelRatio(1); renderer.setSize(W, H, false); camera.aspect = W / H; camera.updateProjectionMatrix();
+    cloud.material.size *= 1; // world-size points: unchanged
+    overlay.traverse(o => { if (o.isLineSegments) o.material.linewidth *= scale; });
+    renderer.render(scene, camera);
+    body.png_b64 = renderer.domElement.toDataURL('image/png');
+    renderer.setPixelRatio(pr); renderer.setSize(w0, h0, false); camera.aspect = w0 / h0; camera.updateProjectionMatrix();
+  }
+  const r = await (await fetch('/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
+  $('saved').textContent = r.ok ? 'saved ' + [r.png, r.camera].filter(Boolean).join(' + ') + ' at ' + new Date().toLocaleTimeString() : 'error: ' + r.error;
+  cur.camera = body.camera; if (r.png) cur.png = r.png.split('/').pop();
+}
+$('sess').onchange = e => loadSession(e.target.value);
+for (const el of document.querySelectorAll('#side input, #side select')) if (el.id !== 'sess' && !el.id.startsWith('out')) el.addEventListener('input', rebuild);
+$('bReset').onclick = resetView;
+$('bLoadCam').onclick = () => { if (cur.camera) { applyStyle(cur.camera.style); rebuild(); applyCamera(cur.camera.camera); } };
+$('bCopyCam').onclick = async () => { const c = { camera: cameraState(), style: style() }; for (const s of sessions) { await fetch('/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: s.name, camera: c }) }); s.camera = c; } $('saved').textContent = 'camera + style copied to all ' + sessions.length + ' sessions'; };
+$('bSave').onclick = () => save(true);
+$('bSaveCam').onclick = () => save(false);
+(async () => {
+  sessions = await (await fetch('/index.json')).json();
+  $('sess').innerHTML = sessions.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+  if (sessions.length) loadSession(sessions[0].name);
+})();
+</script>
