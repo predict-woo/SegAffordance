@@ -45,8 +45,11 @@
   <label>frustum <input type="color" id="cFrustum" value="#7f8c9a"></label>
   <label>field of view (deg) <input type="number" id="fov" value="45" step="1" min="10" max="120"></label>
   <h2>Camera</h2>
+  <label>mode <select id="mode"><option value="orbit">orbit</option><option value="fly">fly (Minecraft)</option></select></label>
+  <label>fly speed (m/s) <input type="number" id="flySpeed" value="1.0" step="0.25" min="0.05"></label>
+  <label>mouse sensitivity <input type="number" id="flySens" value="0.2" step="0.05" min="0.02"></label>
   <button id="bReset">reset view</button><button id="bLoadCam">reload saved</button><button id="bCopyCam">copy to all sessions</button>
-  <div class="hint">orbit: drag · pan: right-drag / shift-drag · zoom: wheel</div>
+  <div class="hint" id="modeHint">orbit: drag · pan: right-drag / shift-drag · zoom: wheel · press F to toggle fly mode</div>
   <h2>Export</h2>
   <label>width (px) <input type="number" id="outW" value="3840" step="10"></label>
   <label>height (px) <input type="number" id="outH" value="2160" step="10"></label>
@@ -81,7 +84,55 @@ let cloud = null, D = null, sessions = [], cur = null;
 
 function resize() { const w = view.clientWidth, h = view.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 new ResizeObserver(resize).observe(view); resize();
-(function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+// ---- fly mode (Minecraft controls): WASD move, space up, shift down, mouse look (click the view to lock the pointer, Esc releases)
+const keys = new Set(); let fly = false, yaw = 0, pitch = 0, lastT = performance.now();
+const WORLD_UP = new THREE.Vector3(0, -1, 0);           // camera-frame data: y points down, so "up" is -y
+function setMode(m) {
+  fly = m === 'fly'; $('mode').value = m; controls.enabled = !fly;
+  if (fly) {
+    const d = new THREE.Vector3(); camera.getWorldDirection(d);
+    yaw = Math.atan2(d.x, d.z); pitch = Math.asin(THREE.MathUtils.clamp(-d.y, -1, 1));
+    $('modeHint').textContent = 'fly: click the view to capture the mouse · W/S forward/back · A/D strafe · space up · shift down · Esc releases · F back to orbit';
+  } else {
+    const d = new THREE.Vector3(); camera.getWorldDirection(d); controls.target.copy(camera.position).add(d.multiplyScalar(2.0)); controls.update();
+    if (document.pointerLockElement === canvas) document.exitPointerLock();
+    $('modeHint').textContent = 'orbit: drag · pan: right-drag / shift-drag · zoom: wheel · press F to toggle fly mode';
+  }
+}
+function flyLook() {
+  pitch = THREE.MathUtils.clamp(pitch, -Math.PI / 2 + 0.01, Math.PI / 2 - 0.01);
+  const d = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+  camera.lookAt(camera.position.clone().add(d));
+}
+const typing = () => ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement && document.activeElement.tagName);
+window.addEventListener('keydown', e => {
+  if (typing()) return;
+  if (e.code === 'KeyF') { setMode(fly ? 'orbit' : 'fly'); return; }
+  keys.add(e.code); if (fly && (e.code === 'Space' || e.code.startsWith('Shift'))) e.preventDefault();
+});
+window.addEventListener('keyup', e => keys.delete(e.code));
+window.addEventListener('blur', () => keys.clear());
+canvas.addEventListener('mousedown', () => { if (fly && document.pointerLockElement !== canvas) canvas.requestPointerLock(); });
+window.addEventListener('mousemove', e => {
+  if (!fly) return;
+  const locked = document.pointerLockElement === canvas;
+  if (!locked && !(e.buttons & 1)) return;
+  const s = (+$('flySens').value || 0.2) * 0.005;
+  yaw -= e.movementX * s; pitch += e.movementY * s; flyLook();
+});
+$('mode').onchange = e => setMode(e.target.value);
+function flyStep(dt) {
+  const v = (+$('flySpeed').value || 1) * dt * (keys.has('ControlLeft') || keys.has('ControlRight') ? 3 : 1);
+  const d = new THREE.Vector3(); camera.getWorldDirection(d);
+  const fwd = new THREE.Vector3(d.x, 0, d.z).normalize();                 // Minecraft: walking ignores pitch
+  const right = new THREE.Vector3().crossVectors(fwd, WORLD_UP).normalize();
+  const m = new THREE.Vector3();
+  if (keys.has('KeyW')) m.add(fwd); if (keys.has('KeyS')) m.sub(fwd);
+  if (keys.has('KeyD')) m.add(right); if (keys.has('KeyA')) m.sub(right);
+  if (keys.has('Space')) m.add(WORLD_UP); if (keys.has('ShiftLeft') || keys.has('ShiftRight')) m.sub(WORLD_UP);
+  if (m.lengthSq() > 0) { camera.position.add(m.normalize().multiplyScalar(v)); flyLook(); }
+}
+(function loop() { const t = performance.now(), dt = Math.min(0.1, (t - lastT) / 1000); lastT = t; if (fly) flyStep(dt); else controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
 
 const mat = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.05 });
 function tube(points, r, color) { return new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(V)), Math.max(16, points.length * 6), r, 16, false), mat(color)); }
@@ -99,8 +150,8 @@ function applyStyle(s) {
   for (const k of ['bgMode', 'ptSize', 'maxDepth', 'tubeR', 'contactR', 'axisLen', 'frustumD', 'cTraj', 'cAxis', 'cContact', 'cMask', 'cFrustum', 'fov']) { const key = k === 'bgMode' ? 'bg' : k; if (s[key] !== undefined) $(k).value = s[key]; }
   if (s.show) for (const k in s.show) if ($('sh' + k)) $('sh' + k).checked = s.show[k];
 }
-function cameraState() { return { position: camera.position.toArray(), target: controls.target.toArray(), up: camera.up.toArray(), fov: camera.fov }; }
-function applyCamera(c) { if (!c) return; camera.position.fromArray(c.position); controls.target.fromArray(c.target); if (c.up) camera.up.fromArray(c.up); if (c.fov) { camera.fov = c.fov; $('fov').value = c.fov; } camera.updateProjectionMatrix(); controls.update(); }
+function cameraState() { if (fly) { const d = new THREE.Vector3(); camera.getWorldDirection(d); controls.target.copy(camera.position).add(d.multiplyScalar(2.0)); } return { position: camera.position.toArray(), target: controls.target.toArray(), up: camera.up.toArray(), fov: camera.fov }; }
+function applyCamera(c) { if (!c) return; camera.position.fromArray(c.position); controls.target.fromArray(c.target); if (c.up) camera.up.fromArray(c.up); if (c.fov) { camera.fov = c.fov; $('fov').value = c.fov; } camera.updateProjectionMatrix(); if (fly) { camera.lookAt(controls.target); const d = new THREE.Vector3(); camera.getWorldDirection(d); yaw = Math.atan2(d.x, d.z); pitch = Math.asin(THREE.MathUtils.clamp(-d.y, -1, 1)); } else controls.update(); }
 
 function rebuild() {
   if (!D) return;
