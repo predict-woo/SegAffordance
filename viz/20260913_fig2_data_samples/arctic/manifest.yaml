@@ -1,0 +1,17 @@
+command: tools/viz_data_samples.py --dataset arctic --num 10 --out viz/20260913_fig2_data_samples/arctic
+tool_commit: 8064b3f
+generated: '2026-09-13T07:29:49+00:00'
+dataset: arctic
+split: val
+seed: 0
+keys:
+- s01_waffleiron/waffleiron_use_02_s01_f00140
+- s07_phone/phone_use_01_s00_f00093
+- s02_laptop/laptop_use_02_s03_f00443
+- s07_notebook/notebook_use_02_s05_f00302
+- s01_capsulemachine/capsulemachine_use_02_s06_f00416
+- s04_laptop/laptop_use_01_s01_f00080
+- s06_phone/phone_use_01_s01_f00115
+- s05_box/box_use_02_s04_f00492
+- s09_scissors/scissors_use_01_s01_f00138
+- s08_espressomachine/espressomachine_use_03_s00_f00039

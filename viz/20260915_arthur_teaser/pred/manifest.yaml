@@ -1,0 +1,16 @@
+command: tools/teaser_predict_dump.py --model dense config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
+  --idx 1773 4233 1246 283 501 1140 --out viz/20260915_arthur_teaser/pred
+tool_commit: 354c75f
+generated: '2026-09-15T00:25:25+00:00'
+model:
+  name: dense
+  config: config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  ckpt: experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
+indices:
+- 1773
+- 4233
+- 1246
+- 283
+- 501
+- 1140

@@ -1,0 +1,72 @@
+command: tools/hoi4d_predict_articulation.py --dataset epic --model dense config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
+  --model sf3d_only config/sf3d_test_decoder_rgb_scalefree_dense.yaml experiments/20260913_sf3d_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval1.1144.ckpt
+  --num 53 --per-seq 30 --seed 5 --scale 1 --out viz/20260916_epic_test_dump --dump
+  viz/20260916_epic_test_dump/preds.jsonl
+tool_commit: 00fd709
+generated: '2026-09-15T16:47:58+00:00'
+models:
+- name: dense
+  config: config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  ckpt: experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
+- name: sf3d_only
+  config: config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  ckpt: experiments/20260913_sf3d_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval1.1144.ckpt
+dataset: epic
+seed: 5
+picks:
+- 223
+- 82
+- 247
+- 56
+- 341
+- 228
+- 236
+- 60
+- 155
+- 279
+- 205
+- 9
+- 290
+- 161
+- 291
+- 226
+- 225
+- 81
+- 246
+- 57
+- 229
+- 237
+- 63
+- 277
+- 206
+- 8
+- 289
+- 159
+- 292
+- 227
+- 224
+- 84
+- 62
+- 278
+- 157
+- 294
+- 83
+- 58
+- 273
+- 158
+- 295
+- 79
+- 65
+- 275
+- 156
+- 293
+- 80
+- 61
+- 276
+- 160
+- 64
+- 274
+- 59
+dump: viz/20260916_epic_test_dump/preds.jsonl
+export: null

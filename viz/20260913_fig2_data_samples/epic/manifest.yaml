@@ -1,0 +1,17 @@
+command: tools/viz_data_samples.py --dataset epic --num 10 --out viz/20260913_fig2_data_samples/epic
+tool_commit: 8064b3f
+generated: '2026-09-13T07:29:37+00:00'
+dataset: epic
+split: val
+seed: 0
+keys:
+- P02_09/P02_09_20
+- P20_03/P20_03_15
+- P02_121/P02_121_58
+- P18_02/P18_02_28
+- P01_03/P01_03_4
+- P04_33/P04_33_18
+- P11_103/P11_103_45
+- P06_05/P06_05_125
+- P24_08/P24_08_77
+- P22_107/P22_107_148

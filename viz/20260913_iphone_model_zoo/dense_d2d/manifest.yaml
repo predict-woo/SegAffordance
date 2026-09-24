@@ -1,0 +1,22 @@
+command: tools/predict_image.py --model dense_d2d config/joint4_decoder_l2anchor_dense_d2d.yaml
+  experiments/20260913_joint4_decoder_l2anchor_dense_d2d/checkpoints/best-epoch13-sf3dval1.0920.ckpt
+  --case viz/20260911_iphone_probe/inputs/IMG_0876.jpg open door --case viz/20260911_iphone_probe/inputs/IMG_0874.jpg
+  close laptop --case viz/20260911_iphone_probe/inputs/IMG_0877.jpg open closet --case
+  viz/20260911_iphone_probe/inputs/IMG_0875.jpg push chair forward --out viz/20260913_iphone_model_zoo/dense_d2d
+  --f35 26
+tool_commit: b2c8ddd
+generated: '2026-09-12T22:50:24+00:00'
+models:
+- name: dense_d2d
+  config: config/joint4_decoder_l2anchor_dense_d2d.yaml
+  ckpt: experiments/20260913_joint4_decoder_l2anchor_dense_d2d/checkpoints/best-epoch13-sf3dval1.0920.ckpt
+cases:
+- image: viz/20260911_iphone_probe/inputs/IMG_0876.jpg
+  prompt: open door
+- image: viz/20260911_iphone_probe/inputs/IMG_0874.jpg
+  prompt: close laptop
+- image: viz/20260911_iphone_probe/inputs/IMG_0877.jpg
+  prompt: open closet
+- image: viz/20260911_iphone_probe/inputs/IMG_0875.jpg
+  prompt: push chair forward
+f35: 26.0

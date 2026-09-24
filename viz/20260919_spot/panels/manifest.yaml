@@ -1,0 +1,24 @@
+command: tools/viz_photo_panels.py --dump viz/20260919_spot/preds.jsonl --models sf3d_only,dense
+  --idx 0 1 2 3 4 5 6 7 8 9 10 11 12 13 --out viz/20260919_spot/panels --aspect 1.33333
+tool_commit: 59c8531
+generated: '2026-09-18T22:16:53+00:00'
+dump: viz/20260919_spot/preds.jsonl
+models:
+- sf3d_only
+- dense
+picks:
+- 0
+- 1
+- 2
+- 3
+- 4
+- 5
+- 6
+- 7
+- 8
+- 9
+- 10
+- 11
+- 12
+- 13
+aspect: 1.33333

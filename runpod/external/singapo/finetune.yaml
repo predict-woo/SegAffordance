@@ -1,0 +1,90 @@
+# Matched fine-tune config (both arms). Arm-specific overrides via CLI:
+#   theirs: name=ft_theirs system.name=sys_singapo
+#   ours:   name=ft_ours   system.name=sys_singapo_screw system.screw_weight=<λ>
+name: ft
+version: v1
+seed: 42
+
+data:
+  name: dm_singapo
+  root: ../../data
+  batch_size: 20
+  num_workers: 8
+  K: 32
+  split_file: data/data_split.json
+
+system:
+  name: sys_singapo
+  exp_dir: exps/${name}/${version}
+  data_root: ${data.root}
+  n_time_samples: 16
+  loss_fg_weight: 0.01
+  img_drop_prob: 0.1
+  guidance_scaler: 0.5
+  graph_drop_prob: 0.5
+  # screw-loss knobs (ignored by sys_singapo)
+  screw_weight: 0.0
+  screw_w_h1: 1.0
+  screw_w_pos: 0.0
+  screw_w_anchor: 0.5
+  screw_min_radius: 0.05
+  screw_snr_gamma: 5.0
+  screw_detach_point: true
+
+  model:
+    name: denoiser
+    in_ch: 6
+    attn_dim: 128
+    n_head: 4
+    n_layers: 6
+    dropout: 0.1
+    K: ${data.K}
+    img_emb_dims: [768, 128]
+    cat_drop_prob: 0.5
+
+  scheduler:
+    name: ddpm
+    config:
+      num_train_timesteps: 1000
+      beta_schedule: linear
+      prediction_type: epsilon
+
+  # constant low LR: warmup_start_lr = eta_min = lr (0.1x their initial;
+  # equals their final eta_min for the base model)
+  lr_scheduler_adapter:
+    name: LinearWarmupCosineAnnealingLR
+    warmup_epochs: 2
+    max_epochs: ${trainer.max_epochs}
+    warmup_start_lr: 5e-5
+    eta_min: 5e-5
+  optimizer_adapter:
+    name: AdamW
+    args: {lr: 5e-5, betas: [0.9, 0.99], eps: 1.e-15}
+  lr_scheduler_cage:
+    name: LinearWarmupCosineAnnealingLR
+    warmup_epochs: 2
+    max_epochs: ${trainer.max_epochs}
+    warmup_start_lr: 1e-5
+    eta_min: 1e-5
+  optimizer_cage:
+    name: AdamW
+    args: {lr: 1e-5, betas: [0.9, 0.99], eps: 1.e-15}
+
+checkpoint:
+  dirpath: ${system.exp_dir}/ckpts
+  save_top_k: -1
+  every_n_epochs: 5
+  save_last: true
+  save_on_train_epoch_end: true   # no validation in this run -> must save at train epoch end
+
+logger:
+  save_dir: ${system.exp_dir}/logs
+
+trainer:
+  max_epochs: 20
+  log_every_n_steps: 50
+  limit_train_batches: 1.0
+  limit_val_batches: 0   # their val loader has only 4 batches; validation is via the full test eval
+  check_val_every_n_epoch: 1000
+  precision: 16-mixed
+  num_sanity_val_steps: 0

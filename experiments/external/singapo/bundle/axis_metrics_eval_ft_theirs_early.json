@@ -1,0 +1,17 @@
+{
+ "n_inputs": 154,
+ "avg": {
+  "angle_unsigned_deg": 12.935234929354872,
+  "angle_signed_deg": 12.940491810719875,
+  "flip": 0.04696969696969697,
+  "origin_line_dist": 0.31122656125014264,
+  "type_ok": 0.8489177489177491
+ },
+ "best": {
+  "angle_unsigned_deg": 7.267368038167282,
+  "angle_signed_deg": 7.273897464226717,
+  "flip": 0.03733766233766234,
+  "origin_line_dist": 0.2758832405553639,
+  "type_ok": 0.906926406926407
+ }
+}

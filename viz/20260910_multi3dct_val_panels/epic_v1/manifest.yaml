@@ -1,0 +1,18 @@
+command: tools/hoi4d_vis_2d_panels.py --config config/epic_v1_rgb_scalefree.yaml --ckpt
+  experiments/20260910_multi3_dct_rgb_scalefree/checkpoints/best-epoch11-valloss0.4161.ckpt
+  --set trajectory_dct_coeffs=6 --out viz/20260910_multi3dct_val_panels/epic_v1 --num
+  12
+tool_commit: 3b63c3c
+generated: '2026-09-09T18:42:24+00:00'
+argv:
+- tools/hoi4d_vis_2d_panels.py
+- --config
+- config/epic_v1_rgb_scalefree.yaml
+- --ckpt
+- experiments/20260910_multi3_dct_rgb_scalefree/checkpoints/best-epoch11-valloss0.4161.ckpt
+- --set
+- trajectory_dct_coeffs=6
+- --out
+- viz/20260910_multi3dct_val_panels/epic_v1
+- --num
+- '12'

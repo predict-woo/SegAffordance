@@ -1,0 +1,22 @@
+command: tools/hoi4d_vis_2d_panels.py --config config/epic_v1_rgb_scalefree.yaml --ckpt
+  experiments/20260911_joint4_decoder_rgb_scalefree/checkpoints/best-epoch16-sf3dval1.0089.ckpt
+  --out viz/20260912_joint_decoder_panels/epic_v1 --num 8 --seed 5 --set use_trajectory_head=false
+  --set trajectory_decoder=analytic
+tool_commit: 08c99d5
+generated: '2026-09-11T04:27:41+00:00'
+argv:
+- tools/hoi4d_vis_2d_panels.py
+- --config
+- config/epic_v1_rgb_scalefree.yaml
+- --ckpt
+- experiments/20260911_joint4_decoder_rgb_scalefree/checkpoints/best-epoch16-sf3dval1.0089.ckpt
+- --out
+- viz/20260912_joint_decoder_panels/epic_v1
+- --num
+- '8'
+- --seed
+- '5'
+- --set
+- use_trajectory_head=false
+- --set
+- trajectory_decoder=analytic

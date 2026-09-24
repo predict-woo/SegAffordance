@@ -1,0 +1,9 @@
+command: tools/sf3d_vis_val.py --model dense_seed7 config/joint4_decoder_l2anchor_dense_seed7.yaml
+  experiments/20260913_joint4_decoder_l2anchor_dense_seed7/checkpoints/best-epoch19-sf3dval1.0205.ckpt
+  --out viz/20260914_sf3d_model_zoo/dense_seed7 --num 20 --seed 3
+tool_commit: b18edf2
+generated: '2026-09-14T10:57:00+00:00'
+models:
+- name: dense_seed7
+  config: config/joint4_decoder_l2anchor_dense_seed7.yaml
+  ckpt: experiments/20260913_joint4_decoder_l2anchor_dense_seed7/checkpoints/best-epoch19-sf3dval1.0205.ckpt

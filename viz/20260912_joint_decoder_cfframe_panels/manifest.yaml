@@ -1,0 +1,13 @@
+command: tools/sf3d_vis_val.py --model cfframe config/sf3d_test_decoder_rgb_scalefree.yaml
+  experiments/20260912_joint4_decoder_cfframe/checkpoints/best-epoch17-sf3dval1.1178.ckpt
+  --model dec_base config/sf3d_test_decoder_rgb_scalefree.yaml experiments/20260911_joint4_decoder_rgb_scalefree/checkpoints/best-epoch16-sf3dval1.0089.ckpt
+  --out viz/20260912_joint_decoder_cfframe_panels --num 12 --seed 7
+tool_commit: 53851c4
+generated: '2026-09-11T09:10:48+00:00'
+models:
+- name: cfframe
+  config: config/sf3d_test_decoder_rgb_scalefree.yaml
+  ckpt: experiments/20260912_joint4_decoder_cfframe/checkpoints/best-epoch17-sf3dval1.1178.ckpt
+- name: dec_base
+  config: config/sf3d_test_decoder_rgb_scalefree.yaml
+  ckpt: experiments/20260911_joint4_decoder_rgb_scalefree/checkpoints/best-epoch16-sf3dval1.0089.ckpt

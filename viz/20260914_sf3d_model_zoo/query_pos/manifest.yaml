@@ -1,0 +1,9 @@
+command: tools/sf3d_vis_val.py --model query_pos config/joint4_decoder_l2anchor_query_pos.yaml
+  experiments/20260913_joint4_decoder_l2anchor_query_pos/checkpoints/best-epoch19-sf3dval1.1439.ckpt
+  --out viz/20260914_sf3d_model_zoo/query_pos --num 20 --seed 3
+tool_commit: b18edf2
+generated: '2026-09-14T10:42:52+00:00'
+models:
+- name: query_pos
+  config: config/joint4_decoder_l2anchor_query_pos.yaml
+  ckpt: experiments/20260913_joint4_decoder_l2anchor_query_pos/checkpoints/best-epoch19-sf3dval1.1439.ckpt

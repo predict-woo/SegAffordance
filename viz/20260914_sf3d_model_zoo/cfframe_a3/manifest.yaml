@@ -1,0 +1,9 @@
+command: tools/sf3d_vis_val.py --model cfframe_a3 experiments/20260912_joint4_decoder_cfframe_a3/config.yaml
+  experiments/20260912_joint4_decoder_cfframe_a3/checkpoints/best-epoch19-sf3dval1.2559.ckpt
+  --out viz/20260914_sf3d_model_zoo/cfframe_a3 --num 20 --seed 3
+tool_commit: b18edf2
+generated: '2026-09-14T10:18:23+00:00'
+models:
+- name: cfframe_a3
+  config: experiments/20260912_joint4_decoder_cfframe_a3/config.yaml
+  ckpt: experiments/20260912_joint4_decoder_cfframe_a3/checkpoints/best-epoch19-sf3dval1.2559.ckpt

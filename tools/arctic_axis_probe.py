@@ -129,15 +129,16 @@ def main():
                 point_off = float(np.linalg.norm(uv[0] - uv[1]))
             else:
                 point_off = float("nan")
-            rows[name].append((obj, unsigned, signed, p_rev, r, off, float(p3[2]), verb, point_off))
+            vq = q - og; hinge_line_m = float(np.linalg.norm(vq - np.dot(vq, dg) * dg))   # predicted hinge to the GT axis line, metres
+            rows[name].append((obj, unsigned, signed, p_rev, r, off, float(p3[2]), verb, point_off, hinge_line_m))
         if j % 50 == 0:
             print(f"{j}/{len(idxs)}", flush=True)
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     with open(a.out, "w") as f:
-        f.write("model,object,axis_unsigned_deg,axis_signed_deg,p_rev,radius_m,hinge_offset_frac,z_p,verb,hinge_point_offset_frac\n")
+        f.write("model,object,axis_unsigned_deg,axis_signed_deg,p_rev,radius_m,hinge_offset_frac,z_p,verb,hinge_point_offset_frac,hinge_line_m\n")
         for name, rs in rows.items():
             for r in rs:
-                f.write(f"{name},{r[0]},{r[1]:.3f},{r[2]:.3f},{r[3]:.4f},{r[4]:.4f},{r[5]:.4f},{r[6]:.3f},{r[7]},{r[8]:.4f}\n")
+                f.write(f"{name},{r[0]},{r[1]:.3f},{r[2]:.3f},{r[3]:.4f},{r[4]:.4f},{r[5]:.4f},{r[6]:.3f},{r[7]},{r[8]:.4f},{r[9]:.4f}\n")
     print(f"\n{len(next(iter(rows.values())))} revolute ARCTIC val records")
     print(f"{'model':14s} {'mean':>6s} {'med':>6s} {'<10':>5s} {'<20':>5s} {'flip':>5s} {'offs':>6s} {'poff':>6s} {'r_med':>6s} {'type':>5s}")
     print("  (signed metrics use the per-stroke GT sign: close strokes negate the stored object-fixed axis)")

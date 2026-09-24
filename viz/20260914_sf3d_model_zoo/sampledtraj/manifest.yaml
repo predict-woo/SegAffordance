@@ -1,0 +1,9 @@
+command: tools/sf3d_vis_val.py --model sampledtraj config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  experiments/20260914_joint4_decoder_dense_sampledtraj/checkpoints/best-epoch19-sf3dval1.1797.ckpt
+  --out viz/20260914_sf3d_model_zoo/sampledtraj --num 20 --seed 3
+tool_commit: b18edf2
+generated: '2026-09-14T11:14:43+00:00'
+models:
+- name: sampledtraj
+  config: config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  ckpt: experiments/20260914_joint4_decoder_dense_sampledtraj/checkpoints/best-epoch19-sf3dval1.1797.ckpt

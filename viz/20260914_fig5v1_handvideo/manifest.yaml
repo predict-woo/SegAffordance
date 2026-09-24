@@ -1,11 +1,12 @@
 command: tools/viz_fig4_panels.py --source hoi4d --baseline OPDFormer-C /workspace/datasets/baselines/results/opd512_c_rgbd/handvideo_preds_nearest.jsonl
   --baseline OPDFormer-P /workspace/datasets/baselines/results/opd512_p_rgb/handvideo_preds_nearest.jsonl
-  --baseline MOPD pending --baseline USDNet na --baseline A3VLM /workspace/datasets/baselines/results/a3vlm/handvideo_preds.jsonl
+  --baseline MOPD /workspace/datasets/baselines/results/mopd512_rgb/handvideo_preds_nearest.jsonl
+  --baseline USDNet na --baseline A3VLM /workspace/datasets/baselines/results/a3vlm/handvideo_preds.jsonl
   --baseline 3DOI /workspace/datasets/baselines/results/3doi_runpod/handvideo_preds_centroid.jsonl
   --ours sf3d_only viz/20260914_fig5_handvideo_50/hoi4d/preds.jsonl --ours dense viz/20260914_fig5_handvideo_50/hoi4d/preds.jsonl
   --idx 2366 633 --out viz/20260914_fig5v1_handvideo
-tool_commit: a165902
-generated: '2026-09-15T01:07:21+00:00'
+tool_commit: 749e4d0
+generated: '2026-09-16T06:53:31+00:00'
 source: hoi4d
 ours:
 - - sf3d_only
@@ -18,7 +19,7 @@ baselines:
 - - OPDFormer-P
   - /workspace/datasets/baselines/results/opd512_p_rgb/handvideo_preds_nearest.jsonl
 - - MOPD
-  - pending
+  - /workspace/datasets/baselines/results/mopd512_rgb/handvideo_preds_nearest.jsonl
 - - USDNet
   - na
 - - A3VLM

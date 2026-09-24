@@ -1,0 +1,9 @@
+command: tools/sf3d_vis_val.py --model dct_chain experiments/20260910_sf3d_g19_dct_rgb_scalefree_ft_multi3dct/config.yaml
+  experiments/20260910_sf3d_g19_dct_rgb_scalefree_ft_multi3dct/checkpoints/best-epoch24-valloss1.0178.ckpt
+  --out viz/20260914_sf3d_model_zoo/dct_chain --num 20 --seed 3
+tool_commit: b18edf2
+generated: '2026-09-14T09:54:16+00:00'
+models:
+- name: dct_chain
+  config: experiments/20260910_sf3d_g19_dct_rgb_scalefree_ft_multi3dct/config.yaml
+  ckpt: experiments/20260910_sf3d_g19_dct_rgb_scalefree_ft_multi3dct/checkpoints/best-epoch24-valloss1.0178.ckpt

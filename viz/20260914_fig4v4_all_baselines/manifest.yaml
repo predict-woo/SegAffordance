@@ -1,23 +1,24 @@
-command: tools/viz_fig4_panels.py --source sf3d --ours dense viz/20260914_dense_sf3d_val_200/preds.jsonl
-  --baseline OPDFormer-C /workspace/datasets/baselines/results/opd512_c_rgbd/preds.jsonl
+command: tools/viz_fig4_panels.py --ours dense viz/20260914_dense_sf3d_val_200/preds.jsonl
+  --baseline OPDFormer-C viz/20260914_fig4v4_all_baselines/preds_nearest_opd512_c_rgbd.jsonl
   --baseline OPDFormer-P viz/20260914_fig4v4_all_baselines/preds_nearest_opd512_p_rgb.jsonl
-  --baseline MOPD pending --baseline USDNet /workspace/datasets/baselines/results/usdnet_v1cm/preds.jsonl
-  --baseline A3VLM /workspace/datasets/baselines/results/a3vlm/preds_chain.jsonl --baseline
-  3DOI /workspace/datasets/baselines/results/3doi_runpod/preds.jsonl --idx 1684 113
-  3726 403 --out viz/20260914_fig4v4_all_baselines
-tool_commit: a3b2431
-generated: '2026-09-15T07:25:50+00:00'
+  --baseline MOPD /workspace/datasets/baselines/results/mopd512_rgb/preds.jsonl --baseline
+  USDNet /workspace/datasets/baselines/results/usdnet_v1cm/preds.jsonl --baseline
+  A3VLM /workspace/datasets/baselines/results/a3vlm/preds_chain.jsonl --baseline 3DOI
+  /workspace/datasets/baselines/results/3doi_runpod/preds.jsonl --idx 1684 113 3726
+  403 --out viz/20260914_fig4v4_all_baselines
+tool_commit: fb85d4c
+generated: '2026-09-16T06:58:41+00:00'
 source: sf3d
 ours:
 - - dense
   - viz/20260914_dense_sf3d_val_200/preds.jsonl
 baselines:
 - - OPDFormer-C
-  - /workspace/datasets/baselines/results/opd512_c_rgbd/preds.jsonl
+  - viz/20260914_fig4v4_all_baselines/preds_nearest_opd512_c_rgbd.jsonl
 - - OPDFormer-P
   - viz/20260914_fig4v4_all_baselines/preds_nearest_opd512_p_rgb.jsonl
 - - MOPD
-  - pending
+  - /workspace/datasets/baselines/results/mopd512_rgb/preds.jsonl
 - - USDNet
   - /workspace/datasets/baselines/results/usdnet_v1cm/preds.jsonl
 - - A3VLM

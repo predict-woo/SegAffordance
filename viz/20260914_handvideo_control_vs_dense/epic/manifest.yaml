@@ -1,0 +1,13 @@
+command: tools/hoi4d_predict_articulation.py --dataset epic --model sf3d_only config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  experiments/20260913_sf3d_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval1.1144.ckpt
+  --model dense config/sf3d_test_decoder_rgb_scalefree_dense.yaml experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
+  --num 12 --per-seq 1 --scale 2 --out viz/20260914_handvideo_control_vs_dense/epic
+tool_commit: 95d86fd
+generated: '2026-09-14T03:17:13+00:00'
+models:
+- name: sf3d_only
+  config: config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  ckpt: experiments/20260913_sf3d_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval1.1144.ckpt
+- name: dense
+  config: config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  ckpt: experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt

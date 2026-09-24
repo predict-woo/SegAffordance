@@ -76,12 +76,16 @@ def main():
             d = head[0].cpu().float().numpy().astype(np.float64); d /= max(np.linalg.norm(d), 1e-8)
             c = float(np.clip(np.dot(d, dg), -1, 1)); signed = math.degrees(math.acos(c)); unsigned = min(signed, 180.0 - signed)
             p_rev = float(torch.softmax(out.motion_type_logits[0].float(), -1)[1])
-            rows[name].append((key, g.get("category", key.split("/")[0].split("_")[0]), g["type"], g.get("moving", ""), unsigned, signed, p_rev, int((p_rev > 0.5) == gt_rot), hinge_dist))
+            hinge_line_m = float("nan")   # predicted hinge (metres, at the model's own depth) to the GT axis LINE; revolute GT only
+            if gt_rot and out.origin_pred is not None:
+                q = out.origin_pred[0].cpu().float().numpy().astype(np.float64); v = q - og
+                hinge_line_m = float(np.linalg.norm(v - np.dot(v, dg) * dg))
+            rows[name].append((key, g.get("category", key.split("/")[0].split("_")[0]), g["type"], g.get("moving", ""), unsigned, signed, p_rev, int((p_rev > 0.5) == gt_rot), hinge_dist, hinge_line_m))
         if j % 50 == 0:
             print(f"{j}/{len(idxs)}", flush=True)
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     with open(a.out, "w") as f:
-        f.write("model,key,category,gt_type,moving,axis_unsigned_deg,axis_signed_deg,p_rev,type_ok,gt_hinge_to_point_frac\n")
+        f.write("model,key,category,gt_type,moving,axis_unsigned_deg,axis_signed_deg,p_rev,type_ok,gt_hinge_to_point_frac,hinge_line_m\n")
         for name, rs in rows.items():
             for r in rs:
                 f.write(",".join([name, r[0], r[1], r[2], r[3]] + [f"{v:.4f}" if isinstance(v, float) else str(v) for v in r[4:]]) + "\n")

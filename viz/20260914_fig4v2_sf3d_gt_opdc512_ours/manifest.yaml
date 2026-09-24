@@ -1,0 +1,18 @@
+command: tools/sf3d_vis_baseline_vs_ours.py --model ARTHUR config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
+  --baseline OPDFormer-C /workspace/datasets/baselines/results/opd512_c_rgbd/preds.jsonl
+  --val-idx 1684 113 3726 403 --out viz/20260914_fig4v2_sf3d_gt_opdc512_ours
+tool_commit: c9ccc9b
+generated: '2026-09-14T19:05:09+00:00'
+models:
+- name: ARTHUR
+  config: config/sf3d_test_decoder_rgb_scalefree_dense.yaml
+  ckpt: experiments/20260913_joint4_decoder_l2anchor_dense/checkpoints/best-epoch13-sf3dval0.9789.ckpt
+baselines:
+- name: OPDFormer-C
+  preds: /workspace/datasets/baselines/results/opd512_c_rgbd/preds.jsonl
+picks:
+- 1684
+- 113
+- 3726
+- 403

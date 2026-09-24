@@ -1,0 +1,22 @@
+command: tools/predict_image.py --model query_eps01 config/joint4_decoder_l2anchor_query_eps01.yaml
+  experiments/20260913_joint4_decoder_l2anchor_query_eps01/checkpoints/best-epoch13-sf3dval1.1076.ckpt
+  --case viz/20260911_iphone_probe/inputs/IMG_0876.jpg open door --case viz/20260911_iphone_probe/inputs/IMG_0874.jpg
+  close laptop --case viz/20260911_iphone_probe/inputs/IMG_0877.jpg open closet --case
+  viz/20260911_iphone_probe/inputs/IMG_0875.jpg push chair forward --out viz/20260913_iphone_model_zoo/query_eps01
+  --f35 26
+tool_commit: 346c9b0
+generated: '2026-09-12T22:47:07+00:00'
+models:
+- name: query_eps01
+  config: config/joint4_decoder_l2anchor_query_eps01.yaml
+  ckpt: experiments/20260913_joint4_decoder_l2anchor_query_eps01/checkpoints/best-epoch13-sf3dval1.1076.ckpt
+cases:
+- image: viz/20260911_iphone_probe/inputs/IMG_0876.jpg
+  prompt: open door
+- image: viz/20260911_iphone_probe/inputs/IMG_0874.jpg
+  prompt: close laptop
+- image: viz/20260911_iphone_probe/inputs/IMG_0877.jpg
+  prompt: open closet
+- image: viz/20260911_iphone_probe/inputs/IMG_0875.jpg
+  prompt: push chair forward
+f35: 26.0

@@ -1,0 +1,22 @@
+command: tools/predict_image.py --model h1anchor experiments/20260912_joint4_decoder_h1anchor/config.yaml
+  experiments/20260912_joint4_decoder_h1anchor/checkpoints/best-epoch16-sf3dval1.1649.ckpt
+  --case viz/20260911_iphone_probe/inputs/IMG_0876.jpg open door --case viz/20260911_iphone_probe/inputs/IMG_0874.jpg
+  close laptop --case viz/20260911_iphone_probe/inputs/IMG_0877.jpg open closet --case
+  viz/20260911_iphone_probe/inputs/IMG_0875.jpg push chair forward --out viz/20260913_iphone_model_zoo/h1anchor
+  --f35 26
+tool_commit: 346c9b0
+generated: '2026-09-12T22:42:55+00:00'
+models:
+- name: h1anchor
+  config: experiments/20260912_joint4_decoder_h1anchor/config.yaml
+  ckpt: experiments/20260912_joint4_decoder_h1anchor/checkpoints/best-epoch16-sf3dval1.1649.ckpt
+cases:
+- image: viz/20260911_iphone_probe/inputs/IMG_0876.jpg
+  prompt: open door
+- image: viz/20260911_iphone_probe/inputs/IMG_0874.jpg
+  prompt: close laptop
+- image: viz/20260911_iphone_probe/inputs/IMG_0877.jpg
+  prompt: open closet
+- image: viz/20260911_iphone_probe/inputs/IMG_0875.jpg
+  prompt: push chair forward
+f35: 26.0

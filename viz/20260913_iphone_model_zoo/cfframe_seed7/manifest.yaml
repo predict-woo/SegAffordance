@@ -1,0 +1,22 @@
+command: tools/predict_image.py --model cfframe_seed7 experiments/20260912_joint4_decoder_cfframe_seed7/config.yaml
+  experiments/20260912_joint4_decoder_cfframe_seed7/checkpoints/best-epoch17-sf3dval1.0880.ckpt
+  --case viz/20260911_iphone_probe/inputs/IMG_0876.jpg open door --case viz/20260911_iphone_probe/inputs/IMG_0874.jpg
+  close laptop --case viz/20260911_iphone_probe/inputs/IMG_0877.jpg open closet --case
+  viz/20260911_iphone_probe/inputs/IMG_0875.jpg push chair forward --out viz/20260913_iphone_model_zoo/cfframe_seed7
+  --f35 26
+tool_commit: 346c9b0
+generated: '2026-09-12T22:43:50+00:00'
+models:
+- name: cfframe_seed7
+  config: experiments/20260912_joint4_decoder_cfframe_seed7/config.yaml
+  ckpt: experiments/20260912_joint4_decoder_cfframe_seed7/checkpoints/best-epoch17-sf3dval1.0880.ckpt
+cases:
+- image: viz/20260911_iphone_probe/inputs/IMG_0876.jpg
+  prompt: open door
+- image: viz/20260911_iphone_probe/inputs/IMG_0874.jpg
+  prompt: close laptop
+- image: viz/20260911_iphone_probe/inputs/IMG_0877.jpg
+  prompt: open closet
+- image: viz/20260911_iphone_probe/inputs/IMG_0875.jpg
+  prompt: push chair forward
+f35: 26.0

@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-09-13T15:40:27.330069+00:00",
+  "tool_commit": "76cecc68939093182d59c4118f2df83b1a982387",
+  "argv": [
+    "python3",
+    "viz/20260913_model_diagram_original_style/build.py"
+  ],
+  "experiment": "20260913_joint4_decoder_l2anchor_dense",
+  "seed": 42,
+  "checkpoint": null,
+  "outputs": [
+    "model.svg",
+    "preview.png"
+  ],
+  "figma_import": "pending"
+}

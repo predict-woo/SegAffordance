@@ -1,0 +1,15 @@
+command: tools/hoi4d_vis_2d_panels.py --config config/epic_v1_rgb_scalefree.yaml --ckpt
+  experiments/20260909_multi3_rgb_scalefree/checkpoints/best-epoch06-valloss0.3901.ckpt
+  --out viz/20260909_multi3_val_panels/epic_v1 --num 12
+tool_commit: 477e8b8
+generated: '2026-09-09T12:11:52+00:00'
+argv:
+- tools/hoi4d_vis_2d_panels.py
+- --config
+- config/epic_v1_rgb_scalefree.yaml
+- --ckpt
+- experiments/20260909_multi3_rgb_scalefree/checkpoints/best-epoch06-valloss0.3901.ckpt
+- --out
+- viz/20260909_multi3_val_panels/epic_v1
+- --num
+- '12'

@@ -1,0 +1,29 @@
+command: tools/viz_photo_panels.py --dump viz/20260918_mlkitchen/preds.jsonl --models
+  sf3d_only,dense --idx 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 --out viz/20260918_mlkitchen/panels
+  --aspect 1.33333
+tool_commit: c592774
+generated: '2026-09-17T23:07:59+00:00'
+dump: viz/20260918_mlkitchen/preds.jsonl
+models:
+- sf3d_only
+- dense
+picks:
+- 0
+- 1
+- 2
+- 3
+- 4
+- 5
+- 6
+- 7
+- 8
+- 9
+- 10
+- 11
+- 12
+- 13
+- 14
+- 15
+- 16
+- 17
+aspect: 1.33333

@@ -1,0 +1,13 @@
+command: tools/sf3d_vis_val.py --model decoder config/sf3d_test_decoder_rgb_scalefree.yaml
+  experiments/20260911_joint4_decoder_rgb_scalefree/checkpoints/best-epoch16-sf3dval1.0089.ckpt
+  --model joint4_dct config/sf3d_train_runpod_g19_dct_rgb_scalefree.yaml experiments/20260910_joint4_dct_rgb_scalefree/checkpoints/best-epoch12-sf3dval0.9688.ckpt
+  --out viz/20260912_joint_decoder_panels/sf3d --num 12 --seed 7
+tool_commit: 08c99d5
+generated: '2026-09-11T04:26:18+00:00'
+models:
+- name: decoder
+  config: config/sf3d_test_decoder_rgb_scalefree.yaml
+  ckpt: experiments/20260911_joint4_decoder_rgb_scalefree/checkpoints/best-epoch16-sf3dval1.0089.ckpt
+- name: joint4_dct
+  config: config/sf3d_train_runpod_g19_dct_rgb_scalefree.yaml
+  ckpt: experiments/20260910_joint4_dct_rgb_scalefree/checkpoints/best-epoch12-sf3dval0.9688.ckpt

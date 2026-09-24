@@ -1,0 +1,50 @@
+command: tools/sf3d_vis_baseline_vs_ours.py --baseline OPDFormer-C /workspace/datasets/baselines/results/opd_c_rgbd/preds.jsonl
+  --baseline OPDFormer-P-RGBD /workspace/datasets/baselines/results/opd_p_rgbd/preds.jsonl
+  --baseline OPDFormer-P-RGB /workspace/datasets/baselines/results/opd_p_rgb/preds.jsonl
+  --baseline OPDFormer-P-512 /workspace/datasets/baselines/results/opd512_p_rgb/preds.jsonl
+  --baseline MOPD /workspace/datasets/baselines/results/mopd_rgb/preds.jsonl --baseline
+  USDNet /workspace/datasets/baselines/results/usdnet/preds.jsonl --baseline A3VLM-text
+  /workspace/datasets/baselines/results/a3vlm/preds_chain.jsonl --baseline A3VLM-GTbox
+  /workspace/datasets/baselines/results/a3vlm/preds_gtbox.jsonl --out viz/20260914_sf3d_model_zoo/baselines
+  --num 20 --seed 3
+tool_commit: 0ae9eac
+generated: '2026-09-14T16:37:16+00:00'
+models: []
+baselines:
+- name: OPDFormer-C
+  preds: /workspace/datasets/baselines/results/opd_c_rgbd/preds.jsonl
+- name: OPDFormer-P-RGBD
+  preds: /workspace/datasets/baselines/results/opd_p_rgbd/preds.jsonl
+- name: OPDFormer-P-RGB
+  preds: /workspace/datasets/baselines/results/opd_p_rgb/preds.jsonl
+- name: OPDFormer-P-512
+  preds: /workspace/datasets/baselines/results/opd512_p_rgb/preds.jsonl
+- name: MOPD
+  preds: /workspace/datasets/baselines/results/mopd_rgb/preds.jsonl
+- name: USDNet
+  preds: /workspace/datasets/baselines/results/usdnet/preds.jsonl
+- name: A3VLM-text
+  preds: /workspace/datasets/baselines/results/a3vlm/preds_chain.jsonl
+- name: A3VLM-GTbox
+  preds: /workspace/datasets/baselines/results/a3vlm/preds_gtbox.jsonl
+picks:
+- 4156
+- 3152
+- 4511
+- 1132
+- 4193
+- 501
+- 283
+- 1140
+- 615
+- 1378
+- 213
+- 4233
+- 1696
+- 1246
+- 1773
+- 1578
+- 1495
+- 529
+- 1506
+- 1857

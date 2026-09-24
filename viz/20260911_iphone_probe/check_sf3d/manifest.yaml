@@ -1,0 +1,14 @@
+command: tools/predict_image.py --model joint4_dct config/sf3d_train_runpod_g19_dct_rgb_scalefree.yaml
+  experiments/20260910_joint4_dct_rgb_scalefree/checkpoints/best-epoch12-sf3dval0.9688.ckpt
+  --case viz/20260911_iphone_probe/inputs/sf3d_val1741.jpg Open the left door of the
+  closet near the window --K 1601.96 1601.96 963.32 695.20 --out viz/20260911_iphone_probe/check_sf3d
+tool_commit: 44fa9ed
+generated: '2026-09-09T23:09:14+00:00'
+models:
+- name: joint4_dct
+  config: config/sf3d_train_runpod_g19_dct_rgb_scalefree.yaml
+  ckpt: experiments/20260910_joint4_dct_rgb_scalefree/checkpoints/best-epoch12-sf3dval0.9688.ckpt
+cases:
+- image: viz/20260911_iphone_probe/inputs/sf3d_val1741.jpg
+  prompt: Open the left door of the closet near the window
+f35: 26.0
