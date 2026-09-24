@@ -1,3 +1,16 @@
+## RunPod decommissioned (2026-09-24)
+
+After submission the RunPod infrastructure was shut down: all four network volumes (`segaffordance-data`,
+`segaffordance-hoi4d`, `bl-apjp`, `bl-eufr`) and every pod are deleted. The `runpod/` scripts, the mutagen mirror and
+the `/workspace` paths in configs describe a setup that no longer exists.
+
+The important data lives on the lab server `serverone` (Proxmox), ZFS dataset `project-pool/segaffordance` (804 GB,
+zstd, mounted at `/project-pool/segaffordance`) with a verified snapshot `@verified-20260924` and a second copy at
+`nas-pool/segaffordance-backup`. Its root holds `MIGRATION.md` listing exactly what was copied (SceneFun3D processed
+data, hand-video processed sets, OPD processed data, baseline results/checkpoints, every experiment's best checkpoint,
+viz batches) and what was deliberately left behind (raw public downloads, models, venvs). Code expects those paths under
+`/workspace/...`: bind-mount or symlink the dataset there to run anything.
+
 # RunPod Runbook
 
 Provisioned 2026-07-15. See `RUNPOD_PLAN.md` at the repo root for the original

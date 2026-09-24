@@ -12,6 +12,9 @@ Paper notes and related-work summaries live in `knowledge/`.
 
 ## Remote GPU environment (RunPod)
 
+**Decommissioned 2026-09-24.** The volumes and pods below no longer exist; the data is on serverone
+`project-pool/segaffordance` (see STATE.md "RunPod decommissioned"). The rest of this section is historical.
+
 All GPU work happens on RunPod, not locally. Full runbook: `runpod/README.md`.
 The infra that exists:
 
